@@ -1,6 +1,0 @@
-{
-	"autosize" : true,
-	"cropoffset" : "876.00000 -537.00000",
-	"material" : "materials/saki_arm_crop.json",
-	"puppet" : "models/saki_arm_crop_puppet.mdl"
-}

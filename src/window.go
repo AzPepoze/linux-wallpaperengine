@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"math"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"linux-wallpaperengine/src/wallpaper/feature"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 type RenderObject struct {
@@ -33,7 +31,7 @@ type Window struct {
 
 	updateObjects []wallpaper.Object
 	updateOffsets []wallpaper.Vec2
-	debugBuffer   *ebiten.Image
+	debugOverlay  *DebugOverlay
 }
 
 func NewWindow(scene wallpaper.Scene) *Window {
@@ -49,7 +47,7 @@ func NewWindow(scene wallpaper.Scene) *Window {
 		renderObjects: make([]RenderObject, 0, len(scene.Objects)),
 		updateObjects: make([]wallpaper.Object, len(scene.Objects)),
 		updateOffsets: make([]wallpaper.Vec2, len(scene.Objects)),
-		debugBuffer:   ebiten.NewImage(400, 100),
+		debugOverlay:  NewDebugOverlay(),
 	}
 
 	for i := range scene.Objects {
@@ -129,6 +127,10 @@ func (window *Window) Update() error {
 		}
 	}
 
+	if utils.DebugMode {
+		window.debugOverlay.Update()
+	}
+
 	return nil
 }
 
@@ -181,45 +183,12 @@ func (window *Window) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	window.drawDebugInfo(screen)
-}
-
-func (window *Window) drawDebugInfo(screen *ebiten.Image) {
-	debugText := fmt.Sprintf("FPS: %.1f\nObjects: %d", ebiten.ActualFPS(), len(window.scene.Objects))
-
-	// Add particle debug info
-	for _, renderObject := range window.renderObjects {
-		if renderObject.ParticleSystem != nil && len(renderObject.ParticleSystem.Particles) > 0 {
-			ps := renderObject.ParticleSystem
-			p := ps.Particles[0]
-			debugText += fmt.Sprintf("\n\nParticle System: %s\n  Count: %d\n  First Alpha: %.3f\n  Life: %.2f/%.2f\n  Pos: (%.0f, %.0f)\n  Color: (%.2f, %.2f, %.2f)",
-				ps.Name,
-				len(ps.Particles),
-				p.Alpha,
-				p.Life,
-				p.MaxLife,
-				p.Position.X,
-				p.Position.Y,
-				p.Color.X,
-				p.Color.Y,
-				p.Color.Z,
-			)
-			break // Only show first particle system
-		}
+	if utils.DebugMode {
+		window.debugOverlay.Draw(screen, window.renderObjects)
 	}
-
-	window.debugBuffer.Fill(color.Transparent)
-	ebitenutil.DebugPrint(window.debugBuffer, debugText)
-
-	screenHeight := screen.Bounds().Dy()
-	debugScale := math.Max(1.0, float64(screenHeight)/540.0)
-
-	options := &ebiten.DrawImageOptions{}
-	options.GeoM.Scale(debugScale, debugScale)
-	options.GeoM.Translate(20, 20)
-
-	screen.DrawImage(window.debugBuffer, options)
 }
+
+
 
 func (window *Window) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	width := window.scene.General.OrthogonalProjection.Width
