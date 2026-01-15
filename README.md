@@ -10,10 +10,10 @@
 
 <p align="center">
      <a href="LICENSE">
-          <img src="https://img.shields.io/github/license/AzPepoze/linux-wallpaperengine?style=for-the-badge&label=%E2%97%88%20LICENSE%20%E2%97%88&labelColor=%23222222&color=%2300bfae" alt="License">
+          <img src="https://img.shields.io/github/license/AzPepoze/linux-wallpaperengine?style=for-the-badge&label=%E2%97%88%20LICENSE%20%E2%97%88&labelColor=%23181818&color=%23007bff" alt="License">
      </a>
      <a href="https://github.com/AzPepoze/linux-wallpaperengine/stargazers">
-          <img src="https://img.shields.io/github/stars/AzPepoze/linux-wallpaperengine?style=for-the-badge&label=%E2%97%88%20STARS%20%E2%97%88&labelColor=%23222222&color=%2300bfae" alt="Stars">
+          <img src="https://img.shields.io/github/stars/AzPepoze/linux-wallpaperengine?style=for-the-badge&label=%E2%97%88%20STARS%20%E2%97%88&labelColor=%23181818&color=%23007bff" alt="Stars">
      </a>
 </p>
 
