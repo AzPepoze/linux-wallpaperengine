@@ -1,25 +1,22 @@
-CXX = g++
-CXXFLAGS = -O2 -Wall
-LDFLAGS = -lboost_filesystem
-
-UNPACKER_SRC = src/lib/unpacker.cpp
-UNPACKER_TARGET = bin/unpacker
-
-ENGINE_SRC = src/main.go
+ENGINE_SRC = src/*.go
 ENGINE_TARGET = bin/wallpaper-engine
 
-all: $(UNPACKER_TARGET) $(ENGINE_TARGET)
-
-$(UNPACKER_TARGET): $(UNPACKER_SRC)
+build:
 	mkdir -p bin
-	$(CXX) $(CXXFLAGS) $(UNPACKER_SRC) -o $(UNPACKER_TARGET) $(LDFLAGS)
+	go build -o $(ENGINE_TARGET) $(ENGINE_SRC)
 
-$(ENGINE_TARGET): $(ENGINE_SRC)
-	mkdir -p bin
-	go build -o $(ENGINE_TARGET) ./src
-
-run: all
-	./$(ENGINE_TARGET)
+dev: clean build
+	$(ENGINE_TARGET)
 
 clean:
-	rm -rf bin tmp
+	rm -rf bin tmp debug.log test_out
+
+test: build
+	@echo "Testing DXT1 Decoder..."
+	@# Find the first .tex file in tmp/materials/ to test
+	@FILE=$$(find tmp/materials -name "*.tex" | head -n 1); \
+	if [ -z "$$FILE" ]; then \
+		echo "No .tex files found in tmp/materials to test. Please ensure tmp directory exists."; \
+		exit 1; \
+	fi; \
+	$(ENGINE_TARGET) decode $$FILE

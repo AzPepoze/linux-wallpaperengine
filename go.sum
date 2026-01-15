@@ -4,12 +4,12 @@ github.com/ebitengine/hideconsole v1.0.0 h1:5J4U0kXF+pv/DhiXt5/lTz0eO5ogJ1iXb8Yj
 github.com/ebitengine/hideconsole v1.0.0/go.mod h1:hTTBTvVYWKBuxPr7peweneWdkUwEuHuB3C1R/ielR1A=
 github.com/ebitengine/purego v0.9.0 h1:mh0zpKBIXDceC63hpvPuGLiJ8ZAa3DfrFTudmfi8A4k=
 github.com/ebitengine/purego v0.9.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
-github.com/galaco/dxt v0.0.0-20190227194637-c61fd9851f0b h1:9bq7/AiG+NnLDLo8bIZFXDIGuxTMM973mgNzEJ5tbBI=
-github.com/galaco/dxt v0.0.0-20190227194637-c61fd9851f0b/go.mod h1:X/6UtAHv99sFgg/2as6275XXCm3AXrG3O5vkBzxTwe4=
 github.com/hajimehoshi/ebiten/v2 v2.9.7 h1:WuNgM24uJxwdLZLqM8SXLAGVBof/45udRjo2tJoTpM0=
 github.com/hajimehoshi/ebiten/v2 v2.9.7/go.mod h1:DAt4tnkYYpCvu3x9i1X/nK/vOruNXIlYq/tBXxnhrXM=
 github.com/jezek/xgb v1.1.1 h1:bE/r8ZZtSv7l9gk6nU0mYx51aXrvnyb44892TwSaqS4=
 github.com/jezek/xgb v1.1.1/go.mod h1:nrhwO0FX/enq75I7Y7G8iN1ubpSGZEiA3v9e9GyRFlk=
+github.com/mauserzjeh/dxt v1.0.0 h1:5Qb1aqvdYGAKzQuZQ3lJGKzUje2WswXNvaZkWd0NqG0=
+github.com/mauserzjeh/dxt v1.0.0/go.mod h1:Ulty8+/KXIxoS/sOspJ2z/aPdsXnDH+sCWdZHQSD51k=
 github.com/pierrec/lz4/v4 v4.1.23 h1:oJE7T90aYBGtFNrI8+KbETnPymobAhzRrR8Mu8n1yfU=
 github.com/pierrec/lz4/v4 v4.1.23/go.mod h1:EoQMVJgeeEOMsCqCzqFm2O0cJvljX2nGZjcRIPL34O4=
 golang.org/x/image v0.31.0 h1:mLChjE2MV6g1S7oqbXC0/UcKijjm5fnJLUYKIYrLESA=

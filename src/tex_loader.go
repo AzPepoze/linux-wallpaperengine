@@ -5,95 +5,219 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
-	"log"
+	"image/png"
+	"io"
 	"os"
-	"os/exec"
 	"strings"
 
-	"github.com/galaco/dxt"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/mauserzjeh/dxt"
 	"github.com/pierrec/lz4/v4"
 )
 
-func loadTexture(path string) (*ebiten.Image, error) {
-	data, err := os.ReadFile(path)
-	if err != nil { return nil, err }
+func readInt(r io.Reader) uint32 {
+	var v uint32
+	binary.Read(r, binary.LittleEndian, &v)
+	return v
+}
 
-	if !strings.HasPrefix(string(data), "TEXV0005") {
-		return nil, fmt.Errorf("not a TEXV0005 file")
+func readString(r io.Reader, n int) string {
+	b := make([]byte, n)
+	r.Read(b)
+	return string(bytes.Trim(b, "\x00"))
+}
+
+func swapRB(pix []byte) {
+	for i := 0; i < len(pix); i += 4 {
+		pix[i], pix[i+2] = pix[i+2], pix[i]
+	}
+}
+
+func decodeTexToImage(path string) (image.Image, error) {
+	Debug("Decoding texture: %s", path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	magic1 := readString(f, 8)
+	f.Seek(1, io.SeekCurrent)
+	_ = readString(f, 8) // magic2
+	f.Seek(1, io.SeekCurrent)
+
+	if magic1 != "TEXV0005" {
+		return nil, fmt.Errorf("invalid magic: %s", magic1)
 	}
 
-	// 1. ลอง XOR 0x77 ทั้งก้อนแล้วหา PNG/JPG (ไม้ตายลับ)
-	xorData := make([]byte, len(data))
-	for i := range data { xorData[i] = data[i] ^ 0x77 }
-	
-	pngMagic := []byte{0x89, 0x50, 0x4E, 0x47}
-	if idx := bytes.Index(xorData, pngMagic); idx != -1 {
-		log.Printf("Loader: Found XORed PNG in %s!", path)
-		img, _, err := ebitenutil.NewImageFromReader(bytes.NewReader(xorData[idx:]))
-		if err == nil { return img, nil }
+	format := readInt(f)
+	f.Seek(4, io.SeekCurrent)
+	_ = readInt(f) // texW
+	_ = readInt(f) // texH
+	imgW := readInt(f)
+	imgH := readInt(f)
+
+	Debug("  Format: %d, Target Size: %dx%d", format, imgW, imgH)
+
+	readInt(f)
+	containerMagic := readString(f, 8)
+	f.Seek(1, io.SeekCurrent)
+	imageCount := readInt(f)
+
+	if containerMagic == "TEXB0003" {
+		readInt(f)
 	}
 
-	// 2. วิเคราะห์ Mipmap และคลายบีบอัด
-	width := int(binary.LittleEndian.Uint32(data[26:30]))
-	height := int(binary.LittleEndian.Uint32(data[30:34]))
-	
-	wBuf := make([]byte, 4); binary.LittleEndian.PutUint32(wBuf, uint32(width))
-	hBuf := make([]byte, 4); binary.LittleEndian.PutUint32(hBuf, uint32(height))
-	headerIdx := bytes.Index(data, append(wBuf, hBuf...))
-	if headerIdx == -1 { return nil, fmt.Errorf("mipmap header not found") }
+	for i := uint32(0); i < imageCount; i++ {
+		mipmapCount := readInt(f)
+		for j := uint32(0); j < mipmapCount; j++ {
+			mW := readInt(f)
+			mH := readInt(f)
+			var isLZ4 bool
+			var decompressedSize uint32
+			if containerMagic != "TEXB0001" {
+				isLZ4 = readInt(f) == 1
+				decompressedSize = readInt(f)
+			}
+			dataSize := readInt(f)
+			data := make([]byte, dataSize)
+			if _, err := io.ReadFull(f, data); err != nil {
+				return nil, err
+			}
 
-	uSize := int(binary.LittleEndian.Uint32(data[headerIdx+12 : headerIdx+16]))
-	cSize := int(binary.LittleEndian.Uint32(data[headerIdx+16 : headerIdx+20]))
-	pixelData := data[headerIdx+20 : headerIdx+20+cSize]
-
-	// คลาย LZ4
-	var rawPixels []byte
-	if cSize < uint32(uSize) {
-		rawPixels = make([]byte, uSize)
-		n, err := lz4.UncompressBlock(pixelData, rawPixels)
-		if err != nil {
-			log.Printf("Loader: LZ4 failed for %s, trying XOR on pixels", path)
-		} else {
-			rawPixels = rawPixels[:n]
-		}
-	} else {
-		rawPixels = pixelData
-	}
-
-	// 3. ลอง XOR 0x77 บนพิกเซลที่คลายแล้ว (เผื่อพิกเซลถูกพรางไว้)
-	xorPixels := make([]byte, len(rawPixels))
-	for i := range rawPixels { xorPixels[i] = rawPixels[i] ^ 0x77 }
-	
-	// ลองสแกนหา PNG อีกรอบในพิกเซลที่ XOR แล้ว
-	if idx := bytes.Index(xorPixels, pngMagic); idx != -1 {
-		img, _, err := ebitenutil.NewImageFromReader(bytes.NewReader(xorPixels[idx:]))
-		if err == nil { return img, nil }
-	}
-
-	// 4. ถ้ายังไม่ได้ผล ให้ Decode เป็น DXT1/5 โดยตรง (พยายามล้าง Noise)
-	dxtType := dxt.DXT5
-	if uSize <= (width*height)/2 + 8192 { dxtType = dxt.DXT1 }
-
-	// เราจะลองหลายๆ Offset เพราะ Noise มักเกิดจาก Offset ผิดไป 4-16 ไบต์
-	for _, offset := range []int{0, 4, 8, 12, 16, 24, 32} {
-		if offset >= len(rawPixels) { continue }
-		
-		// ลองทั้งพิกเซลปกติและพิกเซลที่ XOR
-		for _, p := range [][]byte{rawPixels, xorPixels} {
-			decoded, err := dxt.Decode(p[offset:], width, height, dxtType)
-			if err == nil {
-				// ตรวจสอบความถูกต้องเบื้องต้น (ถ้าพิกเซลแรกๆ ไม่ใช่ 0 ทั้งหมด)
-				if decoded[0] != 0 || decoded[1] != 0 || decoded[2] != 0 {
-					log.Printf("Loader: DXT Success for %s at offset %d", path, offset)
-					img := image.NewRGBA(image.Rect(0, 0, width, height))
-					img.Pix = decoded
-					return ebiten.NewImageFromImage(img), nil
+			if i == 0 && j == 0 {
+				finalData := data
+				if isLZ4 {
+					Debug("  Decompressing LZ4: %d -> %d", dataSize, decompressedSize)
+					decodedLZ4 := make([]byte, decompressedSize)
+					if _, err := lz4.UncompressBlock(data, decodedLZ4); err != nil {
+						return nil, err
+					}
+					finalData = decodedLZ4
 				}
+
+				numBlocksW := (mW + 3) / 4
+				numBlocksH := (mH + 3) / 4
+
+				expectedDXT1 := (mW + 3) / 4 * (mH + 3) / 4 * 8
+				expectedDXT5 := numBlocksW * numBlocksH * 16
+				expectedRGBA := mW * mH * 4
+
+				var pix []byte
+				var err error
+
+				switch {
+				case uint32(len(finalData)) == expectedRGBA:
+					Debug("  Type: RGBA")
+					pix = finalData
+					swapRB(pix)
+				case uint32(len(finalData)) == expectedDXT5 || format == 6:
+					Debug("  Type: DXT5")
+					pix, err = dxt.DecodeDXT5(finalData, uint(mW), uint(mH))
+					if err != nil {
+						return nil, err
+					}
+					fixAlpha(pix, int(mW), int(mH))
+				case uint32(len(finalData)) == expectedDXT1 || format == 4 || format == 7:
+					Debug("  Type: DXT1")
+					pix, err = dxt.DecodeDXT1(finalData, uint(mW), uint(mH))
+					if err != nil {
+						return nil, err
+					}
+				case format == 9 && uint32(len(finalData)) == expectedRGBA/4:
+					Debug("  Type: R8 (Grayscale/Mask)")
+					pix = make([]byte, mW*mH*4)
+					for k := 0; k < int(mW*mH); k++ {
+						val := finalData[k]
+						pix[k*4] = val
+						pix[k*4+1] = val
+						pix[k*4+2] = val
+						pix[k*4+3] = 255
+					}
+				case format == 8 && uint32(len(finalData)) == expectedRGBA/2:
+					Debug("  Type: RG88")
+					pix = make([]byte, mW*mH*4)
+					for k := 0; k < int(mW*mH); k++ {
+						pix[k*4] = finalData[k*2]
+						pix[k*4+1] = finalData[k*2+1]
+						pix[k*4+2] = 0
+						pix[k*4+3] = 255
+					}
+				default:
+					return nil, fmt.Errorf("unsupported format %d with size %d (Expected RGBA: %d, DXT5: %d, DXT1: %d)", format, len(finalData), expectedRGBA, expectedDXT5, expectedDXT1)
+				}
+
+				Debug("  Successfully decoded: %s", path)
+				rgbaImg := &image.RGBA{
+					Pix:    pix,
+					Stride: int(mW * 4),
+					Rect:   image.Rect(0, 0, int(mW), int(mH)),
+				}
+				return rgbaImg.SubImage(image.Rect(0, 0, int(imgW), int(imgH))), nil
 			}
 		}
 	}
+	return nil, fmt.Errorf("no image found in texture")
+}
 
-	return nil, fmt.Errorf("decoding failed for %s", path)
+func fixAlpha(pix []byte, width, height int) {
+	const (
+		alphaThreshold = 200
+		edgeThreshold  = 2
+	)
+
+	stride := width * 4
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			idx := (y*width + x) * 4
+			alpha := pix[idx+3]
+
+			if alpha > alphaThreshold {
+				pix[idx+3] = 255
+				continue
+			}
+
+			pix[idx+3] = 0
+
+			if x == 0 || x == width-1 || y == 0 || y == height-1 {
+				continue
+			}
+
+			left := pix[idx-4+3]
+			right := pix[idx+4+3]
+			up := pix[idx-stride+3]
+			down := pix[idx+stride+3]
+
+			if (left > edgeThreshold && right > edgeThreshold) || (up > edgeThreshold && down > edgeThreshold) {
+				pix[idx+3] = 255
+			}
+		}
+	}
+}
+
+func loadTexture(path string) (*ebiten.Image, error) {
+	pngPath := strings.TrimSuffix(path, ".tex") + ".png"
+	if _, err := os.Stat(pngPath); err == nil {
+		img, _, err := ebitenutil.NewImageFromFile(pngPath)
+		return img, err
+	}
+
+	img, err := decodeTexToImage(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if f, err := os.Create(pngPath); err == nil {
+		if err := png.Encode(f, img); err != nil {
+			Warn("Failed to encode PNG %s: %v", pngPath, err)
+			f.Close()
+			os.Remove(pngPath)
+		} else {
+			f.Close()
+		}
+	}
+
+	return ebiten.NewImageFromImage(img), nil
 }
