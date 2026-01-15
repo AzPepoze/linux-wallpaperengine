@@ -1,0 +1,145 @@
+{
+	"animationmode" : "randomframe",
+	"controlpoint" : 
+	[
+		{
+			"flags" : 0,
+			"id" : 0,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 1,
+			"id" : 1,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 0,
+			"id" : 2,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 0,
+			"id" : 3,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 0,
+			"id" : 4,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 0,
+			"id" : 5,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 0,
+			"id" : 6,
+			"offset" : "0 0 0"
+		},
+		{
+			"flags" : 0,
+			"id" : 7,
+			"offset" : "0 0 0"
+		}
+	],
+	"emitter" : 
+	[
+		{
+			"audioprocessingbounds" : "0 1",
+			"audioprocessingexponent" : 1,
+			"audioprocessingfrequencyend" : 15,
+			"audioprocessingmode" : 3,
+			"distancemax" : "10 10 0",
+			"id" : 7,
+			"name" : "boxrandom",
+			"rate" : 1
+		}
+	],
+	"flags" : 0,
+	"initializer" : 
+	[
+		{
+			"id" : 2,
+			"max" : 10,
+			"min" : 5,
+			"name" : "lifetimerandom"
+		},
+		{
+			"id" : 3,
+			"max" : 200,
+			"min" : 100,
+			"name" : "sizerandom"
+		},
+		{
+			"id" : 4,
+			"max" : "10 10 0",
+			"min" : "-10 10 0",
+			"name" : "velocityrandom"
+		},
+		{
+			"id" : 5,
+			"max" : "0 0 1",
+			"min" : "0 0 -1",
+			"name" : "rotationrandom"
+		},
+		{
+			"id" : 6,
+			"max" : "0 0 1",
+			"min" : "0 0 -1",
+			"name" : "angularvelocityrandom"
+		},
+		{
+			"id" : 14,
+			"min" : "255 255 255",
+			"name" : "colorrandom"
+		}
+	],
+	"material" : "materials/workshop/2446146941/particle/halo_22.json",
+	"maxcount" : 20,
+	"operator" : 
+	[
+		{
+			"drag" : 0.10000000000000001,
+			"gravity" : "0 20 0",
+			"id" : 8,
+			"name" : "movement"
+		},
+		{
+			"fadeintime" : 0.20000000000000001,
+			"id" : 9,
+			"name" : "alphafade"
+		},
+		{
+			"id" : 10,
+			"name" : "oscillateposition",
+			"scalemax" : 20,
+			"scalemin" : 0
+		},
+		{
+			"endvalue" : 1,
+			"id" : 11,
+			"name" : "sizechange",
+			"startvalue" : 0.29999999999999999
+		},
+		{
+			"id" : 12,
+			"name" : "angularmovement"
+		},
+		{
+			"controlpoint" : 1,
+			"id" : 13,
+			"name" : "controlpointattract",
+			"scale" : -500,
+			"threshold" : 64
+		}
+	],
+	"renderer" : 
+	[
+		{
+			"id" : 1,
+			"name" : "sprite"
+		}
+	],
+	"starttime" : 0
+}

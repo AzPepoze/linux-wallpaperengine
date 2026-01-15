@@ -1,0 +1,1995 @@
+{
+	"camera" : 
+	{
+		"center" : "0.00000 0.00000 -1.00000",
+		"eye" : "0.00000 0.00000 0.00000",
+		"up" : "0.00000 1.00000 0.00000"
+	},
+	"general" : 
+	{
+		"ambientcolor" : "0.30000 0.30000 0.30000",
+		"bloom" : 
+		{
+			"user" : "bloom",
+			"value" : true
+		},
+		"bloomhdrfeather" : 0.0099999998,
+		"bloomhdriterations" : 8,
+		"bloomhdrscatter" : 0.69999999,
+		"bloomhdrstrength" : 2.0,
+		"bloomhdrthreshold" : 0.98000002,
+		"bloomstrength" : 2.0,
+		"bloomthreshold" : 0.89999998,
+		"camerafade" : true,
+		"cameraparallax" : true,
+		"cameraparallaxamount" : 0.059999999,
+		"cameraparallaxdelay" : 0.1,
+		"cameraparallaxmouseinfluence" : 0.5,
+		"camerapreview" : false,
+		"camerashake" : 
+		{
+			"user" : "camerashake",
+			"value" : false
+		},
+		"camerashakeamplitude" : 0.090000004,
+		"camerashakeroughness" : 1.0,
+		"camerashakespeed" : 1.22,
+		"clearcolor" : "0.51765 0.44314 0.45098",
+		"clearenabled" : true,
+		"farz" : 10000.0,
+		"fov" : 50.0,
+		"hdr" : true,
+		"nearz" : 0.0099999998,
+		"orthogonalprojection" : 
+		{
+			"height" : 2160,
+			"width" : 3840
+		},
+		"skylightcolor" : "0.30000 0.30000 0.30000",
+		"zoom" : 1.0
+	},
+	"objects" : 
+	[
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"id" : 9644,
+			"image" : "models/Window.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "Window",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "3840.00000 2230.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"config" : 
+			{
+				"passthrough" : true
+			},
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/waterflow/effect.json",
+					"id" : 1475,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"phasescale" : 4.5100002,
+								"speed" : 0.1,
+								"strength" : 1.0
+							},
+							"id" : 1476,
+							"textures" : [ null, "masks/waterflow_mask_4f1e36ec", "effects/waterflowphase" ]
+						}
+					],
+					"visible" : false
+				}
+			],
+			"id" : 592,
+			"image" : "models/util/composelayer.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "Compose",
+			"origin" : "2317.52344 1576.90405 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "2500.00000 1200.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 277,
+			"instanceoverride" : 
+			{
+				"brightness" : 1.2,
+				"count" : 1.5,
+				"id" : 8,
+				"size" : 0.60000002
+			},
+			"locktransforms" : false,
+			"name" : "Blinking Stars",
+			"origin" : "2237.08032 1573.89673 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/workshop/2232966846/Stars_copy1.json",
+			"scale" : "3.00000 3.00000 1.00000",
+			"visible" : true
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 166,
+			"instanceoverride" : 
+			{
+				"alpha" : 0.85000002,
+				"count" : 1.2,
+				"id" : 167,
+				"lifetime" : 2.0,
+				"rate" : 0.44999999
+			},
+			"locktransforms" : false,
+			"name" : "Shooting star",
+			"origin" : "2500.00000 1500.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/presets/shootingstar.json",
+			"scale" : "-2.00000 2.00000 1.00000",
+			"visible" : 
+			{
+				"user" : "shootingstars",
+				"value" : false
+			}
+		},
+		{
+			"angles" : "0.00000 -0.00000 0.23576",
+			"id" : 721,
+			"image" : null,
+			"instanceoverride" : 
+			{
+				"alpha" : 0.85000002,
+				"colorn" : "0.00000 0.69020 1.00000",
+				"id" : 5053,
+				"size" : 0.80000001,
+				"speed" : 0.60000002
+			},
+			"locktransforms" : false,
+			"model" : null,
+			"name" : "Fireworks 1",
+			"origin" : "2047.17383 976.26074 0.00000",
+			"parallaxDepth" : "0.00000 0.80000",
+			"particle" : "particles/workshop/2110548715/presets/fireworks1.json",
+			"scale" : "0.35000 0.35000 1.00000",
+			"visible" : 
+			{
+				"user" : "fireworks",
+				"value" : true
+			}
+		},
+		{
+			"angles" : "-0.00000 -0.00000 -0.30218",
+			"id" : 10624,
+			"image" : null,
+			"instanceoverride" : 
+			{
+				"alpha" : 0.85000002,
+				"colorn" : "1.00000 0.13333 0.00000",
+				"id" : 10626,
+				"rate" : 0.80000001,
+				"size" : 0.80000001,
+				"speed" : 0.60000002
+			},
+			"locktransforms" : false,
+			"model" : null,
+			"name" : "Fireworks 1",
+			"origin" : "1132.62500 1346.09595 0.00000",
+			"parallaxDepth" : "0.00000 0.80000",
+			"particle" : "particles/workshop/2110548715/presets/fireworks1.json",
+			"scale" : "0.40000 0.40000 1.00000",
+			"visible" : 
+			{
+				"user" : "fireworks",
+				"value" : true
+			}
+		},
+		{
+			"angles" : "-0.00000 -0.00000 -0.22810",
+			"id" : 19889,
+			"instanceoverride" : null,
+			"locktransforms" : false,
+			"name" : "Fireworks 2",
+			"origin" : "2986.77710 1139.81116 0.00000",
+			"parallaxDepth" : "1.00000 1.00000",
+			"particle" : "particles/presets/fireworks2.json",
+			"scale" : "1.00000 1.00000 1.00000",
+			"visible" : false
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 5014,
+			"instanceoverride" : 
+			{
+				"id" : 29
+			},
+			"locktransforms" : false,
+			"name" : "Rain refractive",
+			"origin" : "1804.68152 1451.04321 0.00000",
+			"parallaxDepth" : "1.00000 1.00000",
+			"particle" : "particles/presets/rainrefractive.json",
+			"scale" : "1.00000 1.00000 1.00000",
+			"visible" : 
+			{
+				"user" : "rain",
+				"value" : true
+			}
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 4121,
+			"instanceoverride" : null,
+			"locktransforms" : false,
+			"name" : "Rain_main",
+			"origin" : "1804.68152 1451.04321 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/workshop/2446129945/Rain_1.json",
+			"scale" : "2.00000 2.00000 1.00000",
+			"visible" : false
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 3762,
+			"instanceoverride" : 
+			{
+				"id" : 40,
+				"size" : 2.0
+			},
+			"locktransforms" : false,
+			"name" : "Rain_secondary",
+			"origin" : "2187.19189 1553.66809 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/workshop/2446129945/Rain2.json",
+			"scale" : "1.20000 1.20000 1.00000",
+			"visible" : 
+			{
+				"user" : "rain",
+				"value" : true
+			}
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 765,
+			"instanceoverride" : 
+			{
+				"count" : 0.5,
+				"id" : 43
+			},
+			"locktransforms" : false,
+			"name" : "rain_on_the_glass1",
+			"origin" : "1665.92261 1858.41174 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/workshop/2446129945/rain_on_the_glass_copy1.json",
+			"scale" : "0.50000 0.50000 1.00000",
+			"visible" : 
+			{
+				"user" : "rain",
+				"value" : true
+			}
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 1656,
+			"instanceoverride" : 
+			{
+				"id" : 0
+			},
+			"locktransforms" : false,
+			"name" : "rain_on_the_glass2",
+			"origin" : "1720.26794 1810.58398 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/workshop/2446129945/rain_splashes_copy1.json",
+			"scale" : "0.50000 0.50000 1.00000",
+			"visible" : false
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.02618",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"config" : 
+			{
+				"passthrough" : true
+			},
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/workshop/2084198056/Simple_Audio_Bars/effect.json",
+					"id" : 9267,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"combos" : 
+							{
+								"ANTIALIAS" : 1
+							},
+							"constantshadervalues" : 
+							{
+								"Anti-alias blurring" : "0.02, 0.02",
+								"Bar Color" : "1 1 1",
+								"Bar Count" : 64,
+								"Bar Spacing" : 0.1,
+								"Lower/Upper Bar Bounds" : "0 0.5",
+								"ui_editor_properties_opacity" : 
+								{
+									"user" : "audiobars2opacity",
+									"value" : 0.30000001
+								}
+							},
+							"id" : 9268
+						}
+					],
+					"visible" : 
+					{
+						"user" : "audiobars2",
+						"value" : true
+					}
+				},
+				{
+					"file" : "effects/pulse/effect.json",
+					"id" : 20232,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"combos" : 
+							{
+								"AUDIOPROCESSING" : 3
+							},
+							"constantshadervalues" : 
+							{
+								"amount" : 1.0,
+								"audioamount" : 0.60000002,
+								"audiobounds" : "0.5 1.0",
+								"audioexponent" : 4,
+								"bounds" : "0 1",
+								"frequencymax" : 1.0,
+								"frequencymin" : 0.0,
+								"noiseamount" : 0.0,
+								"noisespeed" : 0.5,
+								"phase" : 0.0,
+								"power" : 1.0,
+								"speed" : 3,
+								"tinthigh" : "1 1 1",
+								"tintlow" : "1 1 1"
+							},
+							"id" : 20233
+						}
+					],
+					"visible" : false
+				}
+			],
+			"id" : 9186,
+			"image" : "models/util/composelayer.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "Compose-Music Bar 2",
+			"origin" : "2347.00000 1393.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "2048.00000 768.00000",
+			"solid" : true,
+			"visible" : 
+			{
+				"user" : "audiobars2",
+				"value" : true
+			}
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"id" : 14,
+			"image" : "models/gimai_seikatsu headphones hiten_waifu2x_2x_2n_CROP.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "gimai_seikatsu_BG",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "3840.00000 2230.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"config" : 
+			{
+				"passthrough" : true
+			},
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/foliagesway/effect.json",
+					"id" : 19282,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"phase" : 0.5,
+								"power" : 1.0,
+								"ratio" : 0.30000001,
+								"scale" : 0.050000001,
+								"scrolldirection" : -2.0931997,
+								"speeduv" : 3,
+								"strength" : 0.40000001
+							},
+							"id" : 19283,
+							"textures" : [ null, "masks/foliagesway_mask_242c8677", null ]
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 18865,
+			"image" : "models/util/composelayer.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "Compose-Plant",
+			"origin" : "1410.00000 1266.72412 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "320.00000 512.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/foliagesway/effect.json",
+					"id" : 660,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"phase" : 0.5,
+								"power" : 1.0,
+								"ratio" : 0.30000001,
+								"scale" : 0.050000001,
+								"scrolldirection" : -2.6311042,
+								"speeduv" : 2,
+								"strength" : 0.40000001
+							},
+							"id" : 661,
+							"textures" : [ null, "masks/foliagesway_mask_ebbdf457", null ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/pulse/effect.json",
+					"id" : 5984,
+					"name" : "Eye Pulse",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"amount" : 1.15,
+								"bounds" : "0 1",
+								"noiseamount" : 0.0,
+								"noisespeed" : 0.5,
+								"phase" : 0.0,
+								"power" : 1.2,
+								"speed" : 1.5,
+								"tinthigh" : "1 1 1",
+								"tintlow" : "1 1 1"
+							},
+							"id" : 5985,
+							"textures" : [ null, null, "masks/pulse_mask_bb12f5b5" ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/iris/effect.json",
+					"id" : 9521,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"noiseamount" : 0.5,
+								"phase" : 0,
+								"rough" : 0.89999998,
+								"scale" : "1.1 1.1",
+								"speed" : 0.80000001
+							},
+							"id" : 9522,
+							"textures" : [ null, "masks/iris_mask_b2df78a0" ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/shake/effect.json",
+					"id" : 5399,
+					"name" : "Shake Breathe",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"bounds" : "0 1",
+								"friction" : "1.5 1.5",
+								"speed" : 1.0,
+								"strength" : 0.079999998
+							},
+							"id" : 5400,
+							"textures" : [ null, "masks/shake_mask_b19fe2b4", null ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/shake/effect.json",
+					"id" : 23376,
+					"name" : "Shake Spread",
+					"passes" : 
+					[
+						{
+							"combos" : 
+							{
+								"DIRECTION" : 1
+							},
+							"constantshadervalues" : 
+							{
+								"bounds" : "0 1",
+								"friction" : "1.5 1.5",
+								"speed" : 1,
+								"strength" : 0.079999998
+							},
+							"id" : 23377,
+							"textures" : [ null, "masks/shake_mask_70f296a0", null ]
+						}
+					],
+					"visible" : false
+				}
+			],
+			"id" : 344,
+			"image" : "models/saki_crop.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "saki_crop",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "3840.00000 2230.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"animationlayers" : 
+			[
+				{
+					"additive" : false,
+					"animation" : 15501,
+					"blend" : 1.0,
+					"id" : 21631,
+					"name" : "Animation 1",
+					"rate" : 0.80000001,
+					"visible" : true
+				}
+			],
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"id" : 14052,
+			"image" : "models/saki_arm_crop.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "saki_arm_crop",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "3840.00000 2230.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"animationlayers" : 
+			[
+				{
+					"additive" : false,
+					"animation" : 62123,
+					"blend" : 1.0,
+					"id" : 70738,
+					"name" : "Animation 1",
+					"rate" : 1.0,
+					"visible" : true
+				}
+			],
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 70984,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 1.0
+							},
+							"id" : 70985,
+							"textures" : [ null, "masks/opacity_mask_e9ea1280" ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/shake/effect.json",
+					"id" : 56648,
+					"name" : "Shake Breathe",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"bounds" : "0 1",
+								"friction" : "1.5 1.5",
+								"speed" : 1,
+								"strength" : 0.079999998
+							},
+							"id" : 56649,
+							"textures" : [ null, "masks/shake_mask_b19fe2b4", null ]
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 56158,
+			"image" : "models/saki_eyebrow_redraw.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "saki_eyebrow_redraw",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "3840.00000 2230.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/shake/effect.json",
+					"id" : 56596,
+					"name" : "Shake Breathe",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"bounds" : "0 1",
+								"friction" : "1.5 1.5",
+								"speed" : 1,
+								"strength" : 0.079999998
+							},
+							"id" : 56597,
+							"textures" : [ null, "masks/shake_mask_b19fe2b4", null ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/foliagesway/effect.json",
+					"id" : 88515,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"phase" : 0.5,
+								"power" : 1.0,
+								"ratio" : 0.30000001,
+								"scale" : 0.050000001,
+								"scrolldirection" : -2.6179938,
+								"speeduv" : 2,
+								"strength" : 0.40000001
+							},
+							"id" : 88516,
+							"textures" : [ null, "masks/foliagesway_mask_9db9f1f2", null ]
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 55895,
+			"image" : "models/saki_hair_redraw.json",
+			"ledsource" : false,
+			"locktransforms" : true,
+			"name" : "saki_hair_redraw",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "3840.00000 2230.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"config" : 
+			{
+				"passthrough" : true
+			},
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/shake/effect.json",
+					"id" : 17647,
+					"name" : "Mouth Shake",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"bounds" : "0 1",
+								"friction" : "1 1",
+								"speed" : 2,
+								"strength" : 0.25
+							},
+							"id" : 17648,
+							"textures" : [ null, "masks/shake_mask_0f794704", null ]
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 17645,
+			"image" : "models/util/composelayer.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "Compose-Mouth",
+			"origin" : "2511.73169 1440.25574 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "100.00000 100.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 1764,
+			"locktransforms" : false,
+			"maxtime" : 5.0,
+			"mintime" : 1.0,
+			"muteineditor" : true,
+			"name" : "Single Phial.mp3",
+			"origin" : 
+			{
+				"script" : "'use strict';\n\nlet songNames = [\"Single Phial.mp3\", \"Discovering.mp3\", \"Dawn.mp3\"]; //rename to correct ones\n\nexport function applyUserProperties(changedUserProperties)\n{\n    if (changedUserProperties.music != undefined)\n    {\n        if (+changedUserProperties.music != 0)\n        {\n            for (let i = 0; i < songNames.length; i++)\n            {\n                if (i != +changedUserProperties.music-1) songNames[i].stop();\n            }\n            if (!songNames[+changedUserProperties.music-1].isPlaying())\n            {\n                songNames[+changedUserProperties.music-1].play();\n            }\n        }\n        else\n        {\n            songNames.forEach(song => song.stop());\n        }\n    }\n}\n\nexport function init()\n{\n    songNames = songNames.map(song => thisScene.getLayer(song));\n    songNames.forEach(song => song.stop());\n}",
+				"value" : "0.00000 0.00000 0.00000"
+			},
+			"parallaxDepth" : "1.00000 1.00000",
+			"playbackmode" : "loop",
+			"scale" : "1.00000 1.00000 1.00000",
+			"sound" : [ "sounds/Single Phial-(p).mp3" ],
+			"startsilent" : true,
+			"volume" : 
+			{
+				"user" : "musicvolume",
+				"value" : 0.69999999
+			}
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 3090,
+			"locktransforms" : false,
+			"maxtime" : 5.0,
+			"mintime" : 1.0,
+			"muteineditor" : true,
+			"name" : "Discovering.mp3",
+			"origin" : "0.00000 0.00000 0.00000",
+			"parallaxDepth" : "1.00000 1.00000",
+			"playbackmode" : "loop",
+			"scale" : "1.00000 1.00000 1.00000",
+			"sound" : [ "sounds/Discovering (Original Mix)-(p).mp3" ],
+			"startsilent" : true,
+			"volume" : 
+			{
+				"user" : "musicvolume",
+				"value" : 0.69999999
+			}
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 3336,
+			"locktransforms" : false,
+			"maxtime" : 5.0,
+			"mintime" : 1.0,
+			"muteineditor" : true,
+			"name" : "Dawn.mp3",
+			"origin" : "0.00000 0.00000 0.00000",
+			"parallaxDepth" : "1.00000 1.00000",
+			"playbackmode" : "loop",
+			"scale" : "1.00000 1.00000 1.00000",
+			"sound" : [ "sounds/Dawn-(p).mp3" ],
+			"startsilent" : true,
+			"volume" : 
+			{
+				"user" : "musicvolume",
+				"value" : 0.69999999
+			}
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 -0.00000 1.57722",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"config" : 
+			{
+				"passthrough" : true
+			},
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/pulse/effect.json",
+					"id" : 30643,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"amount" : 0.34999999,
+								"audioamount" : 0.34999999,
+								"audiobounds" : "0.5 1.0",
+								"audioexponent" : 2,
+								"bounds" : "0 1",
+								"frequencymax" : 1.0,
+								"frequencymin" : 0.0,
+								"noiseamount" : 0.0,
+								"noisespeed" : 0.5,
+								"phase" : 0.0,
+								"power" : 1,
+								"speed" : 4,
+								"tinthigh" : "1 1 1",
+								"tintlow" : "1 1 1"
+							},
+							"id" : 30644,
+							"textures" : [ null, null, "masks/pulse_mask_736da6db" ]
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/tint/effect.json",
+					"id" : 4755,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 1,
+								"color" : "0.8470588235294118 1 0.9921568627450981"
+							},
+							"id" : 4756,
+							"textures" : [ null, "masks/tint_mask_37dc594a" ]
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 30187,
+			"image" : "models/util/composelayer.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "Compose-Phone",
+			"origin" : "886.04742 403.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "200.00000 500.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 1.57080",
+			"brightness" : 1.5,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/workshop/2084198056/Simple_Audio_Bars/effect.json",
+					"id" : 23,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"combos" : 
+							{
+								"ANTIALIAS" : 1,
+								"RESOLUTION" : 64
+							},
+							"constantshadervalues" : 
+							{
+								"Anti-alias blurring" : "0.1 0.1",
+								"Bar Color" : 
+								{
+									"user" : "audiobarscolor",
+									"value" : "0.00000 0.91373 1.00000"
+								},
+								"Bar Count" : 
+								{
+									"user" : "audiobarscount",
+									"value" : 16
+								},
+								"Bar Spacing" : 0.1,
+								"Lower/Upper Bar Bounds" : "0.0, 1.0",
+								"ui_editor_properties_opacity" : 0.89999998
+							},
+							"id" : 66
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/pulse/effect.json",
+					"id" : 398,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"combos" : 
+							{
+								"AUDIOPROCESSING" : 3
+							},
+							"constantshadervalues" : 
+							{
+								"amount" : 1.0,
+								"audioamount" : 1.0,
+								"audiobounds" : "0.5 1.0",
+								"audioexponent" : 1.0,
+								"bounds" : "0 1",
+								"frequencymax" : 1.0,
+								"frequencymin" : 0.0,
+								"noiseamount" : 0.0,
+								"noisespeed" : 0.5,
+								"phase" : 0.0,
+								"power" : 1.0,
+								"speed" : 3.0,
+								"tinthigh" : "1.00000 1.00000 1.00000",
+								"tintlow" : "1.00000 1.00000 1.00000"
+							},
+							"id" : 399
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/skew/effect.json",
+					"id" : 35,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"combos" : 
+							{
+								"MODE" : 1,
+								"REPEAT" : 0
+							},
+							"constantshadervalues" : 
+							{
+								"bottom" : 0,
+								"left" : -0.2,
+								"right" : 0.40000001,
+								"top" : 0
+							},
+							"id" : 67
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 20,
+			"image" : "models/util/solidlayer.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "Solid-Audio Bar",
+			"origin" : "940.00000 330.43695 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "0.20000 0.20000 1.00000",
+			"size" : "120.00000 700.00000",
+			"solid" : true,
+			"visible" : 
+			{
+				"user" : "audiobars",
+				"value" : true
+			}
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 1743,
+			"instanceoverride" : 
+			{
+				"alpha" : 0.64999998,
+				"colorn" : "1.00000 1.00000 1.00000",
+				"count" : 0.2,
+				"id" : 1744,
+				"rate" : 0.40000001
+			},
+			"locktransforms" : false,
+			"name" : "Smoke cloud",
+			"origin" : "1341.02637 619.47821 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/presets/smoke1.json",
+			"scale" : "0.70000 0.60000 1.00000",
+			"visible" : true
+		},
+		{
+			"angles" : "-0.00000 -0.00000 -0.39299",
+			"id" : 2885,
+			"instanceoverride" : 
+			{
+				"count" : 0.75,
+				"id" : 74,
+				"size" : 1.28
+			},
+			"locktransforms" : false,
+			"name" : "notes1_audio_responsive",
+			"origin" : "3100.00000 1600.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/workshop/2446146941/notes_copy1.json",
+			"scale" : "2.00000 2.00000 1.00000",
+			"visible" : 
+			{
+				"user" : "musicnotes",
+				"value" : true
+			}
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : 
+			{
+				"script" : "'use strict';\nexport let __workshopId = '2107481179';\n\n/**\n * Bind this script to the angles property of a layer for a simple 2D rotation.\n */\n\nlet rotationSpeed = 0.1;\n\n/**\n * @param {Vec3} value\n */\nexport function update(value) {\n\tvalue.z = engine.timeOfDay * -720;\n\treturn value;\n}\n",
+				"value" : "0.00000 0.00000 0.00000"
+			},
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/workshop/2107481179/tint/effect.json",
+					"id" : 35107,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 1.0,
+								"color" : "1 0 0"
+							},
+							"id" : 0
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 35104,
+			"image" : "models/workshop/2107481179/hour.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "hour",
+			"origin" : "623.20001 952.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "0.25500 0.25500 1.00000",
+			"size" : "960.00000 960.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : 
+			{
+				"script" : "'use strict';\nexport let __workshopId = '2107481179';\n\n/**\n * Bind this script to the angles property of a layer for a simple 2D rotation.\n */\n\nlet rotationSpeed = 0.1;\n\n/**\n * @param {Vec3} value\n */\nexport function update(value) {\n\tvalue.z = ((engine.timeOfDay * 24) % 1) * -360;\n\treturn value;\n}\n",
+				"value" : "0.00000 0.00000 0.00000"
+			},
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"id" : 35110,
+			"image" : "models/workshop/2107481179/minute.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "minute",
+			"origin" : "623.20001 952.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "0.25500 0.25500 1.00000",
+			"size" : "960.00000 960.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : 
+			{
+				"script" : "'use strict';\nexport let __workshopId = '2107481179';\n\n/**\n* Bind this script to the angles property of a layer for a simple 2D rotation.\n*/\n\nlet rotationSpeed = 0.1;\n\n/**\n* @param {Vec3} value\n*/\nexport function update(value) {\nvalue.z = ((engine.timeOfDay * 1440) % 1) * -360;\nreturn value;\n}\n",
+				"value" : "0.00000 0.00000 0.00000"
+			},
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"id" : 35113,
+			"image" : "models/workshop/2107481179/seconds.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "seconds",
+			"origin" : "623.20001 952.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "0.25500 0.25500 1.00000",
+			"size" : "960.00000 960.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"id" : 35116,
+			"image" : "models/workshop/2107481179/center_dot.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "center_dot",
+			"origin" : "623.20001 952.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "0.25500 0.25500 1.00000",
+			"size" : "24.00000 24.00000",
+			"solid" : true,
+			"visible" : true
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 4701,
+			"instanceoverride" : null,
+			"locktransforms" : false,
+			"name" : "Dust motes",
+			"origin" : "1920.00000 1080.00000 0.00000",
+			"parallaxDepth" : "0.00000 1.20000",
+			"particle" : "particles/presets/dust_motes_0.json",
+			"scale" : "2.00000 2.00000 1.00000",
+			"visible" : 
+			{
+				"user" : "dust",
+				"value" : true
+			}
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 0.69999999,
+			"angles" : "0.00000 0.00000 0.00000",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/vhs/effect.json",
+					"id" : 499,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"artifacts" : 0,
+								"chromatic" : 0.1,
+								"distortionspeed" : 0.80000001,
+								"distortionstrength" : 1.0,
+								"distortionwidth" : 1.0,
+								"scale" : 0.30000001,
+								"strength" : 1.0
+							},
+							"id" : 500
+						}
+					],
+					"visible" : true
+				}
+			],
+			"id" : 21107,
+			"image" : "models/GimaiSeikatsu_logo.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "GimaiSeikatsu_logo",
+			"origin" : "320.00000 2000.00000 0.00000",
+			"parallaxDepth" : "0.00000 0.00000",
+			"perspective" : false,
+			"scale" : "1.20000 1.20000 1.00000",
+			"size" : "500.00000 163.00000",
+			"solid" : true,
+			"visible" : 
+			{
+				"user" : "logo",
+				"value" : false
+			}
+		},
+		{
+			"angles" : "0.00000 -0.00000 0.35995",
+			"id" : 3426,
+			"instanceoverride" : 
+			{
+				"alpha" : 0.25,
+				"brightness" : 1.5,
+				"colorn" : "0.55686 0.52157 0.45098",
+				"id" : 3427
+			},
+			"locktransforms" : false,
+			"name" : "Light shafts 0",
+			"origin" : "1495.93225 1154.81531 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"particle" : "particles/presets/light_shafts_0.json",
+			"scale" : "2.00000 1.50000 1.00000",
+			"visible" : true
+		},
+		{
+			"angles" : "0.00000 0.00000 0.00000",
+			"id" : 198,
+			"locktransforms" : false,
+			"maxtime" : 5.0,
+			"mintime" : 1.0,
+			"muteineditor" : true,
+			"name" : "RAIN",
+			"origin" : "0.00000 0.00000 0.00000",
+			"parallaxDepth" : "1.00000 1.00000",
+			"playbackmode" : "loop",
+			"scale" : "1.00000 1.00000 1.00000",
+			"sound" : [ "sounds/RainFallMedium PE1005201.mp3" ],
+			"startsilent" : false,
+			"volume" : 
+			{
+				"user" : "rainvolume",
+				"value" : 0.2
+			}
+		},
+		{
+			"alpha" : 1.0,
+			"anchor" : "none",
+			"angles" : "0.00000 0.00000 0.00000",
+			"backgroundbrightness" : 1.0,
+			"backgroundcolor" : "0.00000 0.00000 0.00000",
+			"blockalign" : false,
+			"brightness" : 1.0,
+			"color" : "0.00000 0.00000 0.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"font" : "fonts/Alcubierre.otf",
+			"horizontalalign" : "center",
+			"id" : 539,
+			"ledsource" : false,
+			"limitrows" : false,
+			"limituseellipsis" : false,
+			"limitwidth" : false,
+			"locktransforms" : false,
+			"maxrows" : 1,
+			"maxwidth" : 500.0,
+			"name" : "Today is",
+			"opaquebackground" : false,
+			"origin" : "780.00000 1230.00000 0.00000",
+			"padding" : 32,
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"pointsize" : 
+			{
+				"user" : "datefontsize",
+				"value" : 18.0
+			},
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "529.00000 89.00000",
+			"solid" : true,
+			"text" : 
+			{
+				"user" : "datetextsays",
+				"value" : "Today is currently"
+			},
+			"verticalalign" : "center",
+			"visible" : 
+			{
+				"user" : "date",
+				"value" : true
+			}
+		},
+		{
+			"alpha" : 1.0,
+			"anchor" : "none",
+			"angles" : "0.00000 0.00000 0.00000",
+			"backgroundbrightness" : 1.0,
+			"backgroundcolor" : "0.00000 0.00000 0.00000",
+			"blockalign" : false,
+			"brightness" : 1.0,
+			"color" : "0.00000 0.00000 0.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"font" : "fonts/Alcubierre.otf",
+			"horizontalalign" : "center",
+			"id" : 27723,
+			"ledsource" : false,
+			"limitrows" : false,
+			"limituseellipsis" : false,
+			"limitwidth" : false,
+			"locktransforms" : false,
+			"maxrows" : 1,
+			"maxwidth" : 500.0,
+			"name" : "Time and Date",
+			"opaquebackground" : false,
+			"origin" : "780.00000 1150.00000 0.00000",
+			"padding" : 32,
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"pointsize" : 
+			{
+				"user" : "datefontsize",
+				"value" : 18.0
+			},
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "321.00000 88.00000",
+			"solid" : true,
+			"text" : 
+			{
+				"script" : "export let __workshopId = '2452831710';\n'use strict';export var scriptProperties=createScriptProperties().addCombo({name:'language',label:'Language',options:[{label:'English',value:'en-US'},{label:'繁體中文',value:'zh-TW'},{label:'日本語',value:'ja-JP'}]}).addCombo({name:'week',label:'Weekday Type',options:[{label:'Narrow (e.g. T)',value:'narrow'},{label:'Short (e.g. Thu)',value:'short'},{label:'Long (e.g. Thursday)',value:'long'}]}).addCheckbox({name:'twelve',label:'Use 12-hour clock',value:false}).addText({name:'format',label:'Format',value:'yyyy/MM/dd hh:mm:ss'}).addText({name:'formatInfo',label:'Format Placeholders',value:' - Year\\nyy: 2-digit year\\nyyyy: 4-digit year\\n\\n - Month\\nM: numeric month (e.g. 3)\\nMM: 2-digit month (e.g. 03)\\n\\n - Day\\nd: numeric day (e.g. 5)\\ndd: 2-digit day (e.g. 05)\\n\\n - Weekday\\nW: Weekday placeholder\\n\\n - Hour\\nh: numeric hour (e.g. 4)\\nhh: 2-digit hour (e.g. 04)\\n\\n - Minute\\nm: numeric minute (e.g. 7)\\nmm: 2-digit minute (e.g. 07)\\n\\n - Second\\ns: numeric second (e.g. 1)\\nss: 2-digit second (e.g. 01)\\n\\n - Millisecond\\nS: Millisecond placeholder (Max up to 3 digits)\\n\\n - AMPM\\na: AMPM placeholder\\n※ Note ※\\nYou must enable the \\'Use 12-hour clock\\' to use this placeholder'}).finish();export function update(value){const now=new Date();let nowObject={year:\"\",month:\"\",day:\"\",week:\"\",hour:\"\",minute:\"\",second:\"\",millisecond:\"\",ampm:\"\"};const setting={lang:scriptProperties.language,weektype:scriptProperties.week,twelve:scriptProperties.twelve,year:scriptProperties.format.match(/y+/)?scriptProperties.format.match(/y+/)[0]:\"\",month:scriptProperties.format.match(/M+/)?scriptProperties.format.match(/M+/)[0]:\"\",day:scriptProperties.format.match(/d+/)?scriptProperties.format.match(/d+/)[0]:\"\",week:scriptProperties.format.match(/W+/)?scriptProperties.format.match(/W+/)[0]:\"\",hour:scriptProperties.format.match(/h+/)?scriptProperties.format.match(/h+/)[0]:\"\",minute:scriptProperties.format.match(/m+/)?scriptProperties.format.match(/m+/)[0]:\"\",second:scriptProperties.format.match(/s+/)?scriptProperties.format.match(/s+/)[0]:\"\",millisecond:scriptProperties.format.match(/S+/)?scriptProperties.format.match(/S+/)[0]:\"\",ampm:scriptProperties.format.match(/a+/)?scriptProperties.format.match(/a+/)[0]:\"\"};const weekday={\"en-US\":{narrow:[\"S\",\"M\",\"T\",\"W\",\"T\",\"F\",\"S\"],short:[\"Sun\",\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\",\"Sat\"],long:[\"Sunday\",\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\",\"Saturday\"]},\"zh-TW\":{narrow:[\"日\",\"一\",\"二\",\"三\",\"四\",\"五\",\"六\"],short:[\"週日\",\"週一\",\"週二\",\"週三\",\"週四\",\"週五\",\"週六\"],long:[\"星期日\",\"星期一\",\"星期二\",\"星期三\",\"星期四\",\"星期五\",\"星期六\"]},\"ja-JP\":{long:[\"日\",\"月\",\"火\",\"水\",\"木\",\"金\",\"土\"],short:[\"日曜\",\"月曜\",\"火曜\",\"水曜\",\"木曜\",\"金曜\",\"土曜\"],long:[\"日曜日\",\"月曜日\",\"火曜日\",\"水曜日\",\"木曜日\",\"金曜日\",\"土曜日\"]}};const ampmlang={\"en-US\":[\"AM\",\"PM\"],\"zh-TW\":[\"上午\",\"下午\"],\"ja-JP\":[\"午前\",\"午後\"]};if(setting.year.length==2)nowObject.year=now.getFullYear().toString().slice(2);else if(setting.year.length==4)nowObject.year=now.getFullYear().toString();else nowObject.year=setting.year;if(setting.month.length==1)nowObject.month=(now.getMonth()+1).toString();else if(setting.month.length==2)nowObject.month=(now.getMonth()+1).toString().length==1?\"0\" +(now.getMonth()+1).toString():(now.getMonth()+1).toString();else nowObject.month=setting.month;if(setting.day.length==1)nowObject.day=now.getDate();else if(setting.day.length==2)nowObject.day=now.getDate().toString().length==1?\"0\"+now.getDate().toString():now.getDate().toString();else nowObject.day=setting.day;if(setting.week.length==1)nowObject.week=weekday[setting.lang][setting.weektype][now.getDay()];else nowObject.week=setting.week;if(setting.twelve){if(setting.hour.length==1)nowObject.hour=now.getHours()>12?(now.getHours()-12).toString():now.getHours().toString();else if(setting.hour.length==2)nowObject.hour=(now.getHours()>12?(now.getHours()-12).toString():now.getHours().toString()).length==1?\"0\"+now.getHours()>12?(now.getHours()-12).toString():now.getHours().toString():now.getHours()>12?(now.getHours()-12).toString():now.getHours().toString();else nowObject.hour=setting.hour;}else{if(setting.hour.length==1)nowObject.hour=now.getHours();else if(setting.hour.length==2)nowObject.hour=now.getHours().toString().length==1?\"0\"+now.getHours().toString():now.getHours().toString();else nowObject.hour=setting.hour;}if(setting.minute.length==1)nowObject.minute=now.getMinutes();else if(setting.minute.length==2)nowObject.minute=now.getMinutes().toString().length==1?\"0\"+now.getMinutes().toString():now.getMinutes().toString();else nowObject.minute=setting.minute;if(setting.second.length==1)nowObject.second=now.getSeconds();else if(setting.second.length==2)nowObject.second=now.getSeconds().toString().length==1?\"0\"+now.getSeconds().toString():now.getSeconds().toString();else nowObject.second=setting.second;if(setting.millisecond.length==1)nowObject.millisecond=now.getMilliseconds().toString().slice(0,1);else if(setting.millisecond.length==2)nowObject.millisecond=now.getMilliseconds().toString().slice(0,2);else if(setting.millisecond.length==3)nowObject.millisecond=now.getMilliseconds().toString();else nowObject.millisecond=setting.millisecond;if(setting.ampm.length==1 && setting.twelve){nowObject.ampm=now.getHours()>12?ampmlang[setting.lang][1]:ampmlang[setting.lang][0];}else nowObject.ampm=setting.ampm;let output=scriptProperties.format;output=output.replace(/y+/,nowObject.year);output=output.replace(/M+/,nowObject.month);output=output.replace(/d+/,nowObject.day);output=output.replace(/h+/,nowObject.hour);output=output.replace(/m+/,nowObject.minute);output=output.replace(/s+/,nowObject.second);output=output.replace(/S+/,nowObject.millisecond);output=output.replace(/a+/,nowObject.ampm);output=output.replace(/W+/,nowObject.week);return output;}\n",
+				"scriptproperties" : 
+				{
+					"format" : 
+					{
+						"user" : "dateformat",
+						"value" : "yyyy/MM/dd"
+					},
+					"formatInfo" : " - Year\nyy: 2-digit year\nyyyy: 4-digit year\n\n - Month\nM: numeric month (e.g. 3)\nMM: 2-digit month (e.g. 03)\n\n - Day\nd: numeric day (e.g. 5)\ndd: 2-digit day (e.g. 05)\n\n - Weekday\nW: Weekday placeholder\n\n - Hour\nh: numeric hour (e.g. 4)\nhh: 2-digit hour (e.g. 04)\n\n - Minute\nm: numeric minute (e.g. 7)\nmm: 2-digit minute (e.g. 07)\n\n - Second\ns: numeric second (e.g. 1)\nss: 2-digit second (e.g. 01)\n\n - Millisecond\nS: Millisecond placeholder (Max up to 3 digits)\n\n - AMPM\na: AMPM placeholder\n※ Note ※\nYou must enable the 'Use 12-hour clock' to use this placeholder",
+					"language" : "en-US",
+					"twelve" : false,
+					"week" : "short"
+				},
+				"value" : "2021/01/01"
+			},
+			"verticalalign" : "center",
+			"visible" : 
+			{
+				"user" : "date",
+				"value" : true
+			}
+		},
+		{
+			"alignment" : "center",
+			"alpha" : 1.0,
+			"angles" : "0.00000 0.00000 1.57080",
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 1381,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0.60000002
+							},
+							"id" : 1382
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/vhs/effect.json",
+					"id" : 1384,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"artifacts" : 1.5,
+								"chromatic" : 0.1,
+								"distortionspeed" : 1,
+								"distortionstrength" : 1,
+								"distortionwidth" : 1,
+								"scale" : 0.30000001,
+								"strength" : 1
+							},
+							"id" : 1385
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/perspective/effect.json",
+					"id" : 1389,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"point0" : "0.25176 0.46426",
+								"point1" : "0.36308 0.05604",
+								"point2" : "0.37863 0.66816",
+								"point3" : "0.26557 0.96940"
+							},
+							"id" : 1390
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 1395,
+					"name" : "Media Integration Opacity",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0
+							},
+							"id" : 1396
+						}
+					],
+					"visible" : 
+					{
+						"user" : "hidemediaintegration",
+						"value" : false
+					}
+				}
+			],
+			"id" : 1377,
+			"image" : "models/blank-album-cover.json",
+			"ledsource" : false,
+			"locktransforms" : false,
+			"name" : "blank-album-cover",
+			"origin" : "754.61060 371.16202 0.00000",
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "256.00000 256.00000",
+			"solid" : true,
+			"visible" : 
+			{
+				"script" : "'use strict';\n\n/**\n * @param {MediaPlaybackEvent} event\n */\nexport function mediaPlaybackChanged(event) {\n\tthisLayer.visible = event.state !== MediaPlaybackEvent.PLAYBACK_STOPPED;\n}",
+				"value" : false
+			}
+		},
+		{
+			"alpha" : 0.85000002,
+			"anchor" : "none",
+			"angles" : "0.00000 0.00000 0.00000",
+			"backgroundbrightness" : 1.0,
+			"backgroundcolor" : "0.00000 0.00000 0.00000",
+			"blockalign" : false,
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/edgedetection/effect.json",
+					"id" : 804,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0.60000002,
+								"brightness" : 1,
+								"detectmultiply" : 1.3,
+								"detectthreshold" : 0.2,
+								"outlinecolor" : "0.9294117647058824 0.9294117647058824 0.9294117647058824",
+								"outlinecolorbg" : "1 1 1",
+								"size" : 1
+							},
+							"id" : 805
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/perspective/effect.json",
+					"id" : 3521,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"point0" : "-0.00161 0.06402",
+								"point1" : "1 0",
+								"point2" : "1.00322 0.90397",
+								"point3" : "0 1"
+							},
+							"id" : 3522
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 14115,
+					"name" : "Media Integration Opacity",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0
+							},
+							"id" : 14116
+						}
+					],
+					"visible" : 
+					{
+						"user" : "hidemediaintegration",
+						"value" : false
+					}
+				}
+			],
+			"font" : "fonts/Alcubierre.otf",
+			"horizontalalign" : "left",
+			"id" : 1777,
+			"ledsource" : false,
+			"limitrows" : true,
+			"limituseellipsis" : false,
+			"limitwidth" : true,
+			"locktransforms" : false,
+			"maxrows" : 1,
+			"maxwidth" : 700.0,
+			"name" : "Playing",
+			"opaquebackground" : false,
+			"origin" : "1350.00000 1960.00000 0.00000",
+			"padding" : 32,
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"pointsize" : 22.0,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "533.00000 172.00000",
+			"solid" : true,
+			"text" : "Now Playing:",
+			"verticalalign" : "center",
+			"visible" : 
+			{
+				"script" : "'use strict';\n\n/**\n * @param {MediaPlaybackEvent} event\n */\nexport function mediaPlaybackChanged(event) {\n\tthisLayer.visible = event.state !== MediaPlaybackEvent.PLAYBACK_STOPPED;\n}",
+				"value" : false
+			}
+		},
+		{
+			"alpha" : 0.85000002,
+			"anchor" : "none",
+			"angles" : "0.00000 0.00000 0.00000",
+			"backgroundbrightness" : 1.0,
+			"backgroundcolor" : "0.00000 0.00000 0.00000",
+			"blockalign" : false,
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/edgedetection/effect.json",
+					"id" : 1489,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0.60000002,
+								"brightness" : 1,
+								"detectmultiply" : 1.3,
+								"detectthreshold" : 0.2,
+								"outlinecolor" : "0.9294117647058824 0.9294117647058824 0.9294117647058824",
+								"outlinecolorbg" : "1 1 1",
+								"size" : 1
+							},
+							"id" : 1490
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/perspective/effect.json",
+					"id" : 3777,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"point0" : "-0.00161 0.06402",
+								"point1" : "1 0",
+								"point2" : "1.00322 0.90397",
+								"point3" : "0 1"
+							},
+							"id" : 3778
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 14163,
+					"name" : "Media Integration Opacity",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0
+							},
+							"id" : 14164
+						}
+					],
+					"visible" : 
+					{
+						"user" : "hidemediaintegration",
+						"value" : false
+					}
+				}
+			],
+			"font" : "fonts/Alcubierre.otf",
+			"horizontalalign" : "left",
+			"id" : 387,
+			"ledsource" : false,
+			"limitrows" : true,
+			"limituseellipsis" : true,
+			"limitwidth" : true,
+			"locktransforms" : false,
+			"maxrows" : 1,
+			"maxwidth" : 700.0,
+			"name" : "Song",
+			"opaquebackground" : false,
+			"origin" : "1350.00000 1880.00000 0.00000",
+			"padding" : 32,
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"pointsize" : 14.0,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "356.00000 132.00000",
+			"solid" : true,
+			"text" : 
+			{
+				"script" : "'use strict';\n\nvar mediaData = \"\";\n\n/**\n * @param {String} value - for property 'text'\n * @return {String} - update current property value\n */\nexport function update(value) {\n\treturn mediaData;\n}\n\n/**\n * @param {MediaPropertiesEvent} event\n */\nexport function mediaPropertiesChanged(event) {\n\tmediaData = event.title;\n}",
+				"value" : "Song Name"
+			},
+			"verticalalign" : "center",
+			"visible" : 
+			{
+				"script" : "'use strict';\n\n/**\n * @param {MediaPlaybackEvent} event\n */\nexport function mediaPlaybackChanged(event) {\n\tthisLayer.visible = event.state !== MediaPlaybackEvent.PLAYBACK_STOPPED;\n}",
+				"value" : false
+			}
+		},
+		{
+			"alpha" : 0.85000002,
+			"anchor" : "none",
+			"angles" : "0.00000 0.00000 0.00000",
+			"backgroundbrightness" : 1.0,
+			"backgroundcolor" : "0.00000 0.00000 0.00000",
+			"blockalign" : false,
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/edgedetection/effect.json",
+					"id" : 3143,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0.60000002,
+								"brightness" : 1,
+								"detectmultiply" : 1.3,
+								"detectthreshold" : 0.2,
+								"outlinecolor" : "0.9294117647058824 0.9294117647058824 0.9294117647058824",
+								"outlinecolorbg" : "1 1 1",
+								"size" : 1
+							},
+							"id" : 3144
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/perspective/effect.json",
+					"id" : 3145,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"point0" : "-0.00161 0.06402",
+								"point1" : "1 0",
+								"point2" : "1.00322 0.90397",
+								"point3" : "0 1"
+							},
+							"id" : 3146
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 3147,
+					"name" : "Media Integration Opacity",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0
+							},
+							"id" : 3148
+						}
+					],
+					"visible" : 
+					{
+						"user" : "hidemediaintegration",
+						"value" : false
+					}
+				}
+			],
+			"font" : "fonts/Alcubierre.otf",
+			"horizontalalign" : "left",
+			"id" : 3142,
+			"ledsource" : false,
+			"limitrows" : true,
+			"limituseellipsis" : true,
+			"limitwidth" : true,
+			"locktransforms" : false,
+			"maxrows" : 1,
+			"maxwidth" : 700.0,
+			"name" : "Album",
+			"opaquebackground" : false,
+			"origin" : "1350.00000 1810.00000 0.00000",
+			"padding" : 32,
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"pointsize" : 14.0,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "228.00000 133.00000",
+			"solid" : true,
+			"text" : 
+			{
+				"script" : "'use strict';\n\nvar mediaData = \"\";\n\n/**\n * @param {String} value - for property 'text'\n * @return {String} - update current property value\n */\nexport function update(value) {\n\treturn mediaData;\n}\n\n/**\n * @param {MediaPropertiesEvent} event\n */\nexport function mediaPropertiesChanged(event) {\n\tmediaData = event.albumTitle;\n}",
+				"value" : "Album"
+			},
+			"verticalalign" : "center",
+			"visible" : 
+			{
+				"script" : "'use strict';\n\n/**\n * @param {MediaPlaybackEvent} event\n */\nexport function mediaPlaybackChanged(event) {\n\tthisLayer.visible = event.state !== MediaPlaybackEvent.PLAYBACK_STOPPED;\n}",
+				"value" : false
+			}
+		},
+		{
+			"alpha" : 0.85000002,
+			"anchor" : "none",
+			"angles" : "0.00000 0.00000 0.00000",
+			"backgroundbrightness" : 1.0,
+			"backgroundcolor" : "0.00000 0.00000 0.00000",
+			"blockalign" : false,
+			"brightness" : 1.0,
+			"color" : "1.00000 1.00000 1.00000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"effects" : 
+			[
+				{
+					"file" : "effects/edgedetection/effect.json",
+					"id" : 1571,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0.60000002,
+								"brightness" : 1,
+								"detectmultiply" : 1.3,
+								"detectthreshold" : 0.2,
+								"outlinecolor" : "0.9294117647058824 0.9294117647058824 0.9294117647058824",
+								"outlinecolorbg" : "1 1 1",
+								"size" : 1
+							},
+							"id" : 1572
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/perspective/effect.json",
+					"id" : 3815,
+					"name" : "",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"point0" : "-0.00161 0.06402",
+								"point1" : "1 0",
+								"point2" : "1.00322 0.90397",
+								"point3" : "0 1"
+							},
+							"id" : 3816
+						}
+					],
+					"visible" : true
+				},
+				{
+					"file" : "effects/opacity/effect.json",
+					"id" : 14218,
+					"name" : "Media Integration Opacity",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"alpha" : 0
+							},
+							"id" : 14219
+						}
+					],
+					"visible" : 
+					{
+						"user" : "hidemediaintegration",
+						"value" : false
+					}
+				}
+			],
+			"font" : "fonts/Alcubierre.otf",
+			"horizontalalign" : "left",
+			"id" : 2031,
+			"ledsource" : false,
+			"limitrows" : true,
+			"limituseellipsis" : true,
+			"limitwidth" : true,
+			"locktransforms" : false,
+			"maxrows" : 1,
+			"maxwidth" : 700.0,
+			"name" : "Artist",
+			"opaquebackground" : false,
+			"origin" : "1350.00000 1740.00000 0.00000",
+			"padding" : 32,
+			"parallaxDepth" : "0.00000 1.00000",
+			"perspective" : false,
+			"pointsize" : 14.0,
+			"scale" : "1.00000 1.00000 1.00000",
+			"size" : "185.00000 132.00000",
+			"solid" : true,
+			"text" : 
+			{
+				"script" : "'use strict';\n\nvar mediaData = \"\";\n\n/**\n * @param {String} value - for property 'text'\n * @return {String} - update current property value\n */\nexport function update(value) {\n\treturn mediaData;\n}\n\n/**\n * @param {MediaPropertiesEvent} event\n */\nexport function mediaPropertiesChanged(event) {\n\tmediaData = event.albumArtist;\n}",
+				"value" : "Artist"
+			},
+			"verticalalign" : "center",
+			"visible" : 
+			{
+				"script" : "'use strict';\n\n/**\n * @param {MediaPlaybackEvent} event\n */\nexport function mediaPlaybackChanged(event) {\n\tthisLayer.visible = event.state !== MediaPlaybackEvent.PLAYBACK_STOPPED;\n}",
+				"value" : false
+			}
+		}
+	],
+	"version" : 1
+}
