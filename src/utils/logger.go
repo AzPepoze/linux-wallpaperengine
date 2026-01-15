@@ -17,15 +17,24 @@ const (
 var DebugMode bool
 
 func (l LogLevel) String() string {
+	// ANSI color codes
+	const (
+		colorReset  = "\033[0m"
+		colorBlue   = "\033[34m"
+		colorCyan   = "\033[36m"
+		colorYellow = "\033[33m"
+		colorRed    = "\033[31m"
+	)
+
 	switch l {
 	case LevelInfo:
-		return "INFO"
+		return colorBlue + "INFO" + colorReset
 	case LevelDebug:
-		return "DEBUG"
+		return colorCyan + "DEBUG" + colorReset
 	case LevelWarn:
-		return "WARN"
+		return colorYellow + "WARN" + colorReset
 	case LevelError:
-		return "ERROR"
+		return colorRed + "ERROR" + colorReset
 	}
 	return "UNKNOWN"
 }
