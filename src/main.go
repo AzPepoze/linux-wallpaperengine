@@ -3,101 +3,116 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"linux-wallpaperengine/src/convert"
+	"linux-wallpaperengine/src/utils"
+	"linux-wallpaperengine/src/wallpaper"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 func main() {
+	// Manual check for debug flag anywhere in the arguments
+	for _, arg := range os.Args {
+		if arg == "--debug" || arg == "-debug" || strings.HasPrefix(arg, "--debug=") {
+			utils.DebugMode = true
+			if strings.HasSuffix(arg, "=false") {
+				utils.DebugMode = false
+			}
+			break
+		}
+	}
+
+	// Custom handling for subcommands
+	if len(os.Args) > 1 && os.Args[1] == "decode" {
+		var texPath string
+		// Find the first argument that doesn't start with "-" and isn't "decode"
+		for i := 2; i < len(os.Args); i++ {
+			if !strings.HasPrefix(os.Args[i], "-") {
+				texPath = os.Args[i]
+				break
+			}
+		}
+
+		if texPath != "" {
+			runDecode(texPath)
+			return
+		}
+	}
+
 	pkgPath := flag.String("pkg", "/home/azpepoze/.local/share/Steam/steamapps/workshop/content/431960/2617953025/scene.pkg", "Path to the scene.pkg file")
 	decodeMode := flag.Bool("decode", false, "Enable decode mode to convert a single .tex to .png")
 	texToDecode := flag.String("tex", "", "Path to the .tex file to decode (used with -decode)")
+	testSound := flag.String("test-sound", "", "Path to an mp3 file to test playback")
+	testSine := flag.Bool("test-sine", false, "Test sine wave generator")
 	debugFlag := flag.Bool("debug", false, "Enable verbose debug logging")
 	flag.Parse()
 
-	DebugMode = *debugFlag
+	if *debugFlag {
+		utils.DebugMode = true
+	}
+
+	if *testSine {
+		runTestSine()
+		return
+	}
+
+	if *testSound != "" {
+		runTestSound(*testSound)
+		return
+	}
 
 	if *decodeMode && *texToDecode != "" {
 		runDecode(*texToDecode)
 		return
 	}
 
-	Info("--- Wallpaper Engine Start (Fast Native) ---")
+	utils.Info("--- Wallpaper Engine ---")
 
 	if _, err := os.Stat("tmp"); os.IsNotExist(err) {
-		Info("Unpacking scene.pkg...")
-		if err := extractPkg(*pkgPath, "tmp"); err != nil {
-			Error("Failed to extract pkg: %v", err)
+		utils.Info("Unpacking scene.pkg...")
+		if err := convert.ExtractPkg(*pkgPath, "tmp"); err != nil {
+			utils.Error("Failed to extract pkg: %v", err)
 			os.Exit(1)
 		}
 	}
 
 	sceneData, err := findAndReadSceneJSON("tmp")
 	if err != nil {
-		Error("Failed to find/read scene.json: %v", err)
+		utils.Error("Failed to find/read scene.json: %v", err)
 		os.Exit(1)
 	}
 
-	bulkConvertTextures("tmp")
+	convert.BulkConvertTextures("tmp", "converted")
 
-	var scene Scene
+	var scene wallpaper.Scene
 	if err := json.Unmarshal(sceneData, &scene); err != nil {
-		Error("Error unmarshalling scene.json: %v", err)
+		utils.Error("Error unmarshalling scene.json: %v", err)
 		os.Exit(1)
 	}
-	Info("Scene loaded: %d objects found", len(scene.Objects))
+	utils.Info("Scene loaded: %d objects found", len(scene.Objects))
 
-	ebiten.SetWindowSize(1280, 720)
+	ebiten.SetWindowSize(1920, 1080)
 	ebiten.SetWindowTitle("Linux Wallpaper Engine")
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetRunnableOnUnfocused(true)
 
-	game := NewGame(scene)
+	game := NewWindow(scene)
 
-	Info("Starting game loop...")
+	utils.Info("Starting game loop...")
 	if err := ebiten.RunGame(game); err != nil {
-		Error("Game loop error: %v", err)
+		utils.Error("Game loop error: %v", err)
 	}
-}
-
-func runDecode(texPath string) {
-	Info("Testing decode: %s", texPath)
-	img, err := decodeTexToImage(texPath)
-	if err != nil {
-		Error("Decode failed: %v", err)
-		os.Exit(1)
-	}
-
-	if err := os.MkdirAll("test_out", 0755); err != nil {
-		Error("Failed to create test_out directory: %v", err)
-		os.Exit(1)
-	}
-
-	baseName := filepath.Base(texPath)
-	baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	outPath := filepath.Join("test_out", baseName+".png")
-
-	f, err := os.Create(outPath)
-	if err != nil {
-		Error("Failed to create output file: %v", err)
-		os.Exit(1)
-	}
-	defer f.Close()
-
-	if err := png.Encode(f, img); err != nil {
-		Error("Failed to encode PNG: %v", err)
-		os.Exit(1)
-	}
-
-	Info("Decode successful! Saved to: %s", outPath)
 }
 
 func findAndReadSceneJSON(root string) ([]byte, error) {
 	var sceneData []byte
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && info.Name() == "scene.json" {
-			Debug("Found scene.json at: %s", path)
+			utils.Debug("Found scene.json at: %s", path)
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
 				return readErr
@@ -114,21 +129,4 @@ func findAndReadSceneJSON(root string) ([]byte, error) {
 		return nil, os.ErrNotExist
 	}
 	return sceneData, nil
-}
-
-func bulkConvertTextures(root string) {
-	Info("Starting bulk texture conversion...")
-	convertedCount := 0
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tex") {
-			_, err := loadTexture(path)
-			if err != nil {
-				Warn("Failed to convert %s: %v", path, err)
-			} else {
-				convertedCount++
-			}
-		}
-		return nil
-	})
-	Info("Bulk conversion finished. Processed %d textures.", convertedCount)
 }

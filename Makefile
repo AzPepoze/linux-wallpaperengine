@@ -1,22 +1,29 @@
 ENGINE_SRC = src/*.go
-ENGINE_TARGET = bin/wallpaper-engine
+ENGINE_TARGET = bin/linux-wallpaperengine
 
 build:
 	mkdir -p bin
 	go build -o $(ENGINE_TARGET) $(ENGINE_SRC)
 
 dev: clean build
-	$(ENGINE_TARGET)
+	$(ENGINE_TARGET) $(ARGS)
+
+run:
+	$(ENGINE_TARGET) $(ARGS)
 
 clean:
-	rm -rf bin tmp debug.log test_out
+	rm -rf bin tmp debug.log test_out converted
 
-test: build
+test-texture: build
 	@echo "Testing DXT1 Decoder..."
-	@# Find the first .tex file in tmp/materials/ to test
-	@FILE=$$(find tmp/materials -name "*.tex" | head -n 1); \
+	@FILE=$$(find test/* -name "*.tex" | head -n 1); \
 	if [ -z "$$FILE" ]; then \
-		echo "No .tex files found in tmp/materials to test. Please ensure tmp directory exists."; \
+		echo "No .tex files found in test directory."; \
 		exit 1; \
 	fi; \
-	$(ENGINE_TARGET) decode $$FILE
+	echo "Decoding file: $$FILE"; \
+	$(ENGINE_TARGET) decode $$FILE $(ARGS)
+
+test-sine: build
+	@echo "Testing Sine Wave generator (Forcing Pulse/PipeWire)..."
+	OTO_LINUX_BACKEND=pulse $(ENGINE_TARGET) -test-sine
