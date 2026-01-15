@@ -228,7 +228,7 @@ func LoadTexture(path string) (*ebiten.Image, error) {
 
 	if f, err := os.Create(pngPath); err == nil {
 		if err := png.Encode(f, img); err != nil {
-			utils.Warn("Failed to encode PNG %s: %v", pngPath, err)
+			utils.Error("Failed to encode PNG %s: %v", pngPath, err)
 			f.Close()
 			os.Remove(pngPath)
 		} else {

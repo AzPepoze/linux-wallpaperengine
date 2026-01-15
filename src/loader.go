@@ -21,7 +21,7 @@ func resolveTexturePath(object *wallpaper.Object) string {
 	}
 
 	textureName := strings.TrimSuffix(filepath.Base(object.Image), ".json")
-	
+
 	if strings.HasSuffix(object.Image, ".json") {
 		if name, err := extractTextureFromJSONPath(filepath.Join("tmp", object.Image)); err == nil {
 			textureName = name
@@ -66,13 +66,13 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 	}
 
 	if len(data) == 0 {
-		utils.Warn("Failed to load particle JSON for %s (Path: %s)", name, particlePath)
+		utils.Error("Failed to load particle JSON for %s (Path: %s)", name, particlePath)
 		return nil
 	}
 
 	var config wallpaper.ParticleJSON
 	if err := json.Unmarshal(data, &config); err != nil {
-		utils.Warn("Failed to unmarshal particle JSON for %s: %s", name, err)
+		utils.Error("Failed to unmarshal particle JSON for %s: %s", name, err)
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 				filepath.Join("tmp/materials", config.Material),
 				filepath.Join(filepath.Dir(fullParticlePath), config.Material),
 			}
-			
+
 			for _, p := range possibleMaterialPaths {
 				if name, err := extractTextureFromJSONPath(p); err == nil {
 					textureName = name
@@ -134,7 +134,7 @@ func extractTextureFromJSONPath(fullPath string) (string, error) {
 		if name, err := extractTextureFromJSONPath(p); err == nil {
 			return name, nil
 		}
-		
+
 		// Fallback to searching
 		searchPaths := []string{
 			filepath.Join("tmp", model.Material),
@@ -154,7 +154,7 @@ func findTextureFile(name string) string {
 	if name == "" {
 		return ""
 	}
-	
+
 	cleanName := strings.TrimPrefix(name, "materials/")
 	cleanName = strings.TrimSuffix(cleanName, ".tex")
 
@@ -173,7 +173,7 @@ func findTextureFile(name string) string {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
-		
+
 		// Try with original name inside dir too
 		p = filepath.Join(dir, name+".tex")
 		if _, err := os.Stat(p); err == nil {

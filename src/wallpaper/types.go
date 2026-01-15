@@ -161,16 +161,17 @@ type MaterialJSON struct {
 }
 
 type ParticleJSON struct {
-	Material     string                `json:"material"`
-	MaxCount     int                   `json:"maxcount"`
-	StartTime    float64               `json:"starttime"`
-	Flags        int                   `json:"flags"`
-	Emitter      []ParticleEmitter     `json:"emitter"`
-	Initializer  []ParticleInitializer `json:"initializer"`
-	Operator     []ParticleOperator    `json:"operator"`
-	Renderer     []ParticleRenderer    `json:"renderer"`
-	Children     []string              `json:"children"`
-	ControlPoint []ControlPoint        `json:"controlpoint"`
+	Material           string                `json:"material"`
+	MaxCount           int                   `json:"maxcount"`
+	StartTime          float64               `json:"starttime"`
+	Flags              int                   `json:"flags"`
+	SequenceMultiplier float64               `json:"sequencemultiplier"`
+	Emitter            []ParticleEmitter     `json:"emitter"`
+	Initializer        []ParticleInitializer `json:"initializer"`
+	Operator           []ParticleOperator    `json:"operator"`
+	Renderer           []ParticleRenderer    `json:"renderer"`
+	Children           []interface{}         `json:"children"`
+	ControlPoint       []ControlPoint        `json:"controlpoint"`
 }
 
 type ParticleEmitter struct {
@@ -210,10 +211,10 @@ type ParticleOperator struct {
 	SpeedMin  float64 `json:"speedmin"`
 	SpeedMax  float64 `json:"speedmax"`
 	// Color change operator
-	StartTime  float64 `json:"starttime"`
-	StartValue string  `json:"startvalue"`
-	EndTime    float64 `json:"endtime"`
-	EndValue   string  `json:"endvalue"`
+	StartTime  float64     `json:"starttime"`
+	StartValue interface{} `json:"startvalue"`
+	EndTime    float64     `json:"endtime"`
+	EndValue   interface{} `json:"endvalue"`
 	// Oscillate alpha operator
 	FrequencyMax float64 `json:"frequencymax"`
 	FrequencyMin float64 `json:"frequencymin"`

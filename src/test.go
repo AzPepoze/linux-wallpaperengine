@@ -17,9 +17,9 @@ func runTestSound(path string) {
 	utils.Info("Testing sound playback (Malgo): %s", path)
 	am := wallpaper.NewAudioManager()
 	defer am.Close()
-	
-	am.PlayDirect(path, 1.0)
-	
+
+	am.PlayDirect(path, 1.0, true)
+
 	utils.Info("Playing... Press Enter to stop.")
 	var input string
 	fmt.Scanln(&input)
@@ -27,14 +27,14 @@ func runTestSound(path string) {
 
 func runTestSine() {
 	utils.Info("Testing sine wave generator (440Hz)...")
-	
+
 	sampleRate := 48000
 	frequency := 440.0
 	duration := 2.0
 	amplitude := 0.1
 
 	utils.Info("Generating %f seconds of %f Hz sine wave at %d Hz sample rate", duration, frequency, sampleRate)
-	
+
 	for i := 0; i < 10; i++ {
 		t := float64(i) / float64(sampleRate)
 		val := amplitude * math.Sin(2*math.Pi*frequency*t)

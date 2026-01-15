@@ -43,7 +43,7 @@ func main() {
 		}
 	}
 
-	pkgPath := flag.String("pkg", "/home/azpepoze/.local/share/Steam/steamapps/workshop/content/431960/2617953025/scene.pkg", "Path to the scene.pkg file")
+	pkgPath := flag.String("pkg", "", "Path to the scene.pkg file")
 	decodeMode := flag.Bool("decode", false, "Enable decode mode to convert a single .tex to .png")
 	texToDecode := flag.String("tex", "", "Path to the .tex file to decode (used with -decode)")
 	testSound := flag.String("test-sound", "", "Path to an mp3 file to test playback")
@@ -72,11 +72,36 @@ func main() {
 
 	utils.Info("--- Wallpaper Engine ---")
 
-	if _, err := os.Stat("tmp"); os.IsNotExist(err) {
-		utils.Info("Unpacking scene.pkg...")
-		if err := convert.ExtractPkg(*pkgPath, "tmp"); err != nil {
-			utils.Error("Failed to extract pkg: %v", err)
+	wallpaperFolder := ""
+	if *pkgPath == "" && len(flag.Args()) > 0 {
+		wallpaperFolder = flag.Args()[0]
+	}
+
+	if wallpaperFolder != "" {
+		// If a folder is passed, look for scene.pkg inside
+		scenePkg := filepath.Join(wallpaperFolder, "scene.pkg")
+		if _, err := os.Stat(scenePkg); err == nil {
+			utils.Info("Extracting scene.pkg from folder: %s", wallpaperFolder)
+			if err := convert.ExtractPkg(scenePkg, "tmp"); err != nil {
+				utils.Error("Failed to extract pkg: %v", err)
+				os.Exit(1)
+			}
+		} else {
+			utils.Error("scene.pkg not found in folder: %s", wallpaperFolder)
 			os.Exit(1)
+		}
+	} else {
+		// Fallback to --pkg argument
+		if *pkgPath == "" {
+			utils.Error("No wallpaper folder or scene.pkg specified.")
+			os.Exit(1)
+		}
+		if _, err := os.Stat("tmp"); os.IsNotExist(err) {
+			utils.Info("Unpacking scene.pkg...")
+			if err := convert.ExtractPkg(*pkgPath, "tmp"); err != nil {
+				utils.Error("Failed to extract pkg: %v", err)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -95,7 +120,13 @@ func main() {
 	}
 	utils.Info("Scene loaded: %d objects found", len(scene.Objects))
 
-	ebiten.SetWindowSize(1920, 1080)
+	// Get monitor size and set window to match
+	monitor := ebiten.Monitor()
+	monitorW, monitorH := monitor.Size()
+	utils.Info("Monitor resolution: %dx%d", monitorW, monitorH)
+
+	// Set window size to monitor size
+	ebiten.SetWindowSize(monitorW, monitorH)
 	ebiten.SetWindowTitle("Linux Wallpaper Engine")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetRunnableOnUnfocused(true)

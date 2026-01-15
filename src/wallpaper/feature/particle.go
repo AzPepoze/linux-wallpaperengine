@@ -1,6 +1,7 @@
 package feature
 
 import (
+	"image"
 	"image/color"
 	"math"
 	"math/rand"
@@ -23,6 +24,7 @@ type Particle struct {
 	Size         float64
 	InitialSize  float64
 	SpawnTime    float64
+	SpriteFrame  int
 }
 
 type ParticleSystem struct {
@@ -268,12 +270,12 @@ func (ps *ParticleSystem) applyOperators(particle *Particle, dt float64) {
 			if age >= op.StartTime && age <= op.EndTime {
 				progress := (age - op.StartTime) / (op.EndTime - op.StartTime)
 
-				sr, sg, sb := wallpaper.ParseColor(op.StartValue)
-				er, eg, eb := wallpaper.ParseColor(op.EndValue)
+				startColor := getVec3OrFloat(op.StartValue)
+				endColor := getVec3OrFloat(op.EndValue)
 
-				particle.Color.X = sr + (er-sr)*progress
-				particle.Color.Y = sg + (eg-sg)*progress
-				particle.Color.Z = sb + (eb-sb)*progress
+				particle.Color.X = startColor.X + (endColor.X-startColor.X)*progress
+				particle.Color.Y = startColor.Y + (endColor.Y-startColor.Y)*progress
+				particle.Color.Z = startColor.Z + (endColor.Z-startColor.Z)*progress
 			}
 
 		case "oscillatealpha":
@@ -534,37 +536,95 @@ func (ps *ParticleSystem) Draw(screen *ebiten.Image, originX, originY float64, o
 		img = fallbackTexture
 	}
 
+	rendererType := ""
+	if len(ps.Config.Renderer) > 0 {
+		rendererType = ps.Config.Renderer[0].Name
+	}
+
+	// Check if sprite sheet is used
+	sequenceMultiplier := ps.Config.SequenceMultiplier
+	useSpriteSheet := sequenceMultiplier > 1
+
+	if sequenceMultiplier <= 0 {
+		sequenceMultiplier = 1
+	}
+
+	// Calculate sprite sheet grid (8x8 for sequencemultiplier = 2)
+	gridSize := int(sequenceMultiplier * 4) // 2 * 4 = 8
+	if gridSize <= 1 {
+		gridSize = 1
+	}
+	totalFrames := gridSize * gridSize
+
 	for _, particle := range ps.Particles {
-		drawOptions := &ebiten.DrawImageOptions{}
+		// Only use sprite rendering if renderer is "sprite" AND sprite sheet is enabled
+		if rendererType == "sprite" && useSpriteSheet {
+			drawOptions := &ebiten.DrawImageOptions{}
 
-		width, height := img.Bounds().Dx(), img.Bounds().Dy()
+			width, height := img.Bounds().Dx(), img.Bounds().Dy()
 
-		// Center the particle
-		drawOptions.GeoM.Translate(-float64(width)/2, -float64(height)/2)
+			// Calculate sprite frame based on particle age
+			ageRatio := (particle.MaxLife - particle.Life) / particle.MaxLife
+			frameIndex := int(ageRatio * float64(totalFrames))
+			if frameIndex >= totalFrames {
+				frameIndex = totalFrames - 1
+			}
 
-		// Apply rotation
-		drawOptions.GeoM.Rotate(particle.Rotation)
+			// Calculate sprite sheet position
+			spriteWidth := width / gridSize
+			spriteHeight := height / gridSize
+			srcX := (frameIndex % gridSize) * spriteWidth
+			srcY := (frameIndex / gridSize) * spriteHeight
 
-		// Apply particle size and object scale
-		scaleX := objScale.X * particle.Size / 100.0
-		scaleY := objScale.Y * particle.Size / 100.0
-		drawOptions.GeoM.Scale(scaleX, scaleY)
+			// Create sub-image for the specific sprite frame
+			spriteImg := img.SubImage(image.Rectangle{
+				Min: image.Point{X: srcX, Y: srcY},
+				Max: image.Point{X: srcX + spriteWidth, Y: srcY + spriteHeight},
+			}).(*ebiten.Image)
 
-		// Translate to particle position
-		drawOptions.GeoM.Translate(originX+particle.Position.X, originY+particle.Position.Y)
+			// Center the particle texture
+			drawOptions.GeoM.Translate(-float64(spriteWidth)/2, -float64(spriteHeight)/2)
 
-		// For additive blending, multiply color by alpha to get proper fade
-		// This makes alpha=0 actually invisible
-		drawOptions.ColorScale.Scale(
-			float32(particle.Color.X*particle.Alpha),
-			float32(particle.Color.Y*particle.Alpha),
-			float32(particle.Color.Z*particle.Alpha),
-			1.0, // Keep alpha channel at 1 for additive blending
-		)
+			// Apply rotation
+			drawOptions.GeoM.Rotate(particle.Rotation)
 
-		// Use lighter blending for additive effect
-		drawOptions.Blend = ebiten.BlendLighter
-		screen.DrawImage(img, drawOptions)
+			// Apply scale - particle.Size is in percentage (0-100+), objScale includes render scale
+			scale := particle.Size / 100.0
+			drawOptions.GeoM.Scale(scale*objScale.X, scale*objScale.Y)
+
+			// Translate to particle position
+			drawOptions.GeoM.Translate(originX+particle.Position.X*objScale.X, originY+particle.Position.Y*objScale.Y)
+
+			// Color and alpha
+			drawOptions.ColorScale.Scale(
+				float32(particle.Color.X*particle.Alpha),
+				float32(particle.Color.Y*particle.Alpha),
+				float32(particle.Color.Z*particle.Alpha),
+				1.0,
+			)
+
+			// Use lighter blending for additive effect
+			drawOptions.Blend = ebiten.BlendLighter
+			screen.DrawImage(spriteImg, drawOptions)
+
+		} else {
+			// Default rendering - full texture per particle
+			drawOptions := &ebiten.DrawImageOptions{}
+			width, height := img.Bounds().Dx(), img.Bounds().Dy()
+			drawOptions.GeoM.Translate(-float64(width)/2, -float64(height)/2)
+			drawOptions.GeoM.Rotate(particle.Rotation)
+			scale := particle.Size / 100.0
+			drawOptions.GeoM.Scale(scale*objScale.X, scale*objScale.Y)
+			drawOptions.GeoM.Translate(originX+particle.Position.X*objScale.X, originY+particle.Position.Y*objScale.Y)
+			drawOptions.ColorScale.Scale(
+				float32(particle.Color.X*particle.Alpha),
+				float32(particle.Color.Y*particle.Alpha),
+				float32(particle.Color.Z*particle.Alpha),
+				1.0,
+			)
+			drawOptions.Blend = ebiten.BlendLighter
+			screen.DrawImage(img, drawOptions)
+		}
 	}
 }
 
@@ -582,7 +642,12 @@ func ApplyEffects(obj *wallpaper.Object, alpha *float64, tint *color.RGBA) {
 			*alpha *= effect.Alpha.Value
 		}
 		if effect.Name == "tint" {
-			// Basic tint logic
+			if len(effect.Passes) > 0 {
+				constantColor := effect.Passes[0].ConstantColor
+				tint.R = uint8(float64(tint.R) * constantColor.X)
+				tint.G = uint8(float64(tint.G) * constantColor.Y)
+				tint.B = uint8(float64(tint.B) * constantColor.Z)
+			}
 		}
 	}
 }

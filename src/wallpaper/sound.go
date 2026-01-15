@@ -13,9 +13,10 @@ import (
 )
 
 type AudioStream struct {
-	decoder *mp3.Decoder
-	volume  float64
-	active  bool
+	decoder    *mp3.Decoder
+	volume     float64
+	active     bool
+	shouldLoop bool
 }
 
 type AudioManager struct {
@@ -68,8 +69,13 @@ func (am *AudioManager) initDevice(sampleRate uint32) {
 				n, err := io.ReadFull(stream.decoder, tempBuf)
 				if err != nil {
 					if err == io.EOF || err == io.ErrUnexpectedEOF {
-						stream.decoder.Seek(0, io.SeekStart) // Loop
-						io.ReadFull(stream.decoder, tempBuf)
+						if stream.shouldLoop {
+							stream.decoder.Seek(0, io.SeekStart)
+							io.ReadFull(stream.decoder, tempBuf)
+						} else {
+							stream.active = false
+							continue
+						}
 					} else {
 						stream.active = false
 						continue
@@ -85,7 +91,7 @@ func (am *AudioManager) initDevice(sampleRate uint32) {
 					// Mix into output
 					outVal := int16(pOutputSample[i]) | int16(pOutputSample[i+1])<<8
 					newVal := outVal + mixedVal
-					
+
 					pOutputSample[i] = byte(newVal & 0xff)
 					pOutputSample[i+1] = byte(newVal >> 8)
 				}
@@ -112,19 +118,19 @@ func (am *AudioManager) Play(obj *Object) {
 		return
 	}
 	soundPath := filepath.Join("tmp", obj.Sound.Value)
-	am.PlayDirect(soundPath, obj.Volume.Value)
+	am.PlayDirect(soundPath, obj.Volume.Value, true)
 }
 
-func (am *AudioManager) PlayDirect(soundPath string, vol float64) {
+func (am *AudioManager) PlayDirect(soundPath string, vol float64, shouldLoop bool) {
 	f, err := os.Open(soundPath)
 	if err != nil {
-		utils.Warn("Failed to open sound file %s: %v", soundPath, err)
+		utils.Error("Failed to open sound file %s: %v", soundPath, err)
 		return
 	}
 
 	dec, err := mp3.NewDecoder(f)
 	if err != nil {
-		utils.Warn("Failed to decode mp3 %s: %v", soundPath, err)
+		utils.Error("Failed to decode mp3 %s: %v", soundPath, err)
 		f.Close()
 		return
 	}
@@ -133,9 +139,10 @@ func (am *AudioManager) PlayDirect(soundPath string, vol float64) {
 
 	am.mutex.Lock()
 	am.streams = append(am.streams, &AudioStream{
-		decoder: dec,
-		volume:  vol,
-		active:  true,
+		decoder:    dec,
+		volume:     vol,
+		active:     true,
+		shouldLoop: shouldLoop,
 	})
 	am.mutex.Unlock()
 

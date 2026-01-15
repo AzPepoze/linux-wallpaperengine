@@ -63,7 +63,7 @@ func ExtractPkg(pkgPath, outputDir string) error {
 	}
 
 	dataStartPos, _ := f.Seek(0, io.SeekCurrent)
-	
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return err
 	}
@@ -80,12 +80,12 @@ func ExtractPkg(pkgPath, outputDir string) error {
 		if _, err := f.Seek(dataStartPos+int64(entry.Offset), io.SeekStart); err != nil {
 			return err
 		}
-		
+
 		buf := make([]byte, entry.Size)
 		if _, err := io.ReadFull(f, buf); err != nil {
 			return err
 		}
-		
+
 		if err := os.WriteFile(destPath, buf, 0644); err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func BulkConvertTextures(root string, outDir string) {
 				defer wg.Done()
 				_, err := LoadTexture(p)
 				if err != nil {
-					utils.Warn("Failed to convert %s: %v", p, err)
+					utils.Error("Failed to convert %s: %v", p, err)
 				} else {
 					atomic.AddInt32(&convertedCount, 1)
 				}

@@ -28,6 +28,10 @@ type Window struct {
 	mouseX, mouseY float64
 	startTime      time.Time
 	lastFrameTime  time.Time
+	renderScale    float64
+	sceneWidth     int
+	sceneHeight    int
+	scaleLogged    bool
 
 	updateObjects []wallpaper.Object
 	updateOffsets []wallpaper.Vec2
@@ -44,6 +48,7 @@ func NewWindow(scene wallpaper.Scene) *Window {
 		audioManager:  audioManager,
 		startTime:     time.Now(),
 		lastFrameTime: time.Now(),
+		renderScale:   1.0,
 		renderObjects: make([]RenderObject, 0, len(scene.Objects)),
 		updateObjects: make([]wallpaper.Object, len(scene.Objects)),
 		updateOffsets: make([]wallpaper.Vec2, len(scene.Objects)),
@@ -64,10 +69,10 @@ func NewWindow(scene wallpaper.Scene) *Window {
 			var err error
 			image, err = convert.LoadTexture(texturePath)
 			if err != nil {
-				utils.Warn("Failed to load texture for object %s from %s: %v", object.Name, texturePath, err)
+				utils.Error("Failed to load texture for object %s from %s: %v", object.Name, texturePath, err)
 			}
 		} else if object.Image != "" {
-			utils.Warn("Could not resolve texture path for object %s (Image: %s)", object.Name, object.Image)
+			utils.Error("Could not resolve texture path for object %s (Image: %s)", object.Name, object.Image)
 		}
 
 		if image == nil && object.GetText() != "" {
@@ -163,8 +168,8 @@ func (window *Window) Draw(screen *ebiten.Image) {
 					imageWidth, imageHeight := renderObject.Image.Bounds().Dx(), renderObject.Image.Bounds().Dy()
 					options.GeoM.Translate(-float64(imageWidth)/2, -float64(imageHeight)/2)
 
-					finalScaleX := (targetWidth / float64(imageWidth)) * renderObject.Scale.X
-					finalScaleY := (targetHeight / float64(imageHeight)) * renderObject.Scale.Y
+					finalScaleX := (targetWidth / float64(imageWidth)) * renderObject.Scale.X * window.renderScale
+					finalScaleY := (targetHeight / float64(imageHeight)) * renderObject.Scale.Y * window.renderScale
 					options.GeoM.Scale(finalScaleX, finalScaleY)
 
 					if renderObject.Angles.Z != 0 {
@@ -172,29 +177,71 @@ func (window *Window) Draw(screen *ebiten.Image) {
 						options.GeoM.Rotate(radians)
 					}
 
-					options.GeoM.Translate(renderObject.Origin.X+renderObject.Offset.X, renderObject.Origin.Y+renderObject.Offset.Y)
+					scaledOriginX := (renderObject.Origin.X + renderObject.Offset.X) * window.renderScale
+					scaledOriginY := (renderObject.Origin.Y + renderObject.Offset.Y) * window.renderScale
+					options.GeoM.Translate(scaledOriginX, scaledOriginY)
 					screen.DrawImage(renderObject.Image, options)
 				}
 			}
 		}
 
 		if renderObject.ParticleSystem != nil {
-			renderObject.ParticleSystem.Draw(screen, renderObject.Origin.X+renderObject.Offset.X, renderObject.Origin.Y+renderObject.Offset.Y, renderObject.Scale)
+			scaledX := (renderObject.Origin.X + renderObject.Offset.X) * window.renderScale
+			scaledY := (renderObject.Origin.Y + renderObject.Offset.Y) * window.renderScale
+			scaledScale := wallpaper.Vec3{
+				X: renderObject.Scale.X * window.renderScale,
+				Y: renderObject.Scale.Y * window.renderScale,
+				Z: renderObject.Scale.Z * window.renderScale,
+			}
+			renderObject.ParticleSystem.Draw(screen, scaledX, scaledY, scaledScale)
 		}
 	}
 
 	if utils.DebugMode {
-		window.debugOverlay.Draw(screen, window.renderObjects)
+		window.debugOverlay.Draw(screen, window.renderObjects, window.sceneWidth, window.sceneHeight, window.renderScale)
 	}
 }
 
-
-
 func (window *Window) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	// Get the scene's target resolution
 	width := window.scene.General.OrthogonalProjection.Width
 	height := window.scene.General.OrthogonalProjection.Height
 	if width <= 0 || height <= 0 {
-		return 1920, 1080
+		width, height = 1920, 1080
 	}
+
+	// Store original scene resolution
+	if window.sceneWidth == 0 {
+		window.sceneWidth = width
+		window.sceneHeight = height
+	}
+
+	// Get monitor size
+	monitor := ebiten.Monitor()
+	monitorW, monitorH := monitor.Size()
+
+	// Calculate scale factor
+	window.renderScale = 1.0
+
+	// If scene resolution is higher than monitor, scale down to monitor resolution
+	// This prevents rendering at 4K when monitor is 1080p
+	if width > monitorW || height > monitorH {
+		scaleW := float64(monitorW) / float64(width)
+		scaleH := float64(monitorH) / float64(height)
+		window.renderScale = math.Min(scaleW, scaleH)
+
+		scaledWidth := int(float64(width) * window.renderScale)
+		scaledHeight := int(float64(height) * window.renderScale)
+
+		if !window.scaleLogged {
+			utils.Info("Scene resolution: %dx%d, rendering at: %dx%d (monitor: %dx%d, scale: %.2f)",
+				width, height, scaledWidth, scaledHeight, monitorW, monitorH, window.renderScale)
+			window.scaleLogged = true
+		}
+
+		width = scaledWidth
+		height = scaledHeight
+	}
+
 	return width, height
 }
