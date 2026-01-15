@@ -3,9 +3,9 @@
 </h1>
 
 <p align="center">
-  <strong>◈ A high-performance wallpaper engine implementation for Linux ◈</strong>
-  <br>
-  <strong>◈ Powered by Go and Ebitengine ◈</strong>
+     <strong>◈ A wallpaper engine implementation for Linux ◈</strong>
+     <br>
+     <strong>◈ Written in Go (Ebitengine) ◈</strong>
 </p>
 
 <p align="center">
@@ -39,7 +39,7 @@
 
 ## ABOUT
 
-Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. Inspired by [Almamu's linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), this project aims to provide a high-performance, memory-efficient solution for running Wallpaper Engine content on Linux.
+Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. Inspired by [Almamu's linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), this project is written in Go and runs Wallpaper Engine content on Linux.
 
 **Why This Project?**
 
