@@ -41,6 +41,108 @@ func swapRB(pix []byte) {
 	}
 }
 
+func decodePNG(data []byte, path string) (image.Image, error) {
+	pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	if len(data) > 8 && bytes.Equal(data[:8], pngSignature) {
+		utils.Debug("    Detected embedded PNG: %s", path)
+		img, err := png.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode embedded png: %v", err)
+		}
+		return img, nil
+	}
+	return nil, nil
+}
+
+func decodeRGBA(data []byte, width, height uint32, force bool) ([]byte, error) {
+	utils.Debug("    Type: RGBA")
+
+	for k := 0; k < len(data); k += 4 {
+		opacity := data[k+3]
+		data[k] = opacity
+		data[k+1] = opacity
+		data[k+2] = opacity
+		data[k+3] = opacity
+	}
+
+	return data, nil
+}
+
+func decodeDXT5(data []byte, width, height uint32, force bool) ([]byte, error) {
+	utils.Debug("    Type: DXT5")
+	data, err := dxt.DecodeDXT5(data, uint(width), uint(height))
+	if err != nil {
+		return nil, err
+	}
+	fixAlpha(data, int(width), int(height))
+	return data, nil
+}
+
+func decodeDXT1(data []byte, width, height uint32, force bool) ([]byte, error) {
+	utils.Debug("    Type: DXT1")
+	data, err := dxt.DecodeDXT1(data, uint(width), uint(height))
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func decodeR8(finalData []byte, width, height uint32, force bool) ([]byte, error) {
+	utils.Debug("    Type: R8 (Grayscale/Mask)")
+	pix := make([]byte, width*height*4)
+	for k := 0; k < int(width*height); k++ {
+		val := finalData[k]
+		pix[k*4] = val
+		pix[k*4+1] = val
+		pix[k*4+2] = val
+		pix[k*4+3] = 255
+	}
+	return pix, nil
+}
+
+func decodeRG88(finalData []byte, width, height uint32, force bool) ([]byte, error) {
+	utils.Debug("    Type: RG88")
+	numPixels := int(width) * int(height)
+	pix := make([]byte, numPixels*4)
+
+	for i := 0; i < numPixels; i++ {
+		lum := finalData[i*2+1] // Byte 2: Opacity
+
+		// Write 4 bytes to destination
+		pix[i*4+0] = lum // R
+		pix[i*4+1] = lum // G
+		pix[i*4+2] = lum // B
+		pix[i*4+3] = lum // A
+	}
+	return pix, nil
+}
+
+func decompressLZ4(data []byte, isLZ4 bool, decompressedSize uint32, format uint32, width, height uint32) ([]byte, error) {
+	requiredSize := width * height * 4
+	finalData := data
+
+	if !isLZ4 && format == 0 && uint32(len(data)) < requiredSize {
+		utils.Warn("    Format 0 size mismatch (Got %d, Need %d). Force-enabling LZ4...", len(data), requiredSize)
+
+		decodedLZ4 := make([]byte, requiredSize)
+		n, err := lz4.UncompressBlock(data, decodedLZ4)
+		if err == nil && uint32(n) == requiredSize {
+			utils.Debug("    Forced LZ4 success!")
+			finalData = decodedLZ4
+		} else {
+			utils.Warn("    Forced LZ4 failed: %v", err)
+		}
+	} else if isLZ4 {
+		utils.Debug("    Decompressing LZ4: %d -> %d", len(data), decompressedSize)
+		decodedLZ4 := make([]byte, decompressedSize)
+		if _, err := lz4.UncompressBlock(data, decodedLZ4); err != nil {
+			return nil, err
+		}
+		finalData = decodedLZ4
+	}
+	return finalData, nil
+}
+
 func DecodeTexToImage(path string) (image.Image, error) {
 	utils.Debug("Decoding texture: %s", path)
 	f, err := os.Open(path)
@@ -49,6 +151,7 @@ func DecodeTexToImage(path string) (image.Image, error) {
 	}
 	defer f.Close()
 
+	// 1. Read Global Header
 	magic1 := readString(f, 8)
 	f.Seek(1, io.SeekCurrent)
 	_ = readString(f, 8)
@@ -60,12 +163,15 @@ func DecodeTexToImage(path string) (image.Image, error) {
 
 	format := readInt(f)
 	f.Seek(4, io.SeekCurrent)
+
+	// Read Aligned Dimensions (Important for Stride!)
+	texW := readInt(f)
 	_ = readInt(f)
-	_ = readInt(f)
+
 	imgW := readInt(f)
 	imgH := readInt(f)
 
-	utils.Debug("    Format: %d, Target Size: %dx%d", format, imgW, imgH)
+	utils.Debug("    Format: %d, Aligned: %d, Target: %dx%d", format, texW, imgW, imgH)
 
 	readInt(f)
 	containerMagic := readString(f, 8)
@@ -83,10 +189,13 @@ func DecodeTexToImage(path string) (image.Image, error) {
 			mH := readInt(f)
 			var isLZ4 bool
 			var decompressedSize uint32
+
+			// Check compression flag from header
 			if containerMagic != "TEXB0001" {
 				isLZ4 = readInt(f) == 1
 				decompressedSize = readInt(f)
 			}
+
 			dataSize := readInt(f)
 			data := make([]byte, dataSize)
 			if _, err := io.ReadFull(f, data); err != nil {
@@ -94,77 +203,47 @@ func DecodeTexToImage(path string) (image.Image, error) {
 			}
 
 			if i == 0 && j == 0 {
-				finalData := data
-				if isLZ4 {
-					utils.Debug("    Decompressing LZ4: %d -> %d", dataSize, decompressedSize)
-					decodedLZ4 := make([]byte, decompressedSize)
-					if _, err := lz4.UncompressBlock(data, decodedLZ4); err != nil {
-						return nil, err
-					}
-					finalData = decodedLZ4
+				if img, err := decodePNG(data, path); err != nil {
+					return nil, err
+				} else if img != nil {
+					return img, nil
 				}
 
+				finalData, err := decompressLZ4(data, isLZ4, decompressedSize, format, mW, mH)
+				if err != nil {
+					return nil, err
+				}
+				// ----------------------------------------
+
+				var pix []byte
+
+				// Calculate expected sizes
 				numBlocksW := (mW + 3) / 4
 				numBlocksH := (mH + 3) / 4
-
-				expectedDXT1 := (mW + 3) / 4 * (mH + 3) / 4 * 8
+				expectedDXT1 := numBlocksW * numBlocksH * 8
 				expectedDXT5 := numBlocksW * numBlocksH * 16
 				expectedRGBA := mW * mH * 4
 
-				var pix []byte
-				var err error
-
 				switch {
-				case uint32(len(finalData)) == expectedRGBA:
-					utils.Debug("    Type: RGBA")
-					pix = finalData
-					// swapRB(pix)
-					for k := 0; k < len(finalData); k += 4 {
-						opacity := pix[k+3]
-						pix[k] = opacity
-						pix[k+1] = opacity
-						pix[k+2] = opacity
-						pix[k+3] = opacity
-					}
-				case uint32(len(finalData)) == expectedDXT5 || format == 6:
-					utils.Debug("    Type: DXT5")
-					pix, err = dxt.DecodeDXT5(finalData, uint(mW), uint(mH))
-					if err != nil {
-						return nil, err
-					}
-					fixAlpha(pix, int(mW), int(mH))
-				case uint32(len(finalData)) == expectedDXT1 || format == 4 || format == 7:
-					utils.Debug("    Type: DXT1")
-					pix, err = dxt.DecodeDXT1(finalData, uint(mW), uint(mH))
-					if err != nil {
-						return nil, err
-					}
-				case format == 9 && uint32(len(finalData)) == expectedRGBA/4:
-					utils.Debug("    Type: R8 (Grayscale/Mask)")
-					pix = make([]byte, mW*mH*4)
-					for k := 0; k < int(mW*mH); k++ {
-						val := finalData[k]
-						pix[k*4] = val
-						pix[k*4+1] = val
-						pix[k*4+2] = val
-						pix[k*4+3] = 255
-					}
-				case format == 8 && uint32(len(finalData)) == expectedRGBA/2:
-					utils.Debug("    Type: RG88")
-					numPixels := int(mW) * int(mH)
-					pix = make([]byte, numPixels*4)
+				case format == 0 || uint32(len(finalData)) == expectedRGBA:
+					pix, err = decodeRGBA(finalData, mW, mH, false)
 
-					for i := 0; i < numPixels; i++ {
-						lum := finalData[i*2+1] // Byte 2: Opacity
+				case format == 6 || uint32(len(finalData)) == expectedDXT5:
+					pix, err = decodeDXT5(finalData, mW, mH, false)
 
-						// Write 4 bytes to destination
-						pix[i*4+0] = lum // R
-						pix[i*4+1] = lum // G
-						pix[i*4+2] = lum // B
-						pix[i*4+3] = lum // A
-					}
+				case format == 4 || format == 7 || uint32(len(finalData)) == expectedDXT1:
+					pix, err = decodeDXT1(finalData, mW, mH, false)
+
+				case format == 9:
+					pix, err = decodeR8(finalData, mW, mH, false)
+
+				case format == 8:
+					pix, err = decodeRG88(finalData, mW, mH, false)
+
 				default:
-					return nil, fmt.Errorf("unsupported format %d with size %d", format, len(finalData))
+					utils.Error("    Unknown format %d with data size %d", format, len(finalData))
+					return nil, fmt.Errorf("decode failed: %v", err)
+
 				}
 
 				utils.Debug("    Successfully decoded: %s", path)
@@ -236,5 +315,12 @@ func LoadTexture(path string) (*ebiten.Image, error) {
 		}
 	}
 
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		utils.Error("Skipped %s: image has non-positive dimensions (%d x %d)", path, width, height)
+		return nil, fmt.Errorf("image has non-positive dimensions")
+	}
 	return ebiten.NewImageFromImage(img), nil
 }

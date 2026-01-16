@@ -106,19 +106,20 @@ func main() {
 	}
 
 	sceneData, err := findAndReadSceneJSON("tmp")
+	var scene wallpaper.Scene
+
 	if err != nil {
-		utils.Error("Failed to find/read scene.json: %v", err)
-		os.Exit(1)
+		utils.Error("Failed to find/read scene.json: %v (skipping)", err)
+	} else {
+		err := json.Unmarshal(sceneData, &scene)
+		if err != nil {
+			utils.Error("Fatal JSON error: %v", err)
+		} else {
+			utils.Info("Scene loaded: %d objects found", len(scene.Objects))
+		}
 	}
 
 	convert.BulkConvertTextures("tmp", "converted")
-
-	var scene wallpaper.Scene
-	if err := json.Unmarshal(sceneData, &scene); err != nil {
-		utils.Error("Error unmarshalling scene.json: %v", err)
-		os.Exit(1)
-	}
-	utils.Info("Scene loaded: %d objects found", len(scene.Objects))
 
 	// Get monitor size and set window to match
 	monitor := ebiten.Monitor()
