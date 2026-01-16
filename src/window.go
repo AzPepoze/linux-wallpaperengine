@@ -12,7 +12,7 @@ import (
 	"linux-wallpaperengine/src/wallpaper"
 	"linux-wallpaperengine/src/wallpaper/feature"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type Window struct {
@@ -26,16 +26,25 @@ type Window struct {
 	renderScale    float64
 	sceneWidth     int
 	sceneHeight    int
-	scaleLogged    bool
+	sceneOffsetX   float64
+	sceneOffsetY   float64
+	scalingMode    string
 
 	updateObjects []wallpaper.Object
 	updateOffsets []wallpaper.Vec2
 	debugOverlay  *debug.DebugOverlay
 }
 
-func NewWindow(scene wallpaper.Scene) *Window {
+func NewWindow(scene wallpaper.Scene, scalingMode string) *Window {
 	red, green, blue := wallpaper.ParseColor(scene.General.ClearColor)
 	audioManager := wallpaper.NewAudioManager()
+
+	// Parse scene resolution
+	width := scene.General.OrthogonalProjection.Width
+	height := scene.General.OrthogonalProjection.Height
+	if width <= 0 || height <= 0 {
+		width, height = 1280, 720
+	}
 
 	window := &Window{
 		scene:         scene,
@@ -44,6 +53,9 @@ func NewWindow(scene wallpaper.Scene) *Window {
 		startTime:     time.Now(),
 		lastFrameTime: time.Now(),
 		renderScale:   1.0,
+		sceneWidth:    width,
+		sceneHeight:   height,
+		scalingMode:   scalingMode,
 		renderObjects: make([]types.RenderObject, 0, len(scene.Objects)),
 		updateObjects: make([]wallpaper.Object, len(scene.Objects)),
 		updateOffsets: make([]wallpaper.Vec2, len(scene.Objects)),
@@ -59,10 +71,12 @@ func NewWindow(scene wallpaper.Scene) *Window {
 
 		utils.Debug("Adding object: %s", object.Name)
 		texturePath := resolveTexturePath(object)
-		var image *ebiten.Image
+		var image *rl.Texture2D
+		var renderTexture *rl.RenderTexture2D
+
 		if texturePath != "" {
 			var err error
-			image, err = convert.LoadTexture(texturePath)
+			image, err = convert.LoadTextureNative(texturePath)
 			if err != nil {
 				utils.Error("Failed to load texture for object %s from %s: %v", object.Name, texturePath, err)
 			}
@@ -71,7 +85,8 @@ func NewWindow(scene wallpaper.Scene) *Window {
 		}
 
 		if image == nil && object.GetText() != "" {
-			image = ebiten.NewImage(int(object.Size.X), int(object.Size.Y))
+			rt := rl.LoadRenderTexture(int32(object.Size.X), int32(object.Size.Y))
+			renderTexture = &rt
 		}
 
 		var ps *feature.ParticleSystem
@@ -82,6 +97,7 @@ func NewWindow(scene wallpaper.Scene) *Window {
 		window.renderObjects = append(window.renderObjects, types.RenderObject{
 			Object:         object,
 			Image:          image,
+			RenderTexture:  renderTexture,
 			ParticleSystem: ps,
 		})
 	}
@@ -89,18 +105,49 @@ func NewWindow(scene wallpaper.Scene) *Window {
 	return window
 }
 
-func (window *Window) Update() error {
+func (window *Window) Run() {
+	rl.SetTargetFPS(60)
+
+	for !rl.WindowShouldClose() {
+		window.Update()
+
+		rl.BeginDrawing()
+		window.Draw()
+		rl.EndDrawing()
+	}
+}
+
+func (window *Window) Update() {
 	currentTime := time.Now()
 	deltaTime := currentTime.Sub(window.lastFrameTime).Seconds()
 	window.lastFrameTime = currentTime
 
-	globalMouseX, globalMouseY, err := utils.GetGlobalMousePosition()
-	if err != nil {
-		globalMouseX, globalMouseY = ebiten.CursorPosition()
+	// Calculate render scale based on window size
+	screenWidth := rl.GetScreenWidth()
+	screenHeight := rl.GetScreenHeight()
+	
+	scaleW := float64(screenWidth) / float64(window.sceneWidth)
+	scaleH := float64(screenHeight) / float64(window.sceneHeight)
+
+	if window.scalingMode == "fit" {
+		window.renderScale = math.Min(scaleW, scaleH)
+	} else {
+		window.renderScale = math.Max(scaleW, scaleH)
 	}
 
-	window.mouseX = (float64(globalMouseX) / 1920.0 * 2) - 1.0
-	window.mouseY = (float64(globalMouseY) / 1080.0 * 2) - 1.0
+	window.sceneOffsetX = (float64(screenWidth) - float64(window.sceneWidth)*window.renderScale) / 2
+	window.sceneOffsetY = (float64(screenHeight) - float64(window.sceneHeight)*window.renderScale) / 2
+
+	// Update Mouse using Raylib's built-in function
+	mPos := rl.GetMousePosition()
+	mouseX, mouseY := float64(mPos.X), float64(mPos.Y)
+
+	// Normalized mouse coordinates (-1 to 1) relative to scene
+	relMouseX := (mouseX - window.sceneOffsetX) / window.renderScale
+	relMouseY := (mouseY - window.sceneOffsetY) / window.renderScale
+
+	window.mouseX = (relMouseX / float64(window.sceneWidth) * 2) - 1.0
+	window.mouseY = (relMouseY / float64(window.sceneHeight) * 2) - 1.0
 
 	for i, renderObject := range window.renderObjects {
 		window.updateObjects[i] = *renderObject.Object
@@ -118,125 +165,138 @@ func (window *Window) Update() error {
 	feature.UpdateClock(window.updateObjects, window.updateOffsets)
 	feature.UpdateShake(window.updateObjects, window.updateOffsets, totalTime)
 
+	window.audioManager.Update()
+
+	if rl.IsKeyPressed(rl.KeyF12) {
+		utils.ShowDebugUI = !utils.ShowDebugUI
+	}
+
 	for i := range window.renderObjects {
 		*window.renderObjects[i].Object = window.updateObjects[i]
 		window.renderObjects[i].Offset = window.updateOffsets[i]
-		if window.renderObjects[i].Image != nil && window.renderObjects[i].GetText() != "" {
-			window.renderObjects[i].Image.Fill(color.Transparent)
-			feature.RenderText(window.renderObjects[i].Object, window.renderObjects[i].Image)
+		
+		if window.renderObjects[i].RenderTexture != nil && window.renderObjects[i].Object.GetText() != "" {
+			feature.RenderText(window.renderObjects[i].Object, window.renderObjects[i].RenderTexture)
 		}
 	}
 
-	if utils.DebugMode {
+	if utils.ShowDebugUI {
 		window.debugOverlay.Update()
 	}
-
-	return nil
 }
 
-func (window *Window) Draw(screen *ebiten.Image) {
-	screen.Fill(window.bgColor)
+func (window *Window) Draw() {
+	rl.ClearBackground(rl.Black)
+
+	// Clip rendering to scene area to prevent overdraw in 'fit' mode or when objects move out of bounds
+	sceneRectX := int32(window.sceneOffsetX)
+	sceneRectY := int32(window.sceneOffsetY)
+	sceneRectW := int32(float64(window.sceneWidth) * window.renderScale)
+	sceneRectH := int32(float64(window.sceneHeight) * window.renderScale)
+	
+	rl.BeginScissorMode(sceneRectX, sceneRectY, sceneRectW, sceneRectH)
+	rl.ClearBackground(rl.NewColor(window.bgColor.R, window.bgColor.G, window.bgColor.B, 255))
 
 	for _, renderObject := range window.renderObjects {
-		if !renderObject.Visible.Value {
+		if !renderObject.Object.Visible.Value {
 			continue
 		}
 
+		var texture *rl.Texture2D
+		isRenderTexture := false
+
 		if renderObject.Image != nil {
-			alpha := renderObject.Alpha.Value
+			texture = renderObject.Image
+		} else if renderObject.RenderTexture != nil {
+			texture = &renderObject.RenderTexture.Texture
+			isRenderTexture = true
+		}
+
+		if texture != nil {
+			alpha := renderObject.Object.Alpha.Value
 			tintColor := color.RGBA{255, 255, 255, 255}
 			feature.ApplyEffects(renderObject.Object, &alpha, &tintColor)
 
 			if alpha > 0 {
-				targetWidth, targetHeight := renderObject.Size.X, renderObject.Size.Y
+				targetWidth, targetHeight := renderObject.Object.Size.X, renderObject.Object.Size.Y
 				if targetWidth > 0 && targetHeight > 0 {
-					options := &ebiten.DrawImageOptions{}
-					options.ColorScale.ScaleAlpha(float32(alpha))
-					options.ColorScale.Scale(
-						float32(tintColor.R)/255.0,
-						float32(tintColor.G)/255.0,
-						float32(tintColor.B)/255.0,
-						1.0,
-					)
-					options.Filter = ebiten.FilterLinear
+					
+					imageWidth := float32(texture.Width)
+					imageHeight := float32(texture.Height)
 
-					imageWidth, imageHeight := renderObject.Image.Bounds().Dx(), renderObject.Image.Bounds().Dy()
-					options.GeoM.Translate(-float64(imageWidth)/2, -float64(imageHeight)/2)
-
-					finalScaleX := (targetWidth / float64(imageWidth)) * renderObject.Scale.X * window.renderScale
-					finalScaleY := (targetHeight / float64(imageHeight)) * renderObject.Scale.Y * window.renderScale
-					options.GeoM.Scale(finalScaleX, finalScaleY)
-
-					if renderObject.Angles.Z != 0 {
-						radians := renderObject.Angles.Z * (math.Pi / 180.0)
-						options.GeoM.Rotate(radians)
+					// Source rectangle
+					sourceRec := rl.NewRectangle(0, 0, imageWidth, imageHeight)
+					if isRenderTexture {
+						sourceRec.Height = -imageHeight // Flip vertically for RenderTexture
 					}
 
-					scaledOriginX := (renderObject.Origin.X + renderObject.Offset.X) * window.renderScale
-					scaledOriginY := (renderObject.Origin.Y + renderObject.Offset.Y) * window.renderScale
-					options.GeoM.Translate(scaledOriginX, scaledOriginY)
-					screen.DrawImage(renderObject.Image, options)
+					// Calculate scale
+					finalScaleX := (targetWidth / float64(imageWidth)) * renderObject.Object.Scale.X * window.renderScale
+					finalScaleY := (targetHeight / float64(imageHeight)) * renderObject.Object.Scale.Y * window.renderScale
+
+					// Destination rectangle (centered at Origin)
+					scaledOriginX := window.sceneOffsetX + (renderObject.Object.Origin.X+renderObject.Offset.X)*window.renderScale
+					scaledOriginY := window.sceneOffsetY + (renderObject.Object.Origin.Y+renderObject.Offset.Y)*window.renderScale
+
+					destWidth := float64(imageWidth) * finalScaleX
+					destHeight := float64(imageHeight) * finalScaleY
+
+					// Culling: check if object is outside screen
+					halfWidth := math.Abs(destWidth) / 2
+					halfHeight := math.Abs(destHeight) / 2
+					// Using a bounding radius to account for rotation
+					radius := math.Sqrt(halfWidth*halfWidth + halfHeight*halfHeight)
+
+					if scaledOriginX+radius < 0 || scaledOriginX-radius > float64(rl.GetScreenWidth()) ||
+						scaledOriginY+radius < 0 || scaledOriginY-radius > float64(rl.GetScreenHeight()) {
+						continue
+					}
+
+					destRec := rl.NewRectangle(
+						float32(scaledOriginX),
+						float32(scaledOriginY),
+						float32(math.Abs(destWidth)),
+						float32(math.Abs(destHeight)),
+					)
+
+					// Origin (Pivot point relative to destination rectangle top-left)
+					origin := rl.NewVector2(float32(math.Abs(destWidth))/2, float32(math.Abs(destHeight))/2)
+
+					rotation := float32(renderObject.Object.Angles.Z) // Degrees
+
+					rlTint := rl.NewColor(
+						tintColor.R, 
+						tintColor.G, 
+						tintColor.B, 
+						uint8(float32(255)*float32(alpha)),
+					)
+
+					rl.DrawTexturePro(*texture, sourceRec, destRec, origin, rotation, rlTint)
 				}
 			}
 		}
 
 		if renderObject.ParticleSystem != nil {
-			scaledX := (renderObject.Origin.X + renderObject.Offset.X) * window.renderScale
-			scaledY := (renderObject.Origin.Y + renderObject.Offset.Y) * window.renderScale
-			scaledScale := wallpaper.Vec3{
-				X: renderObject.Scale.X * window.renderScale,
-				Y: renderObject.Scale.Y * window.renderScale,
-				Z: renderObject.Scale.Z * window.renderScale,
+			scaledX := window.sceneOffsetX + (renderObject.Object.Origin.X+renderObject.Offset.X)*window.renderScale
+			scaledY := window.sceneOffsetY + (renderObject.Object.Origin.Y+renderObject.Offset.Y)*window.renderScale
+
+			// Conservative culling for particles: if origin is way off screen, skip
+			margin := 2000.0 * window.renderScale
+			if scaledX+margin >= 0 && scaledX-margin <= float64(rl.GetScreenWidth()) &&
+				scaledY+margin >= 0 && scaledY-margin <= float64(rl.GetScreenHeight()) {
+				scaledScale := wallpaper.Vec3{
+					X: renderObject.Object.Scale.X * window.renderScale,
+					Y: renderObject.Object.Scale.Y * window.renderScale,
+					Z: renderObject.Object.Scale.Z * window.renderScale,
+				}
+				renderObject.ParticleSystem.Draw(scaledX, scaledY, scaledScale)
 			}
-			renderObject.ParticleSystem.Draw(screen, scaledX, scaledY, scaledScale)
 		}
 	}
 
-	if utils.DebugMode {
-		window.debugOverlay.Draw(screen, window.renderObjects, window.sceneWidth, window.sceneHeight, window.renderScale)
+	rl.EndScissorMode()
+
+	if utils.ShowDebugUI {
+		window.debugOverlay.Draw(window.renderObjects, window.sceneWidth, window.sceneHeight, window.renderScale, window.sceneOffsetX, window.sceneOffsetY, window.scalingMode)
 	}
-}
-
-func (window *Window) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	// Get the scene's target resolution
-	width := window.scene.General.OrthogonalProjection.Width
-	height := window.scene.General.OrthogonalProjection.Height
-	if width <= 0 || height <= 0 {
-		width, height = 1920, 1080
-	}
-
-	// Store original scene resolution
-	if window.sceneWidth == 0 {
-		window.sceneWidth = width
-		window.sceneHeight = height
-	}
-
-	// Get monitor size
-	monitor := ebiten.Monitor()
-	monitorW, monitorH := monitor.Size()
-
-	// Calculate scale factor
-	window.renderScale = 1.0
-
-	// If scene resolution is higher than monitor, scale down to monitor resolution
-	// This prevents rendering at 4K when monitor is 1080p
-	if width > monitorW || height > monitorH {
-		scaleW := float64(monitorW) / float64(width)
-		scaleH := float64(monitorH) / float64(height)
-		window.renderScale = math.Min(scaleW, scaleH)
-
-		scaledWidth := int(float64(width) * window.renderScale)
-		scaledHeight := int(float64(height) * window.renderScale)
-
-		if !window.scaleLogged {
-			utils.Info("Scene resolution: %dx%d, rendering at: %dx%d (monitor: %dx%d, scale: %.2f)",
-				width, height, scaledWidth, scaledHeight, monitorW, monitorH, window.renderScale)
-			window.scaleLogged = true
-		}
-
-		width = scaledWidth
-		height = scaledHeight
-	}
-
-	return width, height
 }

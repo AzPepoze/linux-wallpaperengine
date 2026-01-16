@@ -13,8 +13,7 @@ import (
 
 	"linux-wallpaperengine/src/utils"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	rl "github.com/gen2brain/raylib-go/raylib"
 	"github.com/mauserzjeh/dxt"
 	"github.com/pierrec/lz4/v4"
 )
@@ -54,21 +53,19 @@ func decodePNG(data []byte, path string) (image.Image, error) {
 	return nil, nil
 }
 
-func decodeRGBA(data []byte, width, height uint32, force bool) ([]byte, error) {
+func decodeRGBA(data []byte) ([]byte, error) {
 	utils.Debug("    Type: RGBA")
-
-	for k := 0; k < len(data); k += 4 {
-		opacity := data[k+3]
-		data[k] = opacity
-		data[k+1] = opacity
-		data[k+2] = opacity
-		data[k+3] = opacity
-	}
-
+	// for k := 0; k < len(data); k += 4 {
+	// 	opacity := data[k+3]
+	// 	data[k] = opacity
+	// 	data[k+1] = opacity
+	// 	data[k+2] = opacity
+	// 	data[k+3] = opacity
+	// }
 	return data, nil
 }
 
-func decodeDXT5(data []byte, width, height uint32, force bool) ([]byte, error) {
+func decodeDXT5(data []byte, width, height uint32) ([]byte, error) {
 	utils.Debug("    Type: DXT5")
 	data, err := dxt.DecodeDXT5(data, uint(width), uint(height))
 	if err != nil {
@@ -78,7 +75,7 @@ func decodeDXT5(data []byte, width, height uint32, force bool) ([]byte, error) {
 	return data, nil
 }
 
-func decodeDXT1(data []byte, width, height uint32, force bool) ([]byte, error) {
+func decodeDXT1(data []byte, width, height uint32) ([]byte, error) {
 	utils.Debug("    Type: DXT1")
 	data, err := dxt.DecodeDXT1(data, uint(width), uint(height))
 	if err != nil {
@@ -87,7 +84,7 @@ func decodeDXT1(data []byte, width, height uint32, force bool) ([]byte, error) {
 	return data, nil
 }
 
-func decodeR8(finalData []byte, width, height uint32, force bool) ([]byte, error) {
+func decodeR8(finalData []byte, width, height uint32) ([]byte, error) {
 	utils.Debug("    Type: R8 (Grayscale/Mask)")
 	pix := make([]byte, width*height*4)
 	for k := 0; k < int(width*height); k++ {
@@ -100,7 +97,7 @@ func decodeR8(finalData []byte, width, height uint32, force bool) ([]byte, error
 	return pix, nil
 }
 
-func decodeRG88(finalData []byte, width, height uint32, force bool) ([]byte, error) {
+func decodeRG88(finalData []byte, width, height uint32) ([]byte, error) {
 	utils.Debug("    Type: RG88")
 	numPixels := int(width) * int(height)
 	pix := make([]byte, numPixels*4)
@@ -226,19 +223,19 @@ func DecodeTexToImage(path string) (image.Image, error) {
 
 				switch {
 				case format == 0 || uint32(len(finalData)) == expectedRGBA:
-					pix, err = decodeRGBA(finalData, mW, mH, false)
+					pix, err = decodeRGBA(finalData)
 
 				case format == 6 || uint32(len(finalData)) == expectedDXT5:
-					pix, err = decodeDXT5(finalData, mW, mH, false)
+					pix, err = decodeDXT5(finalData, mW, mH)
 
 				case format == 4 || format == 7 || uint32(len(finalData)) == expectedDXT1:
-					pix, err = decodeDXT1(finalData, mW, mH, false)
+					pix, err = decodeDXT1(finalData, mW, mH)
 
 				case format == 9:
-					pix, err = decodeR8(finalData, mW, mH, false)
+					pix, err = decodeR8(finalData, mW, mH)
 
 				case format == 8:
-					pix, err = decodeRG88(finalData, mW, mH, false)
+					pix, err = decodeRG88(finalData, mW, mH)
 
 				default:
 					utils.Error("    Unknown format %d with data size %d", format, len(finalData))
@@ -286,7 +283,7 @@ func fixAlpha(pix []byte, width, height int) {
 	}
 }
 
-func LoadTexture(path string) (*ebiten.Image, error) {
+func LoadTexture(path string) error {
 	var pngPath string
 	if TextureOutDir != "" {
 		base := filepath.Base(path)
@@ -296,13 +293,12 @@ func LoadTexture(path string) (*ebiten.Image, error) {
 	}
 
 	if _, err := os.Stat(pngPath); err == nil {
-		img, _, err := ebitenutil.NewImageFromFile(pngPath)
-		return img, err
+		return nil
 	}
 
 	img, err := DecodeTexToImage(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if f, err := os.Create(pngPath); err == nil {
@@ -310,17 +306,34 @@ func LoadTexture(path string) (*ebiten.Image, error) {
 			utils.Error("Failed to encode PNG %s: %v", pngPath, err)
 			f.Close()
 			os.Remove(pngPath)
+			return err
 		} else {
 			f.Close()
 		}
 	}
 
-	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-	if width <= 0 || height <= 0 {
-		utils.Error("Skipped %s: image has non-positive dimensions (%d x %d)", path, width, height)
-		return nil, fmt.Errorf("image has non-positive dimensions")
+	return nil
+}
+
+func LoadTextureNative(path string) (*rl.Texture2D, error) {
+	var pngPath string
+	if TextureOutDir != "" {
+		base := filepath.Base(path)
+		pngPath = filepath.Join(TextureOutDir, strings.TrimSuffix(base, ".tex")+".png")
+	} else {
+		pngPath = strings.TrimSuffix(path, ".tex") + ".png"
 	}
-	return ebiten.NewImageFromImage(img), nil
+
+	if _, err := os.Stat(pngPath); err != nil {
+		err = LoadTexture(path)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tex := rl.LoadTexture(pngPath)
+	if tex.ID == 0 {
+		return nil, fmt.Errorf("failed to load texture from %s", pngPath)
+	}
+	return &tex, nil
 }

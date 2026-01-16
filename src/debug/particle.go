@@ -2,41 +2,54 @@ package debug
 
 import (
 	"fmt"
+	"sort"
 
 	"linux-wallpaperengine/src/types"
-
-	"github.com/hajimehoshi/ebiten/v2"
 )
 
-func (d *DebugOverlay) drawParticleInspector(screen *ebiten.Image, renderObjects []types.RenderObject, startY int) {
-	ui := NewUIContext(screen, 10, startY, d.lineHeight, d.fontHeight)
+func (d *DebugOverlay) drawParticleInspector(renderObjects []types.RenderObject, startY int, mx, my int, clicked bool) {
+	ui := NewUIContext(10, startY, d.lineHeight, d.fontHeight, d.font, mx, my, clicked)
 
-	// Summary
-	totalParticles := 0
-	activeSystems := 0
-
-	for _, obj := range renderObjects {
-		if obj.ParticleSystem != nil {
-			activeSystems++
-			totalParticles += len(obj.ParticleSystem.Particles)
+	// Gather all particle systems
+	var particleSystems []*types.RenderObject
+	for i := range renderObjects {
+		if renderObjects[i].ParticleSystem != nil {
+			particleSystems = append(particleSystems, &renderObjects[i])
 		}
 	}
 
-	ui.Label(fmt.Sprintf("Total Particles: %d", totalParticles))
-	ui.Label(fmt.Sprintf("Active Systems: %d", activeSystems))
-
+	ui.Header(fmt.Sprintf("Particle Systems (%d)", len(particleSystems)))
 	ui.Separator()
-	ui.Header("Systems:")
 
-	for _, obj := range renderObjects {
-		if obj.ParticleSystem != nil {
-			ps := obj.ParticleSystem
-			text := fmt.Sprintf("- %s: %d", ps.Name, len(ps.Particles))
-			ui.IndentLabel(text, 10)
+	// Sort by name
+	sort.Slice(particleSystems, func(i, j int) bool {
+		return particleSystems[i].Object.Name < particleSystems[j].Object.Name
+	})
 
-			if d.SelectedObjectIndex != -1 && d.SelectedObjectIndex < len(renderObjects) && renderObjects[d.SelectedObjectIndex].Object == obj.Object {
-				ui.IndentLabel(fmt.Sprintf("Rate: %.1f", ps.Config.Emitter[0].Rate.Value), 20)
+	for _, ro := range particleSystems {
+		ps := ro.ParticleSystem
+		ui.Label(fmt.Sprintf("%s (%d particles)", ps.Name, len(ps.Particles)))
+		
+		// Basic stats
+		activeEmitters := 0
+		for _, e := range ps.Config.Emitter {
+			if e.Rate.Value > 0 {
+				activeEmitters++
 			}
 		}
+		ui.IndentLabel(fmt.Sprintf("Emitters: %d (Active: %d)", len(ps.Config.Emitter), activeEmitters), 10)
+		ui.IndentLabel(fmt.Sprintf("Operators: %d", len(ps.Config.Operator)), 10)
+		
+		// Draw some key properties from the first emitter if available
+		if len(ps.Config.Emitter) > 0 {
+			e := ps.Config.Emitter[0]
+			rate := e.Rate.Value
+			if ps.Override != nil && ps.Override.Rate.Value != 0 {
+				rate *= ps.Override.Rate.Value
+			}
+			ui.IndentLabel(fmt.Sprintf("Rate: %.1f", rate), 20)
+		}
+		
+		ui.Separator()
 	}
 }

@@ -5,24 +5,33 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"linux-wallpaperengine/src/convert"
 	"linux-wallpaperengine/src/utils"
 	"linux-wallpaperengine/src/wallpaper"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 func main() {
-	// Manual check for debug flag anywhere in the arguments
+	// If running on Wayland, GLFW might have issues with window positioning.
+	// Forcing X11 platform (via XWayland) can solve many issues.
+	if os.Getenv("XDG_SESSION_TYPE") == "wayland" && os.Getenv("GLFW_PLATFORM") == "" {
+		os.Setenv("GLFW_PLATFORM", "x11")
+	}
+
+	// Manual check for log levels before flag.Parse to ensure early logs are captured
 	for _, arg := range os.Args {
-		if arg == "--debug" || arg == "-debug" || strings.HasPrefix(arg, "--debug=") {
+		if arg == "--debug" {
+			utils.CurrentLevel = utils.LevelDebug
 			utils.DebugMode = true
-			if strings.HasSuffix(arg, "=false") {
-				utils.DebugMode = false
-			}
-			break
+			utils.ShowDebugUI = true
+		} else if arg == "--debug-ui" {
+			utils.ShowDebugUI = true
+		} else if arg == "--info" && utils.CurrentLevel > utils.LevelInfo {
+			utils.CurrentLevel = utils.LevelInfo
 		}
 	}
 
@@ -48,11 +57,27 @@ func main() {
 	texToDecode := flag.String("tex", "", "Path to the .tex file to decode (used with -decode)")
 	testSound := flag.String("test-sound", "", "Path to an mp3 file to test playback")
 	testSine := flag.Bool("test-sine", false, "Test sine wave generator")
-	debugFlag := flag.Bool("debug", false, "Enable verbose debug logging")
+	debugFlag := flag.Bool("debug", false, "Enable verbose debug logging and UI")
+	debugUIFlag := flag.Bool("debug-ui", false, "Enable debug overlay UI")
+	infoFlag := flag.Bool("info", false, "Enable info logging")
+	raylibInfoFlag := flag.Bool("info-raylib", false, "Show Raylib internal info logs")
+	scalingMode := flag.String("scaling", "fit", "Scaling mode: cover, fit")
 	flag.Parse()
 
 	if *debugFlag {
 		utils.DebugMode = true
+		utils.ShowDebugUI = true
+		utils.CurrentLevel = utils.LevelDebug
+	} else if *debugUIFlag {
+		utils.ShowDebugUI = true
+	}
+	
+	if *infoFlag {
+		utils.CurrentLevel = utils.LevelInfo
+	}
+
+	if *raylibInfoFlag {
+		utils.ShowRaylibInfo = true
 	}
 
 	if *testSine {
@@ -71,6 +96,8 @@ func main() {
 	}
 
 	utils.Info("--- Wallpaper Engine ---")
+
+	rl.SetTraceLogCallback(utils.RaylibLogCallback)
 
 	wallpaperFolder := ""
 	if *pkgPath == "" && len(flag.Args()) > 0 {
@@ -120,24 +147,28 @@ func main() {
 	}
 
 	convert.BulkConvertTextures("tmp", "converted")
+	
+	// Manual GC to free up memory after bulk conversion
+	runtime.GC()
 
 	// Get monitor size and set window to match
-	monitor := ebiten.Monitor()
-	monitorW, monitorH := monitor.Size()
+	// Raylib initialization
+	rl.SetConfigFlags(rl.FlagWindowUndecorated | rl.FlagWindowResizable)
+	rl.InitWindow(1280, 720, "Linux Wallpaper Engine")
+	defer rl.CloseWindow()
+
+	monitor := rl.GetCurrentMonitor()
+	monitorW := rl.GetMonitorWidth(monitor)
+	monitorH := rl.GetMonitorHeight(monitor)
+
 	utils.Info("Monitor resolution: %dx%d", monitorW, monitorH)
 
-	// Set window size to monitor size
-	ebiten.SetWindowSize(monitorW, monitorH)
-	ebiten.SetWindowTitle("Linux Wallpaper Engine")
-	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetRunnableOnUnfocused(true)
+	rl.SetWindowSize(monitorW, monitorH)
 
-	game := NewWindow(scene)
+	game := NewWindow(scene, *scalingMode)
 
 	utils.Info("Starting game loop...")
-	if err := ebiten.RunGame(game); err != nil {
-		utils.Error("Game loop error: %v", err)
-	}
+	game.Run()
 }
 
 func findAndReadSceneJSON(root string) ([]byte, error) {

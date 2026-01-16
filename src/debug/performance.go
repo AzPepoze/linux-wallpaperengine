@@ -2,20 +2,19 @@ package debug
 
 import (
 	"fmt"
-	"math"
 	"runtime"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) drawPerformance(screen *ebiten.Image, startY int, sceneWidth, sceneHeight int, renderScale float64) {
-	ui := NewUIContext(screen, 10, startY, d.lineHeight, d.fontHeight)
+func (d *DebugOverlay) drawPerformance(startY int, sceneWidth, sceneHeight int, renderScale float64, scalingMode string, mx, my int, clicked bool) {
+	ui := NewUIContext(10, startY, d.lineHeight, d.fontHeight, d.font, mx, my, clicked)
 
 	// FPS
-	ui.Label(fmt.Sprintf("FPS: %.1f / %.1f", d.fps, ebiten.ActualTPS()))
+	ui.Label(fmt.Sprintf("FPS: %.1f", float64(rl.GetFPS())))
 
-	// TPS (Ticks Per Second)
-	ui.Label(fmt.Sprintf("TPS: %.1f", ebiten.ActualTPS()))
+	// TPS (Ticks Per Second) - Raylib runs at FPS usually
+	ui.Label(fmt.Sprintf("Frame Time: %.2f ms", rl.GetFrameTime()*1000))
 
 	ui.Separator()
 
@@ -54,11 +53,11 @@ func (d *DebugOverlay) drawPerformance(screen *ebiten.Image, startY int, sceneWi
 
 	ui.Separator()
 
-	// GPU Info (from Ebitengine)
+	// GPU Info
 	ui.Header("Graphics:")
 
 	// Get graphics driver info
-	graphicsDriver := "unimplemented"
+	graphicsDriver := "OpenGL"
 	ui.IndentLabel(fmt.Sprintf("Backend: %s", graphicsDriver), 10)
 
 	// Monitor resolution
@@ -70,19 +69,16 @@ func (d *DebugOverlay) drawPerformance(screen *ebiten.Image, startY int, sceneWi
 	}
 
 	// Window size (actual render resolution)
-	w, h := ebiten.WindowSize()
+	w, h := rl.GetScreenWidth(), rl.GetScreenHeight()
 	ui.IndentLabel(fmt.Sprintf("Render: %dx%d", w, h), 10)
 
 	// Render scale
 	if renderScale != 1.0 {
-		ui.IndentLabel(fmt.Sprintf("Render Scale: %.2fx", renderScale), 10)
+		ui.IndentLabel(fmt.Sprintf("Render Scale: %.2fx (%s)", renderScale, scalingMode), 10)
+	} else {
+		ui.IndentLabel(fmt.Sprintf("Scaling Mode: %s", scalingMode), 10)
 	}
 
-	// Device scale
-	scale := ebiten.Monitor().DeviceScaleFactor()
-	ui.IndentLabel(fmt.Sprintf("Device Scale: %.2fx", scale), 10)
-
 	// UI Scale
-	uiScale := math.Max(1.0, float64(d.monitorHeight)/1080.0)
-	ui.IndentLabel(fmt.Sprintf("UI Scale: %.2fx", uiScale), 10)
+	ui.IndentLabel(fmt.Sprintf("UI Scale: %.2fx", d.uiScale), 10)
 }

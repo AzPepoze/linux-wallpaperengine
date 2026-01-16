@@ -5,7 +5,7 @@
 <p align="center">
      <strong>◈ A wallpaper engine implementation for Linux ◈</strong>
      <br>
-     <strong>◈ Written in Go (Ebitengine) ◈</strong>
+     <strong>◈ Written in Go (Raylib) ◈</strong>
 </p>
 
 <p align="center">
@@ -30,6 +30,7 @@
 -    [INSTALLATION](#installation)
 -    [USAGE](#usage)
      -    [Basic Usage](#basic-usage)
+     -    [Arguments](#arguments)
      -    [Debug Mode](#debug-mode)
 -    [BUILD FROM SOURCE](#build-from-source)
 -    [DEVELOPMENT](#development)
@@ -127,17 +128,20 @@ And you can see the built an executable in the `bin` folder.
 
 ### Basic Usage
 
-Point the executable to your wallpaper's scene.json file:
+Point the executable to your wallpaper's folder or scene.json:
 
 ```bash
 ./linux-wallpaperengine /path/to/wallpaper/folder
 ```
 
-Or specify the scene file directly:
+### Arguments
 
-```bash
-./linux-wallpaperengine --pkg /path/to/wallpaper/scene.json
-```
+-    `--scaling <mode>` : Set scaling mode to `fit` (default) or `cover`.
+-    `--debug` : Enable verbose debug logging and show debug UI.
+-    `--debug-ui` : Show debug overlay UI without verbose terminal logs.
+-    `--info` : Enable informational logging (INFO level).
+-    `--info-raylib` : Show internal Raylib logs (colored magenta).
+-    `--pkg <path>` : Explicitly specify path to `scene.pkg` or scene folder.
 
 ### Debug Mode
 
@@ -154,13 +158,10 @@ Enable the debug overlay with `--debug` flag:
 -    **Performance Tab** – Real-time FPS, memory usage, and system metrics
 -    **Object Inspector** – View and toggle properties (Visible, Effects, etc.)
 -    **Bounding Boxes** – Visualize object bounds and particle positions
--    **Scrollable Panels** – Navigate through large object lists and properties
 
 **Controls:**
 
--    `F1` – Toggle debug overlay
--    `Mouse Wheel` – Scroll object list (left) or inspector (right)
--    `Click` – Select objects, toggle boolean properties
+-    `F12` – Toggle debug overlay
 
 ## BUILD FROM SOURCE
 

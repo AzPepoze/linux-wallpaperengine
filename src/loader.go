@@ -12,7 +12,7 @@ import (
 	"linux-wallpaperengine/src/wallpaper"
 	"linux-wallpaperengine/src/wallpaper/feature"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 func resolveTexturePath(object *wallpaper.Object) string {
@@ -76,7 +76,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		return nil
 	}
 
-	var texture *ebiten.Image
+	var texture *rl.Texture2D
 	if config.Material != "" {
 		textureName := ""
 		if strings.HasSuffix(config.Material, ".json") {
@@ -100,7 +100,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		if textureName != "" {
 			texturePath := findTextureFile(textureName)
 			if texturePath != "" {
-				if image, err := convert.LoadTexture(texturePath); err == nil {
+				if image, err := convert.LoadTextureNative(texturePath); err == nil {
 					texture = image
 				}
 			}

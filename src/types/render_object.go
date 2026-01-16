@@ -4,12 +4,19 @@ import (
 	"linux-wallpaperengine/src/wallpaper"
 	"linux-wallpaperengine/src/wallpaper/feature"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type RenderObject struct {
-	*wallpaper.Object
-	Image          *ebiten.Image
+
+	Object         *wallpaper.Object
+
+	Image          *rl.Texture2D
+
+	RenderTexture  *rl.RenderTexture2D
+
 	Offset         wallpaper.Vec2
+
 	ParticleSystem *feature.ParticleSystem
+
 }

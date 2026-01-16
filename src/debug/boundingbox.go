@@ -1,131 +1,89 @@
 package debug
 
 import (
-	"image"
-	"image/color"
-
 	"linux-wallpaperengine/src/types"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/vector"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) getBoundingBoxToggleRect() image.Rectangle {
-	return image.Rectangle{
-		Min: image.Point{X: 10, Y: d.tabHeight + 5},
-		Max: image.Point{X: d.sidebarWidth - 10, Y: d.tabHeight + 25},
-	}
+func (d *DebugOverlay) getBoundingBoxToggleRect() rl.Rectangle {
+	return rl.NewRectangle(
+		10, 
+		float32(d.tabHeight+5), 
+		float32(d.sidebarWidth-20), 
+		20,
+	)
 }
 
-func (d *DebugOverlay) drawBoundingBoxToggle(screen *ebiten.Image) {
+func (d *DebugOverlay) drawBoundingBoxToggle() {
 	rect := d.getBoundingBoxToggleRect()
 
-	boxSize := int(float64(d.fontHeight) * 1.2)
-	boxX := rect.Min.X
-	boxY := rect.Min.Y + (rect.Dy()-boxSize)/2
+	boxSize := float32(d.fontHeight) * 1.2
+	boxX := rect.X
+	boxY := rect.Y + (rect.Height-boxSize)/2
 
-	vector.StrokeRect(screen, float32(boxX), float32(boxY), float32(boxSize), float32(boxSize), 1, color.White, false)
+	rl.DrawRectangleLines(int32(boxX), int32(boxY), int32(boxSize), int32(boxSize), rl.White)
 	if d.ShowBoundingBoxes {
-		vector.FillRect(screen, float32(boxX+2), float32(boxY+2), float32(boxSize-4), float32(boxSize-4), color.White, false)
+		rl.DrawRectangle(int32(boxX+2), int32(boxY+2), int32(boxSize-4), int32(boxSize-4), rl.White)
 	}
 
-	ebitenutil.DebugPrintAt(screen, "Show Bounding Boxes", boxX+boxSize+10, boxY)
+	d.DrawText("Show Bounding Boxes", int32(boxX+boxSize+10), int32(boxY), int32(d.fontHeight), rl.White)
 }
 
-func (d *DebugOverlay) drawSelectedBoundingBox(screen *ebiten.Image, obj types.RenderObject, renderScale float64) {
-	col := color.RGBA{255, 255, 0, 255} // Yellow for selected
+func (d *DebugOverlay) drawSelectedBoundingBox(obj types.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64) {
+	d.drawObjectBoundingBox(obj, renderScale, sceneOffsetX, sceneOffsetY, rl.NewColor(255, 255, 0, 255), rl.NewColor(255, 255, 0, 150))
+}
 
-	if obj.Image != nil {
-		w, h := obj.Image.Bounds().Dx(), obj.Image.Bounds().Dy()
-		sw, sh := float64(w)*obj.Object.Scale.X*renderScale, float64(h)*obj.Object.Scale.Y*renderScale
-
-		cx := (obj.Object.Origin.X + obj.Offset.X) * renderScale
-		cy := (obj.Object.Origin.Y + obj.Offset.Y) * renderScale
-
-		x := cx - sw/2
-		y := cy - sh/2
-
-		vector.StrokeRect(screen, float32(x), float32(y), float32(sw), float32(sh), 2, col, false)
-	}
-
-	if obj.ParticleSystem != nil {
-		pCol := color.RGBA{255, 255, 0, 150} // Semi-transparent yellow
-
-		pw, ph := 0.0, 0.0
-		if obj.ParticleSystem.Texture != nil {
-			b := obj.ParticleSystem.Texture.Bounds()
-			pw, ph = float64(b.Dx()), float64(b.Dy())
-		} else {
-			pw, ph = 2, 2
+func (d *DebugOverlay) drawSceneBoundingBoxes(renderObjects []types.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64) {
+	for i, obj := range renderObjects {
+		if i == d.SelectedObjectIndex {
+			continue
 		}
+		d.drawObjectBoundingBox(obj, renderScale, sceneOffsetX, sceneOffsetY, rl.NewColor(0, 255, 0, 255), rl.NewColor(0, 255, 255, 100))
+	}
+}
 
-		for _, p := range obj.ParticleSystem.Particles {
-			scaleX := obj.Object.Scale.X * p.Size / 100.0 * renderScale
+func (d *DebugOverlay) drawObjectBoundingBox(obj types.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64, imageCol, particleCol rl.Color) {
+		if obj.Image != nil {
+			w, h := obj.Image.Width, obj.Image.Height
+			sw, sh := float64(w)*obj.Object.Scale.X*renderScale, float64(h)*obj.Object.Scale.Y*renderScale
+	
+			cx := sceneOffsetX + (obj.Object.Origin.X+obj.Offset.X)*renderScale
+			cy := sceneOffsetY + (obj.Object.Origin.Y+obj.Offset.Y)*renderScale
+	
+			x := cx - sw/2
+			y := cy - sh/2
+	
+			rl.DrawRectangleLines(int32(x), int32(y), int32(sw), int32(sh), imageCol)
+	
+			// Draw origin point as a small red rectangle
+			rl.DrawRectangle(int32(cx-2), int32(cy-2), 4, 4, rl.Red)
+		}
+	
+		if obj.ParticleSystem != nil {
+			pw, ph := 0.0, 0.0
+			if obj.ParticleSystem.Texture != nil {
+				pw, ph = float64(obj.ParticleSystem.Texture.Width), float64(obj.ParticleSystem.Texture.Height)
+			} else {
+				pw, ph = 2, 2
+			}
+	
+			originX := sceneOffsetX + (obj.Object.Origin.X+obj.Offset.X)*renderScale
+			originY := sceneOffsetY + (obj.Object.Origin.Y+obj.Offset.Y)*renderScale
+	
+			// Draw system origin for particles
+			rl.DrawRectangle(int32(originX-2), int32(originY-2), 4, 4, rl.Red)
+	
+			for _, p := range obj.ParticleSystem.Particles {			scaleX := obj.Object.Scale.X * p.Size / 100.0 * renderScale
 			scaleY := obj.Object.Scale.Y * p.Size / 100.0 * renderScale
 
 			currPW := pw * scaleX
 			currPH := ph * scaleY
 
-			originX := (obj.Object.Origin.X + obj.Offset.X) * renderScale
-			originY := (obj.Object.Origin.Y + obj.Offset.Y) * renderScale
+			px := originX + p.Position.X*obj.Object.Scale.X*renderScale - currPW/2
+			py := originY + p.Position.Y*obj.Object.Scale.Y*renderScale - currPH/2
 
-			px := originX + p.Position.X*renderScale - currPW/2
-			py := originY + p.Position.Y*renderScale - currPH/2
-
-			vector.StrokeRect(screen, float32(px), float32(py), float32(currPW), float32(currPH), 1, pCol, false)
-		}
-	}
-}
-
-func (d *DebugOverlay) drawSceneBoundingBoxes(screen *ebiten.Image, renderObjects []types.RenderObject, renderScale float64) {
-	for i, obj := range renderObjects {
-		// Skip selected object since it's drawn separately
-		if i == d.SelectedObjectIndex {
-			continue
-		}
-
-		col := color.RGBA{0, 255, 0, 255}
-
-		if obj.Image != nil {
-			w, h := obj.Image.Bounds().Dx(), obj.Image.Bounds().Dy()
-			sw, sh := float64(w)*obj.Object.Scale.X*renderScale, float64(h)*obj.Object.Scale.Y*renderScale
-
-			cx := (obj.Object.Origin.X + obj.Offset.X) * renderScale
-			cy := (obj.Object.Origin.Y + obj.Offset.Y) * renderScale
-
-			x := cx - sw/2
-			y := cy - sh/2
-
-			vector.StrokeRect(screen, float32(x), float32(y), float32(sw), float32(sh), 1, col, false)
-		}
-
-		if obj.ParticleSystem != nil {
-			pCol := color.RGBA{0, 255, 255, 100}
-
-			pw, ph := 0.0, 0.0
-			if obj.ParticleSystem.Texture != nil {
-				b := obj.ParticleSystem.Texture.Bounds()
-				pw, ph = float64(b.Dx()), float64(b.Dy())
-			} else {
-				pw, ph = 2, 2
-			}
-
-			for _, p := range obj.ParticleSystem.Particles {
-				scaleX := obj.Object.Scale.X * p.Size / 100.0 * renderScale
-				scaleY := obj.Object.Scale.Y * p.Size / 100.0 * renderScale
-
-				currPW := pw * scaleX
-				currPH := ph * scaleY
-
-				originX := (obj.Object.Origin.X + obj.Offset.X) * renderScale
-				originY := (obj.Object.Origin.Y + obj.Offset.Y) * renderScale
-
-				px := originX + p.Position.X*renderScale - currPW/2
-				py := originY + p.Position.Y*renderScale - currPH/2
-
-				vector.StrokeRect(screen, float32(px), float32(py), float32(currPW), float32(currPH), 1, pCol, false)
-			}
+			rl.DrawRectangleLines(int32(px), int32(py), int32(currPW), int32(currPH), particleCol)
 		}
 	}
 }

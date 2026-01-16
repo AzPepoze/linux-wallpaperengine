@@ -1,116 +1,30 @@
 package wallpaper
 
 import (
-	"io"
-	"os"
 	"path/filepath"
-	"sync"
 
 	"linux-wallpaperengine/src/utils"
 
-	"github.com/gen2brain/malgo"
-	"github.com/hajimehoshi/go-mp3"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type AudioStream struct {
-	decoder    *mp3.Decoder
-	volume     float64
+	music      rl.Music
 	active     bool
 	shouldLoop bool
 }
 
 type AudioManager struct {
-	ctx      *malgo.AllocatedContext
-	device   *malgo.Device
 	streams  []*AudioStream
-	mutex    sync.Mutex
-	initOnce sync.Once
 }
 
 func NewAudioManager() *AudioManager {
+	if !rl.IsAudioDeviceReady() {
+		rl.InitAudioDevice()
+	}
 	return &AudioManager{
 		streams: make([]*AudioStream, 0),
 	}
-}
-
-func (am *AudioManager) initDevice(sampleRate uint32) {
-	am.initOnce.Do(func() {
-		var err error
-		am.ctx, err = malgo.InitContext(nil, malgo.ContextConfig{}, nil)
-		if err != nil {
-			utils.Error("Malgo: Failed to init context: %v", err)
-			return
-		}
-
-		deviceConfig := malgo.DefaultDeviceConfig(malgo.Playback)
-		deviceConfig.Playback.Format = malgo.FormatS16
-		deviceConfig.Playback.Channels = 2
-		deviceConfig.SampleRate = sampleRate
-		deviceConfig.Alsa.NoMMap = 1
-
-		onSamples := func(pOutputSample, pInputSample []byte, frameCount uint32) {
-			am.mutex.Lock()
-			defer am.mutex.Unlock()
-
-			// Clear output buffer
-			for i := range pOutputSample {
-				pOutputSample[i] = 0
-			}
-
-			// Mix all active streams
-			sampleSize := uint32(2 * 2) // S16 (2 bytes) * 2 channels
-			tempBuf := make([]byte, frameCount*sampleSize)
-
-			for _, stream := range am.streams {
-				if !stream.active {
-					continue
-				}
-
-				n, err := io.ReadFull(stream.decoder, tempBuf)
-				if err != nil {
-					if err == io.EOF || err == io.ErrUnexpectedEOF {
-						if stream.shouldLoop {
-							stream.decoder.Seek(0, io.SeekStart)
-							io.ReadFull(stream.decoder, tempBuf)
-						} else {
-							stream.active = false
-							continue
-						}
-					} else {
-						stream.active = false
-						continue
-					}
-				}
-
-				// Simple Mixing (Addition with volume)
-				for i := 0; i < n; i += 2 {
-					// Read S16LE
-					val := int16(tempBuf[i]) | int16(tempBuf[i+1])<<8
-					mixedVal := int16(float64(val) * stream.volume)
-
-					// Mix into output
-					outVal := int16(pOutputSample[i]) | int16(pOutputSample[i+1])<<8
-					newVal := outVal + mixedVal
-
-					pOutputSample[i] = byte(newVal & 0xff)
-					pOutputSample[i+1] = byte(newVal >> 8)
-				}
-			}
-		}
-
-		am.device, err = malgo.InitDevice(am.ctx.Context, deviceConfig, malgo.DeviceCallbacks{
-			Data: onSamples,
-		})
-		if err != nil {
-			utils.Error("Malgo: Failed to init device: %v", err)
-			return
-		}
-
-		if err := am.device.Start(); err != nil {
-			utils.Error("Malgo: Failed to start device: %v", err)
-		}
-		utils.Info("Malgo: Device started at %dHz", sampleRate)
-	})
 }
 
 func (am *AudioManager) Play(obj *Object) {
@@ -122,38 +36,43 @@ func (am *AudioManager) Play(obj *Object) {
 }
 
 func (am *AudioManager) PlayDirect(soundPath string, vol float64, shouldLoop bool) {
-	f, err := os.Open(soundPath)
-	if err != nil {
-		utils.Error("Failed to open sound file %s: %v", soundPath, err)
-		return
+	music := rl.LoadMusicStream(soundPath)
+	if music.Stream.Buffer == nil { // Check if loaded successfully (Go binding specific check might vary, usually 0 check on ID)
+		// Raylib-go music struct might not have easy valid check exposed or it just works.
+		// If pointer is nil or something. But music is a struct.
+		// We trust Raylib for now or check output logs.
 	}
+	
+	music.Looping = shouldLoop
+	rl.SetMusicVolume(music, float32(vol))
+	rl.PlayMusicStream(music)
 
-	dec, err := mp3.NewDecoder(f)
-	if err != nil {
-		utils.Error("Failed to decode mp3 %s: %v", soundPath, err)
-		f.Close()
-		return
-	}
-
-	am.initDevice(uint32(dec.SampleRate()))
-
-	am.mutex.Lock()
 	am.streams = append(am.streams, &AudioStream{
-		decoder:    dec,
-		volume:     vol,
+		music:      music,
 		active:     true,
 		shouldLoop: shouldLoop,
 	})
-	am.mutex.Unlock()
 
-	utils.Info("Malgo: Playing %s (Vol: %.2f)", soundPath, vol)
+	utils.Info("Raylib: Playing %s (Vol: %.2f)", soundPath, vol)
+}
+
+func (am *AudioManager) Update() {
+	for _, stream := range am.streams {
+		if stream.active {
+			rl.UpdateMusicStream(stream.music)
+		}
+	}
 }
 
 func (am *AudioManager) Close() {
-	if am.device != nil {
-		am.device.Uninit()
+	for _, stream := range am.streams {
+		if stream.active {
+			rl.StopMusicStream(stream.music)
+			rl.UnloadMusicStream(stream.music)
+			stream.active = false
+		}
 	}
-	if am.ctx != nil {
-		am.ctx.Free()
+	if rl.IsAudioDeviceReady() {
+		rl.CloseAudioDevice()
 	}
 }
