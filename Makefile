@@ -1,5 +1,6 @@
 ENGINE_SRC = src/*.go
 ENGINE_TARGET = bin/linux-wallpaperengine
+TOOLS_BIN = bin/tools
 
 build:
 	mkdir -p bin
@@ -27,3 +28,8 @@ test-texture: build
 test-sine: build
 	@echo "Testing Sine Wave generator (Forcing Pulse/PipeWire)..."
 	OTO_LINUX_BACKEND=pulse $(ENGINE_TARGET) -test-sine
+
+check:
+	GOBIN=$(PWD)/$(TOOLS_BIN) go install golang.org/x/tools/cmd/deadcode@latest
+	@echo "Running deadcode check..."
+	$(TOOLS_BIN)/deadcode ./...

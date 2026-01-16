@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"linux-wallpaperengine/src/convert"
+	"linux-wallpaperengine/src/debug"
+	"linux-wallpaperengine/src/types"
 	"linux-wallpaperengine/src/utils"
 	"linux-wallpaperengine/src/wallpaper"
 	"linux-wallpaperengine/src/wallpaper/feature"
@@ -13,17 +15,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-type RenderObject struct {
-	*wallpaper.Object
-	Image          *ebiten.Image
-	Offset         wallpaper.Vec2
-	ParticleSystem *feature.ParticleSystem
-}
-
 type Window struct {
 	scene          wallpaper.Scene
 	bgColor        color.RGBA
-	renderObjects  []RenderObject
+	renderObjects  []types.RenderObject
 	audioManager   *wallpaper.AudioManager
 	mouseX, mouseY float64
 	startTime      time.Time
@@ -35,7 +30,7 @@ type Window struct {
 
 	updateObjects []wallpaper.Object
 	updateOffsets []wallpaper.Vec2
-	debugOverlay  *DebugOverlay
+	debugOverlay  *debug.DebugOverlay
 }
 
 func NewWindow(scene wallpaper.Scene) *Window {
@@ -49,10 +44,10 @@ func NewWindow(scene wallpaper.Scene) *Window {
 		startTime:     time.Now(),
 		lastFrameTime: time.Now(),
 		renderScale:   1.0,
-		renderObjects: make([]RenderObject, 0, len(scene.Objects)),
+		renderObjects: make([]types.RenderObject, 0, len(scene.Objects)),
 		updateObjects: make([]wallpaper.Object, len(scene.Objects)),
 		updateOffsets: make([]wallpaper.Vec2, len(scene.Objects)),
-		debugOverlay:  NewDebugOverlay(),
+		debugOverlay:  debug.NewDebugOverlay(),
 	}
 
 	for i := range scene.Objects {
@@ -84,7 +79,7 @@ func NewWindow(scene wallpaper.Scene) *Window {
 			ps = loadParticleSystem(object.Name, object.Particle, object.InstanceOverride)
 		}
 
-		window.renderObjects = append(window.renderObjects, RenderObject{
+		window.renderObjects = append(window.renderObjects, types.RenderObject{
 			Object:         object,
 			Image:          image,
 			ParticleSystem: ps,
