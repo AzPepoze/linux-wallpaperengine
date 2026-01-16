@@ -167,7 +167,7 @@ func (window *Window) Update() {
 
 	window.audioManager.Update()
 
-	if rl.IsKeyPressed(rl.KeyF12) {
+	if rl.IsKeyPressed(rl.KeyF8) {
 		utils.ShowDebugUI = !utils.ShowDebugUI
 	}
 

@@ -40,11 +40,11 @@
 
 ## ABOUT
 
-Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. Inspired by [Almamu's linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), this project is written in Go and runs Wallpaper Engine content on Linux.
+Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. Inspired by [Almamu&#39;s linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), this project is written in Go and runs Wallpaper Engine content on Linux.
 
 **Why This Project?**
 
-While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) for [Almamu's linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), I decided to create a native Go implementation focusing on performance and compatibility. This implementation maintains argument compatibility with the original project for seamless integration.
+While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) for [Almamu&#39;s linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), I decided to create a native Go implementation focusing on performance and compatibility. This implementation maintains argument compatibility with the original project for seamless integration.
 
 > [!Important]
 > You must own and have installed Wallpaper Engine from Steam to use this project. This tool does not provide any wallpapers or assets by itself; you need to supply your own content from the official Wallpaper Engine.
@@ -102,6 +102,7 @@ While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) 
      -    [ ] Support for: `Rain`, `Stars`, `Smoke`, `Fireworks`, `Dust motes`
 
 -    [ ] **System Integration**
+
      -    [ ] **MPRIS Support**: Show current playing song/artist from system players (Spotify, etc.)
      -    [ ] **User Options**: Read `project.json` for user-defined properties (intensity, toggles)
 
@@ -161,7 +162,7 @@ Enable the debug overlay with `--debug` flag:
 
 **Controls:**
 
--    `F12` – Toggle debug overlay
+-    `F8` – Toggle debug overlay
 
 ## BUILD FROM SOURCE
 
