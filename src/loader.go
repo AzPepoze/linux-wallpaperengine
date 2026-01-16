@@ -77,8 +77,8 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 	}
 
 	var texture *rl.Texture2D
+	textureName := ""
 	if config.Material != "" {
-		textureName := ""
 		if strings.HasSuffix(config.Material, ".json") {
 			possibleMaterialPaths := []string{
 				filepath.Join("tmp", config.Material),
@@ -107,7 +107,13 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		}
 	}
 
-	return feature.NewParticleSystem(name, config, texture, override)
+	return feature.NewParticleSystem(feature.ParticleSystemOptions{
+		Name:        name,
+		Config:      config,
+		Texture:     texture,
+		TextureName: textureName,
+		Override:    override,
+	})
 }
 
 func extractTextureFromJSONPath(fullPath string) (string, error) {

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,6 +31,8 @@ func main() {
 			utils.ShowDebugUI = true
 		} else if arg == "--debug-ui" {
 			utils.ShowDebugUI = true
+		} else if arg == "--silent" {
+			utils.SilentMode = true
 		} else if arg == "--info" && utils.CurrentLevel > utils.LevelInfo {
 			utils.CurrentLevel = utils.LevelInfo
 		}
@@ -61,7 +64,19 @@ func main() {
 	debugUIFlag := flag.Bool("debug-ui", false, "Enable debug overlay UI")
 	infoFlag := flag.Bool("info", false, "Enable info logging")
 	raylibInfoFlag := flag.Bool("info-raylib", false, "Show Raylib internal info logs")
+	silentFlag := flag.Bool("silent", false, "Mute all audio output")
 	scalingMode := flag.String("scaling", "fit", "Scaling mode: cover, fit")
+	
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] [wallpaper_folder or scene.pkg]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  %s ./my_wallpaper\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --pkg ./scene.pkg --debug\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --silent --scaling cover\n", os.Args[0])
+	}
+
 	flag.Parse()
 
 	if *debugFlag {
@@ -70,6 +85,10 @@ func main() {
 		utils.CurrentLevel = utils.LevelDebug
 	} else if *debugUIFlag {
 		utils.ShowDebugUI = true
+	}
+
+	if *silentFlag {
+		utils.SilentMode = true
 	}
 	
 	if *infoFlag {

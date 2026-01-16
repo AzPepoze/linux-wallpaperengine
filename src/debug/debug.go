@@ -109,7 +109,7 @@ func (d *DebugOverlay) updateLayout() {
 	d.fontHeight = int(16 * scale)
 	d.lineHeight = int(28 * scale)
 	d.tabHeight = int(40 * scale)
-	d.sidebarWidth = int(400 * scale)
+	d.sidebarWidth = int(800 * scale)
 	d.uiScale = scale
 }
 

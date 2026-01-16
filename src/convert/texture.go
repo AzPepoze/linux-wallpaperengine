@@ -55,13 +55,13 @@ func decodePNG(data []byte, path string) (image.Image, error) {
 
 func decodeRGBA(data []byte) ([]byte, error) {
 	utils.Debug("    Type: RGBA")
-	// for k := 0; k < len(data); k += 4 {
-	// 	opacity := data[k+3]
-	// 	data[k] = opacity
-	// 	data[k+1] = opacity
-	// 	data[k+2] = opacity
-	// 	data[k+3] = opacity
-	// }
+	for k := 0; k < len(data); k += 4 {
+		opacity := data[k+3]
+		data[k] = opacity
+		data[k+1] = opacity
+		data[k+2] = opacity
+		data[k+3] = opacity
+	}
 	return data, nil
 }
 

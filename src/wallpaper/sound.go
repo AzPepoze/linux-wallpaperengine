@@ -19,7 +19,7 @@ type AudioManager struct {
 }
 
 func NewAudioManager() *AudioManager {
-	if !rl.IsAudioDeviceReady() {
+	if !utils.SilentMode && !rl.IsAudioDeviceReady() {
 		rl.InitAudioDevice()
 	}
 	return &AudioManager{
@@ -28,7 +28,7 @@ func NewAudioManager() *AudioManager {
 }
 
 func (am *AudioManager) Play(obj *Object) {
-	if !obj.Visible.Value || len(obj.Sound.Value) == 0 {
+	if utils.SilentMode || !obj.Visible.Value || len(obj.Sound.Value) == 0 {
 		return
 	}
 	soundPath := filepath.Join("tmp", obj.Sound.Value)
@@ -36,6 +36,9 @@ func (am *AudioManager) Play(obj *Object) {
 }
 
 func (am *AudioManager) PlayDirect(soundPath string, vol float64, shouldLoop bool) {
+	if utils.SilentMode {
+		return
+	}
 	music := rl.LoadMusicStream(soundPath)
 	if music.Stream.Buffer == nil { // Check if loaded successfully (Go binding specific check might vary, usually 0 check on ID)
 		// Raylib-go music struct might not have easy valid check exposed or it just works.

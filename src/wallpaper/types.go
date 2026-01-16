@@ -166,6 +166,7 @@ type ParticleJSON struct {
 	StartTime          float64               `json:"starttime"`
 	Flags              int                   `json:"flags"`
 	SequenceMultiplier float64               `json:"sequencemultiplier"`
+	AnimationMode      string                `json:"animationmode"`
 	Emitter            []ParticleEmitter     `json:"emitter"`
 	Initializer        []ParticleInitializer `json:"initializer"`
 	Operator           []ParticleOperator    `json:"operator"`
@@ -175,13 +176,17 @@ type ParticleJSON struct {
 }
 
 type ParticleEmitter struct {
-	ID          int          `json:"id"`
-	Name        string       `json:"name"`
-	Rate        BindingFloat `json:"rate"`
-	Origin      Vec3         `json:"origin"`
-	Directions  Vec3         `json:"directions"`
-	DistanceMax interface{}  `json:"distancemax"` // Can be Vec3 or float64
-	DistanceMin interface{}  `json:"distancemin"` // Can be Vec3 or float64
+	ID                         int          `json:"id"`
+	Name                       string       `json:"name"`
+	Rate                       BindingFloat `json:"rate"`
+	Origin                     Vec3         `json:"origin"`
+	Directions                 Vec3         `json:"directions"`
+	DistanceMax                interface{}  `json:"distancemax"` // Can be Vec3 or float64
+	DistanceMin                interface{}  `json:"distancemin"` // Can be Vec3 or float64
+	AudioProcessingBounds      string       `json:"audioprocessingbounds"`
+	AudioProcessingExponent    float64      `json:"audioprocessingexponent"`
+	AudioProcessingFrequencyEnd float64      `json:"audioprocessingfrequencyend"`
+	AudioProcessingMode        int          `json:"audioprocessingmode"`
 }
 
 type ParticleInitializer struct {

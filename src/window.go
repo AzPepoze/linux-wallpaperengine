@@ -65,6 +65,10 @@ func NewWindow(scene wallpaper.Scene, scalingMode string) *Window {
 	for i := range scene.Objects {
 		object := &scene.Objects[i]
 
+		if object.Particle != "" {
+			object.Origin.Y = float64(height) - object.Origin.Y
+		}
+
 		if len(object.Sound.Value) > 0 {
 			window.audioManager.Play(object)
 		}
@@ -125,7 +129,7 @@ func (window *Window) Update() {
 	// Calculate render scale based on window size
 	screenWidth := rl.GetScreenWidth()
 	screenHeight := rl.GetScreenHeight()
-	
+
 	scaleW := float64(screenWidth) / float64(window.sceneWidth)
 	scaleH := float64(screenHeight) / float64(window.sceneHeight)
 
@@ -152,6 +156,10 @@ func (window *Window) Update() {
 	for i, renderObject := range window.renderObjects {
 		window.updateObjects[i] = *renderObject.Object
 		window.updateOffsets[i] = wallpaper.Vec2{X: 0, Y: 0}
+
+		if !renderObject.Object.Visible.Value {
+			continue
+		}
 		if renderObject.ParticleSystem != nil {
 			renderObject.ParticleSystem.Update(deltaTime)
 		}
@@ -174,7 +182,7 @@ func (window *Window) Update() {
 	for i := range window.renderObjects {
 		*window.renderObjects[i].Object = window.updateObjects[i]
 		window.renderObjects[i].Offset = window.updateOffsets[i]
-		
+
 		if window.renderObjects[i].RenderTexture != nil && window.renderObjects[i].Object.GetText() != "" {
 			feature.RenderText(window.renderObjects[i].Object, window.renderObjects[i].RenderTexture)
 		}
@@ -193,7 +201,7 @@ func (window *Window) Draw() {
 	sceneRectY := int32(window.sceneOffsetY)
 	sceneRectW := int32(float64(window.sceneWidth) * window.renderScale)
 	sceneRectH := int32(float64(window.sceneHeight) * window.renderScale)
-	
+
 	rl.BeginScissorMode(sceneRectX, sceneRectY, sceneRectW, sceneRectH)
 	rl.ClearBackground(rl.NewColor(window.bgColor.R, window.bgColor.G, window.bgColor.B, 255))
 
@@ -220,7 +228,7 @@ func (window *Window) Draw() {
 			if alpha > 0 {
 				targetWidth, targetHeight := renderObject.Object.Size.X, renderObject.Object.Size.Y
 				if targetWidth > 0 && targetHeight > 0 {
-					
+
 					imageWidth := float32(texture.Width)
 					imageHeight := float32(texture.Height)
 
@@ -265,9 +273,9 @@ func (window *Window) Draw() {
 					rotation := float32(renderObject.Object.Angles.Z) // Degrees
 
 					rlTint := rl.NewColor(
-						tintColor.R, 
-						tintColor.G, 
-						tintColor.B, 
+						tintColor.R,
+						tintColor.G,
+						tintColor.B,
 						uint8(float32(255)*float32(alpha)),
 					)
 
@@ -279,6 +287,9 @@ func (window *Window) Draw() {
 		if renderObject.ParticleSystem != nil {
 			scaledX := window.sceneOffsetX + (renderObject.Object.Origin.X+renderObject.Offset.X)*window.renderScale
 			scaledY := window.sceneOffsetY + (renderObject.Object.Origin.Y+renderObject.Offset.Y)*window.renderScale
+
+			// scaledY -= float64(window.sceneHeight) / 2 // Move center to (0,0)
+			// scaledY *= -1                              // Flip Y axis
 
 			// Conservative culling for particles: if origin is way off screen, skip
 			margin := 2000.0 * window.renderScale
