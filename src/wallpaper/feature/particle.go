@@ -1,14 +1,13 @@
 package feature
 
 import (
-	"image"
 	"image/color"
 	"math"
 	"math/rand"
 
 	"linux-wallpaperengine/src/wallpaper"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type Particle struct {
@@ -30,7 +29,7 @@ type Particle struct {
 type ParticleSystem struct {
 	Name       string
 	Config     wallpaper.ParticleJSON
-	Texture    *ebiten.Image
+	Texture    *rl.Texture2D
 	Particles  []*Particle
 	Timer      float64
 	GlobalTime float64
@@ -39,7 +38,7 @@ type ParticleSystem struct {
 	MousePos   wallpaper.Vec3
 }
 
-func NewParticleSystem(name string, config wallpaper.ParticleJSON, texture *ebiten.Image, override *wallpaper.InstanceOverride) *ParticleSystem {
+func NewParticleSystem(name string, config wallpaper.ParticleJSON, texture *rl.Texture2D, override *wallpaper.InstanceOverride) *ParticleSystem {
 	ps := &ParticleSystem{
 		Name:       name,
 		Config:     config,
@@ -524,14 +523,18 @@ func getVec3OrFloat(val interface{}) wallpaper.Vec3 {
 	return getVec3FromInterface(val)
 }
 
-var fallbackTexture *ebiten.Image
+var fallbackTexture *rl.Texture2D
 
-func (ps *ParticleSystem) Draw(screen *ebiten.Image, originX, originY float64, objScale wallpaper.Vec3) {
+func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3) {
 	img := ps.Texture
 	if img == nil {
 		if fallbackTexture == nil {
-			fallbackTexture = ebiten.NewImage(2, 2)
-			fallbackTexture.Fill(color.White)
+			// Create a 2x2 white texture
+			// Need an image first
+			i := rl.GenImageColor(2, 2, rl.White)
+			t := rl.LoadTextureFromImage(i)
+			rl.UnloadImage(i)
+			fallbackTexture = &t
 		}
 		img = fallbackTexture
 	}
@@ -556,13 +559,15 @@ func (ps *ParticleSystem) Draw(screen *ebiten.Image, originX, originY float64, o
 	}
 	totalFrames := gridSize * gridSize
 
+	width := float32(img.Width)
+	height := float32(img.Height)
+
+	// Raylib uses BlendMode
+	rl.BeginBlendMode(rl.BlendAlpha)
+
 	for _, particle := range ps.Particles {
 		// Only use sprite rendering if renderer is "sprite" AND sprite sheet is enabled
 		if rendererType == "sprite" && useSpriteSheet {
-			drawOptions := &ebiten.DrawImageOptions{}
-
-			width, height := img.Bounds().Dx(), img.Bounds().Dy()
-
 			// Calculate sprite frame based on particle age
 			ageRatio := (particle.MaxLife - particle.Life) / particle.MaxLife
 			frameIndex := int(ageRatio * float64(totalFrames))
@@ -571,61 +576,73 @@ func (ps *ParticleSystem) Draw(screen *ebiten.Image, originX, originY float64, o
 			}
 
 			// Calculate sprite sheet position
-			spriteWidth := width / gridSize
-			spriteHeight := height / gridSize
-			srcX := (frameIndex % gridSize) * spriteWidth
-			srcY := (frameIndex / gridSize) * spriteHeight
+			spriteWidth := width / float32(gridSize)
+			spriteHeight := height / float32(gridSize)
+			srcX := float32(frameIndex%gridSize) * spriteWidth
+			srcY := float32(frameIndex/gridSize) * spriteHeight
 
-			// Create sub-image for the specific sprite frame
-			spriteImg := img.SubImage(image.Rectangle{
-				Min: image.Point{X: srcX, Y: srcY},
-				Max: image.Point{X: srcX + spriteWidth, Y: srcY + spriteHeight},
-			}).(*ebiten.Image)
+			sourceRec := rl.NewRectangle(srcX, srcY, spriteWidth, spriteHeight)
 
-			// Center the particle texture
-			drawOptions.GeoM.Translate(-float64(spriteWidth)/2, -float64(spriteHeight)/2)
+			// Scale
+			scale := float32(particle.Size / 100.0)
+			finalScaleX := scale * float32(objScale.X)
+			finalScaleY := scale * float32(objScale.Y)
+			
+			destWidth := spriteWidth * finalScaleX
+			destHeight := spriteHeight * finalScaleY
+			
+			// Destination
+			destX := float32(originX + particle.Position.X*objScale.X)
+			destY := float32(originY + particle.Position.Y*objScale.Y)
+			
+			destRec := rl.NewRectangle(destX, destY, destWidth, destHeight)
+			
+			// Origin (Pivot) - Center of particle
+			origin := rl.NewVector2(destWidth/2, destHeight/2)
+			
+			// Rotation
+			rotation := float32(particle.Rotation * 180.0 / math.Pi)
 
-			// Apply rotation
-			drawOptions.GeoM.Rotate(particle.Rotation)
-
-			// Apply scale - particle.Size is in percentage (0-100+), objScale includes render scale
-			scale := particle.Size / 100.0
-			drawOptions.GeoM.Scale(scale*objScale.X, scale*objScale.Y)
-
-			// Translate to particle position
-			drawOptions.GeoM.Translate(originX+particle.Position.X*objScale.X, originY+particle.Position.Y*objScale.Y)
-
-			// Color and alpha
-			drawOptions.ColorScale.Scale(
-				float32(particle.Color.X*particle.Alpha),
-				float32(particle.Color.Y*particle.Alpha),
-				float32(particle.Color.Z*particle.Alpha),
-				1.0,
+			// Color
+			color := rl.NewColor(
+				uint8(particle.Color.X*255),
+				uint8(particle.Color.Y*255),
+				uint8(particle.Color.Z*255),
+				uint8(particle.Alpha*255),
 			)
 
-			// Use lighter blending for additive effect
-			drawOptions.Blend = ebiten.BlendLighter
-			screen.DrawImage(spriteImg, drawOptions)
+			rl.DrawTexturePro(*img, sourceRec, destRec, origin, rotation, color)
 
 		} else {
 			// Default rendering - full texture per particle
-			drawOptions := &ebiten.DrawImageOptions{}
-			width, height := img.Bounds().Dx(), img.Bounds().Dy()
-			drawOptions.GeoM.Translate(-float64(width)/2, -float64(height)/2)
-			drawOptions.GeoM.Rotate(particle.Rotation)
-			scale := particle.Size / 100.0
-			drawOptions.GeoM.Scale(scale*objScale.X, scale*objScale.Y)
-			drawOptions.GeoM.Translate(originX+particle.Position.X*objScale.X, originY+particle.Position.Y*objScale.Y)
-			drawOptions.ColorScale.Scale(
-				float32(particle.Color.X*particle.Alpha),
-				float32(particle.Color.Y*particle.Alpha),
-				float32(particle.Color.Z*particle.Alpha),
-				1.0,
+			sourceRec := rl.NewRectangle(0, 0, width, height)
+			
+			scale := float32(particle.Size / 100.0)
+			finalScaleX := scale * float32(objScale.X)
+			finalScaleY := scale * float32(objScale.Y)
+
+			destWidth := width * finalScaleX
+			destHeight := height * finalScaleY
+
+			destX := float32(originX + particle.Position.X*objScale.X)
+			destY := float32(originY + particle.Position.Y*objScale.Y)
+
+			destRec := rl.NewRectangle(destX, destY, destWidth, destHeight)
+
+			origin := rl.NewVector2(destWidth/2, destHeight/2)
+			rotation := float32(particle.Rotation * 180.0 / math.Pi)
+
+			color := rl.NewColor(
+				uint8(particle.Color.X*255),
+				uint8(particle.Color.Y*255),
+				uint8(particle.Color.Z*255),
+				uint8(particle.Alpha*255),
 			)
-			drawOptions.Blend = ebiten.BlendLighter
-			screen.DrawImage(img, drawOptions)
+			
+			rl.DrawTexturePro(*img, sourceRec, destRec, origin, rotation, color)
 		}
 	}
+	rl.EndBlendMode()
 }
 
 func (ps *ParticleSystem) SetMousePosition(x, y float64) {

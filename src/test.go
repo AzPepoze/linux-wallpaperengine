@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"image/png"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"linux-wallpaperengine/src/convert"
 	"linux-wallpaperengine/src/utils"
@@ -14,15 +14,19 @@ import (
 )
 
 func runTestSound(path string) {
-	utils.Info("Testing sound playback (Malgo): %s", path)
+	utils.Info("Testing sound playback (Raylib): %s", path)
 	am := wallpaper.NewAudioManager()
 	defer am.Close()
 
 	am.PlayDirect(path, 1.0, true)
 
-	utils.Info("Playing... Press Enter to stop.")
-	var input string
-	fmt.Scanln(&input)
+	utils.Info("Playing... Press Ctrl+C to stop.")
+	
+	// Simple loop to keep audio buffer updating
+	for {
+		am.Update()
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func runTestSine() {

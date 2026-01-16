@@ -2,79 +2,57 @@ package debug
 
 import (
 	"fmt"
-	"image/color"
 
 	"linux-wallpaperengine/src/types"
-	"linux-wallpaperengine/src/wallpaper"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/vector"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) drawHierarchy(screen *ebiten.Image, renderObjects []types.RenderObject, startY int, maxHeight int) {
-	if d.SelectedObjectIndex >= len(renderObjects) {
-		d.SelectedObjectIndex = -1
-	}
-
+func (d *DebugOverlay) drawHierarchy(renderObjects []types.RenderObject, startY int, maxHeight int) {
+	// Left side: Hierarchy List
 	listWidth := d.sidebarWidth / 2
-	inspectorX := listWidth
+	
+	rl.BeginScissorMode(0, int32(startY), int32(listWidth), int32(maxHeight-startY))
 
-	// Handle inspector clicks for toggling booleans
-	if d.editingActive {
-		d.editingActive = false
-		mx, my := ebiten.CursorPosition()
-		if mx >= listWidth && d.SelectedObjectIndex >= 0 && d.SelectedObjectIndex < len(renderObjects) {
-			d.handleInspectorClick(renderObjects[d.SelectedObjectIndex].Object, float64(mx), float64(my), startY)
+	y := startY - int(d.ScrollOffset)
+	mPos := rl.GetMousePosition()
+	mx, my := int(mPos.X), int(mPos.Y)
+
+	for i, ro := range renderObjects {
+		if y > maxHeight {
+			break
 		}
-	}
-
-	// Draw object list
-	for i, obj := range renderObjects {
-		y := startY + i*d.lineHeight - int(d.ScrollOffset)
-		if y < startY || y > maxHeight {
+		if y+d.lineHeight < startY {
+			y += d.lineHeight
 			continue
 		}
 
-		// Highlight selection
-		if i == d.SelectedObjectIndex {
-			vector.FillRect(screen, 0, float32(y), float32(listWidth), float32(d.lineHeight), color.RGBA{60, 60, 100, 255}, false)
+		// Highlight row if selected or hovered
+		selected := i == d.SelectedObjectIndex
+		hovered := mx < listWidth && my >= y && my < y+d.lineHeight
+
+		if selected {
+			rl.DrawRectangle(0, int32(y), int32(listWidth), int32(d.lineHeight), rl.NewColor(50, 50, 150, 255))
+		} else if hovered {
+			rl.DrawRectangle(0, int32(y), int32(listWidth), int32(d.lineHeight), rl.NewColor(60, 60, 60, 255))
 		}
 
-		name := obj.Object.Name
-		if name == "" {
-			name = fmt.Sprintf("Object %d", obj.Object.ID)
+		// Draw Name
+		info := fmt.Sprintf("%d: %s", i, ro.Object.Name)
+		if ro.ParticleSystem != nil {
+			info += " (Particle)"
+		} else if ro.Object.GetText() != "" {
+			info += " (Text)"
 		}
 
-		info := name
-		if obj.ParticleSystem != nil {
-			info += " [P]"
-		}
+		d.DrawText(info, 10, int32(y+4), int32(d.fontHeight), rl.White)
 
-		ebitenutil.DebugPrintAt(screen, info, 10, y+4)
+		y += d.lineHeight
 	}
+	rl.EndScissorMode()
 
-	// Draw separator line
-	vector.StrokeLine(screen, float32(listWidth), float32(startY), float32(listWidth), float32(maxHeight), 1, color.RGBA{100, 100, 100, 255}, false)
-
-	// Draw inspector panel
+	// Right side: Inspector
 	if d.SelectedObjectIndex >= 0 && d.SelectedObjectIndex < len(renderObjects) {
-		obj := renderObjects[d.SelectedObjectIndex]
-		d.drawInspector(screen, &obj, inspectorX, startY, maxHeight)
-	}
-}
-
-func (d *DebugOverlay) handleInspectorClick(obj *wallpaper.Object, x, y float64, startY int) {
-	// Calculate the base Y position where properties start
-	// Title line + Type line + ID line + spacing + "Properties:" line = 4 lines + spacing
-	propStartY := startY + d.lineHeight + d.lineHeight/2 + d.lineHeight + d.lineHeight + d.lineHeight/2 + d.lineHeight + int(d.InspectorScroll)
-
-	// Calculate which property line was clicked (relative to properties start)
-	clickedLine := int((y - float64(propStartY)) / float64(d.lineHeight))
-
-	// Property lines: 0=Origin, 1=Scale, 2=Angles, 3=Alpha, 4=Brightness, 5=Visible
-	if clickedLine == 5 {
-		// Toggle Visible property
-		obj.Visible.Value = !obj.Visible.Value
+		d.drawInspector(&renderObjects[d.SelectedObjectIndex], listWidth, startY, maxHeight, d.mouseX, d.mouseY, d.clicked)
 	}
 }

@@ -81,12 +81,14 @@ func ExtractPkg(pkgPath, outputDir string) error {
 			return err
 		}
 
-		buf := make([]byte, entry.Size)
-		if _, err := io.ReadFull(f, buf); err != nil {
+		outF, err := os.Create(destPath)
+		if err != nil {
 			return err
 		}
 
-		if err := os.WriteFile(destPath, buf, 0644); err != nil {
+		_, err = io.CopyN(outF, f, int64(entry.Size))
+		outF.Close()
+		if err != nil {
 			return err
 		}
 	}
@@ -100,6 +102,10 @@ func BulkConvertTextures(root string, outDir string) {
 	var convertedCount int32
 	var wg sync.WaitGroup
 
+	// Limit concurrency to avoid RAM spikes
+	const maxConcurrency = 10
+	sem := make(chan struct{}, maxConcurrency)
+
 	TextureOutDir = outDir
 	if outDir != "" {
 		os.MkdirAll(outDir, 0755)
@@ -108,9 +114,11 @@ func BulkConvertTextures(root string, outDir string) {
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tex") {
 			wg.Add(1)
+			sem <- struct{}{} // Acquire slot
 			go func(p string) {
 				defer wg.Done()
-				_, err := LoadTexture(p)
+				defer func() { <-sem }() // Release slot
+				err := LoadTexture(p)
 				if err != nil {
 					utils.Error("Failed to convert %s: %v", p, err)
 				} else {

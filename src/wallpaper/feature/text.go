@@ -1,7 +1,6 @@
 package feature
 
 import (
-	"image/color"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,15 +10,12 @@ import (
 	"linux-wallpaperengine/src/utils"
 	"linux-wallpaperengine/src/wallpaper"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-var fontCache = make(map[string]font.Face)
+var fontCache = make(map[string]rl.Font)
 
-func RenderText(object *wallpaper.Object, img *ebiten.Image) {
+func RenderText(object *wallpaper.Object, rt *rl.RenderTexture2D) {
 	str := object.Text.Value
 	if str == "" {
 		return
@@ -40,22 +36,21 @@ func RenderText(object *wallpaper.Object, img *ebiten.Image) {
 		str = time.Now().Format(format)
 	}
 
-	fontSize := object.Pointsize.Value
+	fontSize := float32(object.Pointsize.Value)
 	if fontSize <= 0 {
 		fontSize = 24
 	}
 
-	face := getFont(fontSize)
-	if face == nil {
-		return
-	}
+	font := getFont(fontSize)
 
-	bounds := text.BoundString(face, str)
-	tw := bounds.Dx()
-	th := bounds.Dy()
+	// Measure text
+	textSize := rl.MeasureTextEx(font, str, fontSize, 0)
+	tw := textSize.X
+	th := textSize.Y
 
-	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	x, y := 0, 0
+	w := float32(rt.Texture.Width)
+	h := float32(rt.Texture.Height)
+	x, y := float32(0), float32(0)
 
 	switch object.HorizontalAlign {
 	case "center":
@@ -66,24 +61,26 @@ func RenderText(object *wallpaper.Object, img *ebiten.Image) {
 		x = 0
 	}
 
-	ascent := face.Metrics().Ascent.Floor()
 	switch object.VerticalAlign {
 	case "center":
-		y = (h-th)/2 + ascent
+		y = (h - th) / 2
 	case "bottom":
-		y = h - th + ascent
+		y = h - th
 	default:
-		y = ascent
+		y = 0
 	}
 
-	text.Draw(img, str, face, x, y, color.White)
+	rl.BeginTextureMode(*rt)
+	rl.ClearBackground(rl.Blank)
+	rl.DrawTextEx(font, str, rl.NewVector2(x, y), fontSize, 0, rl.White)
+	rl.EndTextureMode()
 }
 
-func getFont(size float64) font.Face {
+func getFont(size float32) rl.Font {
 	// Use size in cache key to ensure we get a face with the correct size
-	cacheKey := "default_" + strings.ReplaceAll(strconv.FormatFloat(size, 'f', 2, 64), ".", "_")
-	if face, ok := fontCache[cacheKey]; ok {
-		return face
+	cacheKey := "default_" + strings.ReplaceAll(strconv.FormatFloat(float64(size), 'f', 2, 64), ".", "_")
+	if font, ok := fontCache[cacheKey]; ok {
+		return font
 	}
 
 	fontPath := "assets/fonts/NotoSans-Regular.ttf"
@@ -93,29 +90,13 @@ func getFont(size float64) font.Face {
 			fontPath = files[0]
 		} else {
 			utils.Warn("No fonts found in assets/fonts")
-			return nil
+			return rl.GetFontDefault()
 		}
 	}
 
-	fontData, err := os.ReadFile(fontPath)
-	if err != nil {
-		return nil
-	}
+	font := rl.LoadFontEx(fontPath, int32(size), nil, 0)
+	rl.SetTextureFilter(font.Texture, rl.FilterBilinear)
 
-	tt, err := opentype.Parse(fontData)
-	if err != nil {
-		return nil
-	}
-
-	face, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    size,
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		return nil
-	}
-
-	fontCache[cacheKey] = face
-	return face
+	fontCache[cacheKey] = font
+	return font
 }

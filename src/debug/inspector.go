@@ -5,128 +5,80 @@ import (
 
 	"linux-wallpaperengine/src/types"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) drawInspector(screen *ebiten.Image, renderObj *types.RenderObject, startX, startY int, maxHeight int) {
-	y := startY + int(d.InspectorScroll)
-	x := startX + 10
+func (d *DebugOverlay) drawInspector(renderObj *types.RenderObject, startX, startY int, maxHeight int, mx, my int, clicked bool) {
+	ui := NewUIContext(startX+10, startY-int(d.InspectorScroll), d.lineHeight, d.fontHeight, d.font, mx, my, clicked)
 
-	ui := NewUIContext(screen, x, y, d.lineHeight, d.fontHeight)
+	// Scissor mode to handle scrolling and clipping
+	rl.BeginScissorMode(int32(startX), int32(startY), int32(d.sidebarWidth/2), int32(maxHeight-startY))
+	defer rl.EndScissorMode()
 
 	obj := renderObj.Object
 
-	// Title
-	ui.Header("Inspector")
-	ui.Separator()
+	ui.Header(fmt.Sprintf("Object: %s", obj.Name))
 
-	// Object Type
-	objType := "Image"
-	if obj.Particle != "" {
-		objType = "Particle"
-	} else if obj.Text.Value != "" || obj.Text.Script != "" {
+	objType := "Unknown"
+	switch {
+	case obj.Particle != "":
+		objType = "Particle System"
+	case obj.GetText() != "":
 		objType = "Text"
-	} else if obj.Sound.Value != "" {
-		objType = "Sound"
+	case obj.Image != "":
+		objType = "Image"
 	}
-	ui.Label(fmt.Sprintf("Type: %s", objType))
-
-	// ID
-	ui.Label(fmt.Sprintf("ID: %d", obj.ID))
+	ui.IndentLabel(fmt.Sprintf("Type: %s", objType), 10)
 
 	ui.Separator()
 
-	// Properties
-	ui.Header("Properties:")
+	ui.Header("Transform:")
+	ui.IndentLabel(fmt.Sprintf("Logical Pos: %.1f, %.1f", obj.Origin.X, obj.Origin.Y), 10)
+	
+	renderedX := d.sceneOffsetX + (obj.Origin.X+renderObj.Offset.X)*d.renderScale
+	renderedY := d.sceneOffsetY + (obj.Origin.Y+renderObj.Offset.Y)*d.renderScale
+	ui.IndentLabel(fmt.Sprintf("Rendered Pos: %.1f, %.1f", renderedX, renderedY), 10)
+	
+	ui.IndentLabel(fmt.Sprintf("Scale: %.2f, %.2f", obj.Scale.X, obj.Scale.Y), 10)
+	ui.IndentLabel(fmt.Sprintf("Rot: %.1f", obj.Angles.Z), 10)
 
-	// Origin (Vec3)
-	ui.IndentLabel(fmt.Sprintf("Origin: (%.1f, %.1f, %.1f)", obj.Origin.X, obj.Origin.Y, obj.Origin.Z), 5)
+	ui.Separator()
 
-	// Scale (Vec3)
-	ui.IndentLabel(fmt.Sprintf("Scale: (%.2f, %.2f, %.2f)", obj.Scale.X, obj.Scale.Y, obj.Scale.Z), 5)
-
-	// Angles (Vec3)
-	ui.IndentLabel(fmt.Sprintf("Angles: (%.2f, %.2f, %.2f)", obj.Angles.X, obj.Angles.Y, obj.Angles.Z), 5)
-
-	// Alpha (float)
-	ui.IndentLabel(fmt.Sprintf("Alpha: %.2f", obj.Alpha.Value), 5)
-
-	// Brightness (float)
-	ui.IndentLabel(fmt.Sprintf("Brightness: %.2f", obj.Brightness), 5)
-
-	// Visible (bool) - clickable
-	visibleStr := "true"
-	if !obj.Visible.Value {
-		visibleStr = "false"
+	ui.Header("Visibility:")
+	if ui.Checkbox("Visible", obj.Visible.Value) {
+		obj.Visible.Value = !obj.Visible.Value
 	}
+	ui.IndentLabel(fmt.Sprintf("Alpha: %.2f", obj.Alpha.Value), 10)
 
-	ui.Checkbox(fmt.Sprintf("Visible: %s", visibleStr), obj.Visible.Value)
-
-	// Size (Vec2) - if applicable
-	if obj.Size.X > 0 || obj.Size.Y > 0 {
-		ui.IndentLabel(fmt.Sprintf("Size: (%.1f, %.1f)", obj.Size.X, obj.Size.Y), 5)
-	}
-
-	// Color (string)
-	if obj.Color != "" {
-		ui.IndentLabel(fmt.Sprintf("Color: %s", obj.Color), 5)
-	}
-
-	// Effects count
-	if len(obj.Effects) > 0 {
+	if obj.GetText() != "" {
 		ui.Separator()
-		ui.Label(fmt.Sprintf("Effects: %d", len(obj.Effects)))
-
-		for i, effect := range obj.Effects {
-			if i >= 3 { // Limit display
-				ui.IndentLabel(fmt.Sprintf("... and %d more", len(obj.Effects)-3), 5)
-				break
-			}
-			effectName := effect.Name
-			if effect.File != "" {
-				effectName = effect.File
-			}
-			visStr := "✓"
-			if !effect.Visible.Value {
-				visStr = "✗"
-			}
-			ui.IndentLabel(fmt.Sprintf("[%s] %s", visStr, effectName), 5)
-		}
+		ui.Header("Text:")
+		ui.IndentLabel(fmt.Sprintf("Content: %s", obj.Text.Value), 10)
+		ui.IndentLabel(fmt.Sprintf("Size: %.1f", obj.Pointsize.Value), 10)
+		ui.IndentLabel(fmt.Sprintf("Align: %s, %s", obj.HorizontalAlign, obj.VerticalAlign), 10)
 	}
 
-	// Particle-specific info
 	if obj.Particle != "" {
 		ui.Separator()
-		ui.Label(fmt.Sprintf("Particle: %s", obj.Particle))
-
-		// Show actual renderer type based on configuration
+		ui.Header("Particle System:")
+		ui.IndentLabel(fmt.Sprintf("Config: %s", obj.Particle), 10)
 		if renderObj.ParticleSystem != nil {
-			ps := renderObj.ParticleSystem
-			rendererName := "default"
-			if len(ps.Config.Renderer) > 0 {
-				rendererName = ps.Config.Renderer[0].Name
-			}
-
-			useSpriteSheet := ps.Config.SequenceMultiplier > 1
-			if rendererName == "sprite" && useSpriteSheet {
-				ui.IndentLabel(fmt.Sprintf("Renderer: sprite (sheet %dx%d)",
-					int(ps.Config.SequenceMultiplier*4), int(ps.Config.SequenceMultiplier*4)), 5)
-			} else {
-				ui.IndentLabel(fmt.Sprintf("Renderer: %s", rendererName), 5)
-			}
-		}
-
-		if obj.InstanceOverride != nil {
-			ui.IndentLabel("Overrides:", 5)
-			if obj.InstanceOverride.Count.Value != 0 {
-				ui.IndentLabel(fmt.Sprintf("Count: %.2f", obj.InstanceOverride.Count.Value), 10)
-			}
-			if obj.InstanceOverride.Size.Value != 0 {
-				ui.IndentLabel(fmt.Sprintf("Size: %.2f", obj.InstanceOverride.Size.Value), 10)
-			}
-			if obj.InstanceOverride.Speed.Value != 0 {
-				ui.IndentLabel(fmt.Sprintf("Speed: %.2f", obj.InstanceOverride.Speed.Value), 10)
-			}
+			ui.IndentLabel(fmt.Sprintf("Particles: %d", len(renderObj.ParticleSystem.Particles)), 10)
 		}
 	}
+
+	if len(obj.Effects) > 0 {
+
+		ui.Separator()
+
+		ui.Header("Effects:")
+
+		for _, effect := range obj.Effects {
+
+			ui.IndentLabel(fmt.Sprintf("- %s", effect.Name), 10)
+
+		}
+
+	}
+
 }
