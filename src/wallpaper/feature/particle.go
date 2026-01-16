@@ -1,9 +1,12 @@
 package feature
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 	"math/rand"
+	"path/filepath"
+	"strings"
 
 	"linux-wallpaperengine/src/wallpaper"
 
@@ -24,27 +27,105 @@ type Particle struct {
 	InitialSize  float64
 	SpawnTime    float64
 	SpriteFrame  int
+	GridX        int
+	GridY        int
+	RandomValue  float64
 }
 
 type ParticleSystem struct {
-	Name       string
-	Config     wallpaper.ParticleJSON
-	Texture    *rl.Texture2D
-	Particles  []*Particle
-	Timer      float64
-	GlobalTime float64
-	Override   *wallpaper.InstanceOverride
-	ControlPts []wallpaper.Vec3
-	MousePos   wallpaper.Vec3
+	Name        string
+	Config      wallpaper.ParticleJSON
+	Texture     *rl.Texture2D
+	TextureName string
+	Particles   []*Particle
+	Timer       float64
+	GlobalTime  float64
+	Override    *wallpaper.InstanceOverride
+	ControlPts  []wallpaper.Vec3
+	MousePos    wallpaper.Vec3
 }
 
-func NewParticleSystem(name string, config wallpaper.ParticleJSON, texture *rl.Texture2D, override *wallpaper.InstanceOverride) *ParticleSystem {
+type ParticleSystemOptions struct {
+	Name        string
+	Config      wallpaper.ParticleJSON
+	Texture     *rl.Texture2D
+	TextureName string
+	Override    *wallpaper.InstanceOverride
+}
+
+func parseVec3String(s string) (float64, float64, float64) {
+	return wallpaper.ParseColor(s)
+}
+
+func getVec3FromInterface(val interface{}) wallpaper.Vec3 {
+	switch v := val.(type) {
+	case string:
+		x, y, z := parseVec3String(v)
+		return wallpaper.Vec3{X: x, Y: y, Z: z}
+	case float64:
+		return wallpaper.Vec3{X: v, Y: v, Z: v}
+	case int:
+		f := float64(v)
+		return wallpaper.Vec3{X: f, Y: f, Z: f}
+	case map[string]interface{}:
+		vec := wallpaper.Vec3{}
+		if x, ok := v["x"].(float64); ok {
+			vec.X = x
+		}
+		if y, ok := v["y"].(float64); ok {
+			vec.Y = y
+		}
+		if z, ok := v["z"].(float64); ok {
+			vec.Z = z
+		}
+		return vec
+	}
+	return wallpaper.Vec3{X: 0, Y: 0, Z: 0}
+}
+
+func getVec3OrFloat(val interface{}) wallpaper.Vec3 {
+	switch v := val.(type) {
+	case float64:
+		return wallpaper.Vec3{X: v, Y: v, Z: v}
+	case int:
+		f := float64(v)
+		return wallpaper.Vec3{X: f, Y: f, Z: f}
+	case string:
+		x, y, z := parseVec3String(v)
+		return wallpaper.Vec3{X: x, Y: y, Z: z}
+	}
+	return getVec3FromInterface(val)
+}
+
+// Helper functions to extract values from interface{}
+func getFloatFromInterface(val interface{}) float64 {
+	switch v := val.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case string:
+		// Parse string as float
+		x, _, _ := parseVec3String(v)
+		return x
+	case map[string]interface{}:
+		if value, ok := v["value"].(float64); ok {
+			return value
+		}
+	}
+	return 0
+}
+
+var fallbackTexture *rl.Texture2D
+
+func NewParticleSystem(opts ParticleSystemOptions) *ParticleSystem {
 	ps := &ParticleSystem{
-		Name:       name,
-		Config:     config,
-		Texture:    texture,
-		Override:   override,
-		ControlPts: make([]wallpaper.Vec3, 8),
+		Name:        opts.Name,
+		Config:      opts.Config,
+		Texture:     opts.Texture,
+		TextureName: opts.TextureName,
+		Override:    opts.Override,
+		ControlPts:  make([]wallpaper.Vec3, 8),
 	}
 
 	// Initialize control points
@@ -200,8 +281,6 @@ func (ps *ParticleSystem) applyOperators(particle *Particle, dt float64) {
 			}
 
 			// Fade out at end of life
-			// fadeouttime represents the portion of lifetime over which to fade out
-			// e.g., 0.9 means fade out starts at age 0.1 (1.0 - 0.9) and ends at age 1.0
 			if op.FadeOutTime > 0 {
 				fadeStartAge := 1.0 - op.FadeOutTime
 				if ageRatio > fadeStartAge {
@@ -277,6 +356,44 @@ func (ps *ParticleSystem) applyOperators(particle *Particle, dt float64) {
 				particle.Color.Z = startColor.Z + (endColor.Z-startColor.Z)*progress
 			}
 
+		case "oscillateposition":
+			time := ps.GlobalTime - particle.SpawnTime
+
+			// Use random frequency if range is provided
+			freq := op.FrequencyMax
+			if op.FrequencyMin > 0 && op.FrequencyMax > op.FrequencyMin {
+				// We can use particle.RandomValue to derive a stable random frequency too
+				t := (math.Sin(particle.RandomValue) + 1.0) / 2.0
+				freq = op.FrequencyMin + t*(op.FrequencyMax-op.FrequencyMin)
+			}
+
+			if freq == 0 {
+				freq = 1.0 // Default frequency
+			}
+
+			// Add RandomValue as phase shift so particles don't move in sync
+			phaseX := time*freq*math.Pi*2.0 + particle.RandomValue
+			phaseY := time*freq*math.Pi*2.0 + particle.RandomValue + 1.0 // Offset Y phase slightly for more circular motion
+
+			particle.Position.X += math.Sin(phaseX) * op.ScaleMax * dt
+			particle.Position.Y += math.Cos(phaseY) * op.ScaleMax * dt
+
+		case "sizechange":
+			age := (particle.MaxLife - particle.Life) / particle.MaxLife
+			startSize := getFloatFromInterface(op.StartValue)
+			endSize := getFloatFromInterface(op.EndValue)
+
+			// If not specified, use current size as basis
+			if startSize == 0 {
+				startSize = 1.0
+			}
+			if endSize == 0 {
+				endSize = 1.0
+			}
+
+			currentScale := startSize + (endSize-startSize)*age
+			particle.Size = particle.InitialSize * currentScale
+
 		case "oscillatealpha":
 			frequency := op.FrequencyMax
 			if op.FrequencyMin > 0 && op.FrequencyMax > op.FrequencyMin {
@@ -305,10 +422,6 @@ func (ps *ParticleSystem) applyOperators(particle *Particle, dt float64) {
 	particle.Alpha = baseAlpha * fadeMultiplier * oscillateMultiplier
 }
 
-func parseVec3String(s string) (float64, float64, float64) {
-	return wallpaper.ParseColor(s)
-}
-
 func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 	particle := &Particle{
 		Position:     wallpaper.Vec3{X: 0, Y: 0, Z: 0},
@@ -323,10 +436,59 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 		Size:         1.0,
 		InitialSize:  1.0,
 		SpawnTime:    ps.GlobalTime,
+		SpriteFrame:  -1,
+		RandomValue:  rand.Float64() * math.Pi * 2.0,
 	}
 
-	// Set origin from emitter
+	// Set origin from emitter (Grouped for easy debugging)
 	particle.Position = emitter.Origin
+
+	// Handle Sprite Map logic if animationmode is "randomframe"
+	if ps.Config.AnimationMode == "randomframe" {
+		// Default to distancemax
+		distMax := getVec3OrFloat(emitter.DistanceMax)
+		particle.GridX = int(distMax.X)
+		particle.GridY = int(distMax.Y)
+
+		// Try to parse from texture name (e.g. sample_130x258_41)
+		if ps.Texture != nil && ps.TextureName != "" {
+			parts := strings.Split(filepath.Base(ps.TextureName), "_")
+			for _, part := range parts {
+				if strings.Contains(part, "x") {
+					var fw, fh int
+					// Check for pattern like 130x258
+					n, _ := fmt.Sscanf(part, "%dx%d", &fw, &fh)
+					if n == 2 && fw > 0 && fh > 0 {
+						// Found frame size, calculate grid
+						particle.GridX = int(ps.Texture.Width) / fw
+						particle.GridY = int(ps.Texture.Height) / fh
+
+						// If there's a following part with the count (e.g., _41)
+						for _, nextPart := range parts {
+							var count int
+							if _, err := fmt.Sscanf(nextPart, "%d", &count); err == nil && count > 0 && count <= particle.GridX*particle.GridY {
+								// Found a plausible frame count
+								particle.SpriteFrame = rand.Intn(count)
+								goto gridSet
+							}
+						}
+					}
+				}
+			}
+		}
+
+	gridSet:
+		if particle.GridX > 0 && particle.GridY > 0 {
+			if particle.SpriteFrame < 0 {
+				totalSlots := particle.GridX * particle.GridY
+				frameCount := totalSlots
+				if ps.Config.MaxCount > 0 && ps.Config.MaxCount < totalSlots {
+					frameCount = ps.Config.MaxCount
+				}
+				particle.SpriteFrame = rand.Intn(frameCount)
+			}
+		}
+	}
 
 	// Apply emitter positioning
 	switch emitter.Name {
@@ -334,17 +496,7 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 		distMax := getVec3OrFloat(emitter.DistanceMax)
 		distMin := getVec3OrFloat(emitter.DistanceMin)
 
-		// Add minimal randomness if both min and max are 0 to prevent stacking
-		if distMax.X == 0 && distMin.X == 0 {
-			distMax.X = 1.0
-		}
-		if distMax.Y == 0 && distMin.Y == 0 {
-			distMax.Y = 1.0
-		}
-		if distMax.Z == 0 && distMin.Z == 0 {
-			distMax.Z = 1.0
-		}
-
+		// Scatter particles
 		particle.Position.X += (rand.Float64()*2-1)*(distMax.X-distMin.X)/2 + distMin.X
 		particle.Position.Y += (rand.Float64()*2-1)*(distMax.Y-distMin.Y)/2 + distMin.Y
 		particle.Position.Z += (rand.Float64()*2-1)*(distMax.Z-distMin.Z)/2 + distMin.Z
@@ -355,7 +507,7 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 
 		// If both are 0, add minimal randomness to prevent stacking
 		if distMax == 0 && distMin == 0 {
-			distMax = 1.0 // Small randomness to prevent particle overlap
+			distMax = 1.0
 		} else if distMax == 0 {
 			distMax = 100
 		}
@@ -464,67 +616,6 @@ func (ps *ParticleSystem) applyInitializer(particle *Particle, init wallpaper.Pa
 	}
 }
 
-// Helper functions to extract values from interface{}
-func getFloatFromInterface(val interface{}) float64 {
-	switch v := val.(type) {
-	case float64:
-		return v
-	case int:
-		return float64(v)
-	case string:
-		// Parse string as float
-		x, _, _ := parseVec3String(v)
-		return x
-	case map[string]interface{}:
-		if value, ok := v["value"].(float64); ok {
-			return value
-		}
-	}
-	return 0
-}
-
-func getVec3FromInterface(val interface{}) wallpaper.Vec3 {
-	switch v := val.(type) {
-	case string:
-		x, y, z := parseVec3String(v)
-		return wallpaper.Vec3{X: x, Y: y, Z: z}
-	case float64:
-		return wallpaper.Vec3{X: v, Y: v, Z: v}
-	case int:
-		f := float64(v)
-		return wallpaper.Vec3{X: f, Y: f, Z: f}
-	case map[string]interface{}:
-		vec := wallpaper.Vec3{}
-		if x, ok := v["x"].(float64); ok {
-			vec.X = x
-		}
-		if y, ok := v["y"].(float64); ok {
-			vec.Y = y
-		}
-		if z, ok := v["z"].(float64); ok {
-			vec.Z = z
-		}
-		return vec
-	}
-	return wallpaper.Vec3{X: 0, Y: 0, Z: 0}
-}
-
-func getVec3OrFloat(val interface{}) wallpaper.Vec3 {
-	switch v := val.(type) {
-	case float64:
-		return wallpaper.Vec3{X: v, Y: v, Z: v}
-	case int:
-		f := float64(v)
-		return wallpaper.Vec3{X: f, Y: f, Z: f}
-	case string:
-		x, y, z := parseVec3String(v)
-		return wallpaper.Vec3{X: x, Y: y, Z: z}
-	}
-	return getVec3FromInterface(val)
-}
-
-var fallbackTexture *rl.Texture2D
-
 func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3) {
 	img := ps.Texture
 	if img == nil {
@@ -548,16 +639,26 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 	sequenceMultiplier := ps.Config.SequenceMultiplier
 	useSpriteSheet := sequenceMultiplier > 1
 
-	if sequenceMultiplier <= 0 {
-		sequenceMultiplier = 1
-	}
-
 	// Calculate sprite sheet grid (8x8 for sequencemultiplier = 2)
 	gridSize := int(sequenceMultiplier * 4) // 2 * 4 = 8
 	if gridSize <= 1 {
 		gridSize = 1
 	}
-	totalFrames := gridSize * gridSize
+
+	// Check if any particle has a grid set (from distancemax)
+	hasGridParticles := false
+	if len(ps.Particles) > 0 {
+		for _, p := range ps.Particles {
+			if p.GridX > 0 && p.GridY > 0 {
+				hasGridParticles = true
+				break
+			}
+		}
+	}
+
+	if hasGridParticles && rendererType == "" {
+		rendererType = "sprite"
+	}
 
 	width := float32(img.Width)
 	height := float32(img.Height)
@@ -566,20 +667,38 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 	rl.BeginBlendMode(rl.BlendAlpha)
 
 	for _, particle := range ps.Particles {
-		// Only use sprite rendering if renderer is "sprite" AND sprite sheet is enabled
-		if rendererType == "sprite" && useSpriteSheet {
-			// Calculate sprite frame based on particle age
-			ageRatio := (particle.MaxLife - particle.Life) / particle.MaxLife
-			frameIndex := int(ageRatio * float64(totalFrames))
+		isSprite := (rendererType == "sprite" && useSpriteSheet) || (particle.GridX > 0 && particle.GridY > 0)
+		if isSprite {
+			gridSizeX := gridSize
+			gridSizeY := gridSize
+			if particle.GridX > 0 {
+				gridSizeX = particle.GridX
+			}
+			if particle.GridY > 0 {
+				gridSizeY = particle.GridY
+			}
+
+			totalFrames := gridSizeX * gridSizeY
+
+			// Calculate sprite frame based on particle age or fixed random frame
+			frameIndex := particle.SpriteFrame
+			if frameIndex < 0 {
+				ageRatio := (particle.MaxLife - particle.Life) / particle.MaxLife
+				frameIndex = int(ageRatio * float64(totalFrames))
+			}
+
 			if frameIndex >= totalFrames {
 				frameIndex = totalFrames - 1
 			}
+			if frameIndex < 0 {
+				frameIndex = 0
+			}
 
 			// Calculate sprite sheet position
-			spriteWidth := width / float32(gridSize)
-			spriteHeight := height / float32(gridSize)
-			srcX := float32(frameIndex%gridSize) * spriteWidth
-			srcY := float32(frameIndex/gridSize) * spriteHeight
+			spriteWidth := width / float32(gridSizeX)
+			spriteHeight := height / float32(gridSizeY)
+			srcX := float32(frameIndex%gridSizeX) * spriteWidth
+			srcY := float32(frameIndex/gridSizeX) * spriteHeight
 
 			sourceRec := rl.NewRectangle(srcX, srcY, spriteWidth, spriteHeight)
 
@@ -587,19 +706,18 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 			scale := float32(particle.Size / 100.0)
 			finalScaleX := scale * float32(objScale.X)
 			finalScaleY := scale * float32(objScale.Y)
-			
+
 			destWidth := spriteWidth * finalScaleX
 			destHeight := spriteHeight * finalScaleY
-			
+
 			// Destination
 			destX := float32(originX + particle.Position.X*objScale.X)
-			destY := float32(originY + particle.Position.Y*objScale.Y)
-			
+			destY := float32(originY - particle.Position.Y*objScale.Y)
+
 			destRec := rl.NewRectangle(destX, destY, destWidth, destHeight)
-			
 			// Origin (Pivot) - Center of particle
 			origin := rl.NewVector2(destWidth/2, destHeight/2)
-			
+
 			// Rotation
 			rotation := float32(particle.Rotation * 180.0 / math.Pi)
 
@@ -616,7 +734,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 		} else {
 			// Default rendering - full texture per particle
 			sourceRec := rl.NewRectangle(0, 0, width, height)
-			
+
 			scale := float32(particle.Size / 100.0)
 			finalScaleX := scale * float32(objScale.X)
 			finalScaleY := scale * float32(objScale.Y)
@@ -624,11 +742,11 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 			destWidth := width * finalScaleX
 			destHeight := height * finalScaleY
 
+			// Destination
 			destX := float32(originX + particle.Position.X*objScale.X)
 			destY := float32(originY + particle.Position.Y*objScale.Y)
 
 			destRec := rl.NewRectangle(destX, destY, destWidth, destHeight)
-
 			origin := rl.NewVector2(destWidth/2, destHeight/2)
 			rotation := float32(particle.Rotation * 180.0 / math.Pi)
 
@@ -638,7 +756,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 				uint8(particle.Color.Z*255),
 				uint8(particle.Alpha*255),
 			)
-			
+
 			rl.DrawTexturePro(*img, sourceRec, destRec, origin, rotation, color)
 		}
 	}

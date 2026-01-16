@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
 type LogLevel int
@@ -19,6 +20,7 @@ var (
 	CurrentLevel   LogLevel = LevelWarn
 	ShowRaylibInfo bool
 	ShowDebugUI    bool
+	SilentMode     bool
 )
 
 func (l LogLevel) String() string {
@@ -68,6 +70,43 @@ func Info(format string, v ...interface{})  { logMessage(LevelInfo, format, v...
 func Debug(format string, v ...interface{}) { logMessage(LevelDebug, format, v...) }
 func Warn(format string, v ...interface{})  { logMessage(LevelWarn, format, v...) }
 func Error(format string, v ...interface{}) { logMessage(LevelError, format, v...) }
+
+func Dump(label string, v interface{}) {
+	if CurrentLevel > LevelDebug {
+		return
+	}
+	raw := fmt.Sprintf("%#v", v)
+	indent := 0
+	var formatted strings.Builder
+	for i := 0; i < len(raw); i++ {
+		char := raw[i]
+		switch char {
+		case '{', '[':
+			formatted.WriteByte(char)
+			formatted.WriteByte('\n')
+			indent++
+			formatted.WriteString(strings.Repeat("  ", indent))
+		case '}', ']':
+			formatted.WriteByte('\n')
+			indent--
+			if indent < 0 {
+				indent = 0
+			}
+			formatted.WriteString(strings.Repeat("  ", indent))
+			formatted.WriteByte(char)
+		case ',':
+			formatted.WriteByte(char)
+			formatted.WriteByte('\n')
+			formatted.WriteString(strings.Repeat("  ", indent))
+			if i+1 < len(raw) && raw[i+1] == ' ' {
+				i++
+			}
+		default:
+			formatted.WriteByte(char)
+		}
+	}
+	Debug("%s:\n%s", label, formatted.String())
+}
 
 func RaylibLogCallback(level int, text string) {
 	const colorMagenta = "\033[35m"

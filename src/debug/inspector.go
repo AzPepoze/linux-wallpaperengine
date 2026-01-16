@@ -61,9 +61,12 @@ func (d *DebugOverlay) drawInspector(renderObj *types.RenderObject, startX, star
 	if obj.Particle != "" {
 		ui.Separator()
 		ui.Header("Particle System:")
-		ui.IndentLabel(fmt.Sprintf("Config: %s", obj.Particle), 10)
+		
 		if renderObj.ParticleSystem != nil {
-			ui.IndentLabel(fmt.Sprintf("Particles: %d", len(renderObj.ParticleSystem.Particles)), 10)
+			d.drawParticleDetails(ui, renderObj)
+		} else {
+			ui.IndentLabel(fmt.Sprintf("Config: %s", obj.Particle), 10)
+			ui.IndentLabel("Status: Not Loaded", 10)
 		}
 	}
 

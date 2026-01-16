@@ -36,6 +36,7 @@ func (vec2 *Vec2) UnmarshalJSON(data []byte) error {
 }
 
 func (vec3 *Vec3) UnmarshalJSON(data []byte) error {
+	// Try string format "x y z"
 	var str string
 	if err := json.Unmarshal(data, &str); err == nil {
 		fields := strings.Fields(str)
@@ -49,9 +50,20 @@ func (vec3 *Vec3) UnmarshalJSON(data []byte) error {
 		}
 		return nil
 	}
+	// Try single float (fills all components)
 	var floatVal float64
 	if err := json.Unmarshal(data, &floatVal); err == nil {
 		vec3.X, vec3.Y, vec3.Z = floatVal, floatVal, floatVal
+		return nil
+	}
+	// Try standard struct {x, y, z}
+	var result struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+		Z float64 `json:"z"`
+	}
+	if err := json.Unmarshal(data, &result); err == nil {
+		vec3.X, vec3.Y, vec3.Z = result.X, result.Y, result.Z
 		return nil
 	}
 	return nil
