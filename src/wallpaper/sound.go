@@ -28,11 +28,13 @@ func NewAudioManager() *AudioManager {
 }
 
 func (am *AudioManager) Play(obj *Object) {
-	if utils.SilentMode || !obj.Visible.Value || len(obj.Sound.Value) == 0 {
+	if utils.SilentMode || !obj.Visible.GetBool() || len(obj.Sound) == 0 {
 		return
 	}
-	soundPath := filepath.Join("tmp", obj.Sound.Value)
-	am.PlayDirect(soundPath, obj.Volume.Value, true)
+	
+	// Just play the first sound for now
+	soundPath := filepath.Join("tmp", obj.Sound[0])
+	am.PlayDirect(soundPath, obj.Volume.GetFloat(), true)
 }
 
 func (am *AudioManager) PlayDirect(soundPath string, vol float64, shouldLoop bool) {

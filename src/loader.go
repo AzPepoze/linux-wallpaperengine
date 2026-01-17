@@ -16,19 +16,65 @@ import (
 )
 
 func resolveTexturePath(object *wallpaper.Object) string {
-	if object.Image == "" {
+	path := object.Image
+	if path == "" {
+		path = object.Model
+	}
+
+	if path == "" {
 		return ""
 	}
 
-	textureName := strings.TrimSuffix(filepath.Base(object.Image), ".json")
+	textureName := strings.TrimSuffix(filepath.Base(path), ".json")
 
-	if strings.HasSuffix(object.Image, ".json") {
-		if name, err := extractTextureFromJSONPath(filepath.Join("tmp", object.Image)); err == nil {
-			textureName = name
+	if strings.HasSuffix(path, ".json") {
+		// Try to find the file in typical locations
+		searchPaths := []string{
+			filepath.Join("tmp", path),
+			filepath.Join("assets", path),
+			path, // In case it is absolute or relative to root
+		}
+
+		var fullPath string
+		for _, p := range searchPaths {
+			if _, err := os.Stat(p); err == nil {
+				fullPath = p
+				break
+			}
+		}
+
+		if fullPath != "" {
+			if name, err := extractTextureFromJSONPath(fullPath); err == nil {
+				textureName = name
+			}
+		} else {
+			// Fallback: try just the filename in tmp
+			if name, err := extractTextureFromJSONPath(filepath.Join("tmp", path)); err == nil {
+				textureName = name
+			}
 		}
 	}
 
 	return findTextureFile(textureName)
+}
+
+func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
+	searchPaths := []string{
+		filepath.Join("tmp", path),
+		filepath.Join("assets", path),
+		path,
+	}
+
+	for _, p := range searchPaths {
+		data, err := os.ReadFile(p)
+		if err == nil {
+			var config wallpaper.ModelJSON
+			if err := json.Unmarshal(data, &config); err == nil {
+				return &config, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("model config not found or invalid: %s", path)
 }
 
 func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride) *feature.ParticleSystem {
@@ -77,8 +123,14 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 	}
 
 	var texture *rl.Texture2D
+	var extraTextures []*rl.Texture2D
 	textureName := ""
+	var textureNames []string
+	blendMode := rl.BlendAdditive 
+	var texInfo *wallpaper.TexJSON
+
 	if config.Material != "" {
+		var materialPath string
 		if strings.HasSuffix(config.Material, ".json") {
 			possibleMaterialPaths := []string{
 				filepath.Join("tmp", config.Material),
@@ -88,31 +140,88 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 			}
 
 			for _, p := range possibleMaterialPaths {
-				if name, err := extractTextureFromJSONPath(p); err == nil {
-					textureName = name
+				if _, err := os.Stat(p); err == nil {
+					materialPath = p
 					break
 				}
 			}
-		} else {
-			textureName = config.Material
 		}
 
-		if textureName != "" {
-			texturePath := findTextureFile(textureName)
-			if texturePath != "" {
-				if image, err := convert.LoadTextureNative(texturePath); err == nil {
-					texture = image
+		if materialPath != "" {
+			mData, err := os.ReadFile(materialPath)
+			if err == nil {
+				var material wallpaper.MaterialJSON
+				if err := json.Unmarshal(mData, &material); err == nil {
+					if len(material.Passes) > 0 {
+						pass := material.Passes[0]
+						if len(pass.Textures) > 0 {
+							textureName = pass.Textures[0]
+							textureNames = pass.Textures
+						}
+						// Check blending
+						if pass.Blending == "additive" {
+							blendMode = rl.BlendAdditive
+						} else if pass.Blending == "alpha" {
+							blendMode = rl.BlendAlpha
+						} else {
+							blendMode = rl.BlendAdditive 
+						}
+					}
+				}
+			}
+		} else {
+			// Material is just a texture name?
+			textureName = config.Material
+			textureNames = []string{textureName}
+		}
+
+		if len(textureNames) > 0 {
+			primaryIndex := 0
+			// If the first texture is "blank", try to find a better primary texture
+			if strings.Contains(strings.ToLower(textureNames[0]), " blank") {
+				for i := 1; i < len(textureNames); i++ {
+					if !strings.Contains(strings.ToLower(textureNames[i]), " blank") {
+						primaryIndex = i
+						break
+					}
+				}
+			}
+
+			for i, tName := range textureNames {
+				tPath := findTextureFile(tName)
+				if tPath != "" {
+					if image, err := convert.LoadTextureNative(tPath); err == nil {
+						if i == primaryIndex {
+							texture = image
+							
+							// Check for .tex-json only for the primary texture for now
+							texJsonPath := tPath + "-json"
+							if _, err := os.Stat(texJsonPath); err == nil {
+								if data, err := os.ReadFile(texJsonPath); err == nil {
+									var info wallpaper.TexJSON
+									if err := json.Unmarshal(data, &info); err == nil {
+										texInfo = &info
+									}
+								}
+							}
+						} else {
+							extraTextures = append(extraTextures, image)
+						}
+					}
 				}
 			}
 		}
 	}
 
 	return feature.NewParticleSystem(feature.ParticleSystemOptions{
-		Name:        name,
-		Config:      config,
-		Texture:     texture,
-		TextureName: textureName,
-		Override:    override,
+		Name:          name,
+		Config:        config,
+		Texture:       texture,
+		ExtraTextures: extraTextures,
+		TextureName:   textureName,
+		Override:      override,
+		BlendMode:     blendMode,
+		TexInfo:       texInfo,
 	})
 }
 

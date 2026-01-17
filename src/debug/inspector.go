@@ -45,16 +45,17 @@ func (d *DebugOverlay) drawInspector(renderObj *types.RenderObject, startX, star
 	ui.Separator()
 
 	ui.Header("Visibility:")
-	if ui.Checkbox("Visible", obj.Visible.Value) {
-		obj.Visible.Value = !obj.Visible.Value
+	visible := obj.Visible.GetBool()
+	if ui.Checkbox("Visible", visible) {
+		obj.Visible.Value = !visible
 	}
-	ui.IndentLabel(fmt.Sprintf("Alpha: %.2f", obj.Alpha.Value), 10)
+	ui.IndentLabel(fmt.Sprintf("Alpha: %.2f", obj.Alpha.GetFloat()), 10)
 
 	if obj.GetText() != "" {
 		ui.Separator()
 		ui.Header("Text:")
 		ui.IndentLabel(fmt.Sprintf("Content: %s", obj.Text.Value), 10)
-		ui.IndentLabel(fmt.Sprintf("Size: %.1f", obj.Pointsize.Value), 10)
+		ui.IndentLabel(fmt.Sprintf("Size: %.1f", obj.Pointsize.GetFloat()), 10)
 		ui.IndentLabel(fmt.Sprintf("Align: %s, %s", obj.HorizontalAlign, obj.VerticalAlign), 10)
 	}
 

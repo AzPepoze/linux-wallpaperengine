@@ -33,24 +33,30 @@ type Particle struct {
 }
 
 type ParticleSystem struct {
-	Name        string
-	Config      wallpaper.ParticleJSON
-	Texture     *rl.Texture2D
-	TextureName string
-	Particles   []*Particle
-	Timer       float64
-	GlobalTime  float64
-	Override    *wallpaper.InstanceOverride
-	ControlPts  []wallpaper.Vec3
-	MousePos    wallpaper.Vec3
+	Name          string
+	Config        wallpaper.ParticleJSON
+	Texture       *rl.Texture2D
+	ExtraTextures []*rl.Texture2D
+	TextureName   string
+	Particles     []*Particle
+	Timer         float64
+	GlobalTime    float64
+	Override      *wallpaper.InstanceOverride
+	ControlPts    []wallpaper.Vec3
+	MousePos      wallpaper.Vec3
+	BlendMode     rl.BlendMode
+	TexInfo       *wallpaper.TexJSON
 }
 
 type ParticleSystemOptions struct {
-	Name        string
-	Config      wallpaper.ParticleJSON
-	Texture     *rl.Texture2D
-	TextureName string
-	Override    *wallpaper.InstanceOverride
+	Name          string
+	Config        wallpaper.ParticleJSON
+	Texture       *rl.Texture2D
+	ExtraTextures []*rl.Texture2D
+	TextureName   string
+	Override      *wallpaper.InstanceOverride
+	BlendMode     rl.BlendMode
+	TexInfo       *wallpaper.TexJSON
 }
 
 func parseVec3String(s string) (float64, float64, float64) {
@@ -120,12 +126,15 @@ var fallbackTexture *rl.Texture2D
 
 func NewParticleSystem(opts ParticleSystemOptions) *ParticleSystem {
 	ps := &ParticleSystem{
-		Name:        opts.Name,
-		Config:      opts.Config,
-		Texture:     opts.Texture,
-		TextureName: opts.TextureName,
-		Override:    opts.Override,
-		ControlPts:  make([]wallpaper.Vec3, 8),
+		Name:          opts.Name,
+		Config:        opts.Config,
+		Texture:       opts.Texture,
+		ExtraTextures: opts.ExtraTextures,
+		TextureName:   opts.TextureName,
+		Override:      opts.Override,
+		ControlPts:    make([]wallpaper.Vec3, 8),
+		BlendMode:     opts.BlendMode,
+		TexInfo:       opts.TexInfo,
 	}
 
 	// Initialize control points
@@ -161,16 +170,16 @@ func (ps *ParticleSystem) Update(dt float64) {
 
 	// Apply instance override count multiplier
 	countMultiplier := 1.0
-	if ps.Override != nil && ps.Override.Count.Value != 0 {
-		countMultiplier = ps.Override.Count.Value
+	if ps.Override != nil && ps.Override.Count.GetFloat() != 0 {
+		countMultiplier = ps.Override.Count.GetFloat()
 	}
 	maxCount = int(float64(maxCount) * countMultiplier)
 
 	// Emit particles
 	for _, emitter := range ps.Config.Emitter {
-		rate := emitter.Rate.Value
-		if ps.Override != nil && ps.Override.Rate.Value != 0 {
-			rate *= ps.Override.Rate.Value
+		rate := getFloatFromInterface(emitter.Rate)
+		if ps.Override != nil && ps.Override.Rate.GetFloat() != 0 {
+			rate *= ps.Override.Rate.GetFloat()
 		}
 
 		if rate > 0 {
@@ -261,8 +270,9 @@ func (ps *ParticleSystem) applyOperators(particle *Particle, dt float64) {
 			}
 
 			// Apply drag
-			if op.Drag.Value > 0 {
-				dragFactor := 1.0 - (op.Drag.Value * dt)
+			dragVal := getFloatFromInterface(op.Drag)
+			if dragVal > 0 {
+				dragFactor := 1.0 - (dragVal * dt)
 				if dragFactor < 0 {
 					dragFactor = 0
 				}
@@ -441,12 +451,29 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 	}
 
 	// Set origin from emitter (Grouped for easy debugging)
-	particle.Position = emitter.Origin
+	particle.Position = getVec3OrFloat(emitter.Origin)
 
 	// Handle Sprite Map logic if animationmode is "randomframe"
 	if ps.Config.AnimationMode == "randomframe" {
+		var distMax wallpaper.Vec3
+
+		// Try TexInfo first
+		if ps.TexInfo != nil && len(ps.TexInfo.SpriteSheetSequences) > 0 {
+			seq := ps.TexInfo.SpriteSheetSequences[0]
+			if seq.Width > 0 && seq.Height > 0 && ps.Texture != nil {
+				particle.GridX = int(ps.Texture.Width) / seq.Width
+				particle.GridY = int(ps.Texture.Height) / seq.Height
+				if seq.Frames > 0 {
+					particle.SpriteFrame = rand.Intn(seq.Frames)
+				} else {
+					particle.SpriteFrame = rand.Intn(particle.GridX * particle.GridY)
+				}
+				goto gridSet
+			}
+		}
+
 		// Default to distancemax
-		distMax := getVec3OrFloat(emitter.DistanceMax)
+		distMax = getVec3OrFloat(emitter.DistanceMax)
 		particle.GridX = int(distMax.X)
 		particle.GridY = int(distMax.Y)
 
@@ -529,22 +556,22 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 
 	// Apply instance overrides
 	if ps.Override != nil {
-		if ps.Override.Lifetime.Value != 0 {
-			particle.MaxLife *= ps.Override.Lifetime.Value
+		if ps.Override.Lifetime.GetFloat() != 0 {
+			particle.MaxLife *= ps.Override.Lifetime.GetFloat()
 			particle.Life = particle.MaxLife
 		}
-		if ps.Override.Alpha.Value != 0 {
-			particle.Alpha = ps.Override.Alpha.Value
-			particle.InitialAlpha = ps.Override.Alpha.Value
+		if ps.Override.Alpha.GetFloat() != 0 {
+			particle.Alpha = ps.Override.Alpha.GetFloat()
+			particle.InitialAlpha = ps.Override.Alpha.GetFloat()
 		}
-		if ps.Override.Size.Value != 0 {
-			particle.Size *= ps.Override.Size.Value
+		if ps.Override.Size.GetFloat() != 0 {
+			particle.Size *= ps.Override.Size.GetFloat()
 			particle.InitialSize = particle.Size
 		}
-		if ps.Override.Speed.Value != 0 {
-			particle.Velocity.X *= ps.Override.Speed.Value
-			particle.Velocity.Y *= ps.Override.Speed.Value
-			particle.Velocity.Z *= ps.Override.Speed.Value
+		if ps.Override.Speed.GetFloat() != 0 {
+			particle.Velocity.X *= ps.Override.Speed.GetFloat()
+			particle.Velocity.Y *= ps.Override.Speed.GetFloat()
+			particle.Velocity.Z *= ps.Override.Speed.GetFloat()
 		}
 		// Apply color override
 		if ps.Override.ColorN != "" {
@@ -645,6 +672,18 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 		gridSize = 1
 	}
 
+	texGridX := 0
+	texGridY := 0
+
+	if ps.TexInfo != nil && len(ps.TexInfo.SpriteSheetSequences) > 0 {
+		seq := ps.TexInfo.SpriteSheetSequences[0]
+		if seq.Width > 0 && seq.Height > 0 && ps.Texture != nil {
+			texGridX = int(ps.Texture.Width) / seq.Width
+			texGridY = int(ps.Texture.Height) / seq.Height
+			useSpriteSheet = true
+		}
+	}
+
 	// Check if any particle has a grid set (from distancemax)
 	hasGridParticles := false
 	if len(ps.Particles) > 0 {
@@ -656,7 +695,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 		}
 	}
 
-	if hasGridParticles && rendererType == "" {
+	if (hasGridParticles || useSpriteSheet) && rendererType == "" {
 		rendererType = "sprite"
 	}
 
@@ -664,13 +703,19 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 	height := float32(img.Height)
 
 	// Raylib uses BlendMode
-	rl.BeginBlendMode(rl.BlendAlpha)
+	rl.BeginBlendMode(ps.BlendMode)
 
 	for _, particle := range ps.Particles {
 		isSprite := (rendererType == "sprite" && useSpriteSheet) || (particle.GridX > 0 && particle.GridY > 0)
 		if isSprite {
 			gridSizeX := gridSize
 			gridSizeY := gridSize
+
+			if texGridX > 0 && texGridY > 0 {
+				gridSizeX = texGridX
+				gridSizeY = texGridY
+			}
+
 			if particle.GridX > 0 {
 				gridSizeX = particle.GridX
 			}
@@ -703,7 +748,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 			sourceRec := rl.NewRectangle(srcX, srcY, spriteWidth, spriteHeight)
 
 			// Scale
-			scale := float32(particle.Size / 100.0)
+			scale := float32(particle.Size / 1000.0)
 			finalScaleX := scale * float32(objScale.X)
 			finalScaleY := scale * float32(objScale.Y)
 
@@ -769,12 +814,12 @@ func (ps *ParticleSystem) SetMousePosition(x, y float64) {
 
 func ApplyEffects(obj *wallpaper.Object, alpha *float64, tint *color.RGBA) {
 	for _, effect := range obj.Effects {
-		if !effect.Visible.Value {
+		if !effect.Visible.GetBool() {
 			continue
 		}
 
 		if effect.Name == "opacity" {
-			*alpha *= effect.Alpha.Value
+			*alpha *= effect.Alpha.GetFloat()
 		}
 		if effect.Name == "tint" {
 			if len(effect.Passes) > 0 {

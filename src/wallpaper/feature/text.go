@@ -36,7 +36,7 @@ func RenderText(object *wallpaper.Object, rt *rl.RenderTexture2D) {
 		str = time.Now().Format(format)
 	}
 
-	fontSize := float32(object.Pointsize.Value)
+	fontSize := float32(object.Pointsize.GetFloat())
 	if fontSize <= 0 {
 		fontSize = 24
 	}

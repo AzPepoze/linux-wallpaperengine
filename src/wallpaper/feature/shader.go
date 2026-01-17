@@ -6,7 +6,7 @@ import (
 
 func ApplyShaderEffects(obj *wallpaper.Object, alpha *float64) {
 	for _, effect := range obj.Effects {
-		if !effect.Visible.Value {
+		if !effect.Visible.GetBool() {
 			continue
 		}
 
@@ -15,7 +15,7 @@ func ApplyShaderEffects(obj *wallpaper.Object, alpha *float64) {
 			if len(effect.Passes) > 0 {
 				*alpha *= effect.Passes[0].ConstantValue
 			} else {
-				*alpha *= effect.Alpha.Value
+				*alpha *= effect.Alpha.GetFloat()
 			}
 		}
 	}

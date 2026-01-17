@@ -3,6 +3,8 @@ package main
 import (
 	"image/color"
 	"math"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"linux-wallpaperengine/src/convert"
@@ -69,11 +71,32 @@ func NewWindow(scene wallpaper.Scene, scalingMode string) *Window {
 			object.Origin.Y = float64(height) - object.Origin.Y
 		}
 
-		if len(object.Sound.Value) > 0 {
+		if len(object.Sound) > 0 {
 			window.audioManager.Play(object)
 		}
 
 		utils.Debug("Adding object: %s", object.Name)
+
+		// Check for Model config (Puppet/Autosize)
+		var autoSize bool
+		var puppetPath string
+		modelPath := object.Model
+		if modelPath == "" && strings.HasSuffix(object.Image, ".json") {
+			modelPath = object.Image
+		}
+
+		if modelPath != "" && strings.HasSuffix(modelPath, ".json") {
+			if modelConfig, err := LoadModelConfig(modelPath); err == nil {
+				if modelConfig.Puppet != "" {
+					utils.Info("Object %s uses Puppet Warp (static rendering only): %s", object.Name, modelConfig.Puppet)
+					puppetPath = modelConfig.Puppet
+				}
+				if modelConfig.Autosize {
+					autoSize = true
+				}
+			}
+		}
+
 		texturePath := resolveTexturePath(object)
 		var image *rl.Texture2D
 		var renderTexture *rl.RenderTexture2D
@@ -83,6 +106,9 @@ func NewWindow(scene wallpaper.Scene, scalingMode string) *Window {
 			image, err = convert.LoadTextureNative(texturePath)
 			if err != nil {
 				utils.Error("Failed to load texture for object %s from %s: %v", object.Name, texturePath, err)
+			} else if autoSize {
+				object.Size.X = float64(image.Width)
+				object.Size.Y = float64(image.Height)
 			}
 		} else if object.Image != "" {
 			utils.Error("Could not resolve texture path for object %s (Image: %s)", object.Name, object.Image)
@@ -104,6 +130,18 @@ func NewWindow(scene wallpaper.Scene, scalingMode string) *Window {
 			RenderTexture:  renderTexture,
 			ParticleSystem: ps,
 		})
+
+		// Load MDL mesh if available
+		if autoSize && puppetPath != "" {
+			mdlFullPath := filepath.Join("tmp", puppetPath)
+			utils.Debug("Attempting to load MDL for object '%s' from: %s", object.Name, mdlFullPath)
+			if mesh, err := convert.LoadMDL(mdlFullPath); err == nil {
+				window.renderObjects[len(window.renderObjects)-1].Mesh = mesh
+				utils.Debug("Successfully attached mesh to object '%s'", object.Name)
+			} else {
+				utils.Error("Failed to load MDL for object '%s': %v", object.Name, err)
+			}
+		}
 	}
 
 	return window
@@ -157,7 +195,7 @@ func (window *Window) Update() {
 		window.updateObjects[i] = *renderObject.Object
 		window.updateOffsets[i] = wallpaper.Vec2{X: 0, Y: 0}
 
-		if !renderObject.Object.Visible.Value {
+		if !renderObject.Object.Visible.GetBool() {
 			continue
 		}
 		if renderObject.ParticleSystem != nil {
@@ -193,6 +231,53 @@ func (window *Window) Update() {
 	}
 }
 
+func mapCoord(nx, ny float32, destRec rl.Rectangle, origin rl.Vector2, rotation float32) rl.Vector2 {
+	// nx, ny are likely in range [-4.25, 4.25]
+	// Assume (0,0) is center of object
+	
+	// Map to screen
+	// We guess the scale factor. 
+	// If the object range is ~8 units wide, and we want it to fit destRec.Width...
+	scaleX := destRec.Width / 8.5
+	scaleY := destRec.Height / 8.5
+	
+	lx := nx * float32(scaleX)
+	ly := ny * float32(scaleY)
+	
+	// Rotate around Pivot (which we assume is at 0,0 of the mesh space)
+	// But `origin` parameter is the pivot offset relative to top-left of destRec.
+	// Actually, `destRec` is centered at `scaledOrigin` in `Draw`?
+	// No:
+	// destRec := rl.NewRectangle(scaledOriginX, scaledOriginY, ...)
+	// origin := rl.NewVector2(width/2, height/2)
+	// DrawTexturePro rotates around `origin`.
+	
+	// So (0,0) in mesh space corresponds to `destRec.X + origin.X` ?
+	// Yes, if the mesh is centered.
+	
+	rad := rotation * math.Pi / 180.0
+	c := float32(math.Cos(float64(rad)))
+	s := float32(math.Sin(float64(rad)))
+	
+	rx := lx*c - ly*s
+	ry := lx*s + ly*c
+	
+	// My `Draw` code:
+	// destRec X/Y is `scaledOriginX/Y`.
+	// origin is `Width/2, Height/2`.
+	// So `scaledOriginX/Y` is the center of the image on screen?
+	// Let's check `Draw`:
+	// scaledOriginX = sceneOffsetX + (Obj.Origin.X + Offset.X) * scale
+	// This looks like the position of the object's origin.
+	// And we set destRec.X = scaledOriginX.
+	// And we set origin = Width/2, Height/2.
+	// So we are saying: "Draw the texture so that its center (Width/2, Height/2) aligns with scaledOriginX".
+	
+	// So `destRec.X` IS the screen coordinate of the object's center.
+	
+	return rl.NewVector2(destRec.X + rx, destRec.Y + ry)
+}
+
 func (window *Window) Draw() {
 	rl.ClearBackground(rl.Black)
 
@@ -206,7 +291,7 @@ func (window *Window) Draw() {
 	rl.ClearBackground(rl.NewColor(window.bgColor.R, window.bgColor.G, window.bgColor.B, 255))
 
 	for _, renderObject := range window.renderObjects {
-		if !renderObject.Object.Visible.Value {
+		if !renderObject.Object.Visible.GetBool() {
 			continue
 		}
 
@@ -221,7 +306,7 @@ func (window *Window) Draw() {
 		}
 
 		if texture != nil {
-			alpha := renderObject.Object.Alpha.Value
+			alpha := renderObject.Object.Alpha.GetFloat()
 			tintColor := color.RGBA{255, 255, 255, 255}
 			feature.ApplyEffects(renderObject.Object, &alpha, &tintColor)
 
@@ -280,6 +365,35 @@ func (window *Window) Draw() {
 					)
 
 					rl.DrawTexturePro(*texture, sourceRec, destRec, origin, rotation, rlTint)
+
+					// Debug: Draw Mesh Wireframe
+					if utils.DebugMode && renderObject.Mesh != nil {
+						rl.DrawRectangleLinesEx(destRec, 2, rl.Red)
+						
+						// Draw mesh triangles
+						for i := 0; i < len(renderObject.Mesh.Indices)-2; i += 3 {
+							idx1 := renderObject.Mesh.Indices[i]
+							idx2 := renderObject.Mesh.Indices[i+1]
+							idx3 := renderObject.Mesh.Indices[i+2]
+							
+							if int(idx1) < len(renderObject.Mesh.Vertices) && 
+							   int(idx2) < len(renderObject.Mesh.Vertices) && 
+							   int(idx3) < len(renderObject.Mesh.Vertices) {
+							   	v1 := renderObject.Mesh.Vertices[idx1]
+							   	v2 := renderObject.Mesh.Vertices[idx2]
+							   	v3 := renderObject.Mesh.Vertices[idx3]
+							   	
+							   	// Map normalized coords to screen
+							   	p1 := mapCoord(v1.PosX, v1.PosY, destRec, origin, rotation)
+							   	p2 := mapCoord(v2.PosX, v2.PosY, destRec, origin, rotation)
+							   	p3 := mapCoord(v3.PosX, v3.PosY, destRec, origin, rotation)
+							   	
+							   	rl.DrawLineV(p1, p2, rl.Green)
+							   	rl.DrawLineV(p2, p3, rl.Green)
+							   	rl.DrawLineV(p3, p1, rl.Green)
+							   }
+						}
+					}
 				}
 			}
 		}

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"linux-wallpaperengine/src/convert"
 	"linux-wallpaperengine/src/wallpaper"
 	"linux-wallpaperengine/src/wallpaper/feature"
 
@@ -8,15 +9,10 @@ import (
 )
 
 type RenderObject struct {
-
 	Object         *wallpaper.Object
-
 	Image          *rl.Texture2D
-
 	RenderTexture  *rl.RenderTexture2D
-
-	Offset         wallpaper.Vec2
-
 	ParticleSystem *feature.ParticleSystem
-
+	Offset         wallpaper.Vec2
+	Mesh           *convert.MDLMesh
 }

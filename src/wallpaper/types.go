@@ -1,5 +1,7 @@
 package wallpaper
 
+import "strings"
+
 type Vec2 struct {
 	X, Y float64
 }
@@ -18,6 +20,7 @@ type Scene struct {
 	Camera  Camera   `json:"camera"`
 	General General  `json:"general"`
 	Objects []Object `json:"objects"`
+	Version int      `json:"version"`
 }
 
 type General struct {
@@ -82,11 +85,19 @@ type Object struct {
 	Scale            Vec3                   `json:"scale"`
 	Size             Vec2                   `json:"size"`
 	Solid            bool                   `json:"solid"`
-	Sound            BindingString          `json:"sound"`
+	Sound            BindingStringArray     `json:"sound"`
 	Text             TextInfo               `json:"text"`
 	VerticalAlign    string                 `json:"verticalalign"`
 	Visible          BindingBool            `json:"visible"`
 	Volume           BindingFloat           `json:"volume"`
+	Intensity        BindingFloat           `json:"intensity"`
+	Light            string                 `json:"light"`
+	MaxTime          float64                `json:"maxtime"`
+	MinTime          float64                `json:"mintime"`
+	MuteInEditor     bool                   `json:"muteineditor"`
+	PlaybackMode     string                 `json:"playbackmode"`
+	StartSilent      bool                   `json:"startsilent"`
+	Radius           float64                `json:"radius"`
 }
 
 type InstanceOverride struct {
@@ -102,16 +113,74 @@ type InstanceOverride struct {
 }
 
 type BindingFloat struct {
+	Value interface{} `json:"value"` // Can be float64 or Animation
+}
+
+func (bf BindingFloat) GetFloat() float64 {
+	switch v := bf.Value.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case map[string]interface{}:
+		if val, ok := v["value"].(float64); ok {
+			return val
+		}
+	}
+	return 0
+}
+
+type Animation struct {
+	Animation struct {
+		C0 []Keyframe `json:"c0"`
+		Options struct {
+			FPS      float64 `json:"fps"`
+			Length   float64 `json:"length"`
+			Mode     string  `json:"mode"`
+			WrapLoop bool    `json:"wraploop"`
+		} `json:"options"`
+	} `json:"animation"`
+}
+
+type Keyframe struct {
+	Frame int `json:"frame"`
 	Value float64 `json:"value"`
+	Back  struct {
+		Enabled bool    `json:"enabled"`
+		X       float64 `json:"x"`
+		Y       float64 `json:"y"`
+	} `json:"back"`
+	Front struct {
+		Enabled bool    `json:"enabled"`
+		X       float64 `json:"x"`
+		Y       float64 `json:"y"`
+	} `json:"front"`
+	LockAngle  bool `json:"lockangle"`
+	LockLength bool `json:"locklength"`
 }
 
 type BindingBool struct {
-	Value bool `json:"value"`
+	Value interface{} `json:"value"` // Can be bool or struct { User string, Value bool }
+}
+
+func (bb BindingBool) GetBool() bool {
+	switch v := bb.Value.(type) {
+	case bool:
+		return v
+	case map[string]interface{}:
+		if val, ok := v["value"].(bool); ok {
+			return val
+		}
+	}
+	return true // Default to true if unsure? Or false. Existing code mostly checks !visible.
 }
 
 type BindingString struct {
 	Value string `json:"value"`
 }
+
+// Added BindingStringArray to handle "sound" field which is array of strings
+type BindingStringArray []string
 
 type TextInfo struct {
 	Value            string `json:"value"`
@@ -137,26 +206,50 @@ type EffectPass struct {
 	ConstantValue        float64              `json:"constantvalue"`
 	ConstantColor        Vec3                 `json:"constantcolor"`
 	ConstantShaderValues ConstantShaderValues `json:"constantshadervalues"`
-	Textures             []string             `json:"textures"`
+	Textures             []*string            `json:"textures"` // Pointer to string to handle nulls
+	Combos               map[string]int       `json:"combos"`
 }
 
-type ConstantShaderValues struct {
-	Amount     BindingFloat `json:"amount"`
-	Phase      BindingFloat `json:"phase"`
-	PhaseScale BindingFloat `json:"phasescale"`
-	Power      BindingFloat `json:"power"`
-	Scale      BindingFloat `json:"scale"`
-	Speed      BindingFloat `json:"speed"`
-	Strength   BindingFloat `json:"strength"`
+type ConstantShaderValues map[string]interface{}
+
+func (c ConstantShaderValues) GetFloat(key string) float64 {
+	val, ok := c[key]
+	if !ok {
+		// Try lowercase
+		val, ok = c[strings.ToLower(key)]
+		if !ok {
+			return 0
+		}
+	}
+
+	switch v := val.(type) {
+	case float64:
+		return v
+	case map[string]interface{}:
+		if val, ok := v["value"].(float64); ok {
+			return val
+		}
+		// Handle animation inside constant shader value if needed (future proofing)
+	}
+	return 0
 }
 
 type ModelJSON struct {
 	Material string `json:"material"`
+	Puppet   string `json:"puppet"`
+	Autosize bool   `json:"autosize"`
 }
 
 type MaterialJSON struct {
 	Passes []struct {
-		Textures []string `json:"textures"`
+		Textures             []string              `json:"textures"`
+		Blending             string                `json:"blending"`
+		CullMode             string                `json:"cullmode"`
+		DepthTest            string                `json:"depthtest"`
+		DepthWrite           string                `json:"depthwrite"`
+		Shader               string                `json:"shader"`
+		Combos               map[string]int        `json:"combos"`
+		ConstantShaderValues ConstantShaderValues  `json:"constantshadervalues"`
 	} `json:"passes"`
 }
 
@@ -164,7 +257,7 @@ type ParticleJSON struct {
 	Material           string                `json:"material"`
 	MaxCount           int                   `json:"maxcount"`
 	StartTime          float64               `json:"starttime"`
-	Flags              int                   `json:"flags"`
+	Flags              interface{}           `json:"flags"` // Can be null or int
 	SequenceMultiplier float64               `json:"sequencemultiplier"`
 	AnimationMode      string                `json:"animationmode"`
 	Emitter            []ParticleEmitter     `json:"emitter"`
@@ -178,9 +271,9 @@ type ParticleJSON struct {
 type ParticleEmitter struct {
 	ID                         int          `json:"id"`
 	Name                       string       `json:"name"`
-	Rate                       BindingFloat `json:"rate"`
-	Origin                     Vec3         `json:"origin"`
-	Directions                 Vec3         `json:"directions"`
+	Rate                       interface{}  `json:"rate"` // Can be BindingFloat or float64
+	Origin                     interface{}  `json:"origin"` // Can be Vec3 or string
+	Directions                 interface{}  `json:"directions"` // Can be Vec3 or string
 	DistanceMax                interface{}  `json:"distancemax"` // Can be Vec3 or float64
 	DistanceMin                interface{}  `json:"distancemin"` // Can be Vec3 or float64
 	AudioProcessingBounds      string       `json:"audioprocessingbounds"`
@@ -202,7 +295,7 @@ type ParticleOperator struct {
 	Name string `json:"name"`
 	// Movement operator
 	Gravity interface{}  `json:"gravity"` // Can be BindingFloat or Vec3
-	Drag    BindingFloat `json:"drag"`
+	Drag    interface{}  `json:"drag"` // Can be BindingFloat or float
 	// Alpha fade operator
 	FadeInTime  float64 `json:"fadeintime"`
 	FadeOutTime float64 `json:"fadeouttime"`
@@ -239,4 +332,18 @@ type ControlPoint struct {
 	Flags         int  `json:"flags"`
 	LockToPointer bool `json:"locktopointer"`
 	Offset        Vec3 `json:"offset"`
+}
+
+type TexJSON struct {
+	ClampUVs             bool                  `json:"clampuvs"`
+	Format               string                `json:"format"`
+	NonPowerOfTwo        bool                  `json:"nonpoweroftwo"`
+	SpriteSheetSequences []SpriteSheetSequence `json:"spritesheetsequences"`
+}
+
+type SpriteSheetSequence struct {
+	Duration float64 `json:"duration"`
+	Frames   int     `json:"frames"`
+	Height   int     `json:"height"`
+	Width    int     `json:"width"`
 }
