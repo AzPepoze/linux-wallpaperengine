@@ -16,9 +16,9 @@ func (d *DebugOverlay) drawPerformance(startY int, sceneWidth, sceneHeight int, 
 	ui.Header("Timing:")
 	ui.IndentLabel(fmt.Sprintf("FPS: %.1f", float64(rl.GetFPS())), 10)
 	ui.IndentLabel(fmt.Sprintf("Frame Time: %.2f ms", rl.GetFrameTime()*1000), 10)
-	
+
 	monitor := rl.GetCurrentMonitor()
-	ui.IndentLabel(fmt.Sprintf("Refresh Rate: %d Hz", rl.GetMonitorRefreshRate(monitor)), 10)
+	ui.IndentLabel(fmt.Sprintf("Monitor Refresh Rate: %d Hz", rl.GetMonitorRefreshRate(monitor)), 10)
 
 	ui.Separator()
 
@@ -38,7 +38,7 @@ func (d *DebugOverlay) drawPerformance(startY int, sceneWidth, sceneHeight int, 
 
 	// System Info
 	ui.Header("System:")
-	ui.IndentLabel(fmt.Sprintf("Cores: %d", runtime.NumCPU()), 10)
+	ui.IndentLabel(fmt.Sprintf("Detected Cores: %d", runtime.NumCPU()), 10)
 	ui.IndentLabel(fmt.Sprintf("Goroutines: %d", runtime.NumGoroutine()), 10)
 	ui.IndentLabel(fmt.Sprintf("OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH), 10)
 
@@ -62,13 +62,6 @@ func (d *DebugOverlay) drawPerformance(startY int, sceneWidth, sceneHeight int, 
 	// Window size (actual render resolution)
 	w, h := rl.GetScreenWidth(), rl.GetScreenHeight()
 	ui.IndentLabel(fmt.Sprintf("Window: %dx%d", w, h), 10)
-
-	// Fullscreen status
-	fs := "No"
-	if rl.IsWindowFullscreen() {
-		fs = "Yes"
-	}
-	ui.IndentLabel(fmt.Sprintf("Fullscreen: %s", fs), 10)
 
 	// Scene resolution
 	if sceneWidth > 0 && sceneHeight > 0 {

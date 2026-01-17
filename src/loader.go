@@ -31,7 +31,7 @@ func resolveTexturePath(object *wallpaper.Object) string {
 		// Try to find the file in typical locations
 		searchPaths := []string{
 			filepath.Join("tmp", path),
-			filepath.Join("assets", path),
+			utils.ResolveAssetPath(path),
 			path, // In case it is absolute or relative to root
 		}
 
@@ -61,7 +61,7 @@ func resolveTexturePath(object *wallpaper.Object) string {
 func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
 	searchPaths := []string{
 		filepath.Join("tmp", path),
-		filepath.Join("assets", path),
+		utils.ResolveAssetPath(path),
 		path,
 	}
 
@@ -82,7 +82,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 	possibleParticlePaths := []string{
 		particlePath,
 		filepath.Join("tmp", particlePath),
-		filepath.Join("assets", particlePath),
+		utils.ResolveAssetPath(particlePath),
 		filepath.Join("tmp/particles", filepath.Base(particlePath)),
 	}
 
@@ -134,7 +134,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		if strings.HasSuffix(config.Material, ".json") {
 			possibleMaterialPaths := []string{
 				filepath.Join("tmp", config.Material),
-				filepath.Join("assets", config.Material),
+				utils.ResolveAssetPath(config.Material),
 				filepath.Join("tmp/materials", config.Material),
 				filepath.Join(filepath.Dir(fullParticlePath), config.Material),
 			}

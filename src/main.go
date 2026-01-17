@@ -68,6 +68,7 @@ func main() {
 	raylibInfoFlag := flag.Bool("info-raylib", false, "Show Raylib internal info logs")
 	silentFlag := flag.Bool("silent", false, "Mute all audio output")
 	scalingMode := flag.String("scaling", "fit", "Scaling mode: cover, fit")
+	assetsDir := flag.String("assets-dir", "", "Set custom path for assets")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [wallpaper_folder or scene.pkg]\n\n", os.Args[0])
@@ -77,9 +78,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s ./my_wallpaper\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --pkg ./scene.pkg --debug\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --silent --scaling cover\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --assets-dir /path/to/assets ./wallpaper\n", os.Args[0])
 	}
 
 	flag.Parse()
+
+	DiscoverAssets(*assetsDir)
+	utils.WallpaperEngineAssets = AssetsPath
 
 	if *debugFlag {
 		utils.DebugMode = true

@@ -7,6 +7,26 @@ import (
 	"strings"
 )
 
+var WallpaperEngineAssets string
+
+func ResolveAssetPath(relPath string) string {
+	// Try local assets first
+	localPath := filepath.Join("assets", relPath)
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath
+	}
+
+	// Try discovered Steam assets
+	if WallpaperEngineAssets != "" {
+		steamPath := filepath.Join(WallpaperEngineAssets, relPath)
+		if _, err := os.Stat(steamPath); err == nil {
+			return steamPath
+		}
+	}
+
+	return localPath // Fallback to local even if not exists
+}
+
 func FindTextureFile(name string) string {
 	if name == "" {
 		return ""
@@ -25,6 +45,13 @@ func FindTextureFile(name string) string {
 		"assets",
 	}
 
+	if WallpaperEngineAssets != "" {
+		searchDirs = append(searchDirs,
+			filepath.Join(WallpaperEngineAssets, "materials"),
+			WallpaperEngineAssets,
+		)
+	}
+
 	for _, dir := range searchDirs {
 		p := filepath.Join(dir, cleanName+".tex")
 		if _, err := os.Stat(p); err == nil {
@@ -40,13 +67,26 @@ func FindTextureFile(name string) string {
 
 	// Recursive fallback for assets folder specifically (deep search)
 	var foundPath string
-	filepath.Walk("assets", func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && (strings.HasSuffix(path, cleanName+".tex") || strings.HasSuffix(path, filepath.Base(cleanName)+".tex")) {
-			foundPath = path
-			return fmt.Errorf("found")
+	dirsToWalk := []string{"assets"}
+	if WallpaperEngineAssets != "" {
+		dirsToWalk = append(dirsToWalk, WallpaperEngineAssets)
+	}
+
+	for _, d := range dirsToWalk {
+		if _, err := os.Stat(d); err != nil {
+			continue
 		}
-		return nil
-	})
+		filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() && (strings.HasSuffix(path, cleanName+".tex") || strings.HasSuffix(path, filepath.Base(cleanName)+".tex")) {
+				foundPath = path
+				return fmt.Errorf("found")
+			}
+			return nil
+		})
+		if foundPath != "" {
+			break
+		}
+	}
 
 	return foundPath
 }
