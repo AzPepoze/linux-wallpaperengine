@@ -146,7 +146,7 @@ func main() {
 	} else {
 		// Fallback to --pkg argument
 		if *pkgPath == "" {
-			utils.Error("No wallpaper folder or scene.pkg specified.")
+			flag.Usage()
 			os.Exit(1)
 		}
 		if _, err := os.Stat("tmp"); os.IsNotExist(err) {
