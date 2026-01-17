@@ -21,6 +21,10 @@ var (
 	ShowRaylibInfo bool
 	ShowDebugUI    bool
 	SilentMode     bool
+
+	GPURenderer string
+	GPUVendor   string
+	GLVersion   string
 )
 
 func (l LogLevel) String() string {
@@ -109,6 +113,17 @@ func Dump(label string, v interface{}) {
 }
 
 func RaylibLogCallback(level int, text string) {
+	// Capture GPU info from Raylib startup logs
+	if strings.Contains(text, "> Vendor:") {
+		GPUVendor = strings.TrimSpace(strings.TrimPrefix(text, "    > Vendor:"))
+	}
+	if strings.Contains(text, "> Renderer:") {
+		GPURenderer = strings.TrimSpace(strings.TrimPrefix(text, "    > Renderer:"))
+	}
+	if strings.Contains(text, "> Version:") {
+		GLVersion = strings.TrimSpace(strings.TrimPrefix(text, "    > Version:"))
+	}
+
 	const colorMagenta = "\033[35m"
 	const colorReset = "\033[0m"
 	formattedText := colorMagenta + "[RAYLIB] " + colorReset + text

@@ -1,6 +1,10 @@
 package wallpaper
 
-import "strings"
+import (
+	"strings"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
 
 type Vec2 struct {
 	X, Y float64
@@ -132,7 +136,7 @@ func (bf BindingFloat) GetFloat() float64 {
 
 type Animation struct {
 	Animation struct {
-		C0 []Keyframe `json:"c0"`
+		C0      []Keyframe `json:"c0"`
 		Options struct {
 			FPS      float64 `json:"fps"`
 			Length   float64 `json:"length"`
@@ -143,7 +147,7 @@ type Animation struct {
 }
 
 type Keyframe struct {
-	Frame int `json:"frame"`
+	Frame int     `json:"frame"`
 	Value float64 `json:"value"`
 	Back  struct {
 		Enabled bool    `json:"enabled"`
@@ -208,6 +212,8 @@ type EffectPass struct {
 	ConstantShaderValues ConstantShaderValues `json:"constantshadervalues"`
 	Textures             []*string            `json:"textures"` // Pointer to string to handle nulls
 	Combos               map[string]int       `json:"combos"`
+	Material             string               `json:"material"`
+	Shader               string               `json:"shader"`
 }
 
 type ConstantShaderValues map[string]interface{}
@@ -235,21 +241,22 @@ func (c ConstantShaderValues) GetFloat(key string) float64 {
 }
 
 type ModelJSON struct {
-	Material string `json:"material"`
-	Puppet   string `json:"puppet"`
-	Autosize bool   `json:"autosize"`
+	Material   string `json:"material"`
+	Puppet     string `json:"puppet"`
+	Autosize   bool   `json:"autosize"`
+	Cropoffset Vec2   `json:"cropoffset"`
 }
 
 type MaterialJSON struct {
 	Passes []struct {
-		Textures             []string              `json:"textures"`
-		Blending             string                `json:"blending"`
-		CullMode             string                `json:"cullmode"`
-		DepthTest            string                `json:"depthtest"`
-		DepthWrite           string                `json:"depthwrite"`
-		Shader               string                `json:"shader"`
-		Combos               map[string]int        `json:"combos"`
-		ConstantShaderValues ConstantShaderValues  `json:"constantshadervalues"`
+		Textures             []string             `json:"textures"`
+		Blending             string               `json:"blending"`
+		CullMode             string               `json:"cullmode"`
+		DepthTest            string               `json:"depthtest"`
+		DepthWrite           string               `json:"depthwrite"`
+		Shader               string               `json:"shader"`
+		Combos               map[string]int       `json:"combos"`
+		ConstantShaderValues ConstantShaderValues `json:"constantshadervalues"`
 	} `json:"passes"`
 }
 
@@ -269,17 +276,17 @@ type ParticleJSON struct {
 }
 
 type ParticleEmitter struct {
-	ID                         int          `json:"id"`
-	Name                       string       `json:"name"`
-	Rate                       interface{}  `json:"rate"` // Can be BindingFloat or float64
-	Origin                     interface{}  `json:"origin"` // Can be Vec3 or string
-	Directions                 interface{}  `json:"directions"` // Can be Vec3 or string
-	DistanceMax                interface{}  `json:"distancemax"` // Can be Vec3 or float64
-	DistanceMin                interface{}  `json:"distancemin"` // Can be Vec3 or float64
-	AudioProcessingBounds      string       `json:"audioprocessingbounds"`
-	AudioProcessingExponent    float64      `json:"audioprocessingexponent"`
-	AudioProcessingFrequencyEnd float64      `json:"audioprocessingfrequencyend"`
-	AudioProcessingMode        int          `json:"audioprocessingmode"`
+	ID                          int         `json:"id"`
+	Name                        string      `json:"name"`
+	Rate                        interface{} `json:"rate"`        // Can be BindingFloat or float64
+	Origin                      interface{} `json:"origin"`      // Can be Vec3 or string
+	Directions                  interface{} `json:"directions"`  // Can be Vec3 or string
+	DistanceMax                 interface{} `json:"distancemax"` // Can be Vec3 or float64
+	DistanceMin                 interface{} `json:"distancemin"` // Can be Vec3 or float64
+	AudioProcessingBounds       string      `json:"audioprocessingbounds"`
+	AudioProcessingExponent     float64     `json:"audioprocessingexponent"`
+	AudioProcessingFrequencyEnd float64     `json:"audioprocessingfrequencyend"`
+	AudioProcessingMode         int         `json:"audioprocessingmode"`
 }
 
 type ParticleInitializer struct {
@@ -294,8 +301,8 @@ type ParticleOperator struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 	// Movement operator
-	Gravity interface{}  `json:"gravity"` // Can be BindingFloat or Vec3
-	Drag    interface{}  `json:"drag"` // Can be BindingFloat or float
+	Gravity interface{} `json:"gravity"` // Can be BindingFloat or Vec3
+	Drag    interface{} `json:"drag"`    // Can be BindingFloat or float
 	// Alpha fade operator
 	FadeInTime  float64 `json:"fadeintime"`
 	FadeOutTime float64 `json:"fadeouttime"`
@@ -346,4 +353,16 @@ type SpriteSheetSequence struct {
 	Frames   int     `json:"frames"`
 	Height   int     `json:"height"`
 	Width    int     `json:"width"`
+}
+
+type LoadedEffect struct {
+	Config   *Effect
+	Shaders  []rl.Shader
+	Passes   []LoadedPass
+	ShowMask bool
+}
+
+type LoadedPass struct {
+	Textures  []*rl.Texture2D
+	Constants ConstantShaderValues
 }

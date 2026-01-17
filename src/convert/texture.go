@@ -336,5 +336,9 @@ func LoadTextureNative(path string) (*rl.Texture2D, error) {
 	if tex.ID == 0 {
 		return nil, fmt.Errorf("failed to load texture from %s", pngPath)
 	}
+
+	// Important: WE effects often rely on texture tiling/wrapping (e.g. noise scrolling)
+	rl.SetTextureWrap(tex, rl.TextureWrapRepeat)
+
 	return &tex, nil
 }

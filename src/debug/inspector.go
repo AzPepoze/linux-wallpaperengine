@@ -2,6 +2,7 @@ package debug
 
 import (
 	"fmt"
+	"sort"
 
 	"linux-wallpaperengine/src/types"
 
@@ -71,18 +72,69 @@ func (d *DebugOverlay) drawInspector(renderObj *types.RenderObject, startX, star
 		}
 	}
 
-	if len(obj.Effects) > 0 {
-
+	if len(renderObj.Effects) > 0 {
 		ui.Separator()
-
 		ui.Header("Effects:")
+		for i := range renderObj.Effects {
+			le := &renderObj.Effects[i]
+			displayName := le.Config.Name
+			if displayName == "" {
+				displayName = le.Config.File
+			}
 
-		for _, effect := range obj.Effects {
+			// Visibility Toggle
+			isVisible := le.Config.Visible.GetBool()
+			if ui.IndentCheckbox(displayName, isVisible, 5) {
+				le.Config.Visible.Value = !isVisible
+			}
 
-			ui.IndentLabel(fmt.Sprintf("- %s", effect.Name), 10)
+			// Mask Visualization Toggle
+			if ui.IndentCheckbox("  Show Mask", le.ShowMask, 10) {
+				le.ShowMask = !le.ShowMask
+			}
 
+			// Shader Status
+			shaderInfo := "No Shader"
+			if len(le.Shaders) > 0 {
+				if le.Shaders[0].ID != 0 {
+					shaderInfo = fmt.Sprintf("Shader ID: %d", le.Shaders[0].ID)
+				} else {
+					shaderInfo = "FAILED to compile"
+				}
+			}
+			ui.IndentLabel(fmt.Sprintf("  Status: %s", shaderInfo), 20)
+
+			// Mask Info
+			maskCount := 0
+			if len(le.Passes) > 0 {
+				for _, t := range le.Passes[0].Textures {
+					if t != nil {
+						maskCount++
+					}
+				}
+			}
+			if maskCount > 0 {
+				ui.IndentLabel(fmt.Sprintf("  Masks: %d", maskCount), 20)
+			}
+
+			// Show Constant Shader Values
+			if len(le.Passes) > 0 && len(le.Passes[0].Constants) > 0 {
+				ui.IndentLabel("  Constants:", 20)
+				keys := make([]string, 0, len(le.Passes[0].Constants))
+				for k := range le.Passes[0].Constants {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					v := le.Passes[0].Constants[k]
+					ui.IndentLabel(fmt.Sprintf("    %s: %v", k, v), 20)
+				}
+			}
 		}
-
+	} else if len(obj.Effects) > 0 {
+		ui.Separator()
+		ui.Header("Effects:")
+		ui.IndentLabel("(Configured but not loaded)", 10)
 	}
 
 }

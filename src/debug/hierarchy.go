@@ -38,7 +38,18 @@ func (d *DebugOverlay) drawHierarchy(renderObjects []types.RenderObject, startY 
 		}
 
 		// Draw Name
-		info := fmt.Sprintf("%d: %s", i, ro.Object.Name)
+		displayName := ro.Object.Name
+		if displayName == "" {
+			if ro.Object.Particle != "" {
+				displayName = ro.Object.Particle
+			} else if ro.Object.Image != "" {
+				displayName = ro.Object.Image
+			} else {
+				displayName = "Unnamed Object"
+			}
+		}
+
+		info := fmt.Sprintf("%d: %s", i, displayName)
 		if ro.ParticleSystem != nil {
 			info += " (Particle)"
 		} else if ro.Object.GetText() != "" {
