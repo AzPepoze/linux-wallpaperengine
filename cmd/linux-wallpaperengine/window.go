@@ -8,12 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"linux-wallpaperengine/src/convert"
-	"linux-wallpaperengine/src/debug"
-	"linux-wallpaperengine/src/types"
-	"linux-wallpaperengine/src/utils"
-	"linux-wallpaperengine/src/wallpaper"
-	"linux-wallpaperengine/src/wallpaper/feature"
+	"linux-wallpaperengine/internal/convert"
+	"linux-wallpaperengine/internal/debug"
+	"linux-wallpaperengine/internal/engine2D"
+	"linux-wallpaperengine/internal/utils"
+	"linux-wallpaperengine/internal/wallpaper"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -21,7 +20,7 @@ import (
 type Window struct {
 	scene          wallpaper.Scene
 	bgColor        color.RGBA
-	renderObjects  []types.RenderObject
+	renderObjects  []engine2D.RenderObject
 	audioManager   *wallpaper.AudioManager
 	mouseX, mouseY float64
 	startTime      time.Time
@@ -76,7 +75,7 @@ void main() {
 		sceneWidth:    width,
 		sceneHeight:   height,
 		scalingMode:   scalingMode,
-		renderObjects: make([]types.RenderObject, 0, len(scene.Objects)),
+		renderObjects: make([]engine2D.RenderObject, 0, len(scene.Objects)),
 		updateObjects: make([]wallpaper.Object, len(scene.Objects)),
 		updateOffsets: make([]wallpaper.Vec2, len(scene.Objects)),
 		debugOverlay:  debug.NewDebugOverlay(),
@@ -141,17 +140,17 @@ void main() {
 			renderTexture = &rt
 		}
 
-		var ps *feature.ParticleSystem
+		var ps *engine2D.ParticleSystem
 		if object.Particle != "" {
 			ps = loadParticleSystem(object.Name, object.Particle, object.InstanceOverride)
 		}
 
-		var loadedEffects []wallpaper.LoadedEffect
+		var loadedEffects []engine2D.LoadedEffect
 		for j := range object.Effects {
-			loadedEffects = append(loadedEffects, feature.LoadEffect(&object.Effects[j]))
+			loadedEffects = append(loadedEffects, engine2D.LoadEffect(&object.Effects[j]))
 		}
 
-		window.renderObjects = append(window.renderObjects, types.RenderObject{
+		window.renderObjects = append(window.renderObjects, engine2D.RenderObject{
 			Object:         object,
 			Image:          image,
 			RenderTexture:  renderTexture,
@@ -235,10 +234,10 @@ func (window *Window) Update() {
 	totalTime := time.Since(window.startTime).Seconds()
 
 	if window.scene.General.CameraParallax {
-		feature.UpdateParallax(window.updateObjects, window.updateOffsets, window.mouseX, window.mouseY, window.scene.General.CameraParallaxAmount)
+		engine2D.UpdateParallax(window.updateObjects, window.updateOffsets, window.mouseX, window.mouseY, window.scene.General.CameraParallaxAmount)
 	}
-	feature.UpdateClock(window.updateObjects, window.updateOffsets)
-	feature.UpdateShake(window.updateObjects, window.updateOffsets, totalTime)
+	engine2D.UpdateClock(window.updateObjects, window.updateOffsets)
+	engine2D.UpdateShake(window.updateObjects, window.updateOffsets, totalTime)
 
 	window.audioManager.Update()
 
@@ -251,7 +250,7 @@ func (window *Window) Update() {
 		window.renderObjects[i].Offset = window.updateOffsets[i]
 
 		if window.renderObjects[i].RenderTexture != nil && window.renderObjects[i].Object.GetText() != "" {
-			feature.RenderText(window.renderObjects[i].Object, window.renderObjects[i].RenderTexture)
+			engine2D.RenderText(window.renderObjects[i].Object, window.renderObjects[i].RenderTexture)
 		}
 	}
 
@@ -278,7 +277,7 @@ func mapCoord(nx, ny float32, destRec rl.Rectangle, rotation float32) rl.Vector2
 	return rl.NewVector2(destRec.X+rx, destRec.Y+ry)
 }
 
-func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants wallpaper.ConstantShaderValues, textures []*rl.Texture2D, defaultTexture rl.Texture2D, totalTime float64, mouseX, mouseY float64) {
+func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine2D.ConstantShaderValues, textures []*rl.Texture2D, defaultTexture rl.Texture2D, totalTime float64, mouseX, mouseY float64) {
 	rl.SetShaderValue(shader, rl.GetShaderLocation(shader, "g_Time"), []float32{float32(totalTime)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(shader, rl.GetShaderLocation(shader, "g_PointerPosition"), []float32{float32(mouseX*0.5 + 0.5), float32(mouseY*0.5 + 0.5)}, rl.ShaderUniformVec2)
 
@@ -454,7 +453,7 @@ func (window *Window) Draw() {
 		if texture != nil {
 			alpha := renderObject.Object.Alpha.GetFloat()
 			tintColor := color.RGBA{255, 255, 255, 255}
-			feature.ApplyEffects(renderObject.Object, &alpha, &tintColor)
+			engine2D.ApplyEffects(renderObject.Object, &alpha, &tintColor)
 
 			if alpha > 0 {
 				targetWidth, targetHeight := renderObject.Object.Size.X, renderObject.Object.Size.Y

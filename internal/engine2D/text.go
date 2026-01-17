@@ -1,4 +1,4 @@
-package feature
+package engine2D
 
 import (
 	"os"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"linux-wallpaperengine/src/utils"
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/utils"
+	"linux-wallpaperengine/internal/wallpaper"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

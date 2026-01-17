@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	"linux-wallpaperengine/src/types"
+	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -170,7 +170,7 @@ func (d *DebugOverlay) Update() {
 	}
 }
 
-func (d *DebugOverlay) Draw(renderObjects []types.RenderObject, sceneWidth, sceneHeight int, renderScale, sceneOffsetX, sceneOffsetY float64, scalingMode string) {
+func (d *DebugOverlay) Draw(renderObjects []engine2D.RenderObject, sceneWidth, sceneHeight int, renderScale, sceneOffsetX, sceneOffsetY float64, scalingMode string) {
 	d.renderScale = renderScale
 	d.sceneOffsetX = sceneOffsetX
 	d.sceneOffsetY = sceneOffsetY

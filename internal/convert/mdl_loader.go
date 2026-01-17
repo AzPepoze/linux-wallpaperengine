@@ -6,7 +6,7 @@ import (
 	"math"
 	"os"
 
-	"linux-wallpaperengine/src/utils"
+	"linux-wallpaperengine/internal/utils"
 )
 
 type MDLMesh struct {

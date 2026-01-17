@@ -1,7 +1,7 @@
 package debug
 
 import (
-	"linux-wallpaperengine/src/types"
+	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -30,11 +30,11 @@ func (d *DebugOverlay) drawBoundingBoxToggle() {
 	d.DrawText("Show Bounding Boxes", int32(boxX+boxSize+10), int32(boxY), int32(d.fontHeight), rl.White)
 }
 
-func (d *DebugOverlay) drawSelectedBoundingBox(obj types.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64) {
+func (d *DebugOverlay) drawSelectedBoundingBox(obj engine2D.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64) {
 	d.drawObjectBoundingBox(obj, renderScale, sceneOffsetX, sceneOffsetY, rl.NewColor(255, 255, 0, 255), rl.NewColor(255, 255, 0, 150))
 }
 
-func (d *DebugOverlay) drawSceneBoundingBoxes(renderObjects []types.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64) {
+func (d *DebugOverlay) drawSceneBoundingBoxes(renderObjects []engine2D.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64) {
 	for i, obj := range renderObjects {
 		if i == d.SelectedObjectIndex {
 			continue
@@ -43,7 +43,7 @@ func (d *DebugOverlay) drawSceneBoundingBoxes(renderObjects []types.RenderObject
 	}
 }
 
-func (d *DebugOverlay) drawObjectBoundingBox(obj types.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64, imageCol, particleCol rl.Color) {
+func (d *DebugOverlay) drawObjectBoundingBox(obj engine2D.RenderObject, renderScale, sceneOffsetX, sceneOffsetY float64, imageCol, particleCol rl.Color) {
 		if obj.Image != nil {
 			w, h := obj.Image.Width, obj.Image.Height
 			sw, sh := float64(w)*obj.Object.Scale.X*renderScale, float64(h)*obj.Object.Scale.Y*renderScale

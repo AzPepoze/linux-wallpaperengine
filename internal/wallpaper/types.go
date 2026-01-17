@@ -1,11 +1,5 @@
 package wallpaper
 
-import (
-	"strings"
-
-	rl "github.com/gen2brain/raylib-go/raylib"
-)
-
 type Vec2 struct {
 	X, Y float64
 }
@@ -209,35 +203,11 @@ type EffectPass struct {
 	ID                   int                  `json:"id"`
 	ConstantValue        float64              `json:"constantvalue"`
 	ConstantColor        Vec3                 `json:"constantcolor"`
-	ConstantShaderValues ConstantShaderValues `json:"constantshadervalues"`
+	ConstantShaderValues map[string]interface{} `json:"constantshadervalues"`
 	Textures             []*string            `json:"textures"` // Pointer to string to handle nulls
 	Combos               map[string]int       `json:"combos"`
 	Material             string               `json:"material"`
 	Shader               string               `json:"shader"`
-}
-
-type ConstantShaderValues map[string]interface{}
-
-func (c ConstantShaderValues) GetFloat(key string) float64 {
-	val, ok := c[key]
-	if !ok {
-		// Try lowercase
-		val, ok = c[strings.ToLower(key)]
-		if !ok {
-			return 0
-		}
-	}
-
-	switch v := val.(type) {
-	case float64:
-		return v
-	case map[string]interface{}:
-		if val, ok := v["value"].(float64); ok {
-			return val
-		}
-		// Handle animation inside constant shader value if needed (future proofing)
-	}
-	return 0
 }
 
 type ModelJSON struct {
@@ -245,19 +215,6 @@ type ModelJSON struct {
 	Puppet     string `json:"puppet"`
 	Autosize   bool   `json:"autosize"`
 	Cropoffset Vec2   `json:"cropoffset"`
-}
-
-type MaterialJSON struct {
-	Passes []struct {
-		Textures             []string             `json:"textures"`
-		Blending             string               `json:"blending"`
-		CullMode             string               `json:"cullmode"`
-		DepthTest            string               `json:"depthtest"`
-		DepthWrite           string               `json:"depthwrite"`
-		Shader               string               `json:"shader"`
-		Combos               map[string]int       `json:"combos"`
-		ConstantShaderValues ConstantShaderValues `json:"constantshadervalues"`
-	} `json:"passes"`
 }
 
 type ParticleJSON struct {
@@ -353,16 +310,4 @@ type SpriteSheetSequence struct {
 	Frames   int     `json:"frames"`
 	Height   int     `json:"height"`
 	Width    int     `json:"width"`
-}
-
-type LoadedEffect struct {
-	Config   *Effect
-	Shaders  []rl.Shader
-	Passes   []LoadedPass
-	ShowMask bool
-}
-
-type LoadedPass struct {
-	Textures  []*rl.Texture2D
-	Constants ConstantShaderValues
 }

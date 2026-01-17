@@ -3,12 +3,12 @@ package debug
 import (
 	"fmt"
 
-	"linux-wallpaperengine/src/types"
+	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) drawHierarchy(renderObjects []types.RenderObject, startY int, maxHeight int) {
+func (d *DebugOverlay) drawHierarchy(renderObjects []engine2D.RenderObject, startY int, maxHeight int) {
 	// Left side: Hierarchy List
 	listWidth := d.sidebarWidth / 2
 	

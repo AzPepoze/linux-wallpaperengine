@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"linux-wallpaperengine/src/convert"
-	"linux-wallpaperengine/src/utils"
-	"linux-wallpaperengine/src/wallpaper"
-	"linux-wallpaperengine/src/wallpaper/feature"
+	"linux-wallpaperengine/internal/convert"
+	"linux-wallpaperengine/internal/utils"
+	"linux-wallpaperengine/internal/wallpaper"
+	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -44,12 +44,12 @@ func resolveTexturePath(object *wallpaper.Object) string {
 		}
 
 		if fullPath != "" {
-			if name, err := feature.ExtractTextureFromJSONPath(fullPath); err == nil {
+			if name, err := engine2D.ExtractTextureFromJSONPath(fullPath); err == nil {
 				textureName = name
 			}
 		} else {
 			// Fallback: try just the filename in tmp
-			if name, err := feature.ExtractTextureFromJSONPath(filepath.Join("tmp", path)); err == nil {
+			if name, err := engine2D.ExtractTextureFromJSONPath(filepath.Join("tmp", path)); err == nil {
 				textureName = name
 			}
 		}
@@ -77,7 +77,7 @@ func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
 	return nil, fmt.Errorf("model config not found or invalid: %s", path)
 }
 
-func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride) *feature.ParticleSystem {
+func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride) *engine2D.ParticleSystem {
 	// Try multiple root paths for the particle JSON itself
 	possibleParticlePaths := []string{
 		particlePath,
@@ -150,7 +150,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		if materialPath != "" {
 			mData, err := os.ReadFile(materialPath)
 			if err == nil {
-				var material wallpaper.MaterialJSON
+				var material engine2D.MaterialJSON
 				if err := json.Unmarshal(mData, &material); err == nil {
 					if len(material.Passes) > 0 {
 						pass := material.Passes[0]
@@ -214,7 +214,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		}
 	}
 
-	return feature.NewParticleSystem(feature.ParticleSystemOptions{
+	return engine2D.NewParticleSystem(engine2D.ParticleSystemOptions{
 		Name:          name,
 		Config:        config,
 		Texture:       texture,

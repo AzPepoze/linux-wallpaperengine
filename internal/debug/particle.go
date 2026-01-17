@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"sort"
 
-	"linux-wallpaperengine/src/types"
+	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) drawParticleInspector(renderObjects []types.RenderObject, startY int, mx, my int, clicked bool) {
+func (d *DebugOverlay) drawParticleInspector(renderObjects []engine2D.RenderObject, startY int, mx, my int, clicked bool) {
 	ui := NewUIContext(10, startY, d.lineHeight, d.fontHeight, d.font, mx, my, clicked)
 
 	// Gather all particle systems
-	var particleSystems []*types.RenderObject
+	var particleSystems []*engine2D.RenderObject
 	for i := range renderObjects {
 		if renderObjects[i].ParticleSystem != nil {
 			particleSystems = append(particleSystems, &renderObjects[i])
@@ -33,7 +33,7 @@ func (d *DebugOverlay) drawParticleInspector(renderObjects []types.RenderObject,
 	}
 }
 
-func (d *DebugOverlay) drawParticleDetails(ui *UIContext, ro *types.RenderObject) {
+func (d *DebugOverlay) drawParticleDetails(ui *UIContext, ro *engine2D.RenderObject) {
 	ps := ro.ParticleSystem
 	ui.Label(fmt.Sprintf("%s (%d particles)", ps.Name, len(ps.Particles)))
 	

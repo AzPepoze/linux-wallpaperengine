@@ -1,4 +1,4 @@
-package feature
+package engine2D
 
 import (
 	"encoding/json"
@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"linux-wallpaperengine/src/convert"
-	"linux-wallpaperengine/src/utils"
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/convert"
+	"linux-wallpaperengine/internal/utils"
+	"linux-wallpaperengine/internal/wallpaper"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -167,14 +167,14 @@ func LoadShader(name string, combos map[string]int) rl.Shader {
 	return shader
 }
 
-func LoadMaterial(path string) (*wallpaper.MaterialJSON, error) {
+func LoadMaterial(path string) (*MaterialJSON, error) {
 	fullPath := filepath.Join("tmp", path)
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var material wallpaper.MaterialJSON
+	var material MaterialJSON
 	if err := json.Unmarshal(data, &material); err != nil {
 		return nil, err
 	}
@@ -200,13 +200,13 @@ func LoadMockShader(mockName string) rl.Shader {
 	return shader
 }
 
-func LoadEffect(effectConfig *wallpaper.Effect) wallpaper.LoadedEffect {
+func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 	// DEBUG: Skip loading if not depthparallax
 	// if !strings.Contains(effectConfig.File, "depthparallax") {
-	// 	return wallpaper.LoadedEffect{Config: effectConfig}
+	// 	return LoadedEffect{Config: effectConfig}
 	// }
 
-	loaded := wallpaper.LoadedEffect{
+	loaded := LoadedEffect{
 		Config: effectConfig,
 	}
 
@@ -231,7 +231,7 @@ func LoadEffect(effectConfig *wallpaper.Effect) wallpaper.LoadedEffect {
 	}
 
 	for i, pass := range passes {
-		loadedPass := wallpaper.LoadedPass{}
+		loadedPass := LoadedPass{}
 
 		var basePass *wallpaper.EffectPass
 		if i < len(fullEffect.Passes) {
@@ -242,7 +242,7 @@ func LoadEffect(effectConfig *wallpaper.Effect) wallpaper.LoadedEffect {
 		// Merge ConstantShaderValues
 		if basePass != nil && basePass.ConstantShaderValues != nil {
 			if pass.ConstantShaderValues == nil {
-				pass.ConstantShaderValues = make(wallpaper.ConstantShaderValues)
+				pass.ConstantShaderValues = make(ConstantShaderValues)
 			}
 			for k, v := range basePass.ConstantShaderValues {
 				if _, exists := pass.ConstantShaderValues[k]; !exists {
@@ -286,7 +286,7 @@ func LoadEffect(effectConfig *wallpaper.Effect) wallpaper.LoadedEffect {
 			}
 		}
 
-		var mat *wallpaper.MaterialJSON
+		var mat *MaterialJSON
 		if shaderName == "" && materialPath != "" {
 			if m, err := LoadMaterial(materialPath); err == nil {
 				mat = m
@@ -306,7 +306,7 @@ func LoadEffect(effectConfig *wallpaper.Effect) wallpaper.LoadedEffect {
 					// Merge constants from material
 					if mat.Passes[0].ConstantShaderValues != nil {
 						if pass.ConstantShaderValues == nil {
-							pass.ConstantShaderValues = make(wallpaper.ConstantShaderValues)
+							pass.ConstantShaderValues = make(ConstantShaderValues)
 						}
 						for k, v := range mat.Passes[0].ConstantShaderValues {
 							if _, exists := pass.ConstantShaderValues[k]; !exists {
@@ -447,7 +447,7 @@ func ExtractTextureFromJSONPath(fullPath string) (string, error) {
 		return "", err
 	}
 
-	var material wallpaper.MaterialJSON
+	var material MaterialJSON
 	if err := json.Unmarshal(data, &material); err == nil {
 		if len(material.Passes) > 0 && len(material.Passes[0].Textures) > 0 {
 			tex := material.Passes[0].Textures[0]

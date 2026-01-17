@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"sort"
 
-	"linux-wallpaperengine/src/types"
+	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-func (d *DebugOverlay) drawInspector(renderObj *types.RenderObject, startX, startY int, maxHeight int, mx, my int, clicked bool) {
+func (d *DebugOverlay) drawInspector(renderObj *engine2D.RenderObject, startX, startY int, maxHeight int, mx, my int, clicked bool) {
 	ui := NewUIContext(startX+10, startY-int(d.InspectorScroll), d.lineHeight, d.fontHeight, d.font, mx, my, clicked)
 
 	// Scissor mode to handle scrolling and clipping

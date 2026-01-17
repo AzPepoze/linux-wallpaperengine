@@ -1,7 +1,7 @@
-package feature
+package engine2D
 
 import (
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/wallpaper"
 )
 
 func UpdateParallax(objects []wallpaper.Object, offsets []wallpaper.Vec2, mouseX, mouseY float64, amount float64) {
