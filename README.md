@@ -23,20 +23,20 @@
 
 ## CONTENTS
 
--    [CONTENTS](#contents)
--    [ABOUT](#about)
--    [CURRENT STATUS](#current-status)
--    [PREREQUISITES](#prerequisites)
--    [INSTALLATION](#installation)
--    [USAGE](#usage)
-     -    [Basic Usage](#basic-usage)
-     -    [Arguments](#arguments)
-     -    [Debug Mode](#debug-mode)
--    [BUILD FROM SOURCE](#build-from-source)
--    [DEVELOPMENT](#development)
--    [ACKNOWLEDGMENTS](#acknowledgments)
--    [CONTRIBUTING](#contributing)
--    [STONKS!](#stonks)
+- [CONTENTS](#contents)
+- [ABOUT](#about)
+- [CURRENT STATUS](#current-status)
+- [PREREQUISITES](#prerequisites)
+- [INSTALLATION](#installation)
+- [USAGE](#usage)
+	- [Basic Usage](#basic-usage)
+	- [Arguments](#arguments)
+	- [Debug Mode](#debug-mode)
+- [BUILD FROM SOURCE](#build-from-source)
+- [DEVELOPMENT](#development)
+- [ACKNOWLEDGMENTS](#acknowledgments)
+- [CONTRIBUTING](#contributing)
+- [STONKS!](#stonks)
 
 ## ABOUT
 
@@ -49,6 +49,23 @@ While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) 
 > [!Important]
 > You must own and have installed Wallpaper Engine from Steam to use this project. This tool does not provide any wallpapers or assets by itself; you need to supply your own content from the official Wallpaper Engine.
 
+> [!Important]
+> **Asset Discovery:** 
+>
+> It currently attempts to detect assets in the following locations:
+>
+> ```
+> $HOME/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Standard Steam)
+> $HOME/.steam/steam/steamapps/common/wallpaper_engine/assets (Steam Symlink)
+> $HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Flatpak Steam)
+> /usr/share/wallpaper_engine/assets (System wide)
+> ```
+>
+> ```bash
+> # Example of manual linking if discovery fails
+> ln -s "/path/to/steamapps/common/wallpaper_engine/assets" ./assets
+> ```
+
 > [!WARNING]
 > This project is in **very early development** stage. Most features are incomplete or unusable. Expect bugs, crashes, and missing functionality. Not recommended for daily use yet.
 
@@ -56,62 +73,55 @@ While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) 
 
 (Maybe already completed I just forgot to update this)
 
--    [x] **Core & I/O**
+- [x] **Core & I/O**
+     - [x] Unpacker & Parallel Texture Conversion
+     - [x] Basic Rendering (Linear Filtering, Scaling)
+     - [x] Project Structure (utils, convert, wallpaper, feature)
 
-     -    [x] Unpacker & Parallel Texture Conversion
-     -    [x] Basic Rendering (Linear Filtering, Scaling)
-     -    [x] Project Structure (utils, convert, wallpaper, feature)
+- [x] **Audio System**
+     - [x] Malgo Implementation (PipeWire Support)
+     - [x] Multiple Sound Streams & Loop Support
 
--    [x] **Audio System**
+- [x] **Visual Features (Basic)**
+     - [x] Real-time Clock (Hour, Minute, Second)
+     - [x] Global Mouse Parallax (X11 Integration)
+     - [x] Smooth Shake Effect (Sine Wave logic)
 
-     -    [x] Malgo Implementation (PipeWire Support)
-     -    [x] Multiple Sound Streams & Loop Support
+- [ ] **Visual Features (Intermediate)**
+     - [ ] **Text Rendering Enhancement**:
+          - [ ] Support custom `.otf`/`.ttf` fonts from `fonts/` folder
+          - [ ] Implement text alignment (Horizontal/Vertical)
+          - [ ] Support complex date/time formats
+     - [ ] **Property Binding**:
+          - [ ] Link Object properties (Alpha, Scale, Color) to JSON values or scripts
 
--    [x] **Visual Features (Basic)**
+- [ ] **Visual Features (Advanced - Shaders)**
+     - [x] **Color & Transparency**:
+          - [x] `opacity` effect pass
+          - [x] `tint` effect (Color mixing)
+     - [ ] **Dynamic Distortions**:
+          - [ ] `waterflow` (Water surface movement)
+          - [ ] `foliagesway` (Wind swaying effect)
+          - [ ] `perspective` (Perspective warping)
+     - [ ] **Post-Processing**:
+          - [ ] `vhs` (Scanlines, noise, chromatic aberration)
+          - [ ] `edgedetection` (Edge highlighting)
+          - [ ] `pulse` (Beating/scaling effects)
 
-     -    [x] Real-time Clock (Hour, Minute, Second)
-     -    [x] Global Mouse Parallax (X11 Integration)
-     -    [x] Smooth Shake Effect (Sine Wave logic)
+- [ ] **Particle System (High Priority)**
+     - [x] Particle emitter logic (Basic)
+     - [ ] Support for: `Rain`, `Stars`, `Smoke`, `Fireworks`, `Dust motes`
 
--    [ ] **Visual Features (Intermediate)**
-
-     -    [ ] **Text Rendering Enhancement**:
-          -    [ ] Support custom `.otf`/`.ttf` fonts from `fonts/` folder
-          -    [ ] Implement text alignment (Horizontal/Vertical)
-          -    [ ] Support complex date/time formats
-     -    [ ] **Property Binding**:
-          -    [ ] Link Object properties (Alpha, Scale, Color) to JSON values or scripts
-
--    [ ] **Visual Features (Advanced - Shaders)**
-
-     -    [x] **Color & Transparency**:
-          -    [x] `opacity` effect pass
-          -    [x] `tint` effect (Color mixing)
-     -    [ ] **Dynamic Distortions**:
-          -    [ ] `waterflow` (Water surface movement)
-          -    [ ] `foliagesway` (Wind swaying effect)
-          -    [ ] `perspective` (Perspective warping)
-     -    [ ] **Post-Processing**:
-          -    [ ] `vhs` (Scanlines, noise, chromatic aberration)
-          -    [ ] `edgedetection` (Edge highlighting)
-          -    [ ] `pulse` (Beating/scaling effects)
-
--    [ ] **Particle System (High Priority)**
-
-     -    [x] Particle emitter logic (Basic)
-     -    [ ] Support for: `Rain`, `Stars`, `Smoke`, `Fireworks`, `Dust motes`
-
--    [ ] **System Integration**
-
-     -    [ ] **MPRIS Support**: Show current playing song/artist from system players (Spotify, etc.)
-     -    [ ] **User Options**: Read `project.json` for user-defined properties (intensity, toggles)
+- [ ] **System Integration**
+     - [ ] **MPRIS Support**: Show current playing song/artist from system players (Spotify, etc.)
+     - [ ] **User Options**: Read `project.json` for user-defined properties (intensity, toggles)
 
 ## PREREQUISITES
 
--    **Go** 1.21 or higher
--    **OpenGL** support (Mesa, proprietary drivers)
--    **Audio libraries** (ALSA/PulseAudio)
--    **Wallpaper Engine content** (from Steam Workshop)
+- **Go** 1.21 or higher
+- **OpenGL** support (Mesa, proprietary drivers)
+- **Audio libraries** (ALSA/PulseAudio)
+- **Wallpaper Engine content** (from Steam Workshop)
 
 ## INSTALLATION
 
@@ -138,11 +148,14 @@ Point the executable to your wallpaper's folder or scene.json:
 ### Arguments
 
 -    `--scaling <mode>` : Set scaling mode to `fit` (default) or `cover`.
+
+-    `--assets-dir <path>` : Set custom path for assets (overrides automatic discovery).
+
 -    `--debug` : Enable verbose debug logging and show debug UI.
--    `--debug-ui` : Show debug overlay UI without verbose terminal logs.
--    `--info` : Enable informational logging (INFO level).
--    `--info-raylib` : Show internal Raylib logs (colored magenta).
--    `--pkg <path>` : Explicitly specify path to `scene.pkg` or scene folder.
+- `--debug-ui` : Show debug overlay UI without verbose terminal logs.
+- `--info` : Enable informational logging (INFO level).
+- `--info-raylib` : Show internal Raylib logs (colored magenta).
+- `--pkg <path>` : Explicitly specify path to `scene.pkg` or scene folder.
 
 ### Debug Mode
 
@@ -154,24 +167,24 @@ Enable the debug overlay with `--debug` flag:
 
 **Debug Features:**
 
--    **Hierarchy Tab** – Browse scene objects with full property inspector
--    **Particle Tab** – Monitor active particle systems and counts
--    **Performance Tab** – Real-time FPS, memory usage, and system metrics
--    **Object Inspector** – View and toggle properties (Visible, Effects, etc.)
--    **Bounding Boxes** – Visualize object bounds and particle positions
+- **Hierarchy Tab** – Browse scene objects with full property inspector
+- **Particle Tab** – Monitor active particle systems and counts
+- **Performance Tab** – Real-time FPS, memory usage, and system metrics
+- **Object Inspector** – View and toggle properties (Visible, Effects, etc.)
+- **Bounding Boxes** – Visualize object bounds and particle positions
 
 **Controls:**
 
--    `F8` – Toggle debug overlay
+- `F8` – Toggle debug overlay
 
 ## BUILD FROM SOURCE
 
 **Requirements:**
 
--    [Go](https://golang.org/) 1.21+
--    Build essentials (gcc, make)
--    OpenGL development libraries
--    Audio development libraries (libasound2-dev/pulseaudio-dev)
+- [Go](https://golang.org/) 1.21+
+- Build essentials (gcc, make)
+- OpenGL development libraries
+- Audio development libraries (libasound2-dev/pulseaudio-dev)
 
 **On Debian/Ubuntu:**
 
@@ -224,7 +237,7 @@ make dev ARGS="/path/to/wallpaper/folder --debug"
 
 This project is inspired by and maintains compatibility with:
 
--    **[Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)** – The original C++ implementation that pioneered Wallpaper Engine support on Linux. This project aims to provide similar functionality while being written from scratch in Go for better memory safety and easier maintenance.
+- **[Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)** – The original C++ implementation that pioneered Wallpaper Engine support on Linux. This project aims to provide similar functionality while being written from scratch in Go for better memory safety and easier maintenance.
 
 Special thanks to the Wallpaper Engine community and all contributors who helped document the file formats and rendering techniques.
 
@@ -234,11 +247,11 @@ Feel free to open a PR or issue if you want to contribute or report a bug!
 
 **Areas needing help:**
 
--    Shader implementation for advanced effects
--    3D model rendering support
--    Video background support
--    Performance optimizations
--    Documentation improvements
+- Shader implementation for advanced effects
+- 3D model rendering support
+- Video background support
+- Performance optimizations
+- Documentation improvements
 
 ## STONKS!
 

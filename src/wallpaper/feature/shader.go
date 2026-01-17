@@ -39,11 +39,15 @@ func PreprocessShader(source string, combos map[string]int) string {
 	for k, v := range combos {
 		sb.WriteString(fmt.Sprintf("#define %s %d\n", k, v))
 	}
+	if _, exists := combos["BLENDMODE"]; !exists {
+		sb.WriteString("#define BLENDMODE 0\n")
+	}
 
 	// GLSL compatibility macros
 	sb.WriteString("#define frac fract\n")
 	sb.WriteString("#define lerp mix\n")
 	sb.WriteString("#define texSample2D texture2D\n")
+	sb.WriteString("#define atan2(y, x) atan(y, x)\n")
 
 	// FIX: Swapped multiplication order for Raylib/OpenGL (Matrix * Vector)
 	sb.WriteString("#define mul(a, b) ((b) * (a))\n")
@@ -59,24 +63,42 @@ func PreprocessShader(source string, combos map[string]int) string {
 	sb.WriteString("#define CAST3X3(x) mat3(x)\n")
 	sb.WriteString("#define saturate(x) clamp(x, 0.0, 1.0)\n")
 
-	// Inject common.h
-	if common, err := os.ReadFile("assets/shaders/common.h"); err == nil {
-		sb.WriteString(strings.Trim(string(common), "\ufeff"))
+	// Pre-process includes to avoid duplicates
+	included := make(map[string]bool)
+	
+	// Check if common.h is already in the source
+	if !strings.Contains(source, "#include \"common.h\"") {
+		commonPath := utils.ResolveAssetPath("shaders/common.h")
+		if content, err := os.ReadFile(commonPath); err == nil {
+			sb.WriteString(strings.Trim(string(content), "\ufeff"))
+			sb.WriteString("\n")
+			included["common.h"] = true
+		}
+	}
+
+	lines := strings.Split(source, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#include \"") && strings.HasSuffix(trimmed, "\"") {
+			includeFile := strings.Trim(trimmed[len("#include \""):len(trimmed)-1], " ")
+			if included[includeFile] {
+				continue
+			}
+			// Try to find in assets/shaders
+			includePath := utils.ResolveAssetPath(filepath.Join("shaders", includeFile))
+			if content, err := os.ReadFile(includePath); err == nil {
+				sb.WriteString(strings.Trim(string(content), "\ufeff"))
+				sb.WriteString("\n")
+				included[includeFile] = true
+				continue
+			}
+			utils.Warn("Shader: Could not resolve include: %s", includeFile)
+			continue
+		}
+		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
 
-	// Inject common_perspective.h
-	if commonPersp, err := os.ReadFile("assets/shaders/common_perspective.h"); err == nil {
-		sb.WriteString(strings.Trim(string(commonPersp), "\ufeff"))
-		sb.WriteString("\n")
-	}
-
-	// Cleanup
-	cleaned := strings.ReplaceAll(source, "#include \"common.h\"", "")
-	cleaned = strings.ReplaceAll(cleaned, "#include \"common_perspective.h\"", "")
-	cleaned = strings.Trim(cleaned, "\ufeff")
-
-	sb.WriteString(cleaned)
 	return sb.String()
 }
 
@@ -86,10 +108,31 @@ func LoadShader(name string, combos map[string]int) rl.Shader {
 	}
 
 	name = strings.ReplaceAll(name, "\\", "/")
-	utils.Debug("Shader: Preprocessing %s (Combos: %v)", name, combos)
 
 	vertPath := filepath.Join("tmp/shaders", name+".vert")
 	fragPath := filepath.Join("tmp/shaders", name+".frag")
+
+	// Extract default combos from frag shader comments if not already present
+	if data, err := os.ReadFile(fragPath); err == nil {
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "// [COMBO]") {
+				jsonPart := line[len("// [COMBO] "):]
+				var comboInfo struct {
+					Combo   string `json:"combo"`
+					Default int    `json:"default"`
+				}
+				if err := json.Unmarshal([]byte(jsonPart), &comboInfo); err == nil {
+					if _, exists := combos[comboInfo.Combo]; !exists {
+						utils.Debug("Shader: Setting default combo %s = %d", comboInfo.Combo, comboInfo.Default)
+						combos[comboInfo.Combo] = comboInfo.Default
+					}
+				}
+			}
+		}
+	}
+
+	utils.Debug("Shader: Preprocessing %s (Combos: %v)", name, combos)
 
 	var vSource, fSource string
 
@@ -423,11 +466,11 @@ func ExtractTextureFromJSONPath(fullPath string) (string, error) {
 			return name, nil
 		}
 
-		// Fallback to searching
-		searchPaths := []string{
-			filepath.Join("tmp", model.Material),
-			filepath.Join("assets", model.Material),
-		}
+	// Fallback to searching
+	searchPaths := []string{
+		filepath.Join("tmp", model.Material),
+		utils.ResolveAssetPath(model.Material),
+	}
 		for _, p := range searchPaths {
 			if name, err := ExtractTextureFromJSONPath(p); err == nil {
 				return name, nil

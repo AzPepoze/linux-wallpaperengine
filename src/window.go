@@ -260,7 +260,7 @@ func (window *Window) Update() {
 	}
 }
 
-func mapCoord(nx, ny float32, destRec rl.Rectangle, origin rl.Vector2, rotation float32) rl.Vector2 {
+func mapCoord(nx, ny float32, destRec rl.Rectangle, rotation float32) rl.Vector2 {
 	scaleX := destRec.Width / 8.5
 	scaleY := destRec.Height / 8.5
 
@@ -334,6 +334,12 @@ func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants wallpa
 			// If z is 1/w and x is w, result is 1/w^2 (approx 0), causing mask sampling at (0,0).
 			// By sending [w, h, w, h], we get w/w = 1, preserving 1:1 UV mapping.
 			rl.SetShaderValue(shader, resLoc, []float32{float32(tw), float32(th), float32(tw), float32(th)}, rl.ShaderUniformVec4)
+
+			// Also set g_TexelSize (1.0 / resolution)
+			texelLoc := rl.GetShaderLocation(shader, "g_TexelSize")
+			if texelLoc != -1 {
+				rl.SetShaderValue(shader, texelLoc, []float32{1.0 / float32(tw), 1.0 / float32(th)}, rl.ShaderUniformVec2)
+			}
 		}
 	}
 
@@ -658,9 +664,9 @@ func (window *Window) Draw() {
 								v3 := renderObject.Mesh.Vertices[idx3]
 
 								// Map normalized coords to screen
-								p1 := mapCoord(v1.PosX, v1.PosY, destRec, origin, rotation)
-								p2 := mapCoord(v2.PosX, v2.PosY, destRec, origin, rotation)
-								p3 := mapCoord(v3.PosX, v3.PosY, destRec, origin, rotation)
+								p1 := mapCoord(v1.PosX, v1.PosY, destRec, rotation)
+								p2 := mapCoord(v2.PosX, v2.PosY, destRec, rotation)
+								p3 := mapCoord(v3.PosX, v3.PosY, destRec, rotation)
 
 								rl.DrawLineV(p1, p2, rl.Green)
 								rl.DrawLineV(p2, p3, rl.Green)
