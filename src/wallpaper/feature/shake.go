@@ -11,7 +11,7 @@ func UpdateShake(objects []wallpaper.Object, offsets []wallpaper.Vec2, totalTime
 	for i := range objects {
 		obj := &objects[i]
 		for _, effect := range obj.Effects {
-			if !effect.Visible.Value {
+			if !effect.Visible.GetBool() {
 				continue
 			}
 
@@ -21,16 +21,32 @@ func UpdateShake(objects []wallpaper.Object, offsets []wallpaper.Vec2, totalTime
 
 				if len(effect.Passes) > 0 {
 					ps := effect.Passes[0]
-					if ps.ConstantShaderValues.Strength.Value != 0 {
-						amount = ps.ConstantShaderValues.Strength.Value
-					} else if ps.ConstantShaderValues.Amount.Value != 0 {
-						amount = ps.ConstantShaderValues.Amount.Value
-					} else if ps.ConstantValue != 0 {
-						amount = ps.ConstantValue * 0.1
+					
+					strength := ps.ConstantShaderValues.GetFloat("strength")
+					if strength == 0 {
+						strength = ps.ConstantShaderValues.GetFloat("Strength")
+					}
+					
+					if strength != 0 {
+						amount = strength
+					} else {
+						amt := ps.ConstantShaderValues.GetFloat("amount")
+						if amt == 0 {
+							amt = ps.ConstantShaderValues.GetFloat("Amount")
+						}
+						if amt != 0 {
+							amount = amt
+						} else if ps.ConstantValue != 0 {
+							amount = ps.ConstantValue * 0.1
+						}
 					}
 
-					if ps.ConstantShaderValues.Speed.Value != 0 {
-						speed = ps.ConstantShaderValues.Speed.Value
+					spd := ps.ConstantShaderValues.GetFloat("speed")
+					if spd == 0 {
+						spd = ps.ConstantShaderValues.GetFloat("Speed")
+					}
+					if spd != 0 {
+						speed = spd
 					}
 				}
 

@@ -103,13 +103,14 @@ func decodeRG88(finalData []byte, width, height uint32) ([]byte, error) {
 	pix := make([]byte, numPixels*4)
 
 	for i := 0; i < numPixels; i++ {
-		lum := finalData[i*2+1] // Byte 2: Opacity
+		lum := finalData[i*2+0]     // Byte 1: Luminance
+		opacity := finalData[i*2+1] // Byte 2: Opacity
 
 		// Write 4 bytes to destination
-		pix[i*4+0] = lum // R
-		pix[i*4+1] = lum // G
-		pix[i*4+2] = lum // B
-		pix[i*4+3] = lum // A
+		pix[i*4+0] = lum     // R
+		pix[i*4+1] = lum     // G
+		pix[i*4+2] = lum     // B
+		pix[i*4+3] = opacity // A
 	}
 	return pix, nil
 }
@@ -168,7 +169,7 @@ func DecodeTexToImage(path string) (image.Image, error) {
 	imgW := readInt(f)
 	imgH := readInt(f)
 
-	utils.Debug("    Format: %d, Aligned: %d, Target: %dx%d", format, texW, imgW, imgH)
+	utils.Debug("    Magic: %s, Format: %d, Aligned: %d, Target: %dx%d", magic1, format, texW, imgW, imgH)
 
 	readInt(f)
 	containerMagic := readString(f, 8)
@@ -225,17 +226,17 @@ func DecodeTexToImage(path string) (image.Image, error) {
 				case format == 0 || uint32(len(finalData)) == expectedRGBA:
 					pix, err = decodeRGBA(finalData)
 
-				case format == 6 || uint32(len(finalData)) == expectedDXT5:
-					pix, err = decodeDXT5(finalData, mW, mH)
-
-				case format == 4 || format == 7 || uint32(len(finalData)) == expectedDXT1:
-					pix, err = decodeDXT1(finalData, mW, mH)
-
 				case format == 9:
 					pix, err = decodeR8(finalData, mW, mH)
 
 				case format == 8:
 					pix, err = decodeRG88(finalData, mW, mH)
+
+				case format == 6 || uint32(len(finalData)) == expectedDXT5:
+					pix, err = decodeDXT5(finalData, mW, mH)
+
+				case format == 4 || format == 7 || uint32(len(finalData)) == expectedDXT1:
+					pix, err = decodeDXT1(finalData, mW, mH)
 
 				default:
 					utils.Error("    Unknown format %d with data size %d", format, len(finalData))

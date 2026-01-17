@@ -17,11 +17,13 @@ import (
 )
 
 func main() {
-	// If running on Wayland, GLFW might have issues with window positioning.
-	// Forcing X11 platform (via XWayland) can solve many issues.
-	if os.Getenv("XDG_SESSION_TYPE") == "wayland" && os.Getenv("GLFW_PLATFORM") == "" {
-		os.Setenv("GLFW_PLATFORM", "x11")
-	}
+	// clear tmp
+	os.RemoveAll("tmp")
+	os.Mkdir("tmp", 0755)
+
+	// clear converted
+	os.RemoveAll("converted")
+	os.Mkdir("converted", 0755)
 
 	// Manual check for log levels before flag.Parse to ensure early logs are captured
 	for _, arg := range os.Args {
@@ -66,7 +68,7 @@ func main() {
 	raylibInfoFlag := flag.Bool("info-raylib", false, "Show Raylib internal info logs")
 	silentFlag := flag.Bool("silent", false, "Mute all audio output")
 	scalingMode := flag.String("scaling", "fit", "Scaling mode: cover, fit")
-	
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [wallpaper_folder or scene.pkg]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -90,7 +92,7 @@ func main() {
 	if *silentFlag {
 		utils.SilentMode = true
 	}
-	
+
 	if *infoFlag {
 		utils.CurrentLevel = utils.LevelInfo
 	}
@@ -166,7 +168,7 @@ func main() {
 	}
 
 	convert.BulkConvertTextures("tmp", "converted")
-	
+
 	// Manual GC to free up memory after bulk conversion
 	runtime.GC()
 
