@@ -14,5 +14,8 @@ type RenderObject struct {
 	RenderTexture  *rl.RenderTexture2D
 	ParticleSystem *feature.ParticleSystem
 	Offset         wallpaper.Vec2
+	Cropoffset     wallpaper.Vec2
 	Mesh           *convert.MDLMesh
+	Effects        []wallpaper.LoadedEffect
+	PingPong       [2]*rl.RenderTexture2D
 }

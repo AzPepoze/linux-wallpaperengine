@@ -56,13 +56,17 @@ func (ui *UIContext) Header(text string) {
 }
 
 func (ui *UIContext) Checkbox(label string, checked bool) bool {
+	return ui.IndentCheckbox(label, checked, 0)
+}
+
+func (ui *UIContext) IndentCheckbox(label string, checked bool, indent int) bool {
 	boxSize := int(float64(ui.FontHeight) * 0.8)
-	boxX := ui.X + 5
+	boxX := ui.X + indent + 5
 	boxY := ui.Y + 2
 
 	changed := false
 	if ui.MouseClicked &&
-		ui.MouseX >= boxX && ui.MouseX <= boxX+boxSize+100 && // Add some width for label click
+		ui.MouseX >= boxX && ui.MouseX <= boxX+boxSize+200 &&
 		ui.MouseY >= boxY && ui.MouseY <= boxY+boxSize {
 		changed = true
 	}
@@ -72,7 +76,7 @@ func (ui *UIContext) Checkbox(label string, checked bool) bool {
 	if checked {
 		rl.DrawRectangle(int32(boxX+2), int32(boxY+2), int32(boxSize-4), int32(boxSize-4), rl.NewColor(100, 255, 100, 255))
 	}
-	ui.drawText(label, int32(ui.X+5+boxSize+5), int32(ui.Y), rl.White)
+	ui.drawText(label, int32(boxX+boxSize+5), int32(ui.Y), rl.White)
 	ui.Y += ui.LineHeight
 
 	return changed

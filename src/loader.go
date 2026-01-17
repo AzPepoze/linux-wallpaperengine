@@ -44,18 +44,18 @@ func resolveTexturePath(object *wallpaper.Object) string {
 		}
 
 		if fullPath != "" {
-			if name, err := extractTextureFromJSONPath(fullPath); err == nil {
+			if name, err := feature.ExtractTextureFromJSONPath(fullPath); err == nil {
 				textureName = name
 			}
 		} else {
 			// Fallback: try just the filename in tmp
-			if name, err := extractTextureFromJSONPath(filepath.Join("tmp", path)); err == nil {
+			if name, err := feature.ExtractTextureFromJSONPath(filepath.Join("tmp", path)); err == nil {
 				textureName = name
 			}
 		}
 	}
 
-	return findTextureFile(textureName)
+	return utils.FindTextureFile(textureName)
 }
 
 func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
@@ -126,7 +126,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 	var extraTextures []*rl.Texture2D
 	textureName := ""
 	var textureNames []string
-	blendMode := rl.BlendAdditive 
+	blendMode := rl.BlendAdditive
 	var texInfo *wallpaper.TexJSON
 
 	if config.Material != "" {
@@ -159,12 +159,13 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 							textureNames = pass.Textures
 						}
 						// Check blending
-						if pass.Blending == "additive" {
+						switch pass.Blending {
+						case "additive":
 							blendMode = rl.BlendAdditive
-						} else if pass.Blending == "alpha" {
+						case "alpha":
 							blendMode = rl.BlendAlpha
-						} else {
-							blendMode = rl.BlendAdditive 
+						default:
+							blendMode = rl.BlendAdditive
 						}
 					}
 				}
@@ -188,12 +189,12 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 			}
 
 			for i, tName := range textureNames {
-				tPath := findTextureFile(tName)
+				tPath := utils.FindTextureFile(tName)
 				if tPath != "" {
 					if image, err := convert.LoadTextureNative(tPath); err == nil {
 						if i == primaryIndex {
 							texture = image
-							
+
 							// Check for .tex-json only for the primary texture for now
 							texJsonPath := tPath + "-json"
 							if _, err := os.Stat(texJsonPath); err == nil {
@@ -223,88 +224,4 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		BlendMode:     blendMode,
 		TexInfo:       texInfo,
 	})
-}
-
-func extractTextureFromJSONPath(fullPath string) (string, error) {
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return "", err
-	}
-
-	var material wallpaper.MaterialJSON
-	if err := json.Unmarshal(data, &material); err == nil {
-		if len(material.Passes) > 0 && len(material.Passes[0].Textures) > 0 {
-			tex := material.Passes[0].Textures[0]
-			if tex != "" {
-				return tex, nil
-			}
-		}
-	}
-
-	var model wallpaper.ModelJSON
-	if err := json.Unmarshal(data, &model); err == nil && model.Material != "" {
-		// Try relative to the current file's directory first
-		baseDir := filepath.Dir(fullPath)
-		p := filepath.Join(baseDir, model.Material)
-		if name, err := extractTextureFromJSONPath(p); err == nil {
-			return name, nil
-		}
-
-		// Fallback to searching
-		searchPaths := []string{
-			filepath.Join("tmp", model.Material),
-			filepath.Join("assets", model.Material),
-		}
-		for _, p := range searchPaths {
-			if name, err := extractTextureFromJSONPath(p); err == nil {
-				return name, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no textures found in %s", fullPath)
-}
-
-func findTextureFile(name string) string {
-	if name == "" {
-		return ""
-	}
-
-	cleanName := strings.TrimPrefix(name, "materials/")
-	cleanName = strings.TrimSuffix(cleanName, ".tex")
-
-	searchDirs := []string{
-		"converted",
-		"tmp/materials",
-		"tmp/materials/workshop",
-		"tmp/materials/presets",
-		"tmp",
-		"assets/materials",
-		"assets",
-	}
-
-	for _, dir := range searchDirs {
-		p := filepath.Join(dir, cleanName+".tex")
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-
-		// Try with original name inside dir too
-		p = filepath.Join(dir, name+".tex")
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-
-	// Recursive fallback for assets folder specifically (deep search)
-	var foundPath string
-	filepath.Walk("assets", func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && (strings.HasSuffix(path, cleanName+".tex") || strings.HasSuffix(path, filepath.Base(cleanName)+".tex")) {
-			foundPath = path
-			return fmt.Errorf("found")
-		}
-		return nil
-	})
-
-	return foundPath
 }
