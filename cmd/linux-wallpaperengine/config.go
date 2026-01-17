@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"linux-wallpaperengine/src/utils"
+	"linux-wallpaperengine/internal/utils"
 )
 
 var AssetsPath string

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"linux-wallpaperengine/src/convert"
-	"linux-wallpaperengine/src/utils"
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/convert"
+	"linux-wallpaperengine/internal/utils"
+	"linux-wallpaperengine/internal/wallpaper"
 )
 
 func runTestSound(path string) {

@@ -1,4 +1,4 @@
-ENGINE_SRC = src/*.go
+ENGINE_SRC = ./cmd/linux-wallpaperengine
 ENGINE_TARGET = bin/linux-wallpaperengine
 TOOLS_BIN = bin/tools
 

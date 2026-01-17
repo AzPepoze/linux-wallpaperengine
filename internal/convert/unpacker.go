@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"linux-wallpaperengine/src/utils"
+	"linux-wallpaperengine/internal/utils"
 )
 
 type FileEntry struct {

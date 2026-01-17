@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"linux-wallpaperengine/src/utils"
+	"linux-wallpaperengine/internal/utils"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"github.com/mauserzjeh/dxt"

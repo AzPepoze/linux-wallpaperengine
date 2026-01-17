@@ -1,11 +1,11 @@
-package feature
+package engine2D
 
 import (
 	"math"
 	"strings"
 	"time"
 
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/wallpaper"
 )
 
 func UpdateClock(objects []wallpaper.Object, offsets []wallpaper.Vec2) {

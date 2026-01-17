@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"strings"
 
-	"linux-wallpaperengine/src/convert"
-	"linux-wallpaperengine/src/utils"
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/convert"
+	"linux-wallpaperengine/internal/utils"
+	"linux-wallpaperengine/internal/wallpaper"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

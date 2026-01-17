@@ -1,10 +1,10 @@
-package feature
+package engine2D
 
 import (
 	"math"
 	"strings"
 
-	"linux-wallpaperengine/src/wallpaper"
+	"linux-wallpaperengine/internal/wallpaper"
 )
 
 func UpdateShake(objects []wallpaper.Object, offsets []wallpaper.Vec2, totalTime float64) {
@@ -21,18 +21,19 @@ func UpdateShake(objects []wallpaper.Object, offsets []wallpaper.Vec2, totalTime
 
 				if len(effect.Passes) > 0 {
 					ps := effect.Passes[0]
+					csv := ConstantShaderValues(ps.ConstantShaderValues)
 					
-					strength := ps.ConstantShaderValues.GetFloat("strength")
+					strength := csv.GetFloat("strength")
 					if strength == 0 {
-						strength = ps.ConstantShaderValues.GetFloat("Strength")
+						strength = csv.GetFloat("Strength")
 					}
 					
 					if strength != 0 {
 						amount = strength
 					} else {
-						amt := ps.ConstantShaderValues.GetFloat("amount")
+						amt := csv.GetFloat("amount")
 						if amt == 0 {
-							amt = ps.ConstantShaderValues.GetFloat("Amount")
+							amt = csv.GetFloat("Amount")
 						}
 						if amt != 0 {
 							amount = amt
@@ -41,9 +42,9 @@ func UpdateShake(objects []wallpaper.Object, offsets []wallpaper.Vec2, totalTime
 						}
 					}
 
-					spd := ps.ConstantShaderValues.GetFloat("speed")
+					spd := csv.GetFloat("speed")
 					if spd == 0 {
-						spd = ps.ConstantShaderValues.GetFloat("Speed")
+						spd = csv.GetFloat("Speed")
 					}
 					if spd != 0 {
 						speed = spd
