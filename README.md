@@ -36,6 +36,8 @@
 - [CONTRIBUTING](#contributing)
 - [STONKS!](#stonks)
 
+<img src="docs/preview.png" alt="Preview" />
+
 ## ABOUT
 
 Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. Inspired by [Almamu&#39;s linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), this project is written in Go and runs Wallpaper Engine content on Linux.
