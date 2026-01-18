@@ -257,16 +257,16 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 		}
 
 		// DEBUG: Force sens to 0.02 and scale to "0.2 0.2"
-		if pass.ConstantShaderValues != nil {
-			if _, ok := pass.ConstantShaderValues["sens"]; ok {
-				pass.ConstantShaderValues["sens"] = 0.02
-				utils.Info("Effect: Debug override 'sens' to 0.02")
-			}
-			if _, ok := pass.ConstantShaderValues["scale"]; ok {
-				pass.ConstantShaderValues["scale"] = "0.08 0.08"
-				utils.Info("Effect: Debug override 'scale' to '0.08 0.08'")
-			}
-		}
+		// if pass.ConstantShaderValues != nil {
+		// 	if _, ok := pass.ConstantShaderValues["sens"]; ok {
+		// 		pass.ConstantShaderValues["sens"] = 0.02
+		// 		utils.Info("Effect: Debug override 'sens' to 0.02")
+		// 	}
+		// 	if _, ok := pass.ConstantShaderValues["scale"]; ok {
+		// 		pass.ConstantShaderValues["scale"] = "0.08 0.08"
+		// 		utils.Info("Effect: Debug override 'scale' to '0.08 0.08'")
+		// 	}
+		// }
 
 		// Merge Combos
 		combos := pass.Combos
@@ -382,6 +382,13 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 			}
 		}
 		utils.Debug("Effect: [Pass %d] Loaded %d textures", i, len(loadedPass.Textures))
+		for ti, t := range loadedPass.Textures {
+			if t != nil {
+				utils.Debug("Effect: [Pass %d, Tex %d] Texture ID: %d", i, ti, t.ID)
+			} else {
+				utils.Debug("Effect: [Pass %d, Tex %d] Texture is nil", i, ti)
+			}
+		}
 
 		// Copy constants to the loaded pass
 		loadedPass.Constants = pass.ConstantShaderValues
@@ -400,43 +407,6 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 			}
 
 			shader = LoadShader(shaderName, combos)
-		}
-
-		// Generic Texture Slot Fixer: Shift leading nils if the non-nil textures fall outside the shader's uniforms
-		if shader.ID != 0 {
-			maxSlotIdx := -1
-			for n := 1; n < 8; n++ {
-				loc := rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", n))
-				if loc != -1 {
-					maxSlotIdx = n - 1
-				}
-			}
-
-			if maxSlotIdx >= 0 {
-				lastNonNilIdx := -1
-				for j := len(loadedPass.Textures) - 1; j >= 0; j-- {
-					if loadedPass.Textures[j] != nil {
-						lastNonNilIdx = j
-						break
-					}
-				}
-
-				if lastNonNilIdx > maxSlotIdx {
-					shift := lastNonNilIdx - maxSlotIdx
-					canShift := true
-					for s := 0; s < shift; s++ {
-						if s >= len(loadedPass.Textures) || loadedPass.Textures[s] != nil {
-							canShift = false
-							break
-						}
-					}
-
-					if canShift {
-						utils.Info("Effect: Auto-fixing slots for %s (shifting %d positions to align with max slot %d)", shaderName, shift, maxSlotIdx)
-						loadedPass.Textures = loadedPass.Textures[shift:]
-					}
-				}
-			}
 		}
 
 		loaded.Passes = append(loaded.Passes, loadedPass)

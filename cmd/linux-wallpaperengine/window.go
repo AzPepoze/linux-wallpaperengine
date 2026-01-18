@@ -277,7 +277,7 @@ func mapCoord(nx, ny float32, destRec rl.Rectangle, rotation float32) rl.Vector2
 	return rl.NewVector2(destRec.X+rx, destRec.Y+ry)
 }
 
-func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine2D.ConstantShaderValues, textures []*rl.Texture2D, defaultTexture rl.Texture2D, totalTime float64, mouseX, mouseY float64) {
+func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine2D.ConstantShaderValues, textures []*rl.Texture2D, totalTime float64, mouseX, mouseY float64) {
 	rl.SetShaderValue(shader, rl.GetShaderLocation(shader, "g_Time"), []float32{float32(totalTime)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(shader, rl.GetShaderLocation(shader, "g_PointerPosition"), []float32{float32(mouseX*0.5 + 0.5), float32(mouseY*0.5 + 0.5)}, rl.ShaderUniformVec2)
 
@@ -322,14 +322,11 @@ func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine
 				if idx < len(textures) {
 					if textures[idx] != nil {
 						tw, th = float64(textures[idx].Width), float64(textures[idx].Height)
-					} else {
-						// Fallback to defaultTexture (dummy white) dimensions
-						tw, th = float64(defaultTexture.Width), float64(defaultTexture.Height)
 					}
 				}
 			}
 
-			// FIX: WE shaders often compute UVs using (Res.z / Res.x).
+			// WE shaders often compute UVs using (Res.z / Res.x).
 			// If z is 1/w and x is w, result is 1/w^2 (approx 0), causing mask sampling at (0,0).
 			// By sending [w, h, w, h], we get w/w = 1, preserving 1:1 UV mapping.
 			rl.SetShaderValue(shader, resLoc, []float32{float32(tw), float32(th), float32(tw), float32(th)}, rl.ShaderUniformVec4)
@@ -372,9 +369,8 @@ func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine
 		for _, name := range names {
 			loc := rl.GetShaderLocation(shader, name)
 			if loc != -1 {
-				if k == "scale" {
-					// Scale is usually g_Scale and is often a Vec2.
-					// It can be a string "2 2" or a number.
+				switch k {
+				case "scale":
 					var x, y float32
 					if sVal, ok := constants[k].(string); ok {
 						fmt.Sscanf(sVal, "%f %f", &x, &y)
@@ -383,7 +379,7 @@ func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine
 						y = float32(val)
 					}
 					rl.SetShaderValue(shader, loc, []float32{x, y}, rl.ShaderUniformVec2)
-				} else {
+				default:
 					rl.SetShaderValue(shader, loc, []float32{float32(val)}, rl.ShaderUniformFloat)
 				}
 				break
@@ -391,31 +387,30 @@ func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine
 		}
 	}
 
-	// 1. Explicitly bind g_Texture0 to Unit 0 to "consume" the first slot
-	loc0 := rl.GetShaderLocation(shader, "g_Texture0")
-	if loc0 == -1 {
-		loc0 = rl.GetShaderLocation(shader, "texture0")
+	// 1. Explicitly bind texture0 to Unit 0 to "consume" the first slot
+	texture0 := rl.GetShaderLocation(shader, "g_Texture0")
+	if texture0 == -1 {
+		texture0 = rl.GetShaderLocation(shader, "texture0")
 	}
-	if loc0 != -1 && texture != nil {
-		rl.SetShaderValueTexture(shader, loc0, *texture)
+	if texture0 != -1 && texture != nil {
+		rl.SetShaderValueTexture(shader, texture0, *texture)
 	}
 
 	// 2. Bind secondary textures to Units 1-7
 	for i := 1; i < 8; i++ {
-		loc := rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i))
-		if loc != -1 {
+		textureIdx := rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i))
+		if textureIdx != -1 {
 			// Explicitly set the sampler unit index (1, 2, 3...)
 			unit := float32(i)
-			rl.SetShaderValue(shader, loc, []float32{unit}, rl.ShaderUniformSampler2d)
+			rl.SetShaderValue(shader, textureIdx, []float32{unit}, rl.ShaderUniformSampler2d)
 
 			var texToBind rl.Texture2D
-			idx := i - 1
-			if idx < len(textures) && textures[idx] != nil {
-				texToBind = *textures[idx]
+			if i < len(textures) && textures[i] != nil {
+				texToBind = *textures[i]
 			} else {
-				texToBind = defaultTexture
+				// utils.Warn("Shader: Texture g_Texture%d is nil", i)
 			}
-			rl.SetShaderValueTexture(shader, loc, texToBind)
+			rl.SetShaderValueTexture(shader, textureIdx, texToBind)
 		}
 	}
 }
@@ -584,13 +579,10 @@ func (window *Window) Draw() {
 							rl.BeginShaderMode(activeShader)
 
 							// Pass currentTexture as input (g_Texture0)
-							applyShaderValues(activeShader, activeMainTex, le.Passes[0].Constants, activeTextures, window.dummyTexture, totalTime, window.mouseX, window.mouseY)
+							applyShaderValues(activeShader, activeMainTex, le.Passes[0].Constants, activeTextures, totalTime, window.mouseX, window.mouseY)
 
 							// Draw activeMainTex 1:1 onto targetRT
 							srcRec := rl.NewRectangle(0, 0, float32(activeMainTex.Width), float32(activeMainTex.Height))
-							// If activeMainTex is from an RT, it might be flipped.
-							// But Mask textures are usually Image textures (not flipped).
-							// Let's check if it's the currentTexture (which could be an RT)
 							if activeMainTex == currentTexture && isCurrentRenderTexture {
 								srcRec.Height = -srcRec.Height
 							}
