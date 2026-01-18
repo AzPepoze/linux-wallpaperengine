@@ -25,15 +25,13 @@
 
 - [CONTENTS](#contents)
 - [ABOUT](#about)
-- [CURRENT STATUS](#current-status)
-- [PREREQUISITES](#prerequisites)
-- [INSTALLATION](#installation)
 - [USAGE](#usage)
-	- [Basic Usage](#basic-usage)
-	- [Arguments](#arguments)
-	- [Debug Mode](#debug-mode)
+     - [Basic Usage](#basic-usage)
+     - [Arguments](#arguments)
+     - [Debug Mode](#debug-mode)
 - [BUILD FROM SOURCE](#build-from-source)
 - [DEVELOPMENT](#development)
+- [CURRENT STATUS](#current-status)
 - [ACKNOWLEDGMENTS](#acknowledgments)
 - [CONTRIBUTING](#contributing)
 - [STONKS!](#stonks)
@@ -47,93 +45,29 @@ Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linu
 While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) for [Almamu&#39;s linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), I decided to create a native Go implementation focusing on performance and compatibility. This implementation maintains argument compatibility with the original project for seamless integration.
 
 > [!Important]
+> **Wallpaper Engine Assets:**
+>
 > You must own and have installed Wallpaper Engine from Steam to use this project. This tool does not provide any wallpapers or assets by itself; you need to supply your own content from the official Wallpaper Engine.
 
 > [!Important]
-> **Asset Discovery:** 
+> **Asset Discovery:**
 >
 > It currently attempts to detect assets in the following locations:
 >
 > ```
-> $HOME/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Standard Steam)
-> $HOME/.steam/steam/steamapps/common/wallpaper_engine/assets (Steam Symlink)
-> $HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Flatpak Steam)
+> ~/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Standard Steam)
+> ~/.steam/steam/steamapps/common/wallpaper_engine/assets (Steam Symlink)
+> ~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Flatpak Steam)
 > /usr/share/wallpaper_engine/assets (System wide)
 > ```
 >
 > ```bash
-> # Example of manual linking if discovery fails
-> ln -s "/path/to/steamapps/common/wallpaper_engine/assets" ./assets
+> # Example of manual asset directory specification
+> ./linux-wallpaperengine /path/to/wallpaper/folder --assets-dir /custom/path/to/assets
 > ```
 
 > [!WARNING]
 > This project is in **very early development** stage. Most features are incomplete or unusable. Expect bugs, crashes, and missing functionality. Not recommended for daily use yet.
-
-## CURRENT STATUS
-
-(Maybe already completed I just forgot to update this)
-
-- [x] **Core & I/O**
-     - [x] Unpacker & Parallel Texture Conversion
-     - [x] Basic Rendering (Linear Filtering, Scaling)
-     - [x] Project Structure (utils, convert, wallpaper, feature)
-
-- [x] **Audio System**
-     - [x] Malgo Implementation (PipeWire Support)
-     - [x] Multiple Sound Streams & Loop Support
-
-- [x] **Visual Features (Basic)**
-     - [x] Real-time Clock (Hour, Minute, Second)
-     - [x] Global Mouse Parallax (X11 Integration)
-     - [x] Smooth Shake Effect (Sine Wave logic)
-
-- [ ] **Visual Features (Intermediate)**
-     - [ ] **Text Rendering Enhancement**:
-          - [ ] Support custom `.otf`/`.ttf` fonts from `fonts/` folder
-          - [ ] Implement text alignment (Horizontal/Vertical)
-          - [ ] Support complex date/time formats
-     - [ ] **Property Binding**:
-          - [ ] Link Object properties (Alpha, Scale, Color) to JSON values or scripts
-
-- [ ] **Visual Features (Advanced - Shaders)**
-     - [x] **Color & Transparency**:
-          - [x] `opacity` effect pass
-          - [x] `tint` effect (Color mixing)
-     - [ ] **Dynamic Distortions**:
-          - [ ] `waterflow` (Water surface movement)
-          - [ ] `foliagesway` (Wind swaying effect)
-          - [ ] `perspective` (Perspective warping)
-     - [ ] **Post-Processing**:
-          - [ ] `vhs` (Scanlines, noise, chromatic aberration)
-          - [ ] `edgedetection` (Edge highlighting)
-          - [ ] `pulse` (Beating/scaling effects)
-
-- [ ] **Particle System (High Priority)**
-     - [x] Particle emitter logic (Basic)
-     - [ ] Support for: `Rain`, `Stars`, `Smoke`, `Fireworks`, `Dust motes`
-
-- [ ] **System Integration**
-     - [ ] **MPRIS Support**: Show current playing song/artist from system players (Spotify, etc.)
-     - [ ] **User Options**: Read `project.json` for user-defined properties (intensity, toggles)
-
-## PREREQUISITES
-
-- **Go** 1.21 or higher
-- **OpenGL** support (Mesa, proprietary drivers)
-- **Audio libraries** (ALSA/PulseAudio)
-- **Wallpaper Engine content** (from Steam Workshop)
-
-## INSTALLATION
-
-Clone the repository and build from source:
-
-```bash
-git clone https://github.com/AzPepoze/linux-wallpaperengine.git
-cd linux-wallpaperengine
-make build
-```
-
-And you can see the built an executable in the `bin` folder.
 
 ## USAGE
 
@@ -147,14 +81,12 @@ Point the executable to your wallpaper's folder or scene.json:
 
 ### Arguments
 
--    `--scaling <mode>` : Set scaling mode to `fit` (default) or `cover`.
-
--    `--assets-dir <path>` : Set custom path for assets (overrides automatic discovery).
-
--    `--debug` : Enable verbose debug logging and show debug UI.
+- `--scaling <mode>` : Set scaling mode to `fit` (default) or `cover`.
+- `--assets-dir <path>` : Set custom path for assets (overrides automatic discovery).
+- `--debug` : Enable verbose debug logging and show debug UI.
 - `--debug-ui` : Show debug overlay UI without verbose terminal logs.
 - `--info` : Enable informational logging (INFO level).
-- `--info-raylib` : Show internal Raylib logs (colored magenta).
+- `--info-raylib` : Show internal Raylib logs.
 - `--pkg <path>` : Explicitly specify path to `scene.pkg` or scene folder.
 
 ### Debug Mode
@@ -219,6 +151,9 @@ sudo pacman -S go base-devel mesa alsa-lib
      make build
      ```
 
+> [!Important]
+> And you can see the built an executable in the `bin` folder.
+
 ## DEVELOPMENT
 
 **Run in development mode:**
@@ -233,6 +168,53 @@ You can pass custom arguments using the ARGS variable, for example:
 make dev ARGS="/path/to/wallpaper/folder --debug"
 ```
 
+## CURRENT STATUS
+
+(Maybe already completed I just forgot to update this)
+
+- [x] **Core & I/O**
+     - [x] Unpacker & Parallel Texture Conversion
+     - [x] Basic Rendering (Linear Filtering, Scaling)
+     - [x] Project Structure (utils, convert, wallpaper, feature)
+
+- [x] **Audio System**
+     - [x] Malgo Implementation (PipeWire Support)
+     - [x] Multiple Sound Streams & Loop Support
+
+- [x] **Visual Features (Basic)**
+     - [x] Real-time Clock (Hour, Minute, Second)
+     - [x] Global Mouse Parallax (X11 Integration)
+     - [x] Smooth Shake Effect (Sine Wave logic)
+
+- [ ] **Visual Features (Intermediate)**
+     - [ ] **Text Rendering Enhancement**:
+          - [ ] Support custom `.otf`/`.ttf` fonts from `fonts/` folder
+          - [ ] Implement text alignment (Horizontal/Vertical)
+          - [ ] Support complex date/time formats
+     - [ ] **Property Binding**:
+          - [ ] Link Object properties (Alpha, Scale, Color) to JSON values or scripts
+
+- [ ] **Visual Features (Advanced - Shaders)**
+     - [x] **Color & Transparency**:
+          - [x] `opacity` effect pass
+          - [x] `tint` effect (Color mixing)
+     - [ ] **Dynamic Distortions**:
+          - [ ] `waterflow` (Water surface movement)
+          - [ ] `foliagesway` (Wind swaying effect)
+          - [ ] `perspective` (Perspective warping)
+     - [ ] **Post-Processing**:
+          - [ ] `vhs` (Scanlines, noise, chromatic aberration)
+          - [ ] `edgedetection` (Edge highlighting)
+          - [ ] `pulse` (Beating/scaling effects)
+
+- [ ] **Particle System (High Priority)**
+     - [x] Particle emitter logic (Basic)
+     - [ ] Support for: `Rain`, `Stars`, `Smoke`, `Fireworks`, `Dust motes`
+
+- [ ] **System Integration**
+     - [ ] **MPRIS Support**: Show current playing song/artist from system players (Spotify, etc.)
+     - [ ] **User Options**: Read `project.json` for user-defined properties (intensity, toggles)
+
 ## ACKNOWLEDGMENTS
 
 This project is inspired by and maintains compatibility with:
@@ -244,14 +226,6 @@ Special thanks to the Wallpaper Engine community and all contributors who helped
 ## CONTRIBUTING
 
 Feel free to open a PR or issue if you want to contribute or report a bug!
-
-**Areas needing help:**
-
-- Shader implementation for advanced effects
-- 3D model rendering support
-- Video background support
-- Performance optimizations
-- Documentation improvements
 
 ## STONKS!
 
