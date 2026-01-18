@@ -32,7 +32,7 @@ func ApplyShaderEffects(obj *wallpaper.Object, alpha *float64) {
 	}
 }
 
-func PreprocessShader(source string, combos map[string]int) string {
+func PreprocessShader(source string, combos map[string]int, name string) string {
 	var sb strings.Builder
 	sb.WriteString("#version 120\n")
 
@@ -63,6 +63,40 @@ func PreprocessShader(source string, combos map[string]int) string {
 	sb.WriteString("#define CAST2X2(x) mat2(x)\n")
 	sb.WriteString("#define CAST3X3(x) mat3(x)\n")
 	sb.WriteString("#define saturate(x) clamp(x, 0.0, 1.0)\n")
+
+	// FIX: Waterripple speed is too slow due to squaring. Remove one factor.
+	if strings.Contains(name, "waterripple") {
+		source = strings.ReplaceAll(source, "g_Time * g_AnimationSpeed * g_AnimationSpeed", "g_Time * g_AnimationSpeed")
+		utils.Debug("Shader: Applied waterripple speed fix for %s", name)
+	}
+
+	// FIX: Mask Y is inverted for most effects compared to depthparallax
+	// Check for standard mask calc pattern
+	if !strings.Contains(name, "depthparallax") {
+		// Pattern 1
+		if strings.Contains(source, "v_TexCoord.y * g_Texture2Resolution.w / g_Texture2Resolution.y") {
+			source = strings.ReplaceAll(source,
+				"v_TexCoord.y * g_Texture2Resolution.w / g_Texture2Resolution.y",
+				"(1.0 - v_TexCoord.y) * g_Texture2Resolution.w / g_Texture2Resolution.y")
+			utils.Debug("Shader: Applied mask flip fix (Pattern 1) for %s", name)
+		}
+		
+		// Pattern 2: waterwaves uses v_TexCoord.w
+		if strings.Contains(source, "v_TexCoord.w *= g_Texture1Resolution.w / g_Texture1Resolution.y;") {
+			source = strings.ReplaceAll(source,
+				"v_TexCoord.w *= g_Texture1Resolution.w / g_Texture1Resolution.y;",
+				"v_TexCoord.w = (1.0 - v_TexCoord.w) * (g_Texture1Resolution.w / g_Texture1Resolution.y);")
+			utils.Debug("Shader: Applied mask flip fix (Pattern 2 - Texture1) for %s", name)
+		}
+		
+		// Pattern 2b: waterwaves TIMEOFFSET or others using Texture2
+		if strings.Contains(source, "v_TexCoord.w *= g_Texture2Resolution.w / g_Texture2Resolution.y;") {
+			source = strings.ReplaceAll(source,
+				"v_TexCoord.w *= g_Texture2Resolution.w / g_Texture2Resolution.y;",
+				"v_TexCoord.w = (1.0 - v_TexCoord.w) * (g_Texture2Resolution.w / g_Texture2Resolution.y);")
+			utils.Debug("Shader: Applied mask flip fix (Pattern 2 - Texture2) for %s", name)
+		}
+	}
 
 	// Pre-process includes to avoid duplicates
 	included := make(map[string]bool)
@@ -139,7 +173,7 @@ func LoadShader(name string, combos map[string]int) rl.Shader {
 
 	// Vertex Shader Loading ---
 	if data, err := os.ReadFile(vertPath); err == nil {
-		vSource = PreprocessShader(string(data), combos)
+		vSource = PreprocessShader(string(data), combos, name)
 	} else {
 		utils.Warn("Shader: %s - No vertex source found at %s", name, vertPath)
 		vSource = "#version 120\nattribute vec3 a_Position; attribute vec2 a_TexCoord; varying vec4 v_TexCoord; uniform mat4 mvp; void main() { v_TexCoord = a_TexCoord.xyxy; gl_Position = mvp * vec4(a_Position, 1.0); }"
@@ -147,7 +181,7 @@ func LoadShader(name string, combos map[string]int) rl.Shader {
 
 	// Fragment Shader Loading ---
 	if data, err := os.ReadFile(fragPath); err == nil {
-		fSource = PreprocessShader(string(data), combos)
+		fSource = PreprocessShader(string(data), combos, name)
 	} else {
 		utils.Warn("Shader: %s - No fragment source found at %s", name, fragPath)
 		fSource = "#version 120\nvarying vec4 v_TexCoord; uniform sampler2D g_Texture0; void main() { gl_FragColor = texture2D(g_Texture0, v_TexCoord.xy); }"
@@ -532,6 +566,18 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 			}
 
 			shader = LoadShader(shaderName, combos)
+
+			// Load defaults from shader comments
+			defaults := GetShaderDefaults(shaderName)
+			if pass.ConstantShaderValues == nil {
+				pass.ConstantShaderValues = make(ConstantShaderValues)
+			}
+			for k, v := range defaults {
+				if _, exists := pass.ConstantShaderValues[k]; !exists {
+					utils.Debug("Effect: Applying default for %s = %v", k, v)
+					pass.ConstantShaderValues[k] = v
+				}
+			}
 		}
 
 		loadedPass := SetupPass(shader, shaderName, pass.ConstantShaderValues, loadedTextures)
@@ -539,6 +585,48 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 	}
 
 	return loaded
+}
+
+func GetShaderDefaults(name string) map[string]interface{} {
+	defaults := make(map[string]interface{})
+
+	processFile := func(ext string) {
+		path := filepath.Join("tmp/shaders", name+ext)
+		// Try asset path if tmp doesn't exist, though usually shaders are in tmp
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			path = utils.ResolveAssetPath("shaders/" + name + ext)
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			utils.Debug("ShaderDefaults: Failed to read %s", path)
+			return
+		}
+
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			// Robust parsing for JSON in comments
+			if idx := strings.Index(line, "//"); idx != -1 {
+				comment := strings.TrimSpace(line[idx+2:])
+				if strings.HasPrefix(comment, "{") {
+					var meta struct {
+						Material string      `json:"material"`
+						Default  interface{} `json:"default"`
+					}
+					if err := json.Unmarshal([]byte(comment), &meta); err == nil {
+						if meta.Material != "" && meta.Default != nil {
+							defaults[meta.Material] = meta.Default
+						}
+					}
+				}
+			}
+		}
+	}
+
+	processFile(".vert")
+	processFile(".frag")
+
+	return defaults
 }
 
 var BlackTexture *rl.Texture2D
@@ -553,9 +641,44 @@ func InitDefaults() {
 	}
 }
 
+// Helper to reverse map location to name for debugging
+func getUniformName(loc int32, pass *LoadedPass) string {
+	for k := range pass.Constants {
+		// This is a rough guess, as we don't store the exact mapping. 
+		// But valid for most params.
+		if strings.Contains(strings.ToLower(k), "speed") {
+			return k
+		}
+	}
+	return "?"
+}
+
 func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 	shader := pass.Shader
 	parameters := &pass.Parameters
+
+	if strings.Contains(pass.ShaderName, "waterripple") {
+		utils.Debug("WaterRipple: --- Frame ---")
+		utils.Debug("WaterRipple: TimeLoc=%d Time=%.4f", parameters.Time, state.Time)
+		
+		// Check Resolutions
+		for i, loc := range parameters.TextureResolutions {
+			if loc != -1 {
+				utils.Debug("WaterRipple: Tex%dRes Loc=%d", i, loc)
+			}
+		}
+		
+		// Check Samplers
+		for i, loc := range parameters.TextureSamplers {
+			if loc != -1 {
+				utils.Debug("WaterRipple: Tex%dSampler Loc=%d", i, loc)
+			}
+		}
+
+		for _, u := range pass.Uniforms {
+			utils.Debug("WaterRipple: Uniform Loc=%d Values=%v", u.Location, u.Values)
+		}
+	}
 
 	// 1. Set Standard Uniforms
 	if parameters.Time != -1 {
@@ -624,6 +747,10 @@ func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 		if parameters.TextureResolutions[i] != -1 {
 			w, h := float32(texture.Width), float32(texture.Height)
 			rl.SetShaderValue(shader, parameters.TextureResolutions[i], []float32{w, h, w, h}, rl.ShaderUniformVec4)
+
+			if strings.Contains(pass.ShaderName, "waterripple") && i == 0 {
+				utils.Debug("WaterRipple: Set Tex0Res (Loc %d) to %.0fx%.0f", parameters.TextureResolutions[i], w, h)
+			}
 
 			// Set TexelSize if this is the main texture (slot 0)
 			if i == 0 && parameters.TexelSize != -1 {
