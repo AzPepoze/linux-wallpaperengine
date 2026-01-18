@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"math"
 	"path/filepath"
@@ -40,6 +39,8 @@ type Window struct {
 }
 
 func NewWindow(scene wallpaper.Scene, scalingMode string) *Window {
+	engine2D.InitDefaults()
+
 	red, green, blue := wallpaper.ParseColor(scene.General.ClearColor)
 	audioManager := wallpaper.NewAudioManager()
 
@@ -277,144 +278,6 @@ func mapCoord(nx, ny float32, destRec rl.Rectangle, rotation float32) rl.Vector2
 	return rl.NewVector2(destRec.X+rx, destRec.Y+ry)
 }
 
-func applyShaderValues(shader rl.Shader, texture *rl.Texture2D, constants engine2D.ConstantShaderValues, textures []*rl.Texture2D, totalTime float64, mouseX, mouseY float64) {
-	rl.SetShaderValue(shader, rl.GetShaderLocation(shader, "g_Time"), []float32{float32(totalTime)}, rl.ShaderUniformFloat)
-	rl.SetShaderValue(shader, rl.GetShaderLocation(shader, "g_PointerPosition"), []float32{float32(mouseX*0.5 + 0.5), float32(mouseY*0.5 + 0.5)}, rl.ShaderUniformVec2)
-
-	// Parallax position
-	parLoc := rl.GetShaderLocation(shader, "g_ParallaxPosition")
-	if parLoc != -1 {
-		// Mouse is [-1, 1], map to [0, 1]
-		valX := float32(mouseX*0.5 + 0.5)
-		valY := float32(mouseY*0.5 + 0.5)
-		rl.SetShaderValue(shader, parLoc, []float32{valX, valY}, rl.ShaderUniformVec2)
-		// utils.Debug("Shader: Set g_ParallaxPosition to (%f, %f)", valX, valY)
-	}
-
-	// Matrices
-	identity := rl.MatrixIdentity()
-	matNames := []string{
-		"g_EffectTextureProjectionMatrixInverse",
-		"g_EffectTextureProjectionMatrix",
-		"g_EffectModelViewProjectionMatrixInverse",
-	}
-	for _, mn := range matNames {
-		loc := rl.GetShaderLocation(shader, mn)
-		if loc != -1 {
-			rl.SetShaderValueMatrix(shader, loc, identity)
-		}
-	}
-
-	// Texture Resolutions
-	for i := 0; i < 8; i++ {
-		resLoc := rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%dResolution", i))
-		if resLoc != -1 {
-			tw, th := 1.0, 1.0
-
-			if i == 0 {
-				if texture != nil {
-					tw, th = float64(texture.Width), float64(texture.Height)
-				}
-			} else {
-				// For secondary textures (g_Texture1, g_Texture2...)
-				// Map to textures[i-1]
-				idx := i - 1
-				if idx < len(textures) {
-					if textures[idx] != nil {
-						tw, th = float64(textures[idx].Width), float64(textures[idx].Height)
-					}
-				}
-			}
-
-			// WE shaders often compute UVs using (Res.z / Res.x).
-			// If z is 1/w and x is w, result is 1/w^2 (approx 0), causing mask sampling at (0,0).
-			// By sending [w, h, w, h], we get w/w = 1, preserving 1:1 UV mapping.
-			rl.SetShaderValue(shader, resLoc, []float32{float32(tw), float32(th), float32(tw), float32(th)}, rl.ShaderUniformVec4)
-
-			// Also set g_TexelSize (1.0 / resolution)
-			texelLoc := rl.GetShaderLocation(shader, "g_TexelSize")
-			if texelLoc != -1 {
-				rl.SetShaderValue(shader, texelLoc, []float32{1.0 / float32(tw), 1.0 / float32(th)}, rl.ShaderUniformVec2)
-			}
-		}
-	}
-
-	for k := range constants {
-		val := constants.GetFloat(k)
-
-		// Try variations of the key
-		names := []string{
-			"g_" + k,
-			k,
-			"g_" + strings.Title(k),
-		}
-
-		// Common mappings
-		if k == "ripplestrength" {
-			names = append(names, "g_Strength")
-		}
-		if k == "animationspeed" {
-			names = append(names, "g_AnimationSpeed")
-		}
-		if k == "sens" || k == "sensitivity" {
-			names = append(names, "g_Sensitivity", "sensitivity")
-		}
-		if k == "center" {
-			names = append(names, "g_Center", "center")
-		}
-		if k == "scale" {
-			names = append(names, "g_Scale", "scale")
-		}
-
-		for _, name := range names {
-			loc := rl.GetShaderLocation(shader, name)
-			if loc != -1 {
-				switch k {
-				case "scale":
-					var x, y float32
-					if sVal, ok := constants[k].(string); ok {
-						fmt.Sscanf(sVal, "%f %f", &x, &y)
-					} else {
-						x = float32(val)
-						y = float32(val)
-					}
-					rl.SetShaderValue(shader, loc, []float32{x, y}, rl.ShaderUniformVec2)
-				default:
-					rl.SetShaderValue(shader, loc, []float32{float32(val)}, rl.ShaderUniformFloat)
-				}
-				break
-			}
-		}
-	}
-
-	// 1. Explicitly bind texture0 to Unit 0 to "consume" the first slot
-	texture0 := rl.GetShaderLocation(shader, "g_Texture0")
-	if texture0 == -1 {
-		texture0 = rl.GetShaderLocation(shader, "texture0")
-	}
-	if texture0 != -1 && texture != nil {
-		rl.SetShaderValueTexture(shader, texture0, *texture)
-	}
-
-	// 2. Bind secondary textures to Units 1-7
-	for i := 1; i < 8; i++ {
-		textureIdx := rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i))
-		if textureIdx != -1 {
-			// Explicitly set the sampler unit index (1, 2, 3...)
-			unit := float32(i)
-			rl.SetShaderValue(shader, textureIdx, []float32{unit}, rl.ShaderUniformSampler2d)
-
-			var texToBind rl.Texture2D
-			if i < len(textures) && textures[i] != nil {
-				texToBind = *textures[i]
-			} else {
-				// utils.Warn("Shader: Texture g_Texture%d is nil", i)
-			}
-			rl.SetShaderValueTexture(shader, textureIdx, texToBind)
-		}
-	}
-}
-
 func (window *Window) Draw() {
 	rl.ClearBackground(rl.Black)
 
@@ -510,7 +373,7 @@ func (window *Window) Draw() {
 					// 1. Setup PingPong buffers if needed
 					hasEffects := false
 					for _, le := range renderObject.Effects {
-						if le.Config.Visible.GetBool() && len(le.Shaders) > 0 {
+						if le.Config.Visible.GetBool() && len(le.Passes) > 0 {
 							hasEffects = true
 							break
 						}
@@ -548,27 +411,38 @@ func (window *Window) Draw() {
 						pingPongIdx := 0
 
 						for _, le := range renderObject.Effects {
-							if !le.Config.Visible.GetBool() || len(le.Shaders) == 0 || le.Shaders[0].ID == 0 {
+							if !le.Config.Visible.GetBool() || len(le.Passes) == 0 {
 								continue
 							}
 
+							activePass := &le.Passes[0]
 							targetRT := renderObject.PingPong[pingPongIdx]
-							activeShader := le.Shaders[0]
-							activeTextures := le.Passes[0].Textures
+							activeShader := activePass.Shader
+
+							if activeShader.ID == 0 {
+								// utils.Error("Effect '%s' has invalid shader in pass, skipping effect.", le.Config.Name)
+								continue
+							}
+
+							activeTextures := activePass.Textures
 							activeMainTex := currentTexture
+
+							// If the pass overrides the main texture (Texture 0), use it
+							if len(activeTextures) > 0 && activeTextures[0] != nil {
+								activeMainTex = activeTextures[0]
+							}
 
 							// Per-Effect Mask Visualization
 							if le.ShowMask {
 								activeShader = window.maskShader
 
-								maskIdx := 0
-
-								if maskIdx < len(activeTextures) && activeTextures[maskIdx] != nil {
-									activeMainTex = activeTextures[maskIdx]
+								if len(activeTextures) > 1 && activeTextures[1] != nil {
+									activeMainTex = activeTextures[1]
+								} else if len(activeTextures) > 0 && activeTextures[0] != nil {
+									activeMainTex = activeTextures[0] // Fallback
 								} else {
 									activeMainTex = &window.dummyTexture
 								}
-								// When showing mask, we want to see it directly, no chaining needed for this pass
 							}
 
 							// Disable Scissor during off-screen rendering to avoid clipping to screen rect
@@ -578,8 +452,22 @@ func (window *Window) Draw() {
 							rl.ClearBackground(rl.Blank)
 							rl.BeginShaderMode(activeShader)
 
-							// Pass currentTexture as input (g_Texture0)
-							applyShaderValues(activeShader, activeMainTex, le.Passes[0].Constants, activeTextures, totalTime, window.mouseX, window.mouseY)
+							if le.ShowMask {
+								texture0Loc := rl.GetShaderLocation(activeShader, "texture0")
+								if texture0Loc != -1 {
+									rl.SetShaderValueTexture(activeShader, texture0Loc, *activeMainTex)
+								}
+							} else {
+								globalState := engine2D.GlobalState{
+									Time:      totalTime,
+									MouseX:    window.mouseX,
+									MouseY:    window.mouseY,
+									ParallaxX: window.mouseX,
+									ParallaxY: window.mouseY,
+								}
+
+								engine2D.ApplyPass(activePass, globalState, activeMainTex)
+							}
 
 							// Draw activeMainTex 1:1 onto targetRT
 							srcRec := rl.NewRectangle(0, 0, float32(activeMainTex.Width), float32(activeMainTex.Height))

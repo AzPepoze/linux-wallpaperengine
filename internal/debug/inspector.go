@@ -95,9 +95,9 @@ func (d *DebugOverlay) drawInspector(renderObj *engine2D.RenderObject, startX, s
 
 			// Shader Status
 			shaderInfo := "No Shader"
-			if len(le.Shaders) > 0 {
-				if le.Shaders[0].ID != 0 {
-					shaderInfo = fmt.Sprintf("Shader ID: %d", le.Shaders[0].ID)
+			if len(le.Passes) > 0 {
+				if le.Passes[0].Shader.ID != 0 {
+					shaderInfo = fmt.Sprintf("Shader ID: %d", le.Passes[0].Shader.ID)
 				} else {
 					shaderInfo = "FAILED to compile"
 				}
