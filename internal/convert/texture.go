@@ -55,24 +55,24 @@ func decodePNG(data []byte, path string) (image.Image, error) {
 
 func decodeRGBA(data []byte) ([]byte, error) {
 	utils.Debug("    Type: RGBA")
-	for k := 0; k < len(data); k += 4 {
-		opacity := data[k+3]
-		data[k] = opacity
-		data[k+1] = opacity
-		data[k+2] = opacity
-		data[k+3] = opacity
-	}
+	// for k := 0; k < len(data); k += 4 {
+	// 	opacity := data[k+3]
+	// 	data[k] = opacity
+	// 	data[k+1] = opacity
+	// 	data[k+2] = opacity
+	// 	data[k+3] = opacity
+	// }
 	return data, nil
 }
 
 func decodeDXT5(data []byte, width, height uint32) ([]byte, error) {
-	utils.Debug("    Type: DXT5")
-	data, err := dxt.DecodeDXT5(data, uint(width), uint(height))
+	decoded, err := dxt.DecodeDXT5(data, uint(width), uint(height))
 	if err != nil {
 		return nil, err
 	}
-	fixAlpha(data, int(width), int(height))
-	return data, nil
+
+	// fixAlpha(decoded, int(width), int(height))
+	return decoded, nil
 }
 
 func decodeDXT1(data []byte, width, height uint32) ([]byte, error) {
@@ -320,6 +320,18 @@ func LoadTexture(path string) error {
 }
 
 func LoadTextureNative(path string) (*rl.Texture2D, error) {
+	// 1. If it's already a supported image format, load directly
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" {
+		tex := rl.LoadTexture(path)
+		if tex.ID == 0 {
+			return nil, fmt.Errorf("failed to load texture from %s", path)
+		}
+		rl.SetTextureWrap(tex, rl.TextureWrapRepeat)
+		return &tex, nil
+	}
+
+	// 2. Handle .tex files (Conversion logic)
 	var pngPath string
 	if TextureOutDir != "" {
 		base := filepath.Base(path)

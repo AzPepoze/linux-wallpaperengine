@@ -80,7 +80,7 @@ func PreprocessShader(source string, combos map[string]int, name string) string 
 				"(1.0 - v_TexCoord.y) * g_Texture2Resolution.w / g_Texture2Resolution.y")
 			utils.Debug("Shader: Applied mask flip fix (Pattern 1) for %s", name)
 		}
-		
+
 		// Pattern 2: waterwaves uses v_TexCoord.w
 		if strings.Contains(source, "v_TexCoord.w *= g_Texture1Resolution.w / g_Texture1Resolution.y;") {
 			source = strings.ReplaceAll(source,
@@ -88,7 +88,7 @@ func PreprocessShader(source string, combos map[string]int, name string) string 
 				"v_TexCoord.w = (1.0 - v_TexCoord.w) * (g_Texture1Resolution.w / g_Texture1Resolution.y);")
 			utils.Debug("Shader: Applied mask flip fix (Pattern 2 - Texture1) for %s", name)
 		}
-		
+
 		// Pattern 2b: waterwaves TIMEOFFSET or others using Texture2
 		if strings.Contains(source, "v_TexCoord.w *= g_Texture2Resolution.w / g_Texture2Resolution.y;") {
 			source = strings.ReplaceAll(source,
@@ -377,11 +377,6 @@ func UpdatePassUniforms(pass *LoadedPass) {
 }
 
 func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
-	// DEBUG: Skip loading if not depthparallax
-	// if !strings.Contains(effectConfig.File, "depthparallax") {
-	// 	return LoadedEffect{Config: effectConfig}
-	// }
-
 	if strings.Contains(effectConfig.File, "bokeh_blur") {
 		utils.Info("Effect: Unsupported effect 'bokeh_blur' detected, skipping loading.")
 		return LoadedEffect{Config: effectConfig}
@@ -644,7 +639,7 @@ func InitDefaults() {
 // Helper to reverse map location to name for debugging
 func getUniformName(loc int32, pass *LoadedPass) string {
 	for k := range pass.Constants {
-		// This is a rough guess, as we don't store the exact mapping. 
+		// This is a rough guess, as we don't store the exact mapping.
 		// But valid for most params.
 		if strings.Contains(strings.ToLower(k), "speed") {
 			return k
@@ -656,29 +651,6 @@ func getUniformName(loc int32, pass *LoadedPass) string {
 func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 	shader := pass.Shader
 	parameters := &pass.Parameters
-
-	if strings.Contains(pass.ShaderName, "waterripple") {
-		utils.Debug("WaterRipple: --- Frame ---")
-		utils.Debug("WaterRipple: TimeLoc=%d Time=%.4f", parameters.Time, state.Time)
-		
-		// Check Resolutions
-		for i, loc := range parameters.TextureResolutions {
-			if loc != -1 {
-				utils.Debug("WaterRipple: Tex%dRes Loc=%d", i, loc)
-			}
-		}
-		
-		// Check Samplers
-		for i, loc := range parameters.TextureSamplers {
-			if loc != -1 {
-				utils.Debug("WaterRipple: Tex%dSampler Loc=%d", i, loc)
-			}
-		}
-
-		for _, u := range pass.Uniforms {
-			utils.Debug("WaterRipple: Uniform Loc=%d Values=%v", u.Location, u.Values)
-		}
-	}
 
 	// 1. Set Standard Uniforms
 	if parameters.Time != -1 {
@@ -748,10 +720,6 @@ func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 			w, h := float32(texture.Width), float32(texture.Height)
 			rl.SetShaderValue(shader, parameters.TextureResolutions[i], []float32{w, h, w, h}, rl.ShaderUniformVec4)
 
-			if strings.Contains(pass.ShaderName, "waterripple") && i == 0 {
-				utils.Debug("WaterRipple: Set Tex0Res (Loc %d) to %.0fx%.0f", parameters.TextureResolutions[i], w, h)
-			}
-
 			// Set TexelSize if this is the main texture (slot 0)
 			if i == 0 && parameters.TexelSize != -1 {
 				rl.SetShaderValue(shader, parameters.TexelSize, []float32{1.0 / w, 1.0 / h}, rl.ShaderUniformVec2)
@@ -762,44 +730,4 @@ func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 			rl.SetShaderValueTexture(shader, rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i)), *texture)
 		}
 	}
-}
-
-func ExtractTextureFromJSONPath(fullPath string) (string, error) {
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return "", err
-	}
-
-	var material MaterialJSON
-	if err := json.Unmarshal(data, &material); err == nil {
-		if len(material.Passes) > 0 && len(material.Passes[0].Textures) > 0 {
-			tex := material.Passes[0].Textures[0]
-			if tex != "" {
-				return tex, nil
-			}
-		}
-	}
-
-	var model wallpaper.ModelJSON
-	if err := json.Unmarshal(data, &model); err == nil && model.Material != "" {
-		// Try relative to the current file's directory first
-		baseDir := filepath.Dir(fullPath)
-		p := filepath.Join(baseDir, model.Material)
-		if name, err := ExtractTextureFromJSONPath(p); err == nil {
-			return name, nil
-		}
-
-		// Fallback to searching
-		searchPaths := []string{
-			filepath.Join("tmp", model.Material),
-			utils.ResolveAssetPath(model.Material),
-		}
-		for _, p := range searchPaths {
-			if name, err := ExtractTextureFromJSONPath(p); err == nil {
-				return name, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no textures found in %s", fullPath)
 }
