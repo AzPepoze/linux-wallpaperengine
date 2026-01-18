@@ -52,7 +52,6 @@ func PreprocessShader(source string, combos map[string]int, name string) string 
 
 	// FIX: Swapped multiplication order for Raylib/OpenGL (Matrix * Vector)
 	sb.WriteString("#define mul(a, b) ((b) * (a))\n")
-
 	sb.WriteString("#define g_ModelViewProjectionMatrix mvp\n")
 	sb.WriteString("#define g_Texture0 texture0\n")
 	sb.WriteString("#define a_Position vertexPosition\n")
@@ -63,12 +62,6 @@ func PreprocessShader(source string, combos map[string]int, name string) string 
 	sb.WriteString("#define CAST2X2(x) mat2(x)\n")
 	sb.WriteString("#define CAST3X3(x) mat3(x)\n")
 	sb.WriteString("#define saturate(x) clamp(x, 0.0, 1.0)\n")
-
-	// FIX: Waterripple speed is too slow due to squaring. Remove one factor.
-	if strings.Contains(name, "waterripple") {
-		source = strings.ReplaceAll(source, "g_Time * g_AnimationSpeed * g_AnimationSpeed", "g_Time * g_AnimationSpeed")
-		utils.Debug("Shader: Applied waterripple speed fix for %s", name)
-	}
 
 	// FIX: Mask Y is inverted for most effects compared to depthparallax
 	// Check for standard mask calc pattern
@@ -89,7 +82,7 @@ func PreprocessShader(source string, combos map[string]int, name string) string 
 			utils.Debug("Shader: Applied mask flip fix (Pattern 2 - Texture1) for %s", name)
 		}
 
-		// Pattern 2b: waterwaves TIMEOFFSET or others using Texture2
+		// Pattern 2b: waterwaves timeoffset or others using Texture2
 		if strings.Contains(source, "v_TexCoord.w *= g_Texture2Resolution.w / g_Texture2Resolution.y;") {
 			source = strings.ReplaceAll(source,
 				"v_TexCoord.w *= g_Texture2Resolution.w / g_Texture2Resolution.y;",

@@ -410,6 +410,7 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 	// Handle Sprite Map logic if animationmode is "randomframe"
 	if ps.Config.AnimationMode == "randomframe" {
 		var distMax wallpaper.Vec3
+		gridSetSuccess := false
 
 		// Try TexInfo first
 		if ps.TexInfo != nil && len(ps.TexInfo.SpriteSheetSequences) > 0 {
@@ -422,6 +423,7 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 				} else {
 					particle.SpriteFrame = rand.Intn(particle.GridX * particle.GridY)
 				}
+				gridSetSuccess = true
 				goto gridSet
 			}
 		}
@@ -450,16 +452,24 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 							if _, err := fmt.Sscanf(nextPart, "%d", &count); err == nil && count > 0 && count <= particle.GridX*particle.GridY {
 								// Found a plausible frame count
 								particle.SpriteFrame = rand.Intn(count)
+								gridSetSuccess = true
 								goto gridSet
 							}
 						}
+						gridSetSuccess = true
+						goto gridSet
 					}
 				}
 			}
 		}
 
 	gridSet:
-		if particle.GridX > 0 && particle.GridY > 0 {
+		// If failed to get grid size, just use original texture (no grid)
+		if !gridSetSuccess || particle.GridX <= 0 || particle.GridY <= 0 {
+			particle.GridX = 0
+			particle.GridY = 0
+			particle.SpriteFrame = -1
+		} else {
 			if particle.SpriteFrame < 0 {
 				totalSlots := particle.GridX * particle.GridY
 				frameCount := totalSlots

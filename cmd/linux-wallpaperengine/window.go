@@ -415,80 +415,85 @@ func (window *Window) Draw() {
 								continue
 							}
 
-							activePass := &le.Passes[0]
-							targetRT := renderObject.PingPong[pingPongIdx]
-							activeShader := activePass.Shader
+							for passIdx := range le.Passes {
+								activePass := &le.Passes[passIdx]
+								targetRT := renderObject.PingPong[pingPongIdx]
+								activeShader := activePass.Shader
 
-							if activeShader.ID == 0 {
-								// utils.Error("Effect '%s' has invalid shader in pass, skipping effect.", le.Config.Name)
-								continue
-							}
+								if activeShader.ID == 0 {
+									continue
+								}
 
-							activeTextures := activePass.Textures
-							activeMainTex := currentTexture
+								activeTextures := activePass.Textures
+								activeMainTex := currentTexture
 
-							// If the pass overrides the main texture (Texture 0), use it
-							if len(activeTextures) > 0 && activeTextures[0] != nil {
-								activeMainTex = activeTextures[0]
-							}
+								shouldFlip := isCurrentRenderTexture
 
-							// Per-Effect Mask Visualization
-							if le.ShowMask {
-								activeShader = window.maskShader
+								// If the pass overrides the main texture (Texture 0), use it
+								if len(activeTextures) > 0 && activeTextures[0] != nil {
+									activeMainTex = activeTextures[0]
 
-								if len(activeTextures) > 1 && activeTextures[1] != nil {
-									activeMainTex = activeTextures[1]
-								} else if len(activeTextures) > 0 && activeTextures[0] != nil {
-									activeMainTex = activeTextures[0] // Fallback
+									shouldFlip = false
+								}
+
+								if le.ShowMask {
+									activeShader = window.maskShader
+
+									if len(activeTextures) > 1 && activeTextures[1] != nil {
+										activeMainTex = activeTextures[1]
+										shouldFlip = false // Mask texture usually loaded from file
+									} else if len(activeTextures) > 0 && activeTextures[0] != nil {
+										activeMainTex = activeTextures[0]
+										shouldFlip = false
+									} else {
+										activeMainTex = &window.dummyTexture
+										shouldFlip = false
+									}
+								}
+
+								rl.EndScissorMode()
+
+								rl.BeginTextureMode(*targetRT)
+								rl.ClearBackground(rl.Blank)
+								rl.BeginShaderMode(activeShader)
+
+								if le.ShowMask {
+									texture0Loc := rl.GetShaderLocation(activeShader, "texture0")
+									if texture0Loc != -1 {
+										rl.SetShaderValueTexture(activeShader, texture0Loc, *activeMainTex)
+									}
 								} else {
-									activeMainTex = &window.dummyTexture
-								}
-							}
+									globalState := engine2D.GlobalState{
+										Time:      totalTime,
+										MouseX:    window.mouseX,
+										MouseY:    window.mouseY,
+										ParallaxX: window.mouseX,
+										ParallaxY: window.mouseY,
+									}
 
-							// Disable Scissor during off-screen rendering to avoid clipping to screen rect
-							rl.EndScissorMode()
-
-							rl.BeginTextureMode(*targetRT)
-							rl.ClearBackground(rl.Blank)
-							rl.BeginShaderMode(activeShader)
-
-							if le.ShowMask {
-								texture0Loc := rl.GetShaderLocation(activeShader, "texture0")
-								if texture0Loc != -1 {
-									rl.SetShaderValueTexture(activeShader, texture0Loc, *activeMainTex)
-								}
-							} else {
-								globalState := engine2D.GlobalState{
-									Time:      totalTime,
-									MouseX:    window.mouseX,
-									MouseY:    window.mouseY,
-									ParallaxX: window.mouseX,
-									ParallaxY: window.mouseY,
+									engine2D.ApplyPass(activePass, globalState, activeMainTex)
 								}
 
-								engine2D.ApplyPass(activePass, globalState, activeMainTex)
+								srcRec := rl.NewRectangle(0, 0, float32(activeMainTex.Width), float32(activeMainTex.Height))
+								dstRec := rl.NewRectangle(0, 0, float32(targetRT.Texture.Width), float32(targetRT.Texture.Height))
+
+								// FIX: Flip based on the source texture type
+								if shouldFlip {
+									srcRec.Height = -srcRec.Height
+								}
+
+								rl.DrawTexturePro(*activeMainTex, srcRec, dstRec, rl.NewVector2(0, 0), 0, rl.White)
+
+								rl.EndShaderMode()
+								rl.EndTextureMode()
+
+								rl.BeginScissorMode(sceneRectX, sceneRectY, sceneRectW, sceneRectH)
+
+								// Update for next pass
+								currentTexture = &targetRT.Texture
+								isCurrentRenderTexture = true
+								pingPongIdx = 1 - pingPongIdx
 							}
-
-							// Draw activeMainTex 1:1 onto targetRT
-							srcRec := rl.NewRectangle(0, 0, float32(activeMainTex.Width), float32(activeMainTex.Height))
-							if activeMainTex == currentTexture && isCurrentRenderTexture {
-								srcRec.Height = -srcRec.Height
-							}
-
-							dstRec := rl.NewRectangle(0, 0, float32(targetRT.Texture.Width), float32(targetRT.Texture.Height))
-
-							rl.DrawTexturePro(*activeMainTex, srcRec, dstRec, rl.NewVector2(0, 0), 0, rl.White)
-
-							rl.EndShaderMode()
-							rl.EndTextureMode()
-
-							// Restore Scissor for main screen rendering
-							rl.BeginScissorMode(sceneRectX, sceneRectY, sceneRectW, sceneRectH)
-
-							// Update for next pass
-							currentTexture = &targetRT.Texture
-							isCurrentRenderTexture = true // Result of RT is always an RT texture
-							pingPongIdx = 1 - pingPongIdx
 						}
 					}
 
