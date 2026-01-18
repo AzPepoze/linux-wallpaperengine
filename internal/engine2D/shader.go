@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"linux-wallpaperengine/internal/convert"
@@ -200,6 +201,147 @@ func LoadMockShader(mockName string) rl.Shader {
 	return shader
 }
 
+func ResolveShaderLocations(shader rl.Shader) ShaderParameters {
+	parameters := ShaderParameters{
+		Time:      rl.GetShaderLocation(shader, "g_Time"),
+		Pointer:   rl.GetShaderLocation(shader, "g_PointerPosition"),
+		Parallax:  rl.GetShaderLocation(shader, "g_ParallaxPosition"),
+		TexelSize: rl.GetShaderLocation(shader, "g_TexelSize"),
+		MVP:       rl.GetShaderLocation(shader, "g_ModelViewProjectionMatrix"),
+		Proj:      rl.GetShaderLocation(shader, "g_EffectTextureProjectionMatrix"),
+		ProjInv:   rl.GetShaderLocation(shader, "g_EffectTextureProjectionMatrixInverse"),
+		ModelInv:  rl.GetShaderLocation(shader, "g_EffectModelViewProjectionMatrixInverse"),
+	}
+
+	if parameters.Pointer == -1 {
+		parameters.Pointer = rl.GetShaderLocation(shader, "g_Pointer")
+	}
+
+	for i := 0; i < 8; i++ {
+		parameters.TextureResolutions[i] = rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%dResolution", i))
+		parameters.TextureSamplers[i] = rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i))
+		
+		// Fallback for Texture0 -> texture0 (Raylib default)
+		if i == 0 && parameters.TextureSamplers[i] == -1 {
+			parameters.TextureSamplers[i] = rl.GetShaderLocation(shader, "texture0")
+		}
+	}
+
+	return parameters
+}
+
+func SetupPass(shader rl.Shader, shaderName string, constants ConstantShaderValues, textures []*rl.Texture2D) LoadedPass {
+	pass := LoadedPass{
+		ShaderName: shaderName,
+		Shader:     shader,
+		Textures:   textures,
+		Parameters: ResolveShaderLocations(shader),
+		Uniforms:   make([]PrecomputedUniform, 0),
+		Constants:  constants, // Store the source map
+	}
+
+	UpdatePassUniforms(&pass)
+
+	return pass
+}
+
+// UpdatePassUniforms rebuilds the precomputed uniforms list from the Constants map.
+// Call this after modifying pass.Constants at runtime.
+func UpdatePassUniforms(pass *LoadedPass) {
+	pass.Uniforms = make([]PrecomputedUniform, 0)
+
+	// Create a temporary map to store uniforms to avoid duplicates if necessary,
+	// but simple append is fine since we clear the list first.
+
+	for k, v := range pass.Constants {
+		// Try variations of the key to find the location
+		names := []string{
+			"g_" + k,
+			k,
+			"g_" + strings.Title(k),
+		}
+		// Common mappings
+		if k == "ripplestrength" {
+			names = append(names, "g_Strength")
+		}
+		if k == "animationspeed" {
+			names = append(names, "g_AnimationSpeed")
+		}
+		if k == "sens" || k == "sensitivity" {
+			names = append(names, "g_Sensitivity", "sensitivity")
+		}
+		if k == "center" {
+			names = append(names, "g_Center", "center")
+		}
+		if k == "scale" {
+			names = append(names, "g_Scale", "scale")
+		}
+
+		var loc int32 = -1
+		for _, name := range names {
+			loc = rl.GetShaderLocation(pass.Shader, name)
+			if loc != -1 {
+				break
+			}
+		}
+
+		if loc != -1 {
+			// Determine value type and convert to []float32
+			var floats []float32
+			var uType rl.ShaderUniformDataType
+
+			switch val := v.(type) {
+			case float64:
+				floats = []float32{float32(val)}
+				uType = rl.ShaderUniformFloat
+			case string:
+				parts := strings.Fields(val)
+				if len(parts) == 1 {
+					if f, err := strconv.ParseFloat(parts[0], 64); err == nil {
+						floats = []float32{float32(f)}
+						uType = rl.ShaderUniformFloat
+					}
+				} else if len(parts) == 2 {
+					f1, _ := strconv.ParseFloat(parts[0], 64)
+					f2, _ := strconv.ParseFloat(parts[1], 64)
+					floats = []float32{float32(f1), float32(f2)}
+					uType = rl.ShaderUniformVec2
+				} else if len(parts) == 3 {
+					f1, _ := strconv.ParseFloat(parts[0], 64)
+					f2, _ := strconv.ParseFloat(parts[1], 64)
+					f3, _ := strconv.ParseFloat(parts[2], 64)
+					floats = []float32{float32(f1), float32(f2), float32(f3)}
+					uType = rl.ShaderUniformVec3
+				}
+			case map[string]interface{}:
+				// Handle complex objects like {"value": ...}
+				if innerVal, ok := val["value"]; ok {
+					switch iv := innerVal.(type) {
+					case float64:
+						floats = []float32{float32(iv)}
+						uType = rl.ShaderUniformFloat
+					}
+				}
+			}
+
+			if len(floats) > 0 {
+				// Special fix for depthparallax scale
+				if k == "scale" && strings.Contains(pass.ShaderName, "depthparallax") {
+					for i := range floats {
+						floats[i] /= 10.0
+					}
+				}
+
+				pass.Uniforms = append(pass.Uniforms, PrecomputedUniform{
+					Location: loc,
+					Type:     uType,
+					Values:   floats,
+				})
+			}
+		}
+	}
+}
+
 func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 	// DEBUG: Skip loading if not depthparallax
 	// if !strings.Contains(effectConfig.File, "depthparallax") {
@@ -236,8 +378,6 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 	}
 
 	for i, pass := range passes {
-		loadedPass := LoadedPass{}
-
 		var basePass *wallpaper.EffectPass
 		if i < len(fullEffect.Passes) {
 			basePass = &fullEffect.Passes[i]
@@ -255,18 +395,6 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 				}
 			}
 		}
-
-		// DEBUG: Force sens to 0.02 and scale to "0.2 0.2"
-		// if pass.ConstantShaderValues != nil {
-		// 	if _, ok := pass.ConstantShaderValues["sens"]; ok {
-		// 		pass.ConstantShaderValues["sens"] = 0.02
-		// 		utils.Info("Effect: Debug override 'sens' to 0.02")
-		// 	}
-		// 	if _, ok := pass.ConstantShaderValues["scale"]; ok {
-		// 		pass.ConstantShaderValues["scale"] = "0.08 0.08"
-		// 		utils.Info("Effect: Debug override 'scale' to '0.08 0.08'")
-		// 	}
-		// }
 
 		// Merge Combos
 		combos := pass.Combos
@@ -359,11 +487,12 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 		}
 
 		// Load actual textures
+		var loadedTextures []*rl.Texture2D
 		utils.Debug("Effect: [Pass %d] Final texture names: %v", i, finalTexNames)
 		for tIdx, texName := range finalTexNames {
 			if texName == nil || *texName == "" {
 				utils.Debug("Effect: [Pass %d, Tex %d] Skipping empty texture name", i, tIdx)
-				loadedPass.Textures = append(loadedPass.Textures, nil)
+				loadedTextures = append(loadedTextures, nil)
 				continue
 			}
 			tPath := utils.FindTextureFile(*texName)
@@ -371,28 +500,24 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 				utils.Debug("Effect: [Pass %d, Tex %d] Loading texture '%s' from '%s'", i, tIdx, *texName, tPath)
 				if img, err := convert.LoadTextureNative(tPath); err == nil {
 					utils.Debug("Effect: [Pass %d, Tex %d] Loaded SUCCESS", i, tIdx)
-					loadedPass.Textures = append(loadedPass.Textures, img)
+					loadedTextures = append(loadedTextures, img)
 				} else {
 					utils.Warn("Effect: [Pass %d, Tex %d] Loaded FAILED: %v", i, tIdx, err)
-					loadedPass.Textures = append(loadedPass.Textures, nil)
+					loadedTextures = append(loadedTextures, nil)
 				}
 			} else {
 				utils.Warn("Effect: [Pass %d, Tex %d] Texture path NOT FOUND for '%s'", i, tIdx, *texName)
-				loadedPass.Textures = append(loadedPass.Textures, nil)
+				loadedTextures = append(loadedTextures, nil)
 			}
 		}
-		utils.Debug("Effect: [Pass %d] Loaded %d textures", i, len(loadedPass.Textures))
-		for ti, t := range loadedPass.Textures {
+		utils.Debug("Effect: [Pass %d] Loaded %d textures", i, len(loadedTextures))
+		for ti, t := range loadedTextures {
 			if t != nil {
 				utils.Debug("Effect: [Pass %d, Tex %d] Texture ID: %d", i, ti, t.ID)
 			} else {
 				utils.Debug("Effect: [Pass %d, Tex %d] Texture is nil", i, ti)
 			}
 		}
-
-		// Copy constants to the loaded pass
-		loadedPass.Constants = pass.ConstantShaderValues
-
 		// Load Shader
 		var shader rl.Shader
 		if shaderName != "" {
@@ -409,11 +534,107 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 			shader = LoadShader(shaderName, combos)
 		}
 
+		loadedPass := SetupPass(shader, shaderName, pass.ConstantShaderValues, loadedTextures)
 		loaded.Passes = append(loaded.Passes, loadedPass)
-		loaded.Shaders = append(loaded.Shaders, shader)
 	}
 
 	return loaded
+}
+
+var BlackTexture *rl.Texture2D
+
+func InitDefaults() {
+	if BlackTexture == nil {
+		img := rl.GenImageColor(1, 1, rl.Black)
+		tex := rl.LoadTextureFromImage(img)
+		rl.SetTextureWrap(tex, rl.TextureWrapRepeat)
+		rl.UnloadImage(img)
+		BlackTexture = &tex
+	}
+}
+
+func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
+	shader := pass.Shader
+	parameters := &pass.Parameters
+
+	// 1. Set Standard Uniforms
+	if parameters.Time != -1 {
+		rl.SetShaderValue(shader, parameters.Time, []float32{float32(state.Time)}, rl.ShaderUniformFloat)
+	}
+	if parameters.Pointer != -1 {
+		rl.SetShaderValue(shader, parameters.Pointer, []float32{float32(state.MouseX*0.5 + 0.5), float32(state.MouseY*0.5 + 0.5)}, rl.ShaderUniformVec2)
+	}
+	if parameters.Parallax != -1 {
+		rl.SetShaderValue(shader, parameters.Parallax, []float32{float32(state.ParallaxX*0.5 + 0.5), float32(state.ParallaxY*0.5 + 0.5)}, rl.ShaderUniformVec2)
+	}
+
+	// Matrices (Identity for now)
+	identity := rl.MatrixIdentity()
+	if parameters.MVP != -1 {
+		rl.SetShaderValueMatrix(shader, parameters.MVP, identity)
+	}
+	if parameters.Proj != -1 {
+		rl.SetShaderValueMatrix(shader, parameters.Proj, identity)
+	}
+	if parameters.ProjInv != -1 {
+		rl.SetShaderValueMatrix(shader, parameters.ProjInv, identity)
+	}
+	if parameters.ModelInv != -1 {
+		rl.SetShaderValueMatrix(shader, parameters.ModelInv, identity)
+	}
+
+	// 2. Set Precomputed Constants
+	for _, uniform := range pass.Uniforms {
+		rl.SetShaderValue(shader, uniform.Location, uniform.Values, uniform.Type)
+	}
+
+	// 3. Bind Textures and Resolutions
+	// We iterate up to 8 to cover all potential slots, as g_Texture0Resolution might be needed even if tex is nil
+	for i := 0; i < 8; i++ {
+		var texture *rl.Texture2D
+
+		// Determine which texture to use for this slot
+		if i < len(pass.Textures) {
+			texture = pass.Textures[i]
+		}
+
+		// If it's slot 0 and no override texture is provided, use the main input texture
+		if i == 0 && mainTexture != nil {
+			texture = mainTexture
+		}
+
+		// Fallback for missing textures in slots > 0 (e.g. Depth Maps)
+		if texture == nil && i > 0 && parameters.TextureSamplers[i] != -1 {
+			if BlackTexture == nil {
+				InitDefaults() // Lazy init if needed
+			}
+			texture = BlackTexture
+		}
+
+		if texture == nil {
+			continue
+		}
+
+		// Set Sampler Unit (e.g. g_Texture0 = 0)
+		if parameters.TextureSamplers[i] != -1 {
+			rl.SetShaderValue(shader, parameters.TextureSamplers[i], []float32{float32(i)}, rl.ShaderUniformSampler2d)
+		}
+
+		// Set Resolution
+		if parameters.TextureResolutions[i] != -1 {
+			w, h := float32(texture.Width), float32(texture.Height)
+			rl.SetShaderValue(shader, parameters.TextureResolutions[i], []float32{w, h, w, h}, rl.ShaderUniformVec4)
+
+			// Set TexelSize if this is the main texture (slot 0)
+			if i == 0 && parameters.TexelSize != -1 {
+				rl.SetShaderValue(shader, parameters.TexelSize, []float32{1.0 / w, 1.0 / h}, rl.ShaderUniformVec2)
+			}
+		}
+
+		if i >= 0 {
+			rl.SetShaderValueTexture(shader, rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i)), *texture)
+		}
+	}
 }
 
 func ExtractTextureFromJSONPath(fullPath string) (string, error) {

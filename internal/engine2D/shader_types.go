@@ -44,14 +44,45 @@ type MaterialJSON struct {
 	} `json:"passes"`
 }
 
-type LoadedEffect struct {
-	Config   *wallpaper.Effect
-	Shaders  []rl.Shader
-	Passes   []LoadedPass
-	ShowMask bool
+type PrecomputedUniform struct {
+	Location int32
+	Type     rl.ShaderUniformDataType
+	Values   []float32
+}
+
+type ShaderParameters struct {
+	Time               int32
+	Pointer            int32
+	Parallax           int32
+	TexelSize          int32
+	TextureResolutions [8]int32
+	TextureSamplers    [8]int32
+
+	// Matrices
+	MVP      int32 // g_ModelViewProjectionMatrix
+	Proj     int32 // g_EffectTextureProjectionMatrix
+	ProjInv  int32 // g_EffectTextureProjectionMatrixInverse
+	ModelInv int32 // g_EffectModelViewProjectionMatrixInverse
+}
+
+type GlobalState struct {
+	Time           float64
+	MouseX, MouseY float64
+	ParallaxX      float64
+	ParallaxY      float64
 }
 
 type LoadedPass struct {
-	Textures  []*rl.Texture2D
-	Constants ConstantShaderValues
+	ShaderName string
+	Shader     rl.Shader
+	Textures   []*rl.Texture2D
+	Uniforms   []PrecomputedUniform
+	Parameters ShaderParameters
+	Constants  ConstantShaderValues
+}
+
+type LoadedEffect struct {
+	Config   *wallpaper.Effect
+	Passes   []LoadedPass
+	ShowMask bool
 }
