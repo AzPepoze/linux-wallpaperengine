@@ -16,46 +16,7 @@ import (
 )
 
 func resolveTexturePath(object *wallpaper.Object) string {
-	path := object.Image
-	if path == "" {
-		path = object.Model
-	}
-
-	if path == "" {
-		return ""
-	}
-
-	textureName := strings.TrimSuffix(filepath.Base(path), ".json")
-
-	if strings.HasSuffix(path, ".json") {
-		// Try to find the file in typical locations
-		searchPaths := []string{
-			filepath.Join("tmp", path),
-			utils.ResolveAssetPath(path),
-			path, // In case it is absolute or relative to root
-		}
-
-		var fullPath string
-		for _, p := range searchPaths {
-			if _, err := os.Stat(p); err == nil {
-				fullPath = p
-				break
-			}
-		}
-
-		if fullPath != "" {
-			if name, err := engine2D.ExtractTextureFromJSONPath(fullPath); err == nil {
-				textureName = name
-			}
-		} else {
-			// Fallback: try just the filename in tmp
-			if name, err := engine2D.ExtractTextureFromJSONPath(filepath.Join("tmp", path)); err == nil {
-				textureName = name
-			}
-		}
-	}
-
-	return utils.FindTextureFile(textureName)
+	return utils.ResolveTexturePath(object.Image, object.Model)
 }
 
 func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
