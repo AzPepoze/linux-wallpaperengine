@@ -65,7 +65,7 @@ func PreprocessShader(source string, combos map[string]int) string {
 
 	// Pre-process includes to avoid duplicates
 	included := make(map[string]bool)
-	
+
 	// Check if common.h is already in the source
 	if !strings.Contains(source, "#include \"common.h\"") {
 		commonPath := utils.ResolveAssetPath("shaders/common.h")
@@ -205,6 +205,11 @@ func LoadEffect(effectConfig *wallpaper.Effect) LoadedEffect {
 	// if !strings.Contains(effectConfig.File, "depthparallax") {
 	// 	return LoadedEffect{Config: effectConfig}
 	// }
+
+	if strings.Contains(effectConfig.File, "bokeh_blur") {
+		utils.Info("Effect: Unsupported effect 'bokeh_blur' detected, skipping loading.")
+		return LoadedEffect{Config: effectConfig}
+	}
 
 	loaded := LoadedEffect{
 		Config: effectConfig,
@@ -466,11 +471,11 @@ func ExtractTextureFromJSONPath(fullPath string) (string, error) {
 			return name, nil
 		}
 
-	// Fallback to searching
-	searchPaths := []string{
-		filepath.Join("tmp", model.Material),
-		utils.ResolveAssetPath(model.Material),
-	}
+		// Fallback to searching
+		searchPaths := []string{
+			filepath.Join("tmp", model.Material),
+			utils.ResolveAssetPath(model.Material),
+		}
 		for _, p := range searchPaths {
 			if name, err := ExtractTextureFromJSONPath(p); err == nil {
 				return name, nil
