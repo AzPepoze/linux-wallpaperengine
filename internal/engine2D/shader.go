@@ -220,7 +220,7 @@ func ResolveShaderLocations(shader rl.Shader) ShaderParameters {
 	for i := 0; i < 8; i++ {
 		parameters.TextureResolutions[i] = rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%dResolution", i))
 		parameters.TextureSamplers[i] = rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i))
-		
+
 		// Fallback for Texture0 -> texture0 (Raylib default)
 		if i == 0 && parameters.TextureSamplers[i] == -1 {
 			parameters.TextureSamplers[i] = rl.GetShaderLocation(shader, "texture0")
@@ -328,7 +328,7 @@ func UpdatePassUniforms(pass *LoadedPass) {
 				// Special fix for depthparallax scale
 				if k == "scale" && strings.Contains(pass.ShaderName, "depthparallax") {
 					for i := range floats {
-						floats[i] /= 10.0
+						floats[i] /= 40.0
 					}
 				}
 

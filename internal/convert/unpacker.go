@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -100,34 +101,39 @@ func ExtractPkg(pkgPath, outputDir string) error {
 func BulkConvertTextures(root string, outDir string) {
 	utils.Info("Starting bulk texture conversion in parallel...")
 	var convertedCount int32
-	var wg sync.WaitGroup
-
-	// Limit concurrency to avoid RAM spikes
-	const maxConcurrency = 10
-	sem := make(chan struct{}, maxConcurrency)
 
 	TextureOutDir = outDir
 	if outDir != "" {
 		os.MkdirAll(outDir, 0755)
 	}
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tex") {
-			wg.Add(1)
-			sem <- struct{}{} // Acquire slot
-			go func(p string) {
-				defer wg.Done()
-				defer func() { <-sem }() // Release slot
-				err := LoadTexture(p)
+	numWorkers := runtime.NumCPU()
+	jobs := make(chan string, 128)
+	var wg sync.WaitGroup
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				err := LoadTexture(path)
 				if err != nil {
-					utils.Error("Failed to convert %s: %v", p, err)
+					utils.Error("Failed to convert %s: %v", path, err)
 				} else {
 					atomic.AddInt32(&convertedCount, 1)
 				}
-			}(path)
+			}
+		}()
+	}
+
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".tex") {
+			jobs <- path
 		}
 		return nil
 	})
+
+	close(jobs)
 
 	if err != nil {
 		utils.Error("Error walking through directory: %v", err)

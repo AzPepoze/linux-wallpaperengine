@@ -177,7 +177,6 @@ func main() {
 	// Manual GC to free up memory after bulk conversion
 	runtime.GC()
 
-	// Get monitor size and set window to match
 	// Raylib initialization
 	rl.SetConfigFlags(rl.FlagWindowUndecorated | rl.FlagWindowResizable)
 	rl.InitWindow(1280, 720, "Linux Wallpaper Engine")

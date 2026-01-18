@@ -302,15 +302,18 @@ func LoadTexture(path string) error {
 		return err
 	}
 
-	if f, err := os.Create(pngPath); err == nil {
-		if err := png.Encode(f, img); err != nil {
-			utils.Error("Failed to encode PNG %s: %v", pngPath, err)
-			f.Close()
-			os.Remove(pngPath)
-			return err
-		} else {
-			f.Close()
-		}
+	f, err := os.Create(pngPath)
+	if err != nil {
+		return fmt.Errorf("failed to create png file: %v", err)
+	}
+	defer f.Close()
+
+	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := encoder.Encode(f, img); err != nil {
+		utils.Error("Failed to encode PNG %s: %v", pngPath, err)
+		f.Close()
+		os.Remove(pngPath)
+		return err
 	}
 
 	return nil
