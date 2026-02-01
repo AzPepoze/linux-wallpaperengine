@@ -158,6 +158,11 @@ func LoadShader(name string, combos map[string]int) rl.Shader {
 		return rl.Shader{}
 	}
 
+	// Fix shader code for known problematic patterns
+	if fSource != "" {
+		fSource = fixShaderCode(fSource, name)
+	}
+
 	var shader rl.Shader
 	func() {
 		defer func() {
@@ -178,6 +183,51 @@ func LoadShader(name string, combos map[string]int) rl.Shader {
 	return shader
 }
 
+// fixShaderCode fixes known problematic shader patterns
+func fixShaderCode(fragSource string, name string) string {
+	fixed := false
+
+	// Fix Pattern 1: rotateVec2(v_TexCoord, ...) -> rotateVec2(v_TexCoord.xy, ...)
+	if strings.Contains(fragSource, "rotateVec2(v_TexCoord,") {
+		fragSource = strings.ReplaceAll(fragSource, "rotateVec2(v_TexCoord,", "rotateVec2(v_TexCoord.xy,")
+		fixed = true
+		utils.Debug("Shader: %s - Fixed rotateVec2(v_TexCoord, ...) -> rotateVec2(v_TexCoord.xy, ...)", name)
+	}
+
+	// Fix Pattern 2: rotateVec3(v_TexCoord, ...) -> rotateVec3(vec3(v_TexCoord), ...)
+	if strings.Contains(fragSource, "rotateVec3(v_TexCoord,") {
+		fragSource = strings.ReplaceAll(fragSource, "rotateVec3(v_TexCoord,", "rotateVec3(vec3(v_TexCoord),")
+		fixed = true
+		utils.Debug("Shader: %s - Fixed rotateVec3(v_TexCoord, ...) -> rotateVec3(vec3(v_TexCoord), ...)", name)
+	}
+
+	// Fix Pattern 3: vec3 variable = vec4(...) -> vec3 variable = vec3(vec4(...).xyz)
+	// Look for patterns like "vec3 xxx = v_TexCoord..." or "= rotateVec*(...xyz)"
+	lines := strings.Split(fragSource, "\n")
+	var fixedLines []string
+	for _, line := range lines {
+		original := line
+
+		// Fix "vec3 xxx = v_TexCoord;" -> "vec3 xxx = v_TexCoord.xyz;"
+		if strings.Contains(line, "vec3") && strings.Contains(line, "=") && strings.Contains(line, "v_TexCoord") && !strings.Contains(line, ".xyz") && !strings.Contains(line, ".xy") {
+			line = strings.ReplaceAll(line, "= v_TexCoord;", "= v_TexCoord.xyz;")
+			if line != original {
+				fixed = true
+				utils.Debug("Shader: %s - Fixed vec3 assignment from vec4: %s", name, strings.TrimSpace(original))
+			}
+		}
+
+		fixedLines = append(fixedLines, line)
+	}
+
+	if fixed {
+		fragSource = strings.Join(fixedLines, "\n")
+		utils.Info("Shader: %s - Applied automatic fixes to shader code", name)
+	}
+
+	return fragSource
+}
+
 // LoadMockShader loads a mock shader from assets or uses a fallback.
 func LoadMockShader(mockName string) rl.Shader {
 	vSource := "#version 120\nattribute vec3 a_Position; attribute vec2 a_TexCoord; varying vec4 v_TexCoord; uniform mat4 mvp; void main() { v_TexCoord = a_TexCoord.xyxy; gl_Position = mvp * vec4(a_Position, 1.0); }"
@@ -191,6 +241,11 @@ func LoadMockShader(mockName string) rl.Shader {
 		fSource = "#version 120\nvarying vec4 v_TexCoord; uniform sampler2D g_Texture0; void main() { gl_FragColor = texture2D(g_Texture0, v_TexCoord.xy); }"
 	}
 
+	// Fix shader code for known problematic patterns
+	if fSource != "" {
+		fSource = fixShaderCode(fSource, mockName)
+	}
+
 	var shader rl.Shader
 	func() {
 		defer func() {
@@ -202,9 +257,12 @@ func LoadMockShader(mockName string) rl.Shader {
 		shader = rl.LoadShaderFromMemory(vSource, fSource)
 	}()
 
-	if shader.ID != 0 {
-		utils.Info("Shader: Loaded mock %s successfully (ID: %d)", mockName, shader.ID)
+	if shader.ID == 0 {
+		utils.Info("Shader: Mock %s - compilation failed, using fallback shader", mockName)
+	} else {
+		utils.Info("Shader: Mock %s - Loaded successfully", mockName)
 	}
+
 	return shader
 }
 

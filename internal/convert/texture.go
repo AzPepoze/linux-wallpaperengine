@@ -43,11 +43,14 @@ func swapRB(pix []byte) {
 func decodePNG(data []byte, path string) (image.Image, error) {
 	pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	if len(data) > 8 && bytes.Equal(data[:8], pngSignature) {
-		utils.Debug("    Detected embedded PNG: %s", path)
+		utils.Debug("    Detected embedded PNG, data size: %d bytes", len(data))
 		img, err := png.Decode(bytes.NewReader(data))
 		if err != nil {
+			utils.Error("    Failed to decode embedded PNG: %v", err)
 			return nil, fmt.Errorf("failed to decode embedded png: %v", err)
 		}
+		bounds := img.Bounds()
+		utils.Debug("    Embedded PNG decoded successfully: %dx%d", bounds.Dx(), bounds.Dy())
 		return img, nil
 	}
 	return nil, nil
@@ -71,7 +74,7 @@ func decodeDXT5(data []byte, width, height uint32) ([]byte, error) {
 		return nil, err
 	}
 
-	// fixAlpha(decoded, int(width), int(height))
+	fixAlpha(decoded, int(width), int(height))
 	return decoded, nil
 }
 
