@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"linux-wallpaperengine/internal/utils"
@@ -14,6 +15,7 @@ import (
 )
 
 var fontCache = make(map[string]rl.Font)
+var fontWarningOnce sync.Once
 
 func RenderText(object *wallpaper.Object, rt *rl.RenderTexture2D) {
 	str := object.Text.Value
@@ -89,7 +91,9 @@ func getFont(size float32) rl.Font {
 		if len(files) > 0 {
 			fontPath = files[0]
 		} else {
-			utils.Warn("No fonts found in assets/fonts")
+			fontWarningOnce.Do(func() {
+				utils.Warn("No fonts found in assets/fonts, using default font")
+			})
 			return rl.GetFontDefault()
 		}
 	}
