@@ -13,6 +13,9 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// EnableCropOffset controls whether to apply cropoffset to object positioning
+var EnableCropOffset = false
+
 // UpdateViewport calculates and updates render scale and scene offsets based on window size.
 func (r *Renderer) UpdateViewport(screenWidth, screenHeight int, scalingMode string) {
 	scaleW := float64(screenWidth) / float64(r.SceneWidth)
@@ -117,8 +120,14 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 
 	// Draw particles first (before texture-based rendering)
 	if ro.ParticleSystem != nil {
-		scaledX := r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-ro.Cropoffset.X)*r.RenderScale
-		scaledY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-ro.Cropoffset.Y)*r.RenderScale
+		cropX := 0.0
+		cropY := 0.0
+		if EnableCropOffset {
+			cropX = ro.Cropoffset.X
+			cropY = ro.Cropoffset.Y
+		}
+		scaledX := r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-cropX)*r.RenderScale
+		scaledY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-cropY)*r.RenderScale
 
 		margin := 2000.0 * r.RenderScale
 		if scaledX+margin >= 0 && scaledX-margin <= float64(rl.GetScreenWidth()) &&
@@ -160,8 +169,14 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 	finalScaleX := (targetWidth / float64(imageWidth)) * ro.Object.Scale.X * r.RenderScale
 	finalScaleY := (targetHeight / float64(imageHeight)) * ro.Object.Scale.Y * r.RenderScale
 
-	scaledOriginX := r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-ro.Cropoffset.X)*r.RenderScale
-	scaledOriginY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-ro.Cropoffset.Y)*r.RenderScale
+	cropX := 0.0
+	cropY := 0.0
+	if EnableCropOffset {
+		cropX = ro.Cropoffset.X
+		cropY = ro.Cropoffset.Y
+	}
+	scaledOriginX := r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-cropX)*r.RenderScale
+	scaledOriginY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-cropY)*r.RenderScale
 
 	destWidth := float64(imageWidth) * finalScaleX
 	destHeight := float64(imageHeight) * finalScaleY
@@ -219,8 +234,14 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 	finalScaleX = (targetWidth / float64(imageWidth)) * ro.Object.Scale.X * r.RenderScale
 	finalScaleY = (targetHeight / float64(imageHeight)) * ro.Object.Scale.Y * r.RenderScale
 
-	scaledOriginX = r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-ro.Cropoffset.X)*r.RenderScale
-	scaledOriginY = r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-ro.Cropoffset.Y)*r.RenderScale
+	cropX = 0.0
+	cropY = 0.0
+	if EnableCropOffset {
+		cropX = ro.Cropoffset.X
+		cropY = ro.Cropoffset.Y
+	}
+	scaledOriginX = r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-cropX)*r.RenderScale
+	scaledOriginY = r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-cropY)*r.RenderScale
 
 	destWidth = float64(imageWidth) * finalScaleX
 	destHeight = float64(imageHeight) * finalScaleY
