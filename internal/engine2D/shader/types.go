@@ -1,4 +1,4 @@
-package engine2D
+package shader
 
 import (
 	"strings"

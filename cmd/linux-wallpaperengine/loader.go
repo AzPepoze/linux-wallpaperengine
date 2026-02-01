@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"linux-wallpaperengine/internal/convert"
+	"linux-wallpaperengine/internal/engine2D/particle"
+	"linux-wallpaperengine/internal/engine2D/shader"
 	"linux-wallpaperengine/internal/utils"
 	"linux-wallpaperengine/internal/wallpaper"
-	"linux-wallpaperengine/internal/engine2D"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -38,7 +39,7 @@ func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
 	return nil, fmt.Errorf("model config not found or invalid: %s", path)
 }
 
-func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride) *engine2D.ParticleSystem {
+func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride) *particle.ParticleSystem {
 	// Try multiple root paths for the particle JSON itself
 	possibleParticlePaths := []string{
 		particlePath,
@@ -111,7 +112,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		if materialPath != "" {
 			mData, err := os.ReadFile(materialPath)
 			if err == nil {
-				var material engine2D.MaterialJSON
+				var material shader.MaterialJSON
 				if err := json.Unmarshal(mData, &material); err == nil {
 					if len(material.Passes) > 0 {
 						pass := material.Passes[0]
@@ -175,7 +176,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		}
 	}
 
-	return engine2D.NewParticleSystem(engine2D.ParticleSystemOptions{
+	return particle.NewParticleSystem(particle.ParticleSystemOptions{
 		Name:          name,
 		Config:        config,
 		Texture:       texture,
