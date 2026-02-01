@@ -1,4 +1,4 @@
-package engine2D
+package particle
 
 import (
 	"linux-wallpaperengine/internal/wallpaper"

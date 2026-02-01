@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 
+	"linux-wallpaperengine/internal/engine2D/shader"
 	"linux-wallpaperengine/internal/wallpaper"
 )
 
@@ -21,13 +22,13 @@ func UpdateShake(objects []wallpaper.Object, offsets []wallpaper.Vec2, totalTime
 
 				if len(effect.Passes) > 0 {
 					ps := effect.Passes[0]
-					csv := ConstantShaderValues(ps.ConstantShaderValues)
-					
+					csv := shader.ConstantShaderValues(ps.ConstantShaderValues)
+
 					strength := csv.GetFloat("strength")
 					if strength == 0 {
 						strength = csv.GetFloat("Strength")
 					}
-					
+
 					if strength != 0 {
 						amount = strength
 					} else {
