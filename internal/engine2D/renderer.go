@@ -45,6 +45,8 @@ func (r *Renderer) Update(deltaTime, totalTime float64, scene *wallpaper.Scene) 
 			continue
 		}
 		if renderObject.ParticleSystem != nil {
+			// Pass mouse position to particle system for control points
+			renderObject.ParticleSystem.SetMousePosition(r.MouseX, r.MouseY)
 			renderObject.ParticleSystem.Update(deltaTime)
 		}
 	}
@@ -111,6 +113,23 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 	} else if ro.RenderTexture != nil {
 		texture = &ro.RenderTexture.Texture
 		isRenderTexture = true
+	}
+
+	// Draw particles first (before texture-based rendering)
+	if ro.ParticleSystem != nil {
+		scaledX := r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-ro.Cropoffset.X)*r.RenderScale
+		scaledY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-ro.Cropoffset.Y)*r.RenderScale
+
+		margin := 2000.0 * r.RenderScale
+		if scaledX+margin >= 0 && scaledX-margin <= float64(rl.GetScreenWidth()) &&
+			scaledY+margin >= 0 && scaledY-margin <= float64(rl.GetScreenHeight()) {
+			scaledScale := wallpaper.Vec3{
+				X: ro.Object.Scale.X * r.RenderScale,
+				Y: ro.Object.Scale.Y * r.RenderScale,
+				Z: ro.Object.Scale.Z * r.RenderScale,
+			}
+			ro.ParticleSystem.Draw(scaledX, scaledY, scaledScale)
+		}
 	}
 
 	if texture == nil {
@@ -239,22 +258,6 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 				rl.DrawLineV(p2, p3, rl.Green)
 				rl.DrawLineV(p3, p1, rl.Green)
 			}
-		}
-	}
-
-	if ro.ParticleSystem != nil {
-		scaledX := r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-ro.Cropoffset.X)*r.RenderScale
-		scaledY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-ro.Cropoffset.Y)*r.RenderScale
-
-		margin := 2000.0 * r.RenderScale
-		if scaledX+margin >= 0 && scaledX-margin <= float64(rl.GetScreenWidth()) &&
-			scaledY+margin >= 0 && scaledY-margin <= float64(rl.GetScreenHeight()) {
-			scaledScale := wallpaper.Vec3{
-				X: ro.Object.Scale.X * r.RenderScale,
-				Y: ro.Object.Scale.Y * r.RenderScale,
-				Z: ro.Object.Scale.Z * r.RenderScale,
-			}
-			ro.ParticleSystem.Draw(scaledX, scaledY, scaledScale)
 		}
 	}
 }
