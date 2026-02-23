@@ -16,6 +16,8 @@ func NewParticleSystem(opts ParticleSystemOptions) *ParticleSystem {
 		ControlPts:    make([]wallpaper.Vec3, 8),
 		BlendMode:     opts.BlendMode,
 		TexInfo:       opts.TexInfo,
+		SceneWidth:    opts.SceneWidth,
+		SceneHeight:   opts.SceneHeight,
 	}
 
 	for i := range ps.ControlPts {

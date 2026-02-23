@@ -39,6 +39,8 @@ type ParticleSystem struct {
 	MousePos      wallpaper.Vec3
 	BlendMode     rl.BlendMode
 	TexInfo       *wallpaper.TexJSON
+	SceneWidth    int
+	SceneHeight   int
 }
 
 type ParticleSystemOptions struct {
@@ -50,4 +52,6 @@ type ParticleSystemOptions struct {
 	Override      *wallpaper.InstanceOverride
 	BlendMode     rl.BlendMode
 	TexInfo       *wallpaper.TexJSON
+	SceneWidth    int
+	SceneHeight   int
 }

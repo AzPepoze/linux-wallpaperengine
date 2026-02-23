@@ -1,8 +1,6 @@
 package shader
 
 import (
-	"fmt"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"linux-wallpaperengine/internal/wallpaper"
@@ -78,6 +76,11 @@ func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 			texture = mainTexture
 		}
 
+		// If it's slot 1 and no override texture is provided, use the background texture
+		if i == 1 && texture == nil && state.Background != nil {
+			texture = state.Background
+		}
+
 		// Fallback for missing textures in slots > 0 (e.g. Depth Maps)
 		if texture == nil && i > 0 && parameters.TextureSamplers[i] != -1 {
 			if BlackTexture == nil {
@@ -90,9 +93,12 @@ func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 			continue
 		}
 
-		// Set Sampler Unit (e.g. g_Texture0 = 0)
+		// Select and bind texture to appropriate unit
 		if parameters.TextureSamplers[i] != -1 {
+			// Set Sampler Unit (e.g. g_Texture0 = 0)
 			rl.SetShaderValue(shader, parameters.TextureSamplers[i], []float32{float32(i)}, rl.ShaderUniformSampler2d)
+			// Bind texture
+			rl.SetShaderValueTexture(shader, parameters.TextureSamplers[i], *texture)
 		}
 
 		// Set Resolution
@@ -104,10 +110,6 @@ func ApplyPass(pass *LoadedPass, state GlobalState, mainTexture *rl.Texture2D) {
 			if i == 0 && parameters.TexelSize != -1 {
 				rl.SetShaderValue(shader, parameters.TexelSize, []float32{1.0 / w, 1.0 / h}, rl.ShaderUniformVec2)
 			}
-		}
-
-		if i >= 0 {
-			rl.SetShaderValueTexture(shader, rl.GetShaderLocation(shader, fmt.Sprintf("g_Texture%d", i)), *texture)
 		}
 	}
 }

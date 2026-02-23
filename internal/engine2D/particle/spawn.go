@@ -101,9 +101,9 @@ func (ps *ParticleSystem) spawnParticle(emitter wallpaper.ParticleEmitter) {
 		distMax := GetVec3OrFloat(emitter.DistanceMax)
 		distMin := GetVec3OrFloat(emitter.DistanceMin)
 
-		particle.Position.X += (rand.Float64()*2-1)*(distMax.X-distMin.X)/2 + distMin.X
-		particle.Position.Y += (rand.Float64()*2-1)*(distMax.Y-distMin.Y)/2 + distMin.Y
-		particle.Position.Z += (rand.Float64()*2-1)*(distMax.Z-distMin.Z)/2 + distMin.Z
+		particle.Position.X += distMin.X + rand.Float64()*(distMax.X-distMin.X)
+		particle.Position.Y += distMin.Y + rand.Float64()*(distMax.Y-distMin.Y)
+		particle.Position.Z += distMin.Z + rand.Float64()*(distMax.Z-distMin.Z)
 
 	case "sphererandom":
 		distMax := GetFloatFromInterface(emitter.DistanceMax)

@@ -70,6 +70,7 @@ type GlobalState struct {
 	MouseX, MouseY float64
 	ParallaxX      float64
 	ParallaxY      float64
+	Background     *rl.Texture2D
 }
 
 type LoadedPass struct {
