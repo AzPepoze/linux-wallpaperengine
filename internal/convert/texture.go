@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
-	_ "image/jpeg"
 	"image/png"
 	"io"
 	"os"
@@ -41,10 +40,8 @@ func swapRB(pix []byte) {
 	}
 }
 
-func tryDecodeImage(data []byte, path string) (image.Image, error) {
+func decodePNG(data []byte, path string) (image.Image, error) {
 	pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
-	jpgSignature := []byte{0xFF, 0xD8, 0xFF}
-
 	if len(data) > 8 && bytes.Equal(data[:8], pngSignature) {
 		utils.Debug("    Detected embedded PNG, data size: %d bytes", len(data))
 		img, err := png.Decode(bytes.NewReader(data))
@@ -56,19 +53,6 @@ func tryDecodeImage(data []byte, path string) (image.Image, error) {
 		utils.Debug("    Embedded PNG decoded successfully: %dx%d", bounds.Dx(), bounds.Dy())
 		return img, nil
 	}
-
-	if len(data) > 3 && bytes.Equal(data[:3], jpgSignature) {
-		utils.Debug("    Detected embedded JPEG, data size: %d bytes", len(data))
-		img, _, err := image.Decode(bytes.NewReader(data))
-		if err != nil {
-			utils.Error("    Failed to decode embedded JPEG: %v", err)
-			return nil, fmt.Errorf("failed to decode embedded jpeg: %v", err)
-		}
-		bounds := img.Bounds()
-		utils.Debug("    Embedded JPEG decoded successfully: %dx%d", bounds.Dx(), bounds.Dy())
-		return img, nil
-	}
-
 	return nil, nil
 }
 
@@ -90,6 +74,7 @@ func decodeDXT5(data []byte, width, height uint32) ([]byte, error) {
 		return nil, err
 	}
 
+	fixAlpha(decoded, int(width), int(height))
 	return decoded, nil
 }
 
@@ -107,11 +92,10 @@ func decodeR8(finalData []byte, width, height uint32) ([]byte, error) {
 	pix := make([]byte, width*height*4)
 	for k := 0; k < int(width*height); k++ {
 		val := finalData[k]
-		// Map R to Alpha, and set RGB to White
-		pix[k*4] = 255
-		pix[k*4+1] = 255
-		pix[k*4+2] = 255
-		pix[k*4+3] = val
+		pix[k*4] = val
+		pix[k*4+1] = val
+		pix[k*4+2] = val
+		pix[k*4+3] = 255
 	}
 	return pix, nil
 }
@@ -122,14 +106,14 @@ func decodeRG88(finalData []byte, width, height uint32) ([]byte, error) {
 	pix := make([]byte, numPixels*4)
 
 	for i := 0; i < numPixels; i++ {
-		r := finalData[i*2+0]
-		g := finalData[i*2+1]
+		lum := finalData[i*2+0]     // Byte 1: Luminance
+		opacity := finalData[i*2+1] // Byte 2: Opacity
 
-		// Map R to RGB and G to Alpha
-		pix[i*4+0] = r // R
-		pix[i*4+1] = r // G
-		pix[i*4+2] = r // B
-		pix[i*4+3] = g // A
+		// Write 4 bytes to destination
+		pix[i*4+0] = lum     // R
+		pix[i*4+1] = lum     // G
+		pix[i*4+2] = lum     // B
+		pix[i*4+3] = opacity // A
 	}
 	return pix, nil
 }
@@ -143,24 +127,17 @@ func decompressLZ4(data []byte, isLZ4 bool, decompressedSize uint32, format uint
 
 		decodedLZ4 := make([]byte, requiredSize)
 		n, err := lz4.UncompressBlock(data, decodedLZ4)
-		if err != nil {
-			return nil, fmt.Errorf("forced LZ4 decompression failed: %v", err)
+		if err == nil && uint32(n) == requiredSize {
+			utils.Debug("    Forced LZ4 success!")
+			finalData = decodedLZ4
+		} else {
+			utils.Warn("    Forced LZ4 failed: %v", err)
 		}
-		if uint32(n) < requiredSize {
-			// Some textures might be slightly smaller but it's risky. Let's be strict if they are way off.
-			return nil, fmt.Errorf("forced LZ4 decompression size mismatch: got %d, want %d", n, requiredSize)
-		}
-		utils.Debug("    Forced LZ4 success!")
-		finalData = decodedLZ4
 	} else if isLZ4 {
 		utils.Debug("    Decompressing LZ4: %d -> %d", len(data), decompressedSize)
 		decodedLZ4 := make([]byte, decompressedSize)
-		n, err := lz4.UncompressBlock(data, decodedLZ4)
-		if err != nil {
-			return nil, fmt.Errorf("LZ4 decompression failed: %v", err)
-		}
-		if uint32(n) != decompressedSize {
-			utils.Warn("    LZ4 decompression size mismatch: got %d, want %d", n, decompressedSize)
+		if _, err := lz4.UncompressBlock(data, decodedLZ4); err != nil {
+			return nil, err
 		}
 		finalData = decodedLZ4
 	}
@@ -211,7 +188,6 @@ func DecodeTexToImage(path string) (image.Image, error) {
 		for j := uint32(0); j < mipmapCount; j++ {
 			mW := readInt(f)
 			mH := readInt(f)
-			utils.Debug("    Mipmap %d,%d: %dx%d", i, j, mW, mH)
 			var isLZ4 bool
 			var decompressedSize uint32
 
@@ -228,7 +204,7 @@ func DecodeTexToImage(path string) (image.Image, error) {
 			}
 
 			if i == 0 && j == 0 {
-				if img, err := tryDecodeImage(data, path); err != nil {
+				if img, err := decodePNG(data, path); err != nil {
 					return nil, err
 				} else if img != nil {
 					return img, nil
@@ -267,17 +243,8 @@ func DecodeTexToImage(path string) (image.Image, error) {
 
 				default:
 					utils.Error("    Unknown format %d with data size %d", format, len(finalData))
-					err = fmt.Errorf("unknown format %d", format)
-				}
+					return nil, fmt.Errorf("decode failed: %v", err)
 
-				if err != nil {
-					utils.Error("    Decode failed: %v", err)
-					return nil, err
-				}
-
-				if uint32(len(pix)) < expectedRGBA {
-					utils.Error("    Decoded pixel buffer too small: Got %d, Need %d", len(pix), expectedRGBA)
-					return nil, fmt.Errorf("decoded pixel buffer too small")
 				}
 
 				utils.Debug("    Successfully decoded: %s", path)
@@ -291,6 +258,33 @@ func DecodeTexToImage(path string) (image.Image, error) {
 		}
 	}
 	return nil, fmt.Errorf("no image found in texture")
+}
+
+func fixAlpha(pix []byte, width, height int) {
+	const (
+		alphaThreshold = 200
+		edgeThreshold  = 2
+	)
+	stride := width * 4
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			idx := (y*width + x) * 4
+			alpha := pix[idx+3]
+			if alpha > alphaThreshold {
+				pix[idx+3] = 255
+				continue
+			}
+			pix[idx+3] = 0
+			if x == 0 || x == width-1 || y == 0 || y == height-1 {
+				continue
+			}
+			left, right := pix[idx-4+3], pix[idx+4+3]
+			up, down := pix[idx-stride+3], pix[idx+stride+3]
+			if (left > edgeThreshold && right > edgeThreshold) || (up > edgeThreshold && down > edgeThreshold) {
+				pix[idx+3] = 255
+			}
+		}
+	}
 }
 
 func LoadTexture(path string) error {
@@ -337,7 +331,6 @@ func LoadTextureNative(path string) (*rl.Texture2D, error) {
 			return nil, fmt.Errorf("failed to load texture from %s", path)
 		}
 		rl.SetTextureWrap(tex, rl.TextureWrapRepeat)
-		rl.SetTextureFilter(tex, rl.FilterBilinear)
 		return &tex, nil
 	}
 
@@ -364,7 +357,6 @@ func LoadTextureNative(path string) (*rl.Texture2D, error) {
 
 	// Important: WE effects often rely on texture tiling/wrapping (e.g. noise scrolling)
 	rl.SetTextureWrap(tex, rl.TextureWrapRepeat)
-	rl.SetTextureFilter(tex, rl.FilterBilinear)
 
 	return &tex, nil
 }
