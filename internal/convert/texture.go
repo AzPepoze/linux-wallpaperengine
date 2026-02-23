@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	_ "image/jpeg"
 	"image/png"
 	"io"
 	"os"
@@ -40,8 +41,10 @@ func swapRB(pix []byte) {
 	}
 }
 
-func decodePNG(data []byte, path string) (image.Image, error) {
+func tryDecodeImage(data []byte, path string) (image.Image, error) {
 	pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	jpgSignature := []byte{0xFF, 0xD8, 0xFF}
+
 	if len(data) > 8 && bytes.Equal(data[:8], pngSignature) {
 		utils.Debug("    Detected embedded PNG, data size: %d bytes", len(data))
 		img, err := png.Decode(bytes.NewReader(data))
@@ -53,6 +56,19 @@ func decodePNG(data []byte, path string) (image.Image, error) {
 		utils.Debug("    Embedded PNG decoded successfully: %dx%d", bounds.Dx(), bounds.Dy())
 		return img, nil
 	}
+
+	if len(data) > 3 && bytes.Equal(data[:3], jpgSignature) {
+		utils.Debug("    Detected embedded JPEG, data size: %d bytes", len(data))
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			utils.Error("    Failed to decode embedded JPEG: %v", err)
+			return nil, fmt.Errorf("failed to decode embedded jpeg: %v", err)
+		}
+		bounds := img.Bounds()
+		utils.Debug("    Embedded JPEG decoded successfully: %dx%d", bounds.Dx(), bounds.Dy())
+		return img, nil
+	}
+
 	return nil, nil
 }
 
@@ -127,17 +143,24 @@ func decompressLZ4(data []byte, isLZ4 bool, decompressedSize uint32, format uint
 
 		decodedLZ4 := make([]byte, requiredSize)
 		n, err := lz4.UncompressBlock(data, decodedLZ4)
-		if err == nil && uint32(n) == requiredSize {
-			utils.Debug("    Forced LZ4 success!")
-			finalData = decodedLZ4
-		} else {
-			utils.Warn("    Forced LZ4 failed: %v", err)
+		if err != nil {
+			return nil, fmt.Errorf("forced LZ4 decompression failed: %v", err)
 		}
+		if uint32(n) < requiredSize {
+			// Some textures might be slightly smaller but it's risky. Let's be strict if they are way off.
+			return nil, fmt.Errorf("forced LZ4 decompression size mismatch: got %d, want %d", n, requiredSize)
+		}
+		utils.Debug("    Forced LZ4 success!")
+		finalData = decodedLZ4
 	} else if isLZ4 {
 		utils.Debug("    Decompressing LZ4: %d -> %d", len(data), decompressedSize)
 		decodedLZ4 := make([]byte, decompressedSize)
-		if _, err := lz4.UncompressBlock(data, decodedLZ4); err != nil {
-			return nil, err
+		n, err := lz4.UncompressBlock(data, decodedLZ4)
+		if err != nil {
+			return nil, fmt.Errorf("LZ4 decompression failed: %v", err)
+		}
+		if uint32(n) != decompressedSize {
+			utils.Warn("    LZ4 decompression size mismatch: got %d, want %d", n, decompressedSize)
 		}
 		finalData = decodedLZ4
 	}
@@ -204,7 +227,7 @@ func DecodeTexToImage(path string) (image.Image, error) {
 			}
 
 			if i == 0 && j == 0 {
-				if img, err := decodePNG(data, path); err != nil {
+				if img, err := tryDecodeImage(data, path); err != nil {
 					return nil, err
 				} else if img != nil {
 					return img, nil
@@ -243,8 +266,17 @@ func DecodeTexToImage(path string) (image.Image, error) {
 
 				default:
 					utils.Error("    Unknown format %d with data size %d", format, len(finalData))
-					return nil, fmt.Errorf("decode failed: %v", err)
+					err = fmt.Errorf("unknown format %d", format)
+				}
 
+				if err != nil {
+					utils.Error("    Decode failed: %v", err)
+					return nil, err
+				}
+
+				if uint32(len(pix)) < expectedRGBA {
+					utils.Error("    Decoded pixel buffer too small: Got %d, Need %d", len(pix), expectedRGBA)
+					return nil, fmt.Errorf("decoded pixel buffer too small")
 				}
 
 				utils.Debug("    Successfully decoded: %s", path)
