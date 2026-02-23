@@ -54,33 +54,56 @@ func SetupPass(shader rl.Shader, shaderName string, constants ConstantShaderValu
 	return pass
 }
 
+// toCamelCase converts snake_case or spaced strings to CamelCase.
+func toCamelCase(s string) string {
+	parts := strings.Fields(strings.ReplaceAll(s, "_", " "))
+	for i, part := range parts {
+		if len(part) > 0 {
+			parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+		}
+	}
+	return strings.Join(parts, "")
+}
+
 // UpdatePassUniforms rebuilds the precomputed uniforms list from the Constants map.
 // Call this after modifying pass.Constants at runtime.
 func UpdatePassUniforms(pass *LoadedPass) {
 	pass.Uniforms = make([]PrecomputedUniform, 0)
 
 	for k, v := range pass.Constants {
-		// Try variations of the key to find the location
+		// 1. Normalize key: lowercase and strip common UI prefixes
+		rawKey := strings.ToLower(k)
+		normalizedKey := strings.TrimPrefix(rawKey, "ui_editor_properties_")
+
+		// 2. Build list of potential uniform names in the shader
 		names := []string{
-			"g_" + k,
-			k,
-			"g_" + strings.Title(k),
+			"g_" + normalizedKey,
+			normalizedKey,
+			"g_" + toCamelCase(normalizedKey),
+			toCamelCase(normalizedKey),
 		}
-		// Common mappings
-		if k == "ripplestrength" {
-			names = append(names, "g_Strength")
+
+		// 3. Add common Wallpaper Engine property mappings
+		if strings.Contains(normalizedKey, "ripple_strength") || normalizedKey == "strength" {
+			names = append(names, "g_Strength", "Strength")
 		}
-		if k == "animationspeed" {
-			names = append(names, "g_AnimationSpeed")
+		if strings.Contains(normalizedKey, "ripple_scale") || normalizedKey == "scale" {
+			names = append(names, "g_Scale", "Scale")
 		}
-		if k == "sens" || k == "sensitivity" {
+		if strings.Contains(normalizedKey, "animation_speed") || normalizedKey == "speed" {
+			names = append(names, "g_AnimationSpeed", "AnimationSpeed")
+		}
+		if strings.Contains(normalizedKey, "scroll_speed") {
+			names = append(names, "g_ScrollSpeed", "ScrollSpeed")
+		}
+		if normalizedKey == "ratio" {
+			names = append(names, "g_Ratio", "Ratio")
+		}
+		if normalizedKey == "sens" || normalizedKey == "sensitivity" {
 			names = append(names, "g_Sensitivity", "sensitivity")
 		}
-		if k == "center" {
+		if normalizedKey == "center" {
 			names = append(names, "g_Center", "center")
-		}
-		if k == "scale" {
-			names = append(names, "g_Scale", "scale")
 		}
 
 		var loc int32 = -1
@@ -132,9 +155,15 @@ func UpdatePassUniforms(pass *LoadedPass) {
 
 			if len(floats) > 0 {
 				// Special fix for depthparallax scale
-				if k == "scale" && strings.Contains(pass.ShaderName, "depthparallax") {
+				if (normalizedKey == "scale" || normalizedKey == "ripple_scale") && strings.Contains(pass.ShaderName, "depthparallax") {
 					for i := range floats {
 						floats[i] /= 40.0
+					}
+				}
+				// Special fix for waterripple scale (frequency)
+				if (normalizedKey == "scale" || normalizedKey == "ripple_scale") && strings.Contains(pass.ShaderName, "waterripple") {
+					for i := range floats {
+						floats[i] /= 0.4
 					}
 				}
 

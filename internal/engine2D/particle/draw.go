@@ -69,7 +69,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 	rl.BeginBlendMode(ps.BlendMode)
 
 	for _, particle := range ps.Particles {
-		isSprite := (rendererType == "sprite" && useSpriteSheet) || (particle.GridX > 0 && particle.GridY > 0)
+		isSprite := (rendererType == "sprite" || rendererType == "spritetrail") || useSpriteSheet || (particle.GridX > 0 && particle.GridY > 0)
 		if isSprite {
 			gridSizeX := gridSize
 			gridSizeY := gridSize
@@ -108,7 +108,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 
 			sourceRec := rl.NewRectangle(srcX, srcY, spriteWidth, spriteHeight)
 
-			scale := float32(particle.Size / 1000.0)
+			scale := float32(particle.Size / 100.0)
 			finalScaleX := scale * float32(objScale.X)
 			finalScaleY := scale * float32(objScale.Y)
 
@@ -143,7 +143,7 @@ func (ps *ParticleSystem) Draw(originX, originY float64, objScale wallpaper.Vec3
 			destHeight := height * finalScaleY
 
 			destX := float32(originX + particle.Position.X*objScale.X)
-			destY := float32(originY + particle.Position.Y*objScale.Y)
+			destY := float32(originY - particle.Position.Y*objScale.Y)
 
 			destRec := rl.NewRectangle(destX, destY, destWidth, destHeight)
 			origin := rl.NewVector2(destWidth/2, destHeight/2)

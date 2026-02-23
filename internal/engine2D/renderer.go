@@ -93,14 +93,12 @@ func (r *Renderer) Render() {
 	sceneRectH := int32(float64(r.SceneHeight) * r.RenderScale)
 
 	rl.BeginScissorMode(sceneRectX, sceneRectY, sceneRectW, sceneRectH)
-	rl.ClearBackground(rl.NewColor(r.BgColor.R, r.BgColor.G, r.BgColor.B, 255))
 
 	for i := range r.RenderObjects {
 		ro := &r.RenderObjects[i]
 		if !ro.Object.Visible.GetBool() {
 			continue
 		}
-
 		r.renderObject(ro, totalTime, sceneRectX, sceneRectY, sceneRectW, sceneRectH)
 	}
 
@@ -130,6 +128,7 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 		scaledY := r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-cropY)*r.RenderScale
 
 		margin := 2000.0 * r.RenderScale
+		// Cull against screen boundaries
 		if scaledX+margin >= 0 && scaledX-margin <= float64(rl.GetScreenWidth()) &&
 			scaledY+margin >= 0 && scaledY-margin <= float64(rl.GetScreenHeight()) {
 			scaledScale := wallpaper.Vec3{
@@ -185,6 +184,7 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 	halfHeight := math.Abs(destHeight) / 2
 	radius := math.Sqrt(halfWidth*halfWidth + halfHeight*halfHeight)
 
+	// Cull against screen boundaries
 	if scaledOriginX+radius < 0 || scaledOriginX-radius > float64(rl.GetScreenWidth()) ||
 		scaledOriginY+radius < 0 || scaledOriginY-radius > float64(rl.GetScreenHeight()) {
 		return
@@ -218,44 +218,19 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 	isCurrentRenderTexture := isRenderTexture
 
 	if hasEffects {
-		r.applyEffects(ro, currentTexture, isCurrentRenderTexture, totalTime, sceneRectX, sceneRectY, sceneRectW, sceneRectH)
-		currentTexture = &ro.PingPong[0].Texture
+		currentTexture = r.applyEffects(ro, currentTexture, isCurrentRenderTexture, totalTime, sceneRectX, sceneRectY, sceneRectW, sceneRectH)
 		isCurrentRenderTexture = true
 	}
 
 	imageWidth = float32(currentTexture.Width)
 	imageHeight = float32(currentTexture.Height)
 
-	sourceRec = rl.NewRectangle(0, 0, imageWidth, imageHeight)
+	srcRec := rl.NewRectangle(0, 0, imageWidth, imageHeight)
 	if isCurrentRenderTexture {
-		sourceRec.Height = -imageHeight
+		srcRec.Height = -imageHeight
 	}
 
-	finalScaleX = (targetWidth / float64(imageWidth)) * ro.Object.Scale.X * r.RenderScale
-	finalScaleY = (targetHeight / float64(imageHeight)) * ro.Object.Scale.Y * r.RenderScale
-
-	cropX = 0.0
-	cropY = 0.0
-	if EnableCropOffset {
-		cropX = ro.Cropoffset.X
-		cropY = ro.Cropoffset.Y
-	}
-	scaledOriginX = r.SceneOffsetX + (ro.Object.Origin.X+ro.Offset.X-cropX)*r.RenderScale
-	scaledOriginY = r.SceneOffsetY + (ro.Object.Origin.Y+ro.Offset.Y-cropY)*r.RenderScale
-
-	destWidth = float64(imageWidth) * finalScaleX
-	destHeight = float64(imageHeight) * finalScaleY
-
-	destRec = rl.NewRectangle(
-		float32(scaledOriginX),
-		float32(scaledOriginY),
-		float32(math.Abs(destWidth)),
-		float32(math.Abs(destHeight)),
-	)
-
-	origin = rl.NewVector2(float32(math.Abs(destWidth))/2, float32(math.Abs(destHeight))/2)
-
-	rl.DrawTexturePro(*currentTexture, sourceRec, destRec, origin, rotation, rlTint)
+	rl.DrawTexturePro(*currentTexture, srcRec, destRec, origin, rotation, rlTint)
 
 	if utils.DebugMode && ro.Mesh != nil {
 		rl.DrawRectangleLinesEx(destRec, 2, rl.Red)
@@ -283,7 +258,7 @@ func (r *Renderer) renderObject(ro *RenderObject, totalTime float64, sceneRectX,
 	}
 }
 
-func (r *Renderer) applyEffects(ro *RenderObject, srcTexture *rl.Texture2D, isSrcRenderTexture bool, totalTime float64, sceneRectX, sceneRectY, sceneRectW, sceneRectH int32) {
+func (r *Renderer) applyEffects(ro *RenderObject, srcTexture *rl.Texture2D, isSrcRenderTexture bool, totalTime float64, sceneRectX, sceneRectY, sceneRectW, sceneRectH int32) *rl.Texture2D {
 	w := int32(srcTexture.Width)
 	h := int32(srcTexture.Height)
 
@@ -300,6 +275,8 @@ func (r *Renderer) applyEffects(ro *RenderObject, srcTexture *rl.Texture2D, isSr
 		rt2 := rl.LoadRenderTexture(w, h)
 		rl.SetTextureWrap(rt1.Texture, rl.TextureWrapRepeat)
 		rl.SetTextureWrap(rt2.Texture, rl.TextureWrapRepeat)
+		rl.SetTextureFilter(rt1.Texture, rl.FilterBilinear)
+		rl.SetTextureFilter(rt2.Texture, rl.FilterBilinear)
 
 		ro.PingPong[0] = &rt1
 		ro.PingPong[1] = &rt2
@@ -360,11 +337,12 @@ func (r *Renderer) applyEffects(ro *RenderObject, srcTexture *rl.Texture2D, isSr
 				}
 			} else {
 				globalState := shader.GlobalState{
-					Time:      totalTime,
-					MouseX:    r.MouseX,
-					MouseY:    r.MouseY,
-					ParallaxX: r.MouseX,
-					ParallaxY: r.MouseY,
+					Time:       totalTime,
+					MouseX:     r.MouseX,
+					MouseY:     r.MouseY,
+					ParallaxX:  r.MouseX,
+					ParallaxY:  r.MouseY,
+					Background: nil, // Reverted background sampling
 				}
 
 				shader.ApplyPass(activePass, globalState, activeMainTex)
@@ -389,6 +367,8 @@ func (r *Renderer) applyEffects(ro *RenderObject, srcTexture *rl.Texture2D, isSr
 			pingPongIdx = 1 - pingPongIdx
 		}
 	}
+
+	return currentTexture
 }
 
 func mapCoord(nx, ny float32, destRec rl.Rectangle, rotation float32) rl.Vector2 {

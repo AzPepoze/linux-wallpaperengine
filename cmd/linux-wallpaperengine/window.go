@@ -140,7 +140,7 @@ void main() {
 
 		var ps *particle.ParticleSystem
 		if object.Particle != "" {
-			ps = loadParticleSystem(object.Name, object.Particle, object.InstanceOverride)
+			ps = loadParticleSystem(object.Name, object.Particle, object.InstanceOverride, width, height)
 		}
 
 		var loadedEffects []shader.LoadedEffect

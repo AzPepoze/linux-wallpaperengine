@@ -39,7 +39,7 @@ func LoadModelConfig(path string) (*wallpaper.ModelJSON, error) {
 	return nil, fmt.Errorf("model config not found or invalid: %s", path)
 }
 
-func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride) *particle.ParticleSystem {
+func loadParticleSystem(name string, particlePath string, override *wallpaper.InstanceOverride, sceneWidth, sceneHeight int) *particle.ParticleSystem {
 	// Try multiple root paths for the particle JSON itself
 	possibleParticlePaths := []string{
 		particlePath,
@@ -185,5 +185,7 @@ func loadParticleSystem(name string, particlePath string, override *wallpaper.In
 		Override:      override,
 		BlendMode:     blendMode,
 		TexInfo:       texInfo,
+		SceneWidth:    sceneWidth,
+		SceneHeight:   sceneHeight,
 	})
 }
