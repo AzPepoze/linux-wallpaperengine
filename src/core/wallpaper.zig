@@ -12,6 +12,12 @@ pub const Vec3 = struct {
 };
 
 // We use std.json.Value for almost everything to be extremely robust
+pub const ModelJSON = struct {
+    material: []const u8 = "",
+    puppet: []const u8 = "",
+    textures: []const []const u8 = &.{},
+};
+
 pub const Scene = struct {
     value: std.json.Value,
     allocator: std.mem.Allocator,
