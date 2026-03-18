@@ -100,20 +100,24 @@ pub fn decodeTex(allocator: std.mem.Allocator, path: []const u8) !DecodedTexture
 
     switch (format) {
         .RGBA8 => {
+            logger.Texture.debug("Decoding RGBA8 texture: {s}", .{path});
             const copy_size = @min(pixels.len, raw_data.len);
             @memcpy(pixels[0..copy_size], raw_data[0..copy_size]);
         },
         .DXT1, .DXT1_ALT => {
+            logger.Texture.debug("Decoding DXT1 texture: {s}", .{path});
             const decoded = try texzel.decode(allocator, .bc1, texzel.pixel_formats.RGBA8U, dims, raw_data, .{});
             defer decoded.deinit();
             @memcpy(pixels, decoded.asBuffer());
         },
         .DXT5 => {
+            logger.Texture.debug("Decoding DXT5 texture: {s}", .{path});
             const decoded = try texzel.decode(allocator, .bc3, texzel.pixel_formats.RGBA8U, dims, raw_data, .{});
             defer decoded.deinit();
             @memcpy(pixels, decoded.asBuffer());
         },
         .R8 => {
+            logger.Texture.debug("Decoding R8 texture: {s}", .{path});
             const min_len = @min(pixel_count, raw_data.len);
             for (0..min_len) |i| {
                 const val = raw_data[i];
@@ -124,6 +128,7 @@ pub fn decodeTex(allocator: std.mem.Allocator, path: []const u8) !DecodedTexture
             }
         },
         .RG88 => {
+            logger.Texture.debug("Decoding RG88 texture: {s}", .{path});
             const min_len = @min(pixel_count, raw_data.len / 2);
             for (0..min_len) |i| {
                 const lum = raw_data[i * 2 + 0];

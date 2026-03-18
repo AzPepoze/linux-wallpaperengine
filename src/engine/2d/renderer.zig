@@ -3,32 +3,33 @@ const sokol = @import("sokol");
 const core = @import("core");
 const assets = @import("assets");
 const utils = @import("utils.zig");
-const common = @import("common.zig");
+const common = @import("types.zig");
 const renderer_2d = @import("renderer_2d.zig");
 
-const sg = sokol.gfx;
+const logger = core.logger;
+const sokol_gfx = sokol.gfx;
 const wallpaper = core.wallpaper;
 
 pub const Renderer = struct {
     allocator: std.mem.Allocator,
     renderer_2d: renderer_2d.Renderer2D,
-    pass_action: sg.PassAction = .{},
+    pass_action: sokol_gfx.PassAction = .{},
     scaling_mode: common.ScalingMode = .fit,
-    texture_cache: std.StringHashMapUnmanaged(sg.Image) = .{},
-    white_texture: sg.Image = .{},
+    texture_cache: std.StringHashMapUnmanaged(sokol_gfx.Image) = .{},
+    white_texture: sokol_gfx.Image = .{},
     scene_value: ?std.json.Value = null,
 
     pub fn init(allocator: std.mem.Allocator, width: f64, height: f64) Renderer {
-        var pass_action = sg.PassAction{};
+        var pass_action = sokol_gfx.PassAction{};
         pass_action.colors[0] = .{
             .load_action = .CLEAR,
             .clear_value = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 },
         };
 
         const white_pixel = [_]u32{ 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF };
-        var img_data = sg.ImageData{};
-        img_data.mip_levels[0] = sg.asRange(&white_pixel);
-        const white_tex = sg.makeImage(.{
+        var img_data = sokol_gfx.ImageData{};
+        img_data.mip_levels[0] = sokol_gfx.asRange(&white_pixel);
+        const white_tex = sokol_gfx.makeImage(.{
             .width = 2,
             .height = 2,
             .pixel_format = .RGBA8,
@@ -44,7 +45,7 @@ pub const Renderer = struct {
     }
 
     pub fn deinit(self: *Renderer) void {
-        sg.destroyImage(self.white_texture);
+        sokol_gfx.destroyImage(self.white_texture);
         self.clearResources();
         self.renderer_2d.deinit();
     }
@@ -52,7 +53,7 @@ pub const Renderer = struct {
     pub fn clearResources(self: *Renderer) void {
         var it = self.texture_cache.iterator();
         while (it.next()) |entry| {
-            sg.destroyImage(entry.value_ptr.*);
+            sokol_gfx.destroyImage(entry.value_ptr.*);
             self.allocator.free(entry.key_ptr.*);
         }
         self.texture_cache.clearAndFree(self.allocator);
@@ -78,12 +79,39 @@ pub const Renderer = struct {
 
         const objects = if (scene == .object) (if (scene.object.get("objects")) |objs| (if (objs == .array) objs.array.items else &.{}) else &.{}) else &.{};
         for (objects) |obj| {
-            var img: ?sg.Image = null;
+            logger.Renderer.debug("Processing scene object: {s}", .{wallpaper.getObjectString(obj, "name")});
+            var img: ?sokol_gfx.Image = null;
             const img_name = wallpaper.getObjectString(obj, "image");
             if (img_name.len > 0) {
-                const tex_path = try assets.loader.findTextureFile(self.allocator, img_name);
-                if (tex_path) |path| {
-                    img = try self.loadOrGetTexture(path);
+                var final_img_name: ?[]const u8 = img_name;
+                var model_textures_value: ?core.wallpaper.ModelJSON = null;
+
+                if (std.mem.endsWith(u8, img_name, ".json")) {
+                    final_img_name = null; // Don't try to load .json as texture by default
+                    if (assets.loader.loadModelConfig(self.allocator, img_name)) |cfg| {
+                        model_textures_value = cfg;
+                        if (cfg.textures.len > 0) {
+                            final_img_name = cfg.textures[0];
+                        }
+                    } else |e| {
+                        // Built-in models might be missing, log but don't fail hard
+                        if (e != error.FileNotFound) {
+                            logger.Renderer.err("Failed to load model config {s}: {any}", .{ img_name, e });
+                        } else {
+                            logger.Renderer.debug("Model file not found (likely built-in): {s}", .{img_name});
+                        }
+                    }
+                }
+
+                if (final_img_name) |fname| {
+                    const tex_path = try assets.loader.findTextureFile(self.allocator, fname);
+                    if (tex_path) |path| {
+                        img = try self.loadOrGetTexture(path);
+                    }
+                }
+
+                if (model_textures_value) |cfg| {
+                    assets.loader.freeModelConfig(self.allocator, cfg);
                 }
             }
 
@@ -95,7 +123,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn loadOrGetTexture(self: *Renderer, path: []const u8) !sg.Image {
+    fn loadOrGetTexture(self: *Renderer, path: []const u8) !sokol_gfx.Image {
         if (self.texture_cache.get(path)) |cached_img| {
             self.allocator.free(path);
             return cached_img;
@@ -105,12 +133,13 @@ pub const Renderer = struct {
             self.allocator.free(path);
             return e;
         };
+
         defer self.allocator.free(decoded.pixels);
 
-        var img_data = sg.ImageData{};
-        img_data.mip_levels[0] = sg.asRange(decoded.pixels);
+        var img_data = sokol_gfx.ImageData{};
+        img_data.mip_levels[0] = sokol_gfx.asRange(decoded.pixels);
 
-        const new_img = sg.makeImage(.{
+        const new_img = sokol_gfx.makeImage(.{
             .width = @as(i32, @intCast(decoded.width)),
             .height = @as(i32, @intCast(decoded.height)),
             .pixel_format = .RGBA8,
@@ -126,7 +155,7 @@ pub const Renderer = struct {
     }
 
     pub fn render(self: *Renderer) void {
-        sg.beginPass(.{ .action = self.pass_action, .swapchain = sokol.glue.swapchain() });
+        sokol_gfx.beginPass(.{ .action = self.pass_action, .swapchain = sokol.glue.swapchain() });
 
         for (self.renderer_2d.render_objects.items) |ro| {
             const obj = ro.object_json;
@@ -142,7 +171,7 @@ pub const Renderer = struct {
 
             if (ro.image) |img| {
                 if (size_x == 0 or size_y == 0) {
-                    const info = sg.queryImageDesc(img);
+                    const info = sokol_gfx.queryImageDesc(img);
                     size_x = @as(f32, @floatFromInt(info.width));
                     size_y = @as(f32, @floatFromInt(info.height));
                 }
@@ -175,7 +204,7 @@ pub const Renderer = struct {
             }
         }
 
-        sg.endPass();
-        sg.commit();
+        sokol_gfx.endPass();
+        sokol_gfx.commit();
     }
 };

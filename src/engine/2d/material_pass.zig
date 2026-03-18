@@ -6,7 +6,7 @@ const utils = @import("utils.zig");
 
 const sg = sokol.gfx;
 const wallpaper = core.wallpaper;
-const common = @import("common.zig");
+const common = @import("types.zig");
 
 pub const MaterialPass = struct {
     shader_name: []const u8,

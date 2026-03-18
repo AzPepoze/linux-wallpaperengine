@@ -1,11 +1,11 @@
 // Type definitions
-pub const types = @import("common.zig");
+pub const types = @import("types.zig");
 pub const utils = @import("utils.zig");
 
 // Import all type definitions
-pub const ScalingMode = @import("common.zig").ScalingMode;
-pub const UniformType = @import("common.zig").UniformType;
-pub const UniformInfo = @import("common.zig").UniformInfo;
+pub const ScalingMode = @import("types.zig").ScalingMode;
+pub const UniformType = @import("types.zig").UniformType;
+pub const UniformInfo = @import("types.zig").UniformInfo;
 
 pub const RenderObject = @import("render_object.zig").RenderObject;
 pub const MaterialPass = @import("material_pass.zig").MaterialPass;
