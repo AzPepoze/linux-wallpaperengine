@@ -1,5 +1,4 @@
 test
-assets
-converted
-bin
 tmp
+.zig-cache
+zig-out
