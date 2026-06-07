@@ -1,4 +1,34 @@
-test
-tmp
-.zig-cache
-zig-out
+# XMake
+.xmake/
+build/
+bin/
+
+# Temporary Assets (Generated)
+extracted/
+converted/
+tmp/
+
+# Compiled Object files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# Executables
+linux-wallpaperengine
+linux_wallpaperengine
+
+# IDEs and Editors
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.idea/
+.DS_Store
+
+# Logs
+*.log
