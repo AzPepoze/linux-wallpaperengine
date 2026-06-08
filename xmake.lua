@@ -52,9 +52,14 @@ task("check")
         print("--> Checking formatting (clang-format)...")
         os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
         
-        -- 2. Fast Static Analysis (Limit to our src and avoid deep template expansion)
-        print("--> Running static analysis (cppcheck fast mode)...")
-        os.execv("sh", {"-c", "cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 src/"})
+        -- 2. Fast Static Analysis
+        print("--> Running static analysis (cppcheck)...")
+        -- We suppress libs/ and provide some common defines to avoid false positives or syntax errors in 3rd party headers
+        os.execv("sh", {"-c", "cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 " ..
+                             "'-D__has_feature(x)=0' " ..
+                             "--suppress=preprocessorErrorDirective " ..
+                             "--suppress=*:libs/* " ..
+                             "src/"})
         
         print("All checks passed!")
     end)
