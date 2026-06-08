@@ -3,6 +3,7 @@
 #include "../core/context.h"
 #include "../core/logger.h"
 #include "../core/utils.h"
+#include "../ui/debugger.h"
 #include "imgui.h"
 
 ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
@@ -296,6 +297,18 @@ void ShaderPass::showInspector(int id) {
                 if (ImGui::Checkbox("##mask", &m)) texture_masks[i] = m;
                 ImGui::SameLine();
             }
+
+            if (textures[i].id != SG_INVALID_ID) {
+                if (ImGui::SmallButton("View")) {
+                    sg_image_desc desc = sg_query_image_desc(textures[i]);
+                    if (desc.width > 0 && desc.height > 0) {
+                        Debugger::preview_texture = textures[i];
+                        Debugger::preview_aspect = (float)desc.width / (float)desc.height;
+                    }
+                }
+                ImGui::SameLine();
+            }
+
             if (!texture_paths[i].empty()) {
                 ImGui::Text("Slot %d: %s", i + 1, texture_paths[i].c_str());
             } else {
@@ -384,7 +397,8 @@ void Effect::showInspector(int id) {
     ImGui::SameLine();
 
     // Solo Toggle
-    if (solo) {
+    bool was_solo = solo;
+    if (was_solo) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
@@ -392,7 +406,7 @@ void Effect::showInspector(int id) {
     if (ImGui::Button("S", ImVec2(25, 0))) {
         solo = !solo;
     }
-    if (solo) ImGui::PopStyleColor(3);
+    if (was_solo) ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo Effect (Ctrl+Click effect name also works)");
 
     ImGui::SameLine();
