@@ -9,6 +9,9 @@
 #include "../core/context.h"
 #include "imgui.h"
 
+sg_image Debugger::preview_texture = {SG_INVALID_ID};
+float Debugger::preview_aspect = 1.0f;
+
 void Debugger::init() {
     simgui_desc_t desc = {};
     desc.logger.func = slog_func;
@@ -128,6 +131,23 @@ void Debugger::draw() {
         // Draw debug bounds for selected layer
         if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
             state.layers[state.selected_object]->drawDebug();
+        }
+
+        if (preview_texture.id != SG_INVALID_ID) {
+            ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
+            bool open = true;
+            if (ImGui::Begin("Texture Preview", &open)) {
+                ImVec2 avail = ImGui::GetContentRegionAvail();
+                float w = avail.x;
+                float h = w / preview_aspect;
+                if (h > avail.y) {
+                    h = avail.y;
+                    w = h * preview_aspect;
+                }
+                ImGui::Image((ImTextureID)(uintptr_t)preview_texture.id, ImVec2(w, h));
+            }
+            ImGui::End();
+            if (!open) preview_texture.id = SG_INVALID_ID;
         }
     }
     simgui_render();
