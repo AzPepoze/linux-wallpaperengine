@@ -78,6 +78,9 @@ void ImageLayer::draw() {
     float rx = state.offset_x + (origin[0] + px) * state.render_scale - (rw * 0.5f);
     float ry = state.offset_y + (origin[1] + py) * state.render_scale - (rh * 0.5f);
 
+    // Apply effects
+    for (auto eff : effects) eff->apply();
+
     renderer_draw_sprite(&state.renderer, img, rx, ry, rw, rh, rotation, tint, false);
 }
 
@@ -107,4 +110,6 @@ void ImageLayer::showInspector() {
     ImGui::DragFloat("Rotation", &rotation, 1.0f, 0, 360);
     ImGui::ColorEdit4("Tint", tint);
     ImGui::DragFloat2("Parallax", (float*)parallax, 0.01f, -10, 10);
+
+    showEffectsInspector();
 }

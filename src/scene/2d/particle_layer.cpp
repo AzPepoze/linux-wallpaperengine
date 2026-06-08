@@ -33,6 +33,8 @@ void ParticleLayer::draw() {
         ps->layer_origin[2] = origin[2];
         ps->parallax[0] = parallax[0];
         ps->parallax[1] = parallax[1];
+
+        for (auto eff : effects) eff->apply();
         ps->draw();
     }
 }
@@ -54,4 +56,6 @@ void ParticleLayer::showInspector() {
     ImGui::Separator();
     ImGui::DragFloat3("Position", (float*)origin, 1.0f);
     ImGui::DragFloat2("Parallax", (float*)parallax, 0.01f, -10, 10);
+
+    showEffectsInspector();
 }

@@ -1,6 +1,7 @@
 #include "layer.h"
 
 #include "../core/context.h"
+#include "imgui.h"
 
 void Layer::loadBaseProperties(cJSON* node) {
     cJSON* name_node = cJSON_GetObjectItemCaseSensitive(node, "name");
@@ -28,5 +29,28 @@ void Layer::loadBaseProperties(cJSON* node) {
     } else if (cJSON_IsObject(visible_node)) {
         cJSON* val = cJSON_GetObjectItemCaseSensitive(visible_node, "value");
         if (cJSON_IsBool(val)) visible = cJSON_IsTrue(val);
+    }
+
+    // Load Effects
+    cJSON* effects_node = cJSON_GetObjectItemCaseSensitive(node, "effects");
+    if (cJSON_IsArray(effects_node)) {
+        cJSON* eff_json;
+        cJSON_ArrayForEach(eff_json, effects_node) {
+            cJSON* file_node = cJSON_GetObjectItemCaseSensitive(eff_json, "file");
+            if (cJSON_IsString(file_node)) {
+                Effect* effect = Effect::load(file_node->valuestring, eff_json);
+                if (effect) effects.push_back(effect);
+            }
+        }
+    }
+}
+
+void Layer::showEffectsInspector() {
+    if (effects.empty()) return;
+
+    if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (int i = 0; i < (int)effects.size(); i++) {
+            effects[i]->showInspector(i);
+        }
     }
 }

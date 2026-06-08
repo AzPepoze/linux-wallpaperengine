@@ -6,6 +6,7 @@
 #include "../../libs/cJSON.h"
 #include "../../libs/linmath.h"
 #include "../../libs/sokol/sokol_gfx.h"
+#include "../render/effect.h"
 
 class Layer {
    public:
@@ -19,9 +20,13 @@ class Layer {
     vec2 parallax = {0, 0};
     std::string path;
     std::string asset_metadata;
+    std::vector<Effect*> effects;
 
     Layer(const char* name) : name(name) {}
-    virtual ~Layer() {}
+    virtual ~Layer() {
+        for (auto eff : effects) delete eff;
+        effects.clear();
+    }
 
     // Disable copy for now to satisfy cppcheck (since we manage resources in subclasses)
     Layer(const Layer&) = delete;
@@ -36,6 +41,7 @@ class Layer {
 
    protected:
     void loadBaseProperties(cJSON* node);
+    void showEffectsInspector();
 };
 
 #endif  // LAYER_H
