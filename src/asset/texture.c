@@ -87,6 +87,11 @@ DecodedTexture load_texture(const char* path) {
             uint32_t data_size = read_u32(f);
             if (i == 0 && j == 0) {
                 uint8_t* data_block = malloc(data_size);
+                if (!data_block) {
+                    LOG_E("Failed to allocate memory for texture data block");
+                    fclose(f);
+                    return tex;
+                }
                 fread(data_block, 1, data_size, f);
 
                 // Check for embedded PNG/JPG
@@ -95,10 +100,12 @@ DecodedTexture load_texture(const char* path) {
                     LOG_D("  Found embedded PNG in .tex");
                     int w, h, ch;
                     tex.pixels = stbi_load_from_memory(data_block, data_size, &w, &h, &ch, 4);
-                    tex.width = (uint32_t)w;
-                    tex.height = (uint32_t)h;
-                    tex.format = SG_PIXELFORMAT_RGBA8;
-                    tex.data_size = (uint32_t)(w * h * 4);
+                    if (tex.pixels) {
+                        tex.width = (uint32_t)w;
+                        tex.height = (uint32_t)h;
+                        tex.format = SG_PIXELFORMAT_RGBA8;
+                        tex.data_size = (uint32_t)(w * h * 4);
+                    }
                     free(data_block);
                     fclose(f);
                     return tex;
@@ -108,6 +115,12 @@ DecodedTexture load_texture(const char* path) {
                 uint8_t* raw_data = NULL;
                 if (is_lz4) {
                     raw_data = malloc(decomp_size);
+                    if (!raw_data) {
+                        LOG_E("Failed to allocate memory for LZ4 decompression");
+                        free(data_block);
+                        fclose(f);
+                        return tex;
+                    }
                     LZ4_decompress_safe((char*)data_block, (char*)raw_data, data_size, decomp_size);
                 } else {
                     raw_data = data_block;
@@ -122,32 +135,34 @@ DecodedTexture load_texture(const char* path) {
                     case 0:
                         tex.format = SG_PIXELFORMAT_RGBA8;
                         tex.pixels = malloc(decomp_size);
-                        memcpy(tex.pixels, raw_data, decomp_size);
+                        if (tex.pixels) memcpy(tex.pixels, raw_data, decomp_size);
                         break;
                     case 4:
                         tex.format = SG_PIXELFORMAT_BC1_RGBA;
                         tex.pixels = malloc(decomp_size);
-                        memcpy(tex.pixels, raw_data, decomp_size);
+                        if (tex.pixels) memcpy(tex.pixels, raw_data, decomp_size);
                         break;
                     case 5:
                         tex.format = SG_PIXELFORMAT_BC2_RGBA;
                         tex.pixels = malloc(decomp_size);
-                        memcpy(tex.pixels, raw_data, decomp_size);
+                        if (tex.pixels) memcpy(tex.pixels, raw_data, decomp_size);
                         break;
                     case 6:
                         tex.format = SG_PIXELFORMAT_BC3_RGBA;
                         tex.pixels = malloc(decomp_size);
-                        memcpy(tex.pixels, raw_data, decomp_size);
+                        if (tex.pixels) memcpy(tex.pixels, raw_data, decomp_size);
                         break;
                     case 9:
                         tex.format = SG_PIXELFORMAT_RGBA8;
                         tex.pixels = malloc(imgW * imgH * 4);
-                        for (uint32_t k = 0; k < imgW * imgH; k++) {
-                            uint8_t val = raw_data[k];
-                            tex.pixels[k * 4 + 0] = val;
-                            tex.pixels[k * 4 + 1] = val;
-                            tex.pixels[k * 4 + 2] = val;
-                            tex.pixels[k * 4 + 3] = 255;
+                        if (tex.pixels) {
+                            for (uint32_t k = 0; k < imgW * imgH; k++) {
+                                uint8_t val = raw_data[k];
+                                tex.pixels[k * 4 + 0] = val;
+                                tex.pixels[k * 4 + 1] = val;
+                                tex.pixels[k * 4 + 2] = val;
+                                tex.pixels[k * 4 + 3] = 255;
+                            }
                         }
                         tex.data_size = imgW * imgH * 4;
                         break;

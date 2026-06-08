@@ -66,6 +66,11 @@ bool extract_pkg(const char* pkg_path, const char* output_dir) {
     } FileEntry;
 
     FileEntry* entries = malloc(sizeof(FileEntry) * file_count);
+    if (!entries) {
+        fprintf(stderr, "Unpacker: Failed to allocate memory for %u file entries\n", file_count);
+        fclose(f);
+        return false;
+    }
     for (uint32_t i = 0; i < file_count; i++) {
         entries[i].name = read_pkg_string(f);
         entries[i].offset = read_u32(f);
