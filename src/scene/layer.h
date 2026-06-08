@@ -12,6 +12,7 @@ class Layer {
    public:
     std::string name;
     bool visible = true;
+    bool solo = false;
     vec3 origin = {0, 0, 0};
     vec2 size = {0, 0};
     vec3 scale = {1, 1, 1};
@@ -41,6 +42,7 @@ class Layer {
 
    protected:
     void loadBaseProperties(cJSON* node);
+    void showBaseInspector();
     void showEffectsInspector();
 };
 

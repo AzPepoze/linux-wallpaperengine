@@ -110,8 +110,20 @@ void scene_loader_update(float dt) {
 }
 
 void scene_loader_draw(void) {
+    bool any_solo = false;
     for (auto layer : state.layers) {
-        layer->draw();
+        if (layer->solo) {
+            any_solo = true;
+            break;
+        }
+    }
+
+    for (auto layer : state.layers) {
+        if (any_solo) {
+            if (layer->solo) layer->draw();
+        } else {
+            if (layer->visible) layer->draw();
+        }
     }
 }
 
