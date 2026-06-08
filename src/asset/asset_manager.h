@@ -1,22 +1,22 @@
 #ifndef ASSET_MANAGER_H
 #define ASSET_MANAGER_H
 
-#include <stdbool.h>
+#include <string>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "../../libs/sokol/sokol_gfx.h"
 
-typedef struct {
-    char engine_path[512];
-    char wallpaper_path[512];
-} asset_manager_t;
+class AssetManager {
+   public:
+    void init(const char* engine_path, const char* wallpaper_path);
+    bool resolvePath(const char* rel_path, char* out_abs_path, int max_len) const;
 
-void asset_manager_init(asset_manager_t* am, const char* engine_path, const char* wallpaper_path);
-bool asset_resolve_path(asset_manager_t* am, const char* rel_path, char* out_abs_path, int max_len);
+    // High-level resolvers
+    sg_image resolveTexture(const char* name, std::string* out_path = nullptr) const;
+    sg_image resolveMaterialTexture(const char* mat_rel_path, std::string* out_path = nullptr) const;
 
-#ifdef __cplusplus
-}
-#endif
+   private:
+    std::string engine_path;
+    std::string wallpaper_path;
+};
 
 #endif  // ASSET_MANAGER_H

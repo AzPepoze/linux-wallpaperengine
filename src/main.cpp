@@ -27,7 +27,7 @@ static void init(void) {
     s_desc.logger.func = slog_func;
     sg_setup(&s_desc);
 
-    debugger_init();
+    Debugger::init();
 
     state.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
     state.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -58,7 +58,7 @@ static void frame(void) {
     sg_begin_pass(&pass);
 
     scene_loader_draw();
-    debugger_draw();
+    Debugger::draw();
 
     sg_end_pass();
     sg_commit();
@@ -81,6 +81,7 @@ static void cleanup(void) {
     sargs_shutdown();
     sg_shutdown();
 }
+
 extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
     sargs_desc a_desc = {};
     a_desc.argc = argc;
@@ -88,7 +89,6 @@ extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
     sargs_setup(&a_desc);
 
     if (sargs_exists("pkg"))
-
         strncpy(state.wallpaper_path, sargs_value("pkg"), sizeof(state.wallpaper_path) - 1), state.is_pkg = true;
     else if (argc > 1 && argv[argc - 1][0] != '-')
         strncpy(state.wallpaper_path, argv[argc - 1], sizeof(state.wallpaper_path) - 1);
