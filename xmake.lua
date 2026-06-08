@@ -74,3 +74,40 @@ task("format")
         os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format -i"})
         print("Done!")
     end)
+
+task("dev")
+    set_menu {
+        usage = "xmake dev [wallpaper_path]",
+        description = "Run formatting check, static analysis, build and run the wallpaper",
+        options = {
+            {nil, "pkg", "v", nil, "Specify the wallpaper path"}
+        }
+    }
+    on_run(function ()
+        import("core.base.option")
+
+        -- 1. Run Check
+        print("--> Running checks...")
+        os.exec("xmake check")
+
+        -- 2. Build
+        print("--> Building...")
+        os.exec("xmake")
+
+        -- 3. Run
+        local path = option.get("pkg")
+        if not path then
+            local args = option.get("arguments")
+            if args and #args > 0 then
+                path = args[1]
+            end
+        end
+        
+        -- Default test path if no argument is provided
+        if not path then
+            path = "/mnt/6AB2DBF3B2DBC1AD/Program Files (x86)/Steam/steamapps/workshop/content/431960/2950288512"
+        end
+
+        print("--> Running with: " .. path)
+        os.execv("xmake", {"run", "linux-wallpaperengine", path})
+    end)
