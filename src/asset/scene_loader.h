@@ -7,6 +7,7 @@ extern "C" {
 
 void scene_loader_init(void);
 void scene_loader_load(const char* path);
+void scene_loader_update(float dt);
 void scene_loader_update_viewport(void);
 void scene_loader_draw(void);
 void scene_loader_cleanup(void);

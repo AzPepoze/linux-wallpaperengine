@@ -46,6 +46,7 @@ static void init(void) {
 
 static void frame(void) {
     scene_loader_update_viewport();
+    scene_loader_update((float)sapp_frame_duration());
 
     float target_px = (state.mouse_x / (float)sapp_width() - 0.5f) * 2.0f;
     float target_py = (state.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
