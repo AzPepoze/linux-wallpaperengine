@@ -10,14 +10,16 @@
 class ShaderPass {
    public:
     std::string shader_name;
-    sg_pipeline pipeline;
+    sg_pipeline pipeline = {SG_INVALID_ID};
     std::vector<sg_image> textures;
     cJSON* constant_values;
+    bool enabled = true;
 
     ShaderPass(cJSON* config);
     ~ShaderPass();
 
     void apply();
+    void showInspector(int id);
 };
 
 class Effect {
@@ -31,6 +33,7 @@ class Effect {
 
     static Effect* load(const char* rel_path, cJSON* instance_config);
     void apply();
+    void showInspector(int id);
 };
 
 #endif  // EFFECT_H

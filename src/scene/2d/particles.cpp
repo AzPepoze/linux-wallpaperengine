@@ -355,12 +355,13 @@ void ParticleSystem::drawDebugBounds() {
         }
     }
 
-    // Real-time Particle Tracking (draw dots)
-    float p_color[4] = {1, 0, 0, 1};  // Red for particle tracking
+    // Real-time Particle Tracking (draw boxes for each particle)
+    float p_color[4] = {1, 0, 0, 1};
     for (auto& p : particles) {
         float rx = state.offset_x + (layer_origin[0] + px + p.position[0]) * state.render_scale;
         float ry = state.offset_y + (layer_origin[1] + py + p.position[1]) * state.render_scale;
-        renderer_draw_rect(&state.renderer, rx - 1, ry - 1, 2, 2, p_color);
+        float rs = p.size * state.render_scale;
+        renderer_draw_rect(&state.renderer, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p_color);
     }
 
     for (auto c : children) c->drawDebugBounds();
