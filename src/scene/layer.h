@@ -16,6 +16,8 @@ class Layer {
     float rotation = 0.0f;
     float tint[4] = {1, 1, 1, 1};
     vec2 parallax = {0, 0};
+    std::string path;
+    std::string asset_metadata;
 
     Layer(const char* name) : name(name) {}
     virtual ~Layer() {}

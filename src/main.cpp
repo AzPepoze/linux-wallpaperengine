@@ -81,8 +81,7 @@ static void cleanup(void) {
     sargs_shutdown();
     sg_shutdown();
 }
-
-sapp_desc sokol_main(int argc, char* argv[]) {
+extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
     sargs_desc a_desc = {};
     a_desc.argc = argc;
     a_desc.argv = argv;
@@ -101,7 +100,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     desc.cleanup_cb = cleanup;
     desc.width = 1280;
     desc.height = 720;
-    desc.window_title = "Linux Wallpaper Engine (C)";
+    desc.window_title = "Linux Wallpaper Engine";
+    desc.icon.sokol_default = true;
     desc.logger.func = slog_func;
     return desc;
 }

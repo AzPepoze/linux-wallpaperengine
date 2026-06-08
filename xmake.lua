@@ -7,17 +7,8 @@ target("linux-wallpaperengine")
     add_packages("imgui")
     
     -- Source files
-    add_files("src/*.cpp")
-    add_files("src/core/*.c")
-    add_files("src/core/*.cpp")
-    add_files("src/asset/*.c")
-    add_files("src/asset/*.cpp")
-    add_files("src/render/*.c")
-    add_files("src/sokol/*.cpp")
-    add_files("src/ui/*.cpp")
-    add_files("src/scene/*.cpp")
-    add_files("src/scene/**/*.cpp")
-    
+    add_files("src/main.cpp")
+    add_files("src/**/*.cpp")
     add_files("libs/cJSON.c")
     add_files("libs/lz4.c")
 
