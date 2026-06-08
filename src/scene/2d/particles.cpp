@@ -317,7 +317,7 @@ void ParticleSystem::draw() {
         float ry = state.offset_y + (layer_origin[1] + py + p.position[1]) * state.render_scale;
         float rs = p.size * state.render_scale;
         renderer_draw_sprite(&state.renderer, texture, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation, tint,
-                             is_additive);
+                             is_additive, nullptr);
     }
     for (auto c : children) {
         c->layer_origin[0] = layer_origin[0];
