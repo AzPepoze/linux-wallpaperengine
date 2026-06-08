@@ -50,6 +50,8 @@ class ParticleSystem {
     cJSON* config;
     sg_image texture;
     std::vector<Particle> particles;
+    std::vector<ParticleSystem*> children;
+
     int max_particles;
     std::vector<float> emitter_timers;
     float global_time = 0.0f;
@@ -58,7 +60,11 @@ class ParticleSystem {
     vec2 parallax = {0, 0};
     bool is_additive = false;
 
-    ParticleSystem(cJSON* config, sg_image tex, float sw, float sh);
+    // Overrides
+    float override_alpha = 1.0f;
+    float override_rate = 1.0f;
+
+    ParticleSystem(cJSON* config, sg_image tex, float sw, float h);
     ~ParticleSystem();
 
     static ParticleSystem* createFromJSON(cJSON* node, const class AssetManager& assets, float sw, float sh);

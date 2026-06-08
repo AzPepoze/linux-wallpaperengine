@@ -8,7 +8,6 @@ void renderer_init(renderer_t* r, float w, float h) {
     r->view_width = w;
     r->view_height = h;
 
-    // Standard quad: top-left at 0,0 with size 1x1
     vertex_t vertices[] = {
         {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
     sg_buffer_desc v_desc = {};
@@ -28,6 +27,14 @@ void renderer_init(renderer_t* r, float w, float h) {
     s_desc.wrap_v = SG_WRAP_REPEAT;
     r->smp = sg_make_sampler(&s_desc);
     r->bind.samplers[0] = r->smp;
+
+    uint32_t pixel = 0xFFFFFFFF;
+    sg_image_desc img_desc = {};
+    img_desc.width = 1;
+    img_desc.height = 1;
+    img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+    img_desc.data.mip_levels[0] = {&pixel, 4};
+    r->white_pixel = sg_make_image(&img_desc);
 
     sg_shader_desc shd_desc = {};
     shd_desc.vertex_func.source =
@@ -62,10 +69,8 @@ void renderer_init(renderer_t* r, float w, float h) {
 
     shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
-
     shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-
     shd_desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.texture_sampler_pairs[0].glsl_name = "tex";
     shd_desc.texture_sampler_pairs[0].view_slot = 0;
@@ -81,7 +86,16 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.colors[0].blend.enabled = true;
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    r->pip = sg_make_pipeline(&pip_desc);
+    r->pip_alpha = sg_make_pipeline(&pip_desc);
+
+    pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
+    r->pip_add = sg_make_pipeline(&pip_desc);
+
+    // Line Pipeline
+    pip_desc.primitive_type = SG_PRIMITIVETYPE_LINES;
+    pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    r->pip_lines = sg_make_pipeline(&pip_desc);
 }
 
 void renderer_update_viewport(renderer_t* r, float w, float h) {
@@ -90,69 +104,82 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
 }
 
 void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
-                          float tint[4]) {
+                          float tint[4], bool additive) {
     sg_view_desc v_desc = {};
     v_desc.texture.image = img;
     sg_view view = sg_make_view(&v_desc);
     r->bind.views[0] = view;
 
-    sg_apply_pipeline(r->pip);
+    sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
     sg_apply_bindings(&r->bind);
 
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
-
     mat4x4_identity(model);
     mat4x4_translate_in_place(model, x, y, 0.0f);
     mat4x4_rotate_Z(model, model, rotation * (M_PI / 180.0f));
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
-
     mat4x4_mul(mvp, proj, model);
 
     sg_range mvp_range = SG_RANGE(mvp);
     sg_apply_uniforms(0, &mvp_range);
-
     sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
     sg_apply_uniforms(1, &tint_range);
+    sg_draw(0, 6, 1);
+    sg_destroy_view(view);
+}
 
+void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]) {
+    renderer_draw_line(r, x, y, x + w, y, color);          // Top
+    renderer_draw_line(r, x + w, y, x + w, y + h, color);  // Right
+    renderer_draw_line(r, x + w, y + h, x, y + h, color);  // Bottom
+    renderer_draw_line(r, x, y + h, x, y, color);          // Left
+}
+
+void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, float color[4]) {
+    sg_view_desc v_desc = {};
+    v_desc.texture.image = r->white_pixel;
+    sg_view view = sg_make_view(&v_desc);
+    r->bind.views[0] = view;
+
+    sg_apply_pipeline(r->pip_lines);
+    sg_apply_bindings(&r->bind);
+
+    mat4x4 proj, model, mvp;
+    mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
+    mat4x4_identity(model);
+
+    // We can use the quad vertices and just stretch/rotate them to be a line
+    // but easier to just draw a very thin sprite or use actual line coords.
+    // For now, let's use the quad but with a line pipeline.
+    // However, Sokol's line pipeline with our quad indices won't look right.
+    // Let's just draw quads as thin 1-pixel lines using draw_sprite.
+
+    // Fallback: draw as a thin 1-pixel rectangle
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float dist = sqrtf(dx * dx + dy * dy);
+    float angle = atan2f(dy, dx) * (180.0f / M_PI);
+
+    mat4x4_translate_in_place(model, x0, y0, 0.0f);
+    mat4x4_rotate_Z(model, model, angle * (M_PI / 180.0f));
+    mat4x4_scale_aniso(model, model, dist, 1.0f, 1.0f);
+    mat4x4_mul(mvp, proj, model);
+
+    sg_range mvp_range = SG_RANGE(mvp);
+    sg_apply_uniforms(0, &mvp_range);
+    sg_range tint_range = {.ptr = color, .size = sizeof(float) * 4};
+    sg_apply_uniforms(1, &tint_range);
     sg_draw(0, 6, 1);
 
     sg_destroy_view(view);
 }
 
-void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]) {
-    // Re-use standard sprite shader but without a texture (or with a white pixel)
-    // For simplicity, we just draw a colored quad.
-    // In a more advanced renderer, we might use a dedicated shader.
-
-    // We use SG_INVALID_ID to signify "no texture" or just use a fallback if needed
-    // But since our current shader always expects a texture, we'll just not bind a view
-    // and see if it works as a flat color (depends on GL driver behavior)
-    // Better: We could create a 1x1 white texture during init.
-
-    sg_apply_pipeline(r->pip);
-    sg_apply_bindings(&r->bind);
-
-    mat4x4 proj, model, mvp;
-    mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
-
-    mat4x4_identity(model);
-    mat4x4_translate_in_place(model, x, y, 0.0f);
-    mat4x4_scale_aniso(model, model, w, h, 1.0f);
-
-    mat4x4_mul(mvp, proj, model);
-
-    sg_range mvp_range = SG_RANGE(mvp);
-    sg_apply_uniforms(0, &mvp_range);
-
-    sg_range tint_range = {.ptr = color, .size = sizeof(float) * 4};
-    sg_apply_uniforms(1, &tint_range);
-
-    sg_draw(0, 6, 1);
-}
-
 void renderer_cleanup(renderer_t* r) {
-    sg_destroy_pipeline(r->pip);
+    sg_destroy_pipeline(r->pip_alpha);
+    sg_destroy_pipeline(r->pip_add);
+    sg_destroy_pipeline(r->pip_lines);
+    sg_destroy_image(r->white_pixel);
     sg_destroy_buffer(r->bind.vertex_buffers[0]);
     sg_destroy_buffer(r->bind.index_buffer);
     sg_destroy_sampler(r->smp);
