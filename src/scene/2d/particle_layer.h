@@ -11,8 +11,11 @@ class ParticleLayer : public Layer {
     ParticleLayer(const char* name, ParticleSystem* ps);
     virtual ~ParticleLayer();
 
+    static ParticleLayer* createFromJSON(cJSON* node);
+
     void update(float dt) override;
     void draw() override;
+    void drawDebug() override;
     void showInspector() override;
 };
 

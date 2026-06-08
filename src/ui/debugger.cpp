@@ -9,13 +9,13 @@
 #include "../core/context.h"
 #include "imgui.h"
 
-void debugger_init(void) {
+void Debugger::init() {
     simgui_desc_t desc = {};
     desc.logger.func = slog_func;
     simgui_setup(&desc);
 }
 
-static void draw_hierarchy_panel(float width, float height) {
+void Debugger::drawHierarchyPanel(float width, float height) {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height));
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
@@ -43,7 +43,7 @@ static void draw_hierarchy_panel(float width, float height) {
     ImGui::End();
 }
 
-static void draw_inspector_panel(float width, float height) {
+void Debugger::drawInspectorPanel(float width, float height) {
     float x_pos = (float)sapp_width() - width;
     ImGui::SetNextWindowPos(ImVec2(x_pos, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height));
@@ -75,7 +75,7 @@ static void draw_inspector_panel(float width, float height) {
     ImGui::End();
 }
 
-void debugger_draw(void) {
+void Debugger::draw() {
     simgui_frame_desc_t frame_desc = {};
     frame_desc.width = sapp_width();
     frame_desc.height = sapp_height();
@@ -87,8 +87,13 @@ void debugger_draw(void) {
         float panel_width = 300.0f;
         float screen_height = (float)sapp_height();
 
-        draw_hierarchy_panel(panel_width, screen_height);
-        draw_inspector_panel(panel_width, screen_height);
+        drawHierarchyPanel(panel_width, screen_height);
+        drawInspectorPanel(panel_width, screen_height);
+
+        // Draw debug bounds for selected layer
+        if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
+            state.layers[state.selected_object]->drawDebug();
+        }
     }
     simgui_render();
 }

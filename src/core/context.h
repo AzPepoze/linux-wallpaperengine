@@ -27,7 +27,7 @@ struct app_state_t {
     scene_type_t scene_type = SCENE_TYPE_2D;
     cJSON* scene_json = nullptr;
     renderer_t renderer = {};
-    asset_manager_t asset_mgr = {};
+    AssetManager asset_mgr = {};
 
     std::vector<Layer*> layers;
 

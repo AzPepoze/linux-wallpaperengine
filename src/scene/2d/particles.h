@@ -40,13 +40,18 @@ class ParticleSystem {
     float timer = 0.0f;
     float global_time = 0.0f;
     float scene_w, scene_h;
+    vec3 layer_origin = {0, 0, 0};
+    vec2 parallax = {0, 0};
 
     ParticleSystem(cJSON* config, sg_image tex, float sw, float sh);
     ~ParticleSystem();
 
+    static ParticleSystem* createFromJSON(cJSON* node, const class AssetManager& assets, float sw, float sh);
+
     void update(float dt);
     void draw();
     void showInspector();
+    void drawDebugBounds();
 
     // Debug features
     bool show_bounds = false;
@@ -55,7 +60,6 @@ class ParticleSystem {
 
    private:
     void spawnParticle();
-    void drawDebugBounds();
 };
 
 #endif  // PARTICLES_H

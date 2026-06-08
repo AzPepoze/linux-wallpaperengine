@@ -1,0 +1,32 @@
+#include "layer.h"
+
+#include "../core/context.h"
+
+void Layer::loadBaseProperties(cJSON* node) {
+    cJSON* name_node = cJSON_GetObjectItemCaseSensitive(node, "name");
+    if (cJSON_IsString(name_node)) name = name_node->valuestring;
+
+    cJSON* origin_node = cJSON_GetObjectItemCaseSensitive(node, "origin");
+    if (cJSON_IsString(origin_node)) {
+        sscanf(origin_node->valuestring, "%f %f %f", &origin[0], &origin[1], &origin[2]);
+    }
+
+    cJSON* scale_node = cJSON_GetObjectItemCaseSensitive(node, "scale");
+    if (cJSON_IsString(scale_node)) {
+        sscanf(scale_node->valuestring, "%f %f %f", &scale[0], &scale[1], &scale[2]);
+    }
+
+    cJSON* parallax_node = cJSON_GetObjectItemCaseSensitive(node, "parallax");
+    if (!parallax_node) parallax_node = cJSON_GetObjectItemCaseSensitive(node, "parallaxDepth");
+    if (cJSON_IsString(parallax_node)) {
+        sscanf(parallax_node->valuestring, "%f %f", &parallax[0], &parallax[1]);
+    }
+
+    cJSON* visible_node = cJSON_GetObjectItemCaseSensitive(node, "visible");
+    if (cJSON_IsBool(visible_node)) {
+        visible = cJSON_IsTrue(visible_node);
+    } else if (cJSON_IsObject(visible_node)) {
+        cJSON* val = cJSON_GetObjectItemCaseSensitive(visible_node, "value");
+        if (cJSON_IsBool(val)) visible = cJSON_IsTrue(val);
+    }
+}

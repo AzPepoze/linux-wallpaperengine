@@ -6,6 +6,7 @@
 
 #include "../../core/context.h"
 #include "../../core/logger.h"
+#include "../../core/utils.h"
 #include "../../render/render.h"
 #include "imgui.h"
 
@@ -43,7 +44,38 @@ ParticleSystem::ParticleSystem(cJSON* config, sg_image tex, float sw, float sh)
 }
 
 ParticleSystem::~ParticleSystem() {
-    // config belongs to scene_loader
+    // config belongs to scene_loader/parent
+}
+
+ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const class AssetManager& assets, float sw, float sh) {
+    cJSON* p_file = cJSON_GetObjectItemCaseSensitive(node, "particle");
+    if (!p_file) p_file = cJSON_GetObjectItemCaseSensitive(node, "file");
+
+    if (p_file && cJSON_IsString(p_file)) {
+        char p_abs[1024];
+        if (assets.resolvePath(p_file->valuestring, p_abs, sizeof(p_abs))) {
+            char* p_json_str = read_file_to_string(p_abs);
+            if (p_json_str) {
+                cJSON* p_json = cJSON_Parse(p_json_str);
+                free(p_json_str);
+                if (p_json) {
+                    std::string p_tex_path;
+                    sg_image p_tex = assets.resolveTexture("materials/particle.tex", &p_tex_path);
+                    cJSON* mat = cJSON_GetObjectItemCaseSensitive(p_json, "material");
+                    if (cJSON_IsString(mat)) {
+                        sg_image mat_tex = assets.resolveMaterialTexture(mat->valuestring, &p_tex_path);
+                        if (mat_tex.id != SG_INVALID_ID) p_tex = mat_tex;
+                    }
+
+                    ParticleSystem* ps = new ParticleSystem(p_json, p_tex, sw, sh);
+                    ps->config_path = p_abs;
+                    ps->texture_path = p_tex_path;
+                    return ps;
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 
 void ParticleSystem::spawnParticle() {
@@ -134,7 +166,7 @@ void ParticleSystem::spawnParticle() {
         }
     }
 
-    // Operators (pre-set some properties)
+    // Operators
     cJSON* operators = cJSON_GetObjectItemCaseSensitive(config, "operator");
     cJSON* op;
     cJSON_ArrayForEach(op, operators) {
@@ -182,7 +214,6 @@ void ParticleSystem::update(float dt) {
             continue;
         }
 
-        // Apply movement
         p.velocity[0] += p.gravity[0] * dt;
         p.velocity[1] += p.gravity[1] * dt;
         p.velocity[2] += p.gravity[2] * dt;
@@ -198,7 +229,6 @@ void ParticleSystem::update(float dt) {
         p.position[2] += p.velocity[2] * dt;
         p.rotation += p.angular_vel * dt;
 
-        // Apply alpha fade
         float age = p.max_life - p.life;
         float alpha = p.initial_alpha;
         if (age < p.fade_in) {
@@ -212,18 +242,19 @@ void ParticleSystem::update(float dt) {
 }
 
 void ParticleSystem::draw() {
-    if (show_bounds) drawDebugBounds();
     if (texture.id == SG_INVALID_ID) return;
+
+    float px = parallax[0] * state.parallax_smooth_x * 50.0f;
+    float py = parallax[1] * state.parallax_smooth_y * 50.0f;
 
     for (auto& p : particles) {
         float tint[4] = {p.color[0], p.color[1], p.color[2], p.alpha};
 
-        // Align coordinates with Scene center
-        float rx = state.offset_x + (state.scene_w * 0.5f + p.position[0]) * state.render_scale;
-        float ry = state.offset_y + (state.scene_h * 0.5f - p.position[1]) * state.render_scale;
+        // Align with Layer origin and scene center
+        float rx = state.offset_x + (layer_origin[0] + px + p.position[0]) * state.render_scale;
+        float ry = state.offset_y + (layer_origin[1] + py - p.position[1]) * state.render_scale;
         float rs = p.size * state.render_scale;
 
-        // Origin at center of sprite
         renderer_draw_sprite(&state.renderer, texture, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation, tint);
     }
 }
@@ -231,6 +262,10 @@ void ParticleSystem::draw() {
 void ParticleSystem::drawDebugBounds() {
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     cJSON* emitter;
+
+    float px = parallax[0] * state.parallax_smooth_x * 50.0f;
+    float py = parallax[1] * state.parallax_smooth_y * 50.0f;
+
     cJSON_ArrayForEach(emitter, emitters) {
         cJSON* type_node = cJSON_GetObjectItemCaseSensitive(emitter, "name");
         if (!type_node) continue;
@@ -239,21 +274,21 @@ void ParticleSystem::drawDebugBounds() {
         vec3 origin = {0, 0, 0};
         parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "origin"), origin);
 
-        float color[4] = {1.0f, 1.0f, 0.0f, 0.3f};  // Yellow semi-transparent
+        float color[4] = {1.0f, 1.0f, 0.0f, 0.3f};
 
         if (strcmp(type, "boxrandom") == 0) {
             vec3 dmax = {0, 0, 0};
             parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), dmax);
 
-            float bx = state.offset_x + (state.scene_w * 0.5f + origin[0] - dmax[0]) * state.render_scale;
-            float by = state.offset_y + (state.scene_h * 0.5f - origin[1] - dmax[1]) * state.render_scale;
+            float bx = state.offset_x + (layer_origin[0] + px + origin[0] - dmax[0]) * state.render_scale;
+            float by = state.offset_y + (layer_origin[1] + py - origin[1] - dmax[1]) * state.render_scale;
             float bw = dmax[0] * 2.0f * state.render_scale;
             float bh = dmax[1] * 2.0f * state.render_scale;
             renderer_draw_rect(&state.renderer, bx, by, bw, bh, color);
         } else if (strcmp(type, "sphererandom") == 0) {
             float dmax = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"));
-            float bx = state.offset_x + (state.scene_w * 0.5f + origin[0] - dmax) * state.render_scale;
-            float by = state.offset_y + (state.scene_h * 0.5f - origin[1] - dmax) * state.render_scale;
+            float bx = state.offset_x + (layer_origin[0] + px + origin[0] - dmax) * state.render_scale;
+            float by = state.offset_y + (layer_origin[1] + py - origin[1] - dmax) * state.render_scale;
             float bw = dmax * 2.0f * state.render_scale;
             float bh = dmax * 2.0f * state.render_scale;
             renderer_draw_rect(&state.renderer, bx, by, bw, bh, color);

@@ -1,15 +1,14 @@
 #ifndef DEBUGGER_H
 #define DEBUGGER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+class Debugger {
+   public:
+    static void init();
+    static void draw();
 
-void debugger_init(void);
-void debugger_draw(void);
-
-#ifdef __cplusplus
-}
-#endif
+   private:
+    static void drawHierarchyPanel(float width, float height);
+    static void drawInspectorPanel(float width, float height);
+};
 
 #endif  // DEBUGGER_H

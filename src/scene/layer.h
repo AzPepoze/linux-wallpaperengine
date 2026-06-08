@@ -3,6 +3,7 @@
 
 #include <string>
 
+#include "../../libs/cJSON.h"
 #include "../../libs/linmath.h"
 #include "../../libs/sokol/sokol_gfx.h"
 
@@ -28,7 +29,13 @@ class Layer {
 
     virtual void update(float dt) = 0;
     virtual void draw() = 0;
+    virtual void drawDebug() {}
     virtual void showInspector() = 0;
+
+    bool draw_debug_bounds = false;
+
+   protected:
+    void loadBaseProperties(cJSON* node);
 };
 
 #endif  // LAYER_H
