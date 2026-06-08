@@ -29,6 +29,10 @@ void Debugger::drawHierarchyPanel(float width, float height) {
             state.selected_object = -1;
         }
 
+        ImGui::SameLine();
+        ImGui::Checkbox("Isolate", &state.test_mode);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show ONLY the selected layer and its effects");
+
         ImGui::Separator();
         ImGui::BeginChild("LayerList");
         for (int i = 0; i < (int)state.layers.size(); i++) {

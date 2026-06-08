@@ -26,12 +26,13 @@ static void read_string(FILE* f, char* buf, int n) {
     buf[n] = '\0';
 }
 
-DecodedTexture load_texture(const char* path) {
+DecodedTexture load_texture(const char* path, int image_index) {
     DecodedTexture tex = {0};
     tex.format = SG_PIXELFORMAT_RGBA8;
 
     const char* ext = strrchr(path, '.');
     if (ext && strcmp(ext, ".tex") != 0) {
+        if (image_index > 0) return tex;  // Only first image for non-.tex files
         LOG_TAG_D(TAG, "Loading image: %s", path);
         tex.pixels = (uint8_t*)stbi_load(path, (int*)&tex.width, (int*)&tex.height, &tex.channels, 4);
         if (!tex.pixels) {
@@ -76,7 +77,15 @@ DecodedTexture load_texture(const char* path) {
     fseek(f, 1, SEEK_CUR);
     uint32_t image_count = read_u32(f);
 
+    LOG_TAG_I(TAG, "Loading texture: %s (images: %u, requested: %d)", path, image_count, image_index);
+    if (image_index >= (int)image_count) {
+        LOG_TAG_W(TAG, "  Requested image index %d out of bounds (count: %u)", image_index, image_count);
+        fclose(f);
+        return tex;
+    }
+
     const char* format_name = "Unknown";
+    // ... rest of format detection ...
     switch (wp_format) {
         case 0:
             format_name = "RGBA8";
@@ -95,7 +104,6 @@ DecodedTexture load_texture(const char* path) {
             break;
     }
 
-    LOG_TAG_I(TAG, "Loading texture: %s", path);
     LOG_TAG_D(TAG, "  Format: %s (wp:%u), Size: %dx%d, Container: %s", format_name, wp_format, imgW, imgH,
               container_magic);
 
@@ -119,7 +127,7 @@ DecodedTexture load_texture(const char* path) {
             }
 
             uint32_t data_size = read_u32(f);
-            if (i == 0 && j == 0) {
+            if (i == (uint32_t)image_index && j == 0) {
                 uint8_t* data_block = (uint8_t*)malloc(data_size);
                 if (!data_block) {
                     LOG_TAG_E(TAG, "Failed to allocate memory for texture data block");

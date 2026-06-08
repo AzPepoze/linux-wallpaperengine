@@ -45,6 +45,7 @@ struct app_state_t {
     scaling_mode_t scaling_mode = SCALING_FIT;
     int selected_object = -1;
     bool show_ui = true;
+    bool test_mode = false;
 };
 
 #ifdef __cplusplus

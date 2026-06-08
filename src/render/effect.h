@@ -15,6 +15,7 @@ class ShaderPass {
     sg_shader shader = {SG_INVALID_ID};
     std::vector<sg_image> textures;
     std::vector<std::string> texture_paths;
+    std::vector<bool> texture_masks;
     cJSON* constant_values;
     std::map<std::string, std::vector<float>> uniforms;
     bool enabled = true;

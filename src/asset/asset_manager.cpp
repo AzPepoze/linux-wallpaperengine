@@ -56,7 +56,7 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
     return false;
 }
 
-sg_image AssetManager::resolveTexture(const char* name, std::string* out_path) const {
+sg_image AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {
     char abs_path[1024];
     char name_with_ext[256];
     if (!strstr(name, "."))
@@ -66,7 +66,7 @@ sg_image AssetManager::resolveTexture(const char* name, std::string* out_path) c
 
     if (resolvePath(name_with_ext, abs_path, sizeof(abs_path))) {
         if (out_path) *out_path = abs_path;
-        DecodedTexture tex = load_texture(abs_path);
+        DecodedTexture tex = load_texture(abs_path, image_index);
         if (tex.pixels) {
             sg_image_desc desc = {};
             desc.width = (int)tex.width;
