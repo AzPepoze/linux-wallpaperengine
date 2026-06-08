@@ -27,6 +27,7 @@ static void parse_vec3(cJSON* node, vec3 out) {
 }
 
 static float get_float(cJSON* node) {
+    if (!node) return 0.0f;
     if (cJSON_IsNumber(node)) return (float)node->valuedouble;
     if (cJSON_IsString(node)) return (float)atof(node->valuestring);
     return 0.0f;
@@ -40,6 +41,20 @@ ParticleSystem::ParticleSystem(cJSON* config, sg_image tex, float sw, float sh)
 
     if (texture.id == SG_INVALID_ID) {
         LOG_TAG_W(TAG, "Particle system initialized with INVALID texture");
+    }
+
+    cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
+    int emitter_count = cJSON_GetArraySize(emitters);
+    emitter_timers.resize(emitter_count, 0.0f);
+
+    // Initial Warmup
+    float start_time = get_float(cJSON_GetObjectItemCaseSensitive(config, "starttime"));
+    if (start_time > 0) {
+        LOG_TAG_D(TAG, "Pre-simulating particle system for %.1fs", start_time);
+        float step = 0.1f;
+        for (float t = 0; t < start_time; t += step) {
+            update(step);
+        }
     }
 }
 
@@ -82,7 +97,7 @@ void ParticleSystem::spawnParticle() {
     if ((int)particles.size() >= max_particles) return;
 
     Particle p = {};
-    p.random_value = rand_f();
+    p.random_seed = rand_f();
     p.spawn_time = global_time;
     p.alpha = 1.0f;
     p.initial_alpha = 1.0f;
@@ -90,7 +105,7 @@ void ParticleSystem::spawnParticle() {
     p.color[1] = 1.0f;
     p.color[2] = 1.0f;
 
-    // Default Emitter logic
+    // Emitters
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     cJSON* emitter;
     cJSON_ArrayForEach(emitter, emitters) {
@@ -123,19 +138,18 @@ void ParticleSystem::spawnParticle() {
     cJSON* initializers = cJSON_GetObjectItemCaseSensitive(config, "initializer");
     cJSON* init;
     cJSON_ArrayForEach(init, initializers) {
-        cJSON* name_node = cJSON_GetObjectItemCaseSensitive(init, "name");
-        if (!name_node) continue;
-        const char* name = name_node->valuestring;
+        const char* name = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(init, "name"));
+        if (!name) continue;
 
         if (strcmp(name, "lifetimerandom") == 0) {
-            float min = get_float(cJSON_GetObjectItemCaseSensitive(init, "min"));
-            float max = get_float(cJSON_GetObjectItemCaseSensitive(init, "max"));
-            p.max_life = min + rand_f() * (max - min);
+            p.max_life = get_float(cJSON_GetObjectItemCaseSensitive(init, "min")) +
+                         rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(init, "max")) -
+                                     get_float(cJSON_GetObjectItemCaseSensitive(init, "min")));
             p.life = p.max_life;
         } else if (strcmp(name, "sizerandom") == 0) {
-            float min = get_float(cJSON_GetObjectItemCaseSensitive(init, "min"));
-            float max = get_float(cJSON_GetObjectItemCaseSensitive(init, "max"));
-            p.size = min + rand_f() * (max - min);
+            p.size = get_float(cJSON_GetObjectItemCaseSensitive(init, "min")) +
+                     rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(init, "max")) -
+                                 get_float(cJSON_GetObjectItemCaseSensitive(init, "min")));
             p.initial_size = p.size;
         } else if (strcmp(name, "velocityrandom") == 0) {
             vec3 min, max;
@@ -143,7 +157,6 @@ void ParticleSystem::spawnParticle() {
             parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "max"), max);
             p.velocity[0] = min[0] + rand_f() * (max[0] - min[0]);
             p.velocity[1] = min[1] + rand_f() * (max[1] - min[1]);
-            p.velocity[2] = min[2] + rand_f() * (max[2] - min[2]);
         } else if (strcmp(name, "colorrandom") == 0) {
             vec3 min, max;
             parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "min"), min);
@@ -152,9 +165,9 @@ void ParticleSystem::spawnParticle() {
             p.color[1] = (min[1] + rand_f() * (max[1] - min[1])) / 255.0f;
             p.color[2] = (min[2] + rand_f() * (max[2] - min[2])) / 255.0f;
         } else if (strcmp(name, "alpharandom") == 0) {
-            float min = get_float(cJSON_GetObjectItemCaseSensitive(init, "min"));
-            float max = get_float(cJSON_GetObjectItemCaseSensitive(init, "max"));
-            p.alpha = min + rand_f() * (max - min);
+            p.alpha = get_float(cJSON_GetObjectItemCaseSensitive(init, "min")) +
+                      rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(init, "max")) -
+                                  get_float(cJSON_GetObjectItemCaseSensitive(init, "min")));
             p.initial_alpha = p.alpha;
         } else if (strcmp(name, "rotationrandom") == 0) {
             p.rotation = rand_f() * 360.0f;
@@ -166,13 +179,17 @@ void ParticleSystem::spawnParticle() {
         }
     }
 
-    // Operators
+    // Capture Base Position for Oscillations
+    p.base_position[0] = p.position[0];
+    p.base_position[1] = p.position[1];
+    p.base_position[2] = p.position[2];
+
+    // Pre-calculate operator values
     cJSON* operators = cJSON_GetObjectItemCaseSensitive(config, "operator");
     cJSON* op;
     cJSON_ArrayForEach(op, operators) {
-        cJSON* name_node = cJSON_GetObjectItemCaseSensitive(op, "name");
-        if (!name_node) continue;
-        const char* name = name_node->valuestring;
+        const char* name = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(op, "name"));
+        if (!name) continue;
 
         if (strcmp(name, "movement") == 0) {
             parse_vec3(cJSON_GetObjectItemCaseSensitive(op, "gravity"), p.gravity);
@@ -181,6 +198,28 @@ void ParticleSystem::spawnParticle() {
             p.fade_in = get_float(cJSON_GetObjectItemCaseSensitive(op, "fadeintime"));
             p.fade_out = get_float(cJSON_GetObjectItemCaseSensitive(op, "fadeouttime"));
             if (p.fade_out == 0) p.fade_out = 1.0f;
+        } else if (strcmp(name, "oscillatealpha") == 0) {
+            p.osc_alpha_freq = get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")) +
+                               rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymax")) -
+                                           get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")));
+            p.osc_alpha_min = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemin"));
+        } else if (strcmp(name, "oscillatesize") == 0) {
+            p.osc_size_freq = get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")) +
+                              rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymax")) -
+                                          get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")));
+            p.osc_size_min = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemin"));
+            p.osc_size_max = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemax"));
+            if (p.osc_size_max == 0) p.osc_size_max = 1.0f;
+        } else if (strcmp(name, "oscillateposition") == 0) {
+            p.osc_pos_freq = get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")) +
+                             rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymax")) -
+                                         get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")));
+            p.osc_pos_min = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemin"));
+            p.osc_pos_max = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemax"));
+        } else if (strcmp(name, "turbulence") == 0) {
+            p.turb_speed = get_float(cJSON_GetObjectItemCaseSensitive(op, "speedmin")) +
+                           rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "speedmax")) -
+                                       get_float(cJSON_GetObjectItemCaseSensitive(op, "speedmin")));
         }
     }
 
@@ -192,16 +231,18 @@ void ParticleSystem::update(float dt) {
 
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     cJSON* emitter;
+    int i = 0;
     cJSON_ArrayForEach(emitter, emitters) {
         float rate = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "rate"));
         if (rate > 0) {
-            timer += dt;
+            emitter_timers[i] += dt;
             float interval = 1.0f / rate;
-            while (timer >= interval) {
+            while (emitter_timers[i] >= interval) {
                 spawnParticle();
-                timer -= interval;
+                emitter_timers[i] -= interval;
             }
         }
+        i++;
     }
 
     for (size_t i = 0; i < particles.size(); i++) {
@@ -214,30 +255,54 @@ void ParticleSystem::update(float dt) {
             continue;
         }
 
+        // Movement
         p.velocity[0] += p.gravity[0] * dt;
         p.velocity[1] += p.gravity[1] * dt;
-        p.velocity[2] += p.gravity[2] * dt;
-
         if (p.drag > 0) {
-            p.velocity[0] *= (1.0f - p.drag);
-            p.velocity[1] *= (1.0f - p.drag);
-            p.velocity[2] *= (1.0f - p.drag);
+            p.velocity[0] *= (1.0f - p.drag * dt);
+            p.velocity[1] *= (1.0f - p.drag * dt);
         }
 
-        p.position[0] += p.velocity[0] * dt;
-        p.position[1] += p.velocity[1] * dt;
-        p.position[2] += p.velocity[2] * dt;
+        // Turbulence
+        if (p.turb_speed > 0) {
+            float angle = p.random_seed * 2.0f * M_PI + global_time * 2.0f;
+            p.velocity[0] += cosf(angle) * p.turb_speed * dt;
+            p.velocity[1] += sinf(angle) * p.turb_speed * dt;
+        }
+
+        p.base_position[0] += p.velocity[0] * dt;
+        p.base_position[1] += p.velocity[1] * dt;
         p.rotation += p.angular_vel * dt;
 
+        // Position Oscillation
+        p.position[0] = p.base_position[0];
+        p.position[1] = p.base_position[1];
+        if (p.osc_pos_freq > 0) {
+            float wave = sinf(global_time * p.osc_pos_freq + p.random_seed * 100.0f);
+            float amp = p.osc_pos_min + (p.osc_pos_max - p.osc_pos_min) * 0.5f;
+            p.position[0] += wave * amp;
+            p.position[1] += cosf(global_time * p.osc_pos_freq) * amp;
+        }
+
+        // Alpha Fade & Oscillation
         float age = p.max_life - p.life;
         float alpha = p.initial_alpha;
-        if (age < p.fade_in) {
-            alpha *= (age / p.fade_in);
-        }
-        if (p.life < p.fade_out) {
-            alpha *= (p.life / p.fade_out);
+        if (age < p.fade_in) alpha *= (age / p.fade_in);
+        if (p.life < p.fade_out) alpha *= (p.life / p.fade_out);
+
+        if (p.osc_alpha_freq > 0) {
+            float wave = (sinf(global_time * p.osc_alpha_freq + p.random_seed * 10.0f) + 1.0f) * 0.5f;
+            alpha *= (p.osc_alpha_min + wave * (1.0f - p.osc_alpha_min));
         }
         p.alpha = alpha;
+
+        // Size Oscillation
+        float size = p.initial_size;
+        if (p.osc_size_freq > 0) {
+            float wave = (sinf(global_time * p.osc_size_freq) + 1.0f) * 0.5f;
+            size *= (p.osc_size_min + wave * (p.osc_size_max - p.osc_size_min));
+        }
+        p.size = size;
     }
 }
 
@@ -249,10 +314,8 @@ void ParticleSystem::draw() {
 
     for (auto& p : particles) {
         float tint[4] = {p.color[0], p.color[1], p.color[2], p.alpha};
-
-        // Align with Layer origin and scene center
         float rx = state.offset_x + (layer_origin[0] + px + p.position[0]) * state.render_scale;
-        float ry = state.offset_y + (layer_origin[1] + py - p.position[1]) * state.render_scale;
+        float ry = state.offset_y + (layer_origin[1] + py + p.position[1]) * state.render_scale;
         float rs = p.size * state.render_scale;
 
         renderer_draw_sprite(&state.renderer, texture, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation, tint);
@@ -262,51 +325,37 @@ void ParticleSystem::draw() {
 void ParticleSystem::drawDebugBounds() {
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     cJSON* emitter;
-
     float px = parallax[0] * state.parallax_smooth_x * 50.0f;
     float py = parallax[1] * state.parallax_smooth_y * 50.0f;
 
     cJSON_ArrayForEach(emitter, emitters) {
-        cJSON* type_node = cJSON_GetObjectItemCaseSensitive(emitter, "name");
-        if (!type_node) continue;
-        const char* type = type_node->valuestring;
-
+        const char* type = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(emitter, "name"));
+        if (!type) continue;
         vec3 origin = {0, 0, 0};
         parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "origin"), origin);
-
         float color[4] = {1.0f, 1.0f, 0.0f, 0.3f};
 
         if (strcmp(type, "boxrandom") == 0) {
             vec3 dmax = {0, 0, 0};
             parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), dmax);
-
             float bx = state.offset_x + (layer_origin[0] + px + origin[0] - dmax[0]) * state.render_scale;
-            float by = state.offset_y + (layer_origin[1] + py - origin[1] - dmax[1]) * state.render_scale;
-            float bw = dmax[0] * 2.0f * state.render_scale;
-            float bh = dmax[1] * 2.0f * state.render_scale;
-            renderer_draw_rect(&state.renderer, bx, by, bw, bh, color);
+            float by = state.offset_y + (layer_origin[1] + py + origin[1] - dmax[1]) * state.render_scale;
+            renderer_draw_rect(&state.renderer, bx, by, dmax[0] * 2.0f * state.render_scale,
+                               dmax[1] * 2.0f * state.render_scale, color);
         } else if (strcmp(type, "sphererandom") == 0) {
             float dmax = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"));
             float bx = state.offset_x + (layer_origin[0] + px + origin[0] - dmax) * state.render_scale;
-            float by = state.offset_y + (layer_origin[1] + py - origin[1] - dmax) * state.render_scale;
-            float bw = dmax * 2.0f * state.render_scale;
-            float bh = dmax * 2.0f * state.render_scale;
-            renderer_draw_rect(&state.renderer, bx, by, bw, bh, color);
+            float by = state.offset_y + (layer_origin[1] + py + origin[1] - dmax) * state.render_scale;
+            renderer_draw_rect(&state.renderer, bx, by, dmax * 2.0f * state.render_scale,
+                               dmax * 2.0f * state.render_scale, color);
         }
     }
 }
 
 void ParticleSystem::showInspector() {
     ImGui::Text("Active Particles: %d / %d", (int)particles.size(), max_particles);
-    if (!config_path.empty()) {
-        ImGui::Text("Config: %s", config_path.c_str());
-    }
-    if (!texture_path.empty()) {
-        ImGui::Text("Texture: %s", texture_path.c_str());
-    }
-    if (texture.id == SG_INVALID_ID) {
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "TEXTURE MISSING");
-    }
-
+    if (!config_path.empty()) ImGui::Text("Config: %s", config_path.c_str());
+    if (!texture_path.empty()) ImGui::Text("Texture: %s", texture_path.c_str());
+    if (texture.id == SG_INVALID_ID) ImGui::TextColored(ImVec4(1, 0, 0, 1), "TEXTURE MISSING");
     ImGui::Checkbox("Show Spawning Bounds", &show_bounds);
 }
