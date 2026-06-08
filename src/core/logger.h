@@ -24,6 +24,7 @@ class Logger {
 
 // Global core logger
 extern Logger core_log;
+extern Logger effect_log;
 #endif
 
 #ifdef __cplusplus

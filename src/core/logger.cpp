@@ -9,6 +9,7 @@ static log_level_t min_level = LOG_LEVEL_DEBUG;
 
 // Initialize global core logger
 Logger core_log("CORE");
+Logger effect_log("EFFECT");
 
 void logger_init(log_level_t level) {
     min_level = level;

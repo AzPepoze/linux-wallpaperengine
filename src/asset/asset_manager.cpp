@@ -22,11 +22,15 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
     snprintf(out_abs_path, max_len, "%s/assets/%s", engine_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
-    // 3. Try specifically under assets/materials/ (common for particles)
+    // 3. Try specifically under assets/materials/ (common for particles and masks)
     snprintf(out_abs_path, max_len, "%s/assets/materials/%s", engine_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
-    // 4. Try specifically under assets/presets/
+    // 4. Try under materials/ in the wallpaper/extracted root (common for masks)
+    snprintf(out_abs_path, max_len, "%s/materials/%s", wallpaper_path.c_str(), rel_path);
+    if (access(out_abs_path, F_OK) == 0) return true;
+
+    // 5. Try specifically under assets/presets/
     const char* filename = strrchr(rel_path, '/');
     if (filename) {
         filename++;

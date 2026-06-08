@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "../../libs/sokol/sokol_glue.h"
+#include "effect.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
     r->view_width = w;
@@ -104,14 +105,32 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
 }
 
 void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
-                          float tint[4], bool additive) {
+                          float tint[4], bool additive, ShaderPass* pass) {
     sg_view_desc v_desc = {};
     v_desc.texture.image = img;
     sg_view view = sg_make_view(&v_desc);
     r->bind.views[0] = view;
 
-    sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
+    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+        sg_apply_pipeline(pass->pipeline);
+        for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
+            if (pass->textures[i].id != SG_INVALID_ID) {
+                sg_view_desc ev_desc = {};
+                ev_desc.texture.image = pass->textures[i];
+                r->bind.views[i + 1] = sg_make_view(&ev_desc);
+            } else {
+                r->bind.views[i + 1] = (sg_view){SG_INVALID_ID};
+            }
+        }
+    } else {
+        sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
+        for (int i = 1; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
+    }
+
     sg_apply_bindings(&r->bind);
+    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+        pass->applyUniforms();
+    }
 
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
@@ -126,7 +145,16 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
     sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
     sg_apply_uniforms(1, &tint_range);
     sg_draw(0, 6, 1);
+
     sg_destroy_view(view);
+    if (pass && pass->enabled) {
+        for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
+            if (r->bind.views[i + 1].id != SG_INVALID_ID) {
+                sg_destroy_view(r->bind.views[i + 1]);
+                r->bind.views[i + 1] = (sg_view){SG_INVALID_ID};
+            }
+        }
+    }
 }
 
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]) {
@@ -141,6 +169,7 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
     v_desc.texture.image = r->white_pixel;
     sg_view view = sg_make_view(&v_desc);
     r->bind.views[0] = view;
+    for (int i = 1; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
 
     sg_apply_pipeline(r->pip_lines);
     sg_apply_bindings(&r->bind);
@@ -149,13 +178,6 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
 
-    // We can use the quad vertices and just stretch/rotate them to be a line
-    // but easier to just draw a very thin sprite or use actual line coords.
-    // For now, let's use the quad but with a line pipeline.
-    // However, Sokol's line pipeline with our quad indices won't look right.
-    // Let's just draw quads as thin 1-pixel lines using draw_sprite.
-
-    // Fallback: draw as a thin 1-pixel rectangle
     float dx = x1 - x0;
     float dy = y1 - y0;
     float dist = sqrtf(dx * dx + dy * dy);

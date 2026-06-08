@@ -7,7 +7,10 @@
 #include "../../libs/sokol/sokol_gfx.h"
 
 #ifdef __cplusplus
+class ShaderPass;
 extern "C" {
+#else
+typedef struct ShaderPass ShaderPass;
 #endif
 
 typedef struct {
@@ -29,7 +32,7 @@ typedef struct {
 void renderer_init(renderer_t* r, float w, float h);
 void renderer_update_viewport(renderer_t* r, float w, float h);
 void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
-                          float tint[4], bool additive);
+                          float tint[4], bool additive, ShaderPass* pass);
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]);
 void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, float color[4]);
 void renderer_cleanup(renderer_t* r);

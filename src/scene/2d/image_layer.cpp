@@ -78,10 +78,12 @@ void ImageLayer::draw() {
     float rx = state.offset_x + (origin[0] + px) * state.render_scale - (rw * 0.5f);
     float ry = state.offset_y + (origin[1] + py) * state.render_scale - (rh * 0.5f);
 
-    // Apply effects
-    for (auto eff : effects) eff->apply();
+    ShaderPass* pass = nullptr;
+    if (!effects.empty() && effects[0]->visible && !effects[0]->passes.empty()) {
+        pass = effects[0]->passes[0];
+    }
 
-    renderer_draw_sprite(&state.renderer, img, rx, ry, rw, rh, rotation, tint, false);
+    renderer_draw_sprite(&state.renderer, img, rx, ry, rw, rh, rotation, tint, false, pass);
 }
 
 void ImageLayer::drawDebug() {
