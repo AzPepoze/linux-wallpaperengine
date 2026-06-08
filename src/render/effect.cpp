@@ -316,12 +316,33 @@ void Effect::init() {
 }
 
 void Effect::apply() {
-    if (!visible) return;
     for (auto p : passes) p->apply();
 }
 
 void Effect::showInspector(int id) {
     ImGui::PushID(id);
+
+    // Visibility Toggle
+    if (ImGui::Button(visible ? "V" : " ", ImVec2(25, 0))) {
+        visible = !visible;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Effect Visibility");
+
+    ImGui::SameLine();
+
+    // Solo Toggle
+    if (solo) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
+    }
+    if (ImGui::Button("S", ImVec2(25, 0))) {
+        solo = !solo;
+    }
+    if (solo) ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo Effect (Ctrl+Click effect name also works)");
+
+    ImGui::SameLine();
 
     std::string effect_name = "Unknown Effect";
     if (!passes.empty() && !passes[0]->shader_name.empty()) {
@@ -345,12 +366,12 @@ void Effect::showInspector(int id) {
         effect_name[0] = toupper(effect_name[0]);
     }
 
-    ImGui::Checkbox("##enabled", &visible);
-    ImGui::SameLine();
-
     bool open = ImGui::TreeNodeEx(effect_name.c_str(), ImGuiTreeNodeFlags_FramePadding);
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", file_path.c_str());
+        ImGui::SetTooltip("%s (Ctrl+Click to toggle Solo)", file_path.c_str());
+    }
+    if (ImGui::IsItemClicked() && ImGui::GetIO().KeyCtrl) {
+        solo = !solo;
     }
 
     if (open) {

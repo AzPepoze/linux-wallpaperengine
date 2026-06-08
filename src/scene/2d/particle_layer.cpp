@@ -26,7 +26,7 @@ void ParticleLayer::update(float dt) {
 }
 
 void ParticleLayer::draw() {
-    if (visible && ps) {
+    if (ps) {
         // Sync transformation to particle system
         ps->layer_origin[0] = origin[0];
         ps->layer_origin[1] = origin[1];
@@ -34,7 +34,21 @@ void ParticleLayer::draw() {
         ps->parallax[0] = parallax[0];
         ps->parallax[1] = parallax[1];
 
-        for (auto eff : effects) eff->apply();
+        bool any_eff_solo = false;
+        for (auto eff : effects) {
+            if (eff->solo) {
+                any_eff_solo = true;
+                break;
+            }
+        }
+
+        for (auto eff : effects) {
+            if (any_eff_solo) {
+                if (eff->solo) eff->apply();
+            } else {
+                if (eff->visible) eff->apply();
+            }
+        }
         ps->draw();
     }
 }
@@ -44,7 +58,7 @@ void ParticleLayer::drawDebug() {
 }
 
 void ParticleLayer::showInspector() {
-    ImGui::Checkbox("Visible", &visible);
+    showBaseInspector();
     ImGui::Text("Type: Particle System");
     if (!path.empty()) {
         ImGui::Text("Path: %s", path.c_str());

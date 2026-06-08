@@ -66,7 +66,7 @@ void ImageLayer::update(float dt) {
 }
 
 void ImageLayer::draw() {
-    if (!visible || img.id == SG_INVALID_ID) return;
+    if (img.id == SG_INVALID_ID) return;
 
     float rw = size[0] * scale[0] * state.render_scale;
     float rh = size[1] * scale[1] * state.render_scale;
@@ -79,8 +79,35 @@ void ImageLayer::draw() {
     float ry = state.offset_y + (origin[1] + py) * state.render_scale - (rh * 0.5f);
 
     ShaderPass* pass = nullptr;
-    if (!effects.empty() && effects[0]->visible && !effects[0]->passes.empty()) {
-        pass = effects[0]->passes[0];
+    if (!effects.empty()) {
+        bool any_eff_solo = false;
+        for (auto eff : effects) {
+            if (eff->solo) {
+                any_eff_solo = true;
+                break;
+            }
+        }
+
+        Effect* target_eff = nullptr;
+        if (any_eff_solo) {
+            for (auto eff : effects) {
+                if (eff->solo) {
+                    target_eff = eff;
+                    break;
+                }
+            }
+        } else {
+            for (auto eff : effects) {
+                if (eff->visible) {
+                    target_eff = eff;
+                    break;
+                }
+            }
+        }
+
+        if (target_eff && !target_eff->passes.empty()) {
+            pass = target_eff->passes[0];
+        }
     }
 
     renderer_draw_sprite(&state.renderer, img, rx, ry, rw, rh, rotation, tint, false, pass);
@@ -99,7 +126,7 @@ void ImageLayer::drawDebug() {
 }
 
 void ImageLayer::showInspector() {
-    ImGui::Checkbox("Visible", &visible);
+    showBaseInspector();
     ImGui::Text("Type: Image");
     if (!path.empty()) {
         ImGui::Text("Path: %s", path.c_str());

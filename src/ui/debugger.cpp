@@ -32,11 +32,42 @@ void Debugger::drawHierarchyPanel(float width, float height) {
         ImGui::Separator();
         ImGui::BeginChild("LayerList");
         for (int i = 0; i < (int)state.layers.size(); i++) {
+            Layer* layer = state.layers[i];
+            ImGui::PushID(i);
+
+            // Visibility Toggle
+            if (ImGui::Button(layer->visible ? "V" : " ", ImVec2(25, 0))) {
+                layer->visible = !layer->visible;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Visibility");
+
+            ImGui::SameLine();
+
+            // Solo Toggle
+            if (layer->solo) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
+            }
+            if (ImGui::Button("S", ImVec2(25, 0))) {
+                layer->solo = !layer->solo;
+            }
+            if (layer->solo) ImGui::PopStyleColor(3);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo Layer (Ctrl+Click layer name also works)");
+
+            ImGui::SameLine();
+
             char label[160];
-            snprintf(label, sizeof(label), "%02d: %s", i, state.layers[i]->name.c_str());
+            snprintf(label, sizeof(label), "%02d: %s", i, layer->name.c_str());
             if (ImGui::Selectable(label, state.selected_object == i)) {
                 state.selected_object = i;
+                if (ImGui::GetIO().KeyCtrl) {
+                    layer->solo = !layer->solo;
+                }
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Select layer. Ctrl+Click to toggle Solo.");
+
+            ImGui::PopID();
         }
         ImGui::EndChild();
     }

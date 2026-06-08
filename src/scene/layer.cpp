@@ -45,6 +45,12 @@ void Layer::loadBaseProperties(cJSON* node) {
     }
 }
 
+void Layer::showBaseInspector() {
+    ImGui::Checkbox("Visible", &visible);
+    ImGui::SameLine();
+    ImGui::Checkbox("Solo", &solo);
+}
+
 void Layer::showEffectsInspector() {
     if (effects.empty()) return;
 

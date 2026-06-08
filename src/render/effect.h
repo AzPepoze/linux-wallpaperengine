@@ -34,6 +34,7 @@ class Effect {
     std::string file_path;
     std::vector<ShaderPass*> passes;
     bool visible = true;
+    bool solo = false;
 
     Effect(cJSON* config);
     ~Effect();
