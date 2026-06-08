@@ -15,7 +15,7 @@
 #include "texture.h"
 #include "unpack.h"
 
-static sg_image resolve_texture(const char* name) {
+static sg_image resolve_texture(const char* name, std::string* out_path = nullptr) {
     char abs_path[1024];
     char name_with_ext[256];
     if (!strstr(name, "."))
@@ -24,14 +24,14 @@ static sg_image resolve_texture(const char* name) {
         strncpy(name_with_ext, name, sizeof(name_with_ext) - 1);
 
     if (asset_resolve_path(&state.asset_mgr, name_with_ext, abs_path, sizeof(abs_path))) {
+        if (out_path) *out_path = abs_path;
         DecodedTexture tex = load_texture(abs_path);
         if (tex.pixels) {
             sg_image_desc desc = {};
             desc.width = (int)tex.width;
             desc.height = (int)tex.height;
             desc.pixel_format = tex.format;
-            desc.data.mip_levels[0].ptr = tex.pixels;
-            desc.data.mip_levels[0].size = tex.data_size;
+            desc.data.mip_levels[0] = {tex.pixels, tex.data_size};
             sg_image img = sg_make_image(&desc);
             free_texture(tex);
             return img;
@@ -40,14 +40,20 @@ static sg_image resolve_texture(const char* name) {
     return (sg_image){SG_INVALID_ID};
 }
 
-static void load_material(const char* mat_rel_path, ImageLayer* layer) {
+static sg_image resolve_material_texture(const char* mat_rel_path, std::string* out_path = nullptr) {
     char abs_path[1024];
-    if (!asset_resolve_path(&state.asset_mgr, mat_rel_path, abs_path, sizeof(abs_path))) return;
+    if (!asset_resolve_path(&state.asset_mgr, mat_rel_path, abs_path, sizeof(abs_path)))
+        return (sg_image){SG_INVALID_ID};
+
     char* json_str = read_file_to_string(abs_path);
-    if (!json_str) return;
+    if (!json_str) return (sg_image){SG_INVALID_ID};
+
     cJSON* mat_json = cJSON_Parse(json_str);
     free(json_str);
-    if (!mat_json) return;
+    if (!mat_json) return (sg_image){SG_INVALID_ID};
+
+    sg_image img = {SG_INVALID_ID};
+
     char mat_dir[512] = "";
     const char* last_slash = strrchr(mat_rel_path, '/');
     if (last_slash) {
@@ -56,6 +62,7 @@ static void load_material(const char* mat_rel_path, ImageLayer* layer) {
         mat_dir[len] = '/';
         mat_dir[len + 1] = '\0';
     }
+
     cJSON* passes = cJSON_GetObjectItemCaseSensitive(mat_json, "passes");
     if (cJSON_IsArray(passes)) {
         cJSON* pass = cJSON_GetArrayItem(passes, 0);
@@ -65,12 +72,17 @@ static void load_material(const char* mat_rel_path, ImageLayer* layer) {
             if (cJSON_IsString(tex_node)) {
                 char rel_tex[512];
                 snprintf(rel_tex, sizeof(rel_tex), "%s%s", mat_dir, tex_node->valuestring);
-                layer->img = resolve_texture(rel_tex);
-                if (layer->img.id == SG_INVALID_ID) layer->img = resolve_texture(tex_node->valuestring);
+                img = resolve_texture(rel_tex, out_path);
+                if (img.id == SG_INVALID_ID) img = resolve_texture(tex_node->valuestring, out_path);
             }
         }
     }
     cJSON_Delete(mat_json);
+    return img;
+}
+
+static void load_material(const char* mat_rel_path, ImageLayer* layer) {
+    layer->img = resolve_material_texture(mat_rel_path, &layer->path);
 }
 
 static void load_model(const char* mdl_rel_path, ImageLayer* layer) {
@@ -158,11 +170,18 @@ void scene_loader_load(const char* path) {
                             cJSON* p_json = cJSON_Parse(p_json_str);
                             free(p_json_str);
                             if (p_json) {
-                                sg_image p_tex = resolve_texture("materials/particle.tex");
+                                std::string p_tex_path;
+                                sg_image p_tex = resolve_texture("materials/particle.tex", &p_tex_path);
                                 cJSON* mat = cJSON_GetObjectItemCaseSensitive(p_json, "material");
-                                if (cJSON_IsString(mat)) p_tex = resolve_texture(mat->valuestring);
-                                layer = new ParticleLayer(
-                                    name, new ParticleSystem(p_json, p_tex, state.scene_w, state.scene_h));
+                                if (cJSON_IsString(mat)) {
+                                    sg_image mat_tex = resolve_material_texture(mat->valuestring, &p_tex_path);
+                                    if (mat_tex.id != SG_INVALID_ID) p_tex = mat_tex;
+                                }
+                                ParticleSystem* ps = new ParticleSystem(p_json, p_tex, state.scene_w, state.scene_h);
+                                ps->config_path = p_abs;
+                                ps->texture_path = p_tex_path;
+                                layer = new ParticleLayer(name, ps);
+                                layer->path = p_abs;
                             }
                         }
                     }
@@ -176,7 +195,7 @@ void scene_loader_load(const char* path) {
                     if (strstr(asset_path->valuestring, ".json"))
                         load_model(asset_path->valuestring, img_layer);
                     else
-                        img_layer->img = resolve_texture(asset_path->valuestring);
+                        img_layer->img = resolve_texture(asset_path->valuestring, &img_layer->path);
 
                     if (img_layer->img.id != SG_INVALID_ID) {
                         sg_image_desc desc = sg_query_image_desc(img_layer->img);
@@ -199,45 +218,54 @@ void scene_loader_load(const char* path) {
                     if (sscanf(origin->valuestring, "%f %f %f", &ox, &oy, &oz) >= 2) {
                         layer->origin[0] = ox * norm;
                         layer->origin[1] = oy * norm;
+                        layer->origin[2] = oz * norm;
                     }
                 }
-                cJSON* scale_node = cJSON_GetObjectItemCaseSensitive(obj_json, "scale");
-                if (cJSON_IsString(scale_node))
-                    sscanf(scale_node->valuestring, "%f %f %f", &layer->scale[0], &layer->scale[1], &layer->scale[2]);
-                layer->size[0] *= layer->scale[0];
-                layer->size[1] *= layer->scale[1];
-
-                cJSON* parallax = cJSON_GetObjectItemCaseSensitive(obj_json, "parallaxamount");
-                if (cJSON_IsString(parallax))
+                cJSON* parallax = cJSON_GetObjectItemCaseSensitive(obj_json, "parallax");
+                if (cJSON_IsString(parallax)) {
                     sscanf(parallax->valuestring, "%f %f", &layer->parallax[0], &layer->parallax[1]);
-
+                }
                 state.layers.push_back(layer);
-                LOG_I("Loaded Layer: %s", layer->name.c_str());
             }
         }
+    }
+}
+
+void scene_loader_update(float dt) {
+    for (auto layer : state.layers) layer->update(dt);
+}
+
+void scene_loader_draw(void) {
+    for (auto layer : state.layers) {
+        LOG_TAG_D("SCENE", "Drawing layer: %s", layer->name.c_str());
+        layer->draw();
     }
 }
 
 void scene_loader_update_viewport(void) {
     float sw = (float)sapp_width();
     float sh = (float)sapp_height();
-    float scale_w = sw / state.scene_w;
-    float scale_h = sh / state.scene_h;
-    if (state.scaling_mode == SCALING_COVER)
-        state.render_scale = (scale_w > scale_h) ? scale_w : scale_h;
-    else
-        state.render_scale = (scale_w < scale_h) ? scale_w : scale_h;
+    renderer_update_viewport(&state.renderer, sw, sh);
+
+    float aspect_scene = state.scene_w / state.scene_h;
+    float aspect_window = sw / sh;
+
+    if (state.scaling_mode == SCALING_FIT) {
+        if (aspect_window > aspect_scene) {
+            state.render_scale = sh / state.scene_h;
+        } else {
+            state.render_scale = sw / state.scene_w;
+        }
+    } else {  // COVER
+        if (aspect_window > aspect_scene) {
+            state.render_scale = sw / state.scene_w;
+        } else {
+            state.render_scale = sh / state.scene_h;
+        }
+    }
+
     state.offset_x = (sw - state.scene_w * state.render_scale) * 0.5f;
     state.offset_y = (sh - state.scene_h * state.render_scale) * 0.5f;
-    renderer_update_viewport(&state.renderer, sw, sh);
-}
-
-void scene_loader_draw(void) {
-    float dt = (float)sapp_frame_duration();
-    for (auto layer : state.layers) {
-        layer->update(dt);
-        layer->draw();
-    }
 }
 
 void scene_loader_cleanup(void) {

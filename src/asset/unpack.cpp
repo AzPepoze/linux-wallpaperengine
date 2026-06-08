@@ -7,13 +7,23 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifdef _WIN32
-#include <direct.h>
-#define mkdir(path, mode) _mkdir(path)
-#endif
+static uint32_t read_u32(FILE* f) {
+    uint32_t val;
+    if (fread(&val, 4, 1, f) != 1) return 0;
+    return val;
+}
+
+static char* read_pkg_string(FILE* f) {
+    uint32_t size = read_u32(f);
+    char* str = (char*)malloc(size + 1);
+    if (!str) return NULL;
+    fread(str, 1, size, f);
+    str[size] = '\0';
+    return str;
+}
 
 static void make_path(const char* path) {
-    char tmp[512];
+    char tmp[1024];
     char* p = NULL;
     size_t len;
 
@@ -23,38 +33,28 @@ static void make_path(const char* path) {
     for (p = tmp + 1; *p; p++) {
         if (*p == '/') {
             *p = 0;
-            mkdir(tmp, 0755);
+            mkdir(tmp, S_IRWXU);
             *p = '/';
         }
     }
-    mkdir(tmp, 0755);
-}
-
-static uint32_t read_u32(FILE* f) {
-    uint32_t val;
-    fread(&val, 4, 1, f);
-    return val;
-}
-
-static char* read_pkg_string(FILE* f) {
-    uint32_t size = read_u32(f);
-    char* str = malloc(size + 1);
-    if (!str) return NULL;
-    fread(str, 1, size, f);
-    str[size] = '\0';
-    return str;
+    mkdir(tmp, S_IRWXU);
 }
 
 bool extract_pkg(const char* pkg_path, const char* output_dir) {
     FILE* f = fopen(pkg_path, "rb");
-    if (!f) {
-        fprintf(stderr, "Unpacker: Failed to open %s\n", pkg_path);
+    if (!f) return false;
+
+    char magic[5];
+    fread(magic, 1, 4, f);
+    magic[4] = '\0';
+    if (strcmp(magic, "PKGV") != 0) {
+        printf("Unpacker: Invalid magic: %s\n", magic);
+        fclose(f);
         return false;
     }
 
-    char* version = read_pkg_string(f);
-    printf("Unpacker: Package Version: %s\n", version);
-    free(version);
+    uint32_t version = read_u32(f);
+    printf("Unpacker: Package Version: PKGV%04u\n", version);
 
     uint32_t file_count = read_u32(f);
     printf("Unpacker: File Count: %u\n", file_count);
@@ -65,7 +65,7 @@ bool extract_pkg(const char* pkg_path, const char* output_dir) {
         uint32_t size;
     } FileEntry;
 
-    FileEntry* entries = malloc(sizeof(FileEntry) * file_count);
+    FileEntry* entries = (FileEntry*)malloc(sizeof(FileEntry) * file_count);
     if (!entries) {
         fprintf(stderr, "Unpacker: Failed to allocate memory for %u file entries\n", file_count);
         fclose(f);

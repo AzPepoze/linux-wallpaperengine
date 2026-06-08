@@ -15,6 +15,66 @@ void debugger_init(void) {
     simgui_setup(&desc);
 }
 
+static void draw_hierarchy_panel(float width, float height) {
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(width, height));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    if (ImGui::Begin("HierarchyPanel", nullptr, flags)) {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "HIERARCHY");
+        ImGui::Separator();
+
+        if (ImGui::Selectable("Global Settings", state.selected_object == -1)) {
+            state.selected_object = -1;
+        }
+
+        ImGui::Separator();
+        ImGui::BeginChild("LayerList");
+        for (int i = 0; i < (int)state.layers.size(); i++) {
+            char label[160];
+            snprintf(label, sizeof(label), "%02d: %s", i, state.layers[i]->name.c_str());
+            if (ImGui::Selectable(label, state.selected_object == i)) {
+                state.selected_object = i;
+            }
+        }
+        ImGui::EndChild();
+    }
+    ImGui::End();
+}
+
+static void draw_inspector_panel(float width, float height) {
+    float x_pos = (float)sapp_width() - width;
+    ImGui::SetNextWindowPos(ImVec2(x_pos, 0));
+    ImGui::SetNextWindowSize(ImVec2(width, height));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    if (ImGui::Begin("InspectorPanel", nullptr, flags)) {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "INSPECTOR");
+        ImGui::Separator();
+
+        if (state.selected_object == -1) {
+            ImGui::Text("Global Engine Settings");
+            ImGui::Separator();
+            const char* modes[] = {"Cover", "Fit"};
+            int current_mode = (int)state.scaling_mode;
+            if (ImGui::Combo("Scaling Mode", &current_mode, modes, 2)) {
+                state.scaling_mode = (scaling_mode_t)current_mode;
+            }
+            ImGui::Text("Resolution: %.0fx%.0f", state.scene_w, state.scene_h);
+            ImGui::Text("Render Scale: %.3f", state.render_scale);
+            ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        } else if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
+            Layer* layer = state.layers[state.selected_object];
+            ImGui::Text("Selected: %s", layer->name.c_str());
+            ImGui::Separator();
+            layer->showInspector();
+        }
+    }
+    ImGui::End();
+}
+
 void debugger_draw(void) {
     simgui_frame_desc_t frame_desc = {};
     frame_desc.width = sapp_width();
@@ -24,31 +84,11 @@ void debugger_draw(void) {
     simgui_new_frame(&frame_desc);
 
     if (state.show_ui) {
-        if (ImGui::Begin("Debugger", &state.show_ui)) {
-            if (ImGui::CollapsingHeader("Scene Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-                const char* modes[] = {"Cover", "Fit"};
-                int current_mode = (int)state.scaling_mode;
-                if (ImGui::Combo("Scaling Mode", &current_mode, modes, 2))
-                    state.scaling_mode = (scaling_mode_t)current_mode;
-                ImGui::Text("Resolution: %.0fx%.0f", state.scene_w, state.scene_h);
-                ImGui::Text("Render Scale: %.3f", state.render_scale);
-                ImGui::Text("Layers: %d", (int)state.layers.size());
-            }
-            if (ImGui::CollapsingHeader("Hierarchy", ImGuiTreeNodeFlags_DefaultOpen)) {
-                for (int i = 0; i < (int)state.layers.size(); i++) {
-                    char label[160];
-                    snprintf(label, sizeof(label), "%d: %s", i, state.layers[i]->name.c_str());
-                    if (ImGui::Selectable(label, state.selected_object == i)) state.selected_object = i;
-                }
-            }
-            if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
-                Layer* layer = state.layers[state.selected_object];
-                if (ImGui::CollapsingHeader("Inspector", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    layer->showInspector();
-                }
-            }
-        }
-        ImGui::End();
+        float panel_width = 300.0f;
+        float screen_height = (float)sapp_height();
+
+        draw_hierarchy_panel(panel_width, screen_height);
+        draw_inspector_panel(panel_width, screen_height);
     }
     simgui_render();
 }

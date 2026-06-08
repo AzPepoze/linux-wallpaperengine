@@ -27,6 +27,7 @@ void renderer_init(renderer_t* r, float w, float h);
 void renderer_update_viewport(renderer_t* r, float w, float h);
 void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
                           float tint[4]);
+void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]);
 void renderer_cleanup(renderer_t* r);
 
 #ifdef __cplusplus

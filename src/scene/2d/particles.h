@@ -22,6 +22,12 @@ struct Particle {
     float initial_size = 1.0f;
     float spawn_time = 0.0f;
     float random_value = 0.0f;
+
+    // Added properties
+    float drag = 0.0f;
+    vec3 gravity = {0, 0, 0};
+    float fade_in = 0.0f;
+    float fade_out = 1.0f;
 };
 
 class ParticleSystem {
@@ -42,8 +48,14 @@ class ParticleSystem {
     void draw();
     void showInspector();
 
+    // Debug features
+    bool show_bounds = false;
+    std::string config_path;
+    std::string texture_path;
+
    private:
     void spawnParticle();
+    void drawDebugBounds();
 };
 
 #endif  // PARTICLES_H

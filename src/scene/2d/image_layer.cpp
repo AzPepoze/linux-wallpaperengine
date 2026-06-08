@@ -31,6 +31,15 @@ void ImageLayer::draw() {
 
 void ImageLayer::showInspector() {
     ImGui::Checkbox("Visible", &visible);
+    ImGui::Text("Type: Image");
+    if (!path.empty()) {
+        ImGui::Text("Path: %s", path.c_str());
+    }
+    if (!asset_metadata.empty()) {
+        ImGui::Text("Metadata: %s", asset_metadata.c_str());
+    }
+
+    ImGui::Separator();
     ImGui::DragFloat2("Position", (float*)origin, 1.0f);
     ImGui::DragFloat2("Size", (float*)size, 1.0f);
     ImGui::DragFloat("Rotation", &rotation, 1.0f, 0, 360);
