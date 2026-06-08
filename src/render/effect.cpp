@@ -22,9 +22,26 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
                 sg_image img = state.asset_mgr.resolveTexture(tex_node->valuestring, &path);
                 textures.push_back(img);
                 texture_paths.push_back(path);
+                texture_masks.push_back(true);
+                effect_log.info("ShaderPass %s: Loaded texture %d: %s (id: %d)", shader_name.c_str(),
+                                (int)textures.size() - 1, path.c_str(), img.id);
             } else {
+                // Auto-resolve depth map if it's the second slot and previous was a .tex
+                if (textures.size() == 1 && !texture_paths[0].empty() && strstr(texture_paths[0].c_str(), ".tex")) {
+                    std::string path;
+                    sg_image img = state.asset_mgr.resolveTexture(texture_paths[0].c_str(), &path, 1);
+                    if (img.id != SG_INVALID_ID) {
+                        textures.push_back(img);
+                        texture_paths.push_back(path + "#1");
+                        texture_masks.push_back(true);
+                        effect_log.info("ShaderPass %s: Auto-resolved texture 1 from %s (index 1, id: %d)",
+                                        shader_name.c_str(), texture_paths[0].c_str(), img.id);
+                        continue;
+                    }
+                }
                 textures.push_back((sg_image){SG_INVALID_ID});
                 texture_paths.push_back("");
+                texture_masks.push_back(true);
             }
         }
     }
@@ -44,14 +61,20 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
                             if (textures[i].id != SG_INVALID_ID) sg_destroy_image(textures[i]);
                             textures[i] = img;
                             texture_paths[i] = path;
+                            effect_log.info("ShaderPass %s: Overrode texture %d: %s (id: %d)", shader_name.c_str(), i,
+                                            path.c_str(), img.id);
                         } else {
                             // Expand and add new slot
                             while ((int)textures.size() < i) {
                                 textures.push_back((sg_image){SG_INVALID_ID});
                                 texture_paths.push_back("");
+                                texture_masks.push_back(true);
                             }
                             textures.push_back(img);
                             texture_paths.push_back(path);
+                            texture_masks.push_back(true);
+                            effect_log.info("ShaderPass %s: Added texture %d: %s (id: %d)", shader_name.c_str(), i,
+                                            path.c_str(), img.id);
                         }
                     }
                 }
@@ -141,23 +164,46 @@ void ShaderPass::init() {
         return;
     }
 
-    sg_shader_desc shd_desc = {};
-    shd_desc.vertex_func.source = vs_src;
-    shd_desc.fragment_func.source = fs_src;
+    const char* shader_prefix =
+        "#version 330\n"
+        "#define mul(v, m) (m * v)\n"
+        "#define texSample2D(s, uv) texture(s, uv)\n"
+        "#define CAST2(x) vec2(x)\n"
+        "#define CAST3(x) vec3(x)\n"
+        "#define CAST4(x) vec4(x)\n"
+        "#define CAST3X3(x) mat3(x)\n"
+        "#define saturate(x) clamp(x, 0.0, 1.0)\n"
+        "#define lerp mix\n"
+        "precision mediump float;\n";
 
-    // Setup standard uniforms for Wallpaper Engine shaders
+    std::string full_vs = shader_prefix + std::string(vs_src);
+    std::string full_fs = shader_prefix + std::string(fs_src);
+
+    sg_shader_desc shd_desc = {};
+    shd_desc.vertex_func.source = full_vs.c_str();
+    shd_desc.fragment_func.source = full_fs.c_str();
+
+    // Slot 0: Built-in Uniforms (WPE style)
     shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
-    shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "mvp";
+    shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrix";
     shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
 
-    shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.uniform_blocks[1].size = sizeof(float) * 4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "tint";
+    shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
+    shd_desc.uniform_blocks[1].size = sizeof(float) * 4 * 4 + sizeof(float) * 4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture1Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_ParallaxPosition";
+    shd_desc.uniform_blocks[1].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT2;
+
+    // Slot 2: Fragment Tint
+    shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
+    shd_desc.uniform_blocks[2].size = sizeof(float) * 4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "tint";
+    shd_desc.uniform_blocks[2].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
 
     // Custom uniforms (up to 8 slots total in Sokol)
-    int u_idx = 2;
+    int u_idx = 3;
     for (auto const& [name, vals] : uniforms) {
         if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
         shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -238,17 +284,24 @@ void ShaderPass::showInspector(int id) {
     }
 
     ImGui::SameLine();
-    ImGui::Checkbox("Show Files", &show_files);
+    if (ImGui::SmallButton("Files")) show_files = !show_files;
 
     if (show_files) {
         ImGui::Indent();
         ImGui::Text("Textures (%d):", (int)textures.size());
         for (int i = 0; i < (int)textures.size(); i++) {
-            if (!texture_paths[i].empty()) {
-                ImGui::BulletText("Slot %d: %s", i + 1, texture_paths[i].c_str());
-            } else {
-                ImGui::BulletText("Slot %d: [Empty]", i + 1);
+            ImGui::PushID(i);
+            if (i < (int)texture_masks.size()) {
+                bool m = texture_masks[i];
+                if (ImGui::Checkbox("##mask", &m)) texture_masks[i] = m;
+                ImGui::SameLine();
             }
+            if (!texture_paths[i].empty()) {
+                ImGui::Text("Slot %d: %s", i + 1, texture_paths[i].c_str());
+            } else {
+                ImGui::Text("Slot %d: [Empty]", i + 1);
+            }
+            ImGui::PopID();
         }
         ImGui::Unindent();
     }

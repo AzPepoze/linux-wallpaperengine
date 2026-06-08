@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "../../libs/sokol/sokol_glue.h"
+#include "../core/context.h"
 #include "effect.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
@@ -106,32 +107,6 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
 
 void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
                           float tint[4], bool additive, ShaderPass* pass) {
-    sg_view_desc v_desc = {};
-    v_desc.texture.image = img;
-    sg_view view = sg_make_view(&v_desc);
-    r->bind.views[0] = view;
-
-    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
-        sg_apply_pipeline(pass->pipeline);
-        for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
-            if (pass->textures[i].id != SG_INVALID_ID) {
-                sg_view_desc ev_desc = {};
-                ev_desc.texture.image = pass->textures[i];
-                r->bind.views[i + 1] = sg_make_view(&ev_desc);
-            } else {
-                r->bind.views[i + 1] = (sg_view){SG_INVALID_ID};
-            }
-        }
-    } else {
-        sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
-        for (int i = 1; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
-    }
-
-    sg_apply_bindings(&r->bind);
-    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
-        pass->applyUniforms();
-    }
-
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -140,19 +115,81 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
     mat4x4_mul(mvp, proj, model);
 
-    sg_range mvp_range = SG_RANGE(mvp);
-    sg_apply_uniforms(0, &mvp_range);
-    sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
-    sg_apply_uniforms(1, &tint_range);
+    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+        sg_apply_pipeline(pass->pipeline);
+
+        // Slot 0 (g_Texture0)
+        sg_image slot0 = img;
+        if (!pass->textures.empty() && pass->textures[0].id != SG_INVALID_ID && pass->texture_masks[0]) {
+            slot0 = pass->textures[0];
+        }
+        sg_view_desc v0_desc = {};
+        v0_desc.texture.image = slot0;
+        r->bind.views[0] = sg_make_view(&v0_desc);
+
+        // Built-in Uniforms Setup
+        builtin_uniforms_t builtin = {};
+        memcpy(builtin.mvp, mvp, sizeof(mat4x4));
+        builtin.parallax_pos[0] = state.parallax_smooth_x * 0.5f + 0.5f;
+        builtin.parallax_pos[1] = state.parallax_smooth_y * 0.5f + 0.5f;
+
+        // Slot 1+ and Resolutions
+        for (int i = 1; i < (int)pass->textures.size() && i < 12; i++) {
+            sg_image target_img = (sg_image){SG_INVALID_ID};
+            if (i < (int)pass->texture_masks.size() && pass->texture_masks[i]) {
+                target_img = pass->textures[i];
+            }
+
+            if (target_img.id != SG_INVALID_ID) {
+                sg_view_desc ev_desc = {};
+                ev_desc.texture.image = target_img;
+                r->bind.views[i] = sg_make_view(&ev_desc);
+
+                if (i <= 4) {
+                    sg_image_desc d = sg_query_image_desc(target_img);
+                    builtin.texture_resolutions[i - 1][0] = (float)d.width;
+                    builtin.texture_resolutions[i - 1][1] = (float)d.height;
+                    builtin.texture_resolutions[i - 1][2] = 1.0f / (float)d.width;
+                    builtin.texture_resolutions[i - 1][3] = 1.0f / (float)d.height;
+                }
+            } else {
+                r->bind.views[i] = (sg_view){SG_INVALID_ID};
+            }
+        }
+
+        sg_range b_range = SG_RANGE(builtin.mvp);
+        sg_apply_uniforms(0, &b_range);
+        sg_range res_range = {.ptr = builtin.texture_resolutions,
+                              .size = sizeof(float) * 4 * 4 + sizeof(float) * 4};  // + parallax_pos
+        sg_apply_uniforms(1, &res_range);
+
+        sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
+        sg_apply_uniforms(2, &tint_range);
+    } else {
+        sg_view_desc v_desc = {};
+        v_desc.texture.image = img;
+        sg_view view = sg_make_view(&v_desc);
+        r->bind.views[0] = view;
+        for (int i = 1; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
+        sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
+
+        sg_range mvp_range = SG_RANGE(mvp);
+        sg_apply_uniforms(0, &mvp_range);
+        sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
+        sg_apply_uniforms(1, &tint_range);
+    }
+
+    sg_apply_bindings(&r->bind);
+    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+        pass->applyUniforms();
+    }
+
     sg_draw(0, 6, 1);
 
-    sg_destroy_view(view);
-    if (pass && pass->enabled) {
-        for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
-            if (r->bind.views[i + 1].id != SG_INVALID_ID) {
-                sg_destroy_view(r->bind.views[i + 1]);
-                r->bind.views[i + 1] = (sg_view){SG_INVALID_ID};
-            }
+    for (int i = 0; i < 12; i++) {
+        if (r->bind.views[i].id != SG_INVALID_ID) {
+            sg_destroy_view(r->bind.views[i]);
+            r->bind.views[i] = (sg_view){SG_INVALID_ID};
         }
     }
 }

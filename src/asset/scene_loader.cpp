@@ -106,10 +106,19 @@ void scene_loader_load(const char* path) {
 }
 
 void scene_loader_update(float dt) {
+    if (state.test_mode && state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
+        state.layers[state.selected_object]->update(dt);
+        return;
+    }
     for (auto layer : state.layers) layer->update(dt);
 }
 
 void scene_loader_draw(void) {
+    if (state.test_mode && state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
+        state.layers[state.selected_object]->draw();
+        return;
+    }
+
     bool any_solo = false;
     for (auto layer : state.layers) {
         if (layer->solo) {

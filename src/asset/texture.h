@@ -19,7 +19,7 @@ typedef struct {
     sg_pixel_format format;
 } DecodedTexture;
 
-DecodedTexture load_texture(const char* path);
+DecodedTexture load_texture(const char* path, int image_index);
 void free_texture(DecodedTexture tex);
 void save_texture_as_png(DecodedTexture tex, const char* path);
 

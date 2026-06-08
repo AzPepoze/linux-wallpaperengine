@@ -11,7 +11,7 @@ class AssetManager {
     bool resolvePath(const char* rel_path, char* out_abs_path, int max_len) const;
 
     // High-level resolvers
-    sg_image resolveTexture(const char* name, std::string* out_path = nullptr) const;
+    sg_image resolveTexture(const char* name, std::string* out_path = nullptr, int image_index = 0) const;
     sg_image resolveMaterialTexture(const char* mat_rel_path, std::string* out_path = nullptr) const;
 
    private:
