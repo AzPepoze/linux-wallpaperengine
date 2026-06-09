@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../libs/sokol/sokol_app.h"
 #include "../../core/context.h"
 #include "../../core/logger.h"
 #include "../../core/utils.h"
+#include "../../libs/sokol/sokol_app.h"
 #include "../../render/render.h"
 #include "imgui.h"
 
