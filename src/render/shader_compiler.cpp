@@ -37,12 +37,16 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[1].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT2;
     shd_desc.uniform_blocks[1].glsl_uniforms[6].glsl_name = "g_Time";
     shd_desc.uniform_blocks[1].glsl_uniforms[6].type = SG_UNIFORMTYPE_FLOAT;
-    shd_desc.uniform_blocks[1].glsl_uniforms[7].glsl_name = "g_Screen";
-    shd_desc.uniform_blocks[1].glsl_uniforms[7].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[1].glsl_uniforms[8].glsl_name = "g_EffectTextureProjectionMatrix";
-    shd_desc.uniform_blocks[1].glsl_uniforms[8].type = SG_UNIFORMTYPE_MAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[9].glsl_name = "g_EffectTextureProjectionMatrixInverse";
-    shd_desc.uniform_blocks[1].glsl_uniforms[9].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[7].glsl_name = "g_Padding1";
+    shd_desc.uniform_blocks[1].glsl_uniforms[7].type = SG_UNIFORMTYPE_FLOAT;
+    shd_desc.uniform_blocks[1].glsl_uniforms[8].glsl_name = "g_Screen";
+    shd_desc.uniform_blocks[1].glsl_uniforms[8].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[1].glsl_uniforms[9].glsl_name = "g_Padding2";
+    shd_desc.uniform_blocks[1].glsl_uniforms[9].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[1].glsl_uniforms[10].glsl_name = "g_EffectTextureProjectionMatrix";
+    shd_desc.uniform_blocks[1].glsl_uniforms[10].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[11].glsl_name = "g_EffectTextureProjectionMatrixInverse";
+    shd_desc.uniform_blocks[1].glsl_uniforms[11].type = SG_UNIFORMTYPE_MAT4;
 
     // Slot 2: Fragment Tint
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -75,9 +79,25 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         else
             shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_FRAGMENT;
 
-        shd_desc.uniform_blocks[u_idx].size = sizeof(float) * 4;
+        shd_desc.uniform_blocks[u_idx].size = 16;  // Sokol requires multiple of 16
         shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].glsl_name = name.c_str();
         shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].type = type;
+
+        // Add padding to match 16-byte block size
+        if (type == SG_UNIFORMTYPE_FLOAT) {
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].glsl_name = "dummy_pad_0";
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT;
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[2].glsl_name = "dummy_pad_1";
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT;
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[3].glsl_name = "dummy_pad_2";
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT;
+        } else if (type == SG_UNIFORMTYPE_FLOAT2) {
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].glsl_name = "dummy_pad_0";
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT2;
+        } else if (type == SG_UNIFORMTYPE_FLOAT3) {
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].glsl_name = "dummy_pad_0";
+            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT;
+        }
         u_idx++;
     }
 
