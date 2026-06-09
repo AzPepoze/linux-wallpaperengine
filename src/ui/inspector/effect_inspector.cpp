@@ -20,11 +20,40 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     }
 
     // Debug view mode selector
-    const char* debug_modes[] = {"Normal", "Albedo", "g_Tex1@xy", "g_Tex2@xy", "g_Tex0@xy", "Parallax"};
+    std::vector<std::string> mode_names = {"Normal"};
+    for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "Tex%d", i);
+        mode_names.push_back(buf);
+    }
+    for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "Tex%d (Red)", i);
+        mode_names.push_back(buf);
+    }
+
+    std::vector<const char*> mode_ptrs;
+    for (auto& s : mode_names) mode_ptrs.push_back(s.c_str());
+
     int prev_mode = pass.debug_view_mode;
+    // Map current mode to index in mode_ptrs
+    int current_idx = 0;
+    if (pass.debug_view_mode >= 1 && pass.debug_view_mode <= 10) {
+        current_idx = pass.debug_view_mode;
+    } else if (pass.debug_view_mode >= 11 && pass.debug_view_mode <= 20) {
+        current_idx = (pass.debug_view_mode - 11) + (int)pass.pass_textures.textures.size() + 1;
+    }
+
     ImGui::SameLine();
     ImGui::SetNextItemWidth(140);
-    if (ImGui::Combo("##debugview", &pass.debug_view_mode, debug_modes, 6)) {
+    if (ImGui::Combo("##debugview", &current_idx, mode_ptrs.data(), (int)mode_ptrs.size())) {
+        if (current_idx == 0)
+            pass.debug_view_mode = 0;
+        else if (current_idx <= (int)pass.pass_textures.textures.size())
+            pass.debug_view_mode = current_idx;
+        else
+            pass.debug_view_mode = (current_idx - (int)pass.pass_textures.textures.size() - 1) + 11;
+
         if (pass.debug_view_mode != prev_mode) {
             pass.rebuildWithDebugMode(pass.debug_view_mode, ctx);
         }
@@ -34,13 +63,12 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     int prev_step = pass.debug_step;
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
-    if (ImGui::SliderInt("##debugstep", &pass.debug_step, 0, 8)) {
+    if (ImGui::SliderInt("##debugstep", &pass.debug_step, 0, (int)pass.pass_textures.textures.size())) {
         if (pass.debug_step != prev_step) {
             pass.rebuildWithDebugMode(pass.debug_view_mode, ctx);
         }
     }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Debug Step: 0=full shader, 1=passthrough, 2=+depth sample, 3=+offset, 4=+mask, 5=full");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Debug Step: forced texture output (bypasses main logic)");
 
     ImGui::Indent();
     if (pass.pass_textures.textures.empty()) {

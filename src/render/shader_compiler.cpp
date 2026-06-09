@@ -162,25 +162,19 @@ std::string ShaderCompiler::applyDebugMode(const std::string& fsSource, int debu
         size_t end = full_fs.find(';', pos);
         if (end != std::string::npos) {
             std::string debug_line;
-            switch (debug_view_mode) {
-                case 1:  // raw albedo (no displacement)
-                    debug_line = "frag_color = texSample2D(g_Texture0, v_TexCoord.xy)";
-                    break;
-                case 2:  // g_Texture1 at v_TexCoord.zw
-                    debug_line = "frag_color = vec4(vec3(texSample2D(g_Texture1, v_TexCoord.zw).r), 1.0)";
-                    break;
-                case 3:  // g_Texture2 at .xy
-                    debug_line = "frag_color = vec4(vec3(texSample2D(g_Texture2, v_TexCoord.xy).r), 1.0)";
-                    break;
-                case 4:  // g_Texture0 at .xy
-                    debug_line = "frag_color = vec4(vec3(texSample2D(g_Texture0, v_TexCoord.xy).r), 1.0)";
-                    break;
-                case 5:  // parallax offset
-                    debug_line = "frag_color = vec4(v_ParallaxOffset, 0.0, 1.0)";
-                    break;
-                default:
-                    debug_line = "frag_color = vec4(1,0,1,1)";  // magenta for unknown
-                    break;
+            if (debug_view_mode >= 1 && debug_view_mode <= 10) {
+                // Show Texture N
+                char buf[64];
+                snprintf(buf, sizeof(buf), "frag_color = texSample2D(g_Texture%d, v_TexCoord.xy)", debug_view_mode - 1);
+                debug_line = buf;
+            } else if (debug_view_mode >= 11 && debug_view_mode <= 20) {
+                // Show Texture N Red Channel (Grayscale)
+                char buf[128];
+                snprintf(buf, sizeof(buf), "frag_color = vec4(vec3(texSample2D(g_Texture%d, v_TexCoord.xy).r), 1.0)",
+                         debug_view_mode - 11);
+                debug_line = buf;
+            } else {
+                debug_line = "frag_color = vec4(1,0,1,1)";  // magenta for unknown
             }
             full_fs.replace(pos, end - pos + 1, debug_line + ";");
             effect_log.info("DEBUG: Overriding FS output with mode %d", debug_view_mode);
@@ -196,7 +190,7 @@ std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debu
     size_t main_pos = full_fs.find("void main()");
     if (main_pos != std::string::npos) {
         size_t body_start = full_fs.find('{', main_pos) + 1;
-        // Find matching } by counting braces (rfind('}') hits JSON in comments)
+        // Find matching } by counting braces
         int depth = 1;
         size_t body_end = body_start;
         while (body_end < full_fs.size() && depth > 0) {
@@ -208,67 +202,11 @@ std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debu
         std::string before = full_fs.substr(0, body_start);
         std::string after = full_fs.substr(body_end);
 
-        const char* body = nullptr;
-        switch (debug_step) {
-            case 1:  // just show g_Texture0 at original UV
-                body = "\n\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
-                break;
-            case 2:  // + sample depth (but don't use it for offset yet)
-                body =
-                    "\n\tfloat depth = texSample2D(g_Texture0, v_TexCoord.xy).r;\n"
-                    "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
-                break;
-            case 3:  // + offset with neutral depth=0.5 (offset=0 from math, tests g_Scale+v_Parallax)
-                body =
-                    "\n\tfloat depth = 0.5;\n"
-                    "\tfloat mask = 1.0;\n"
-                    "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
-                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * "
-                    "-Config::kDepthOffsetBase;\n"
-                    "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
-                    "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
-                break;
-            case 4:  // + small fixed offset (0.005) to test if ANY offset blanks
-                body =
-                    "\n\tvec2 offset = vec2(0.005, 0.005);\n"
-                    "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
-                break;
-            case 5:  // show depth as grayscale
-                body =
-                    "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.zw).r;\n"
-                    "\tfrag_color = vec4(vec3(depth), 1.0);\n";
-                break;
-            case 6:  // + hardcode g_Scale=1, real depth
-                body =
-                    "\n\tfloat depth = texSample2D(g_Texture0, v_TexCoord.xy).r;\n"
-                    "\tfloat mask = 1.0;\n"
-                    "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
-                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * 1.0 * -Config::kDepthOffsetBase;\n"
-                    "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
-                    "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
-                break;
-            case 7:  // + sample mask from g_Texture2
-                body =
-                    "\n\tfloat depth = texSample2D(g_Texture0, v_TexCoord.xy).r;\n"
-                    "\tfloat mask = 1.0;\n"
-                    "#if MASK\n"
-                    "\tmask *= texSample2D(g_Texture2, v_TexCoordMask.xy).r;\n"
-                    "#endif\n"
-                    "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
-                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * "
-                    "-Config::kDepthOffsetBase;\n"
-                    "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
-                    "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
-                break;
-            case 8:  // full original (equivalent to step 0, but explicit)
-            default:
-                body = nullptr;
-                break;
-        }
-        if (body) {
-            full_fs = before + body + after;
-            effect_log.info("DEBUG STEP %d: simplified FS main()", debug_step);
-        }
+        char body_buf[128];
+        snprintf(body_buf, sizeof(body_buf), "\n\tfrag_color = texSample2D(g_Texture%d, v_TexCoord.xy);\n",
+                 debug_step - 1);
+        full_fs = before + body_buf + after;
+        effect_log.info("DEBUG STEP %d: forced texture output", debug_step);
     }
     return full_fs;
 }
