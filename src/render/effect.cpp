@@ -154,8 +154,20 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
                     name = "g_Sensitivity";
                 else if (name == "center")
                     name = "g_Center";
-                else if (name.find("g_") != 0)
-                    name = "g_" + name;
+                else if (name == "speed")
+                    name = "g_Speed";
+                else if (name == "strength")
+                    name = "g_Strength";
+                else if (name == "direction")
+                    name = "g_Direction";
+                else if (name == "perspective")
+                    name = "g_Perspective";
+                else if (name.find("g_") != 0) {
+                    std::string mapped = "g_";
+                    mapped += (char)toupper(name[0]);
+                    mapped += name.substr(1);
+                    name = mapped;
+                }
 
                 uniforms[name] = vals;
             }
@@ -167,6 +179,75 @@ ShaderPass::~ShaderPass() {
     if (constant_values) cJSON_Delete(constant_values);
     if (pipeline.id != SG_INVALID_ID) sg_destroy_pipeline(pipeline);
     if (shader.id != SG_INVALID_ID) sg_destroy_shader(shader);
+}
+
+static std::string process_shader_source(const std::string& source, bool is_vertex) {
+    std::string result = source;
+
+    // 1. Resolve #include "common.h"
+    size_t include_pos = result.find("#include \"common.h\"");
+    if (include_pos != std::string::npos) {
+        const char* common_h =
+            "#define M_PI 3.14159265358979323846\n"
+            "#define M_PI_2 1.57079632679\n"
+            "#define M_2PI 6.28318530718\n"
+            "vec2 rotateVec2(vec2 v, float a) {\n"
+            "    float s = sin(a);\n"
+            "    float c = cos(a);\n"
+            "    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);\n"
+            "}\n";
+        result.replace(include_pos, 19, common_h);
+    }
+
+    // 2. Resolve #include "common_perspective.h"
+    include_pos = result.find("#include \"common_perspective.h\"");
+    if (include_pos != std::string::npos) {
+        const char* common_perspective_h =
+            "mat3 squareToQuad(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {\n"
+            "    float dx1 = p1.x - p2.x, dy1 = p1.y - p2.y;\n"
+            "    float dx2 = p3.x - p2.x, dy2 = p3.y - p2.y;\n"
+            "    float sx = p0.x - p1.x + p2.x - p3.x, sy = p0.y - p1.y + p2.y - p3.y;\n"
+            "    float g = (sx * dy2 - dx2 * sy) / (dx1 * dy2 - dx2 * dy1);\n"
+            "    float h = (dx1 * sy - sx * dy1) / (dx1 * dy2 - dx2 * dy1);\n"
+            "    return mat3(p1.x - p0.x + g * p1.x, p1.y - p0.y + g * p1.y, g, p3.x - p0.x + h * p3.x, p3.y - p0.y + "
+            "h * p3.y, h, p0.x, p0.y, 1.0);\n"
+            "}\n";
+        result.replace(include_pos, 31, common_perspective_h);
+    }
+
+    // 3. Translate attribute/varying
+    if (is_vertex) {
+        // attribute -> in
+        size_t pos = 0;
+        while ((pos = result.find("attribute ", pos)) != std::string::npos) {
+            result.replace(pos, 9, "in ");
+            pos += 3;
+        }
+        // varying -> out
+        pos = 0;
+        while ((pos = result.find("varying ", pos)) != std::string::npos) {
+            result.replace(pos, 8, "out ");
+            pos += 4;
+        }
+    } else {
+        // varying -> in
+        size_t pos = 0;
+        while ((pos = result.find("varying ", pos)) != std::string::npos) {
+            result.replace(pos, 8, "in ");
+            pos += 3;
+        }
+        // gl_FragColor -> frag_color
+        if (result.find("gl_FragColor") != std::string::npos) {
+            result = "out vec4 frag_color;\n" + result;
+            size_t frag_pos = 0;
+            while ((frag_pos = result.find("gl_FragColor", frag_pos)) != std::string::npos) {
+                result.replace(frag_pos, 12, "frag_color");
+                frag_pos += 10;
+            }
+        }
+    }
+
+    return result;
 }
 
 void ShaderPass::init() {
@@ -222,10 +303,31 @@ void ShaderPass::init() {
         return;
     }
 
+    std::string combo_defines = "";
+    if (constant_values) {
+        cJSON* item;
+        cJSON_ArrayForEach(item, constant_values) {
+            if (cJSON_IsNumber(item)) {
+                std::string name = item->string;
+                // Uppercase for combos
+                for (auto& c : name) c = toupper(c);
+                combo_defines += "#define " + name + " " + std::to_string((int)item->valuedouble) + "\n";
+            }
+        }
+    }
+    // Also add defines for textures being present
+    for (int i = 0; i < (int)textures.size(); i++) {
+        if (textures[i].id != SG_INVALID_ID && texture_masks[i]) {
+            if (i == 1) combo_defines += "#define MASK 1\n";
+            if (i == 2) combo_defines += "#define TIMEOFFSET 1\n";
+        }
+    }
+
     const char* shader_prefix =
         "#version 330\n"
         "#define mul(v, m) (m * v)\n"
         "#define texSample2D(s, uv) texture(s, uv)\n"
+        "#define texture2D texture\n"
         "#define CAST2(x) vec2(x)\n"
         "#define CAST3(x) vec3(x)\n"
         "#define CAST4(x) vec4(x)\n"
@@ -234,8 +336,8 @@ void ShaderPass::init() {
         "#define lerp mix\n"
         "precision mediump float;\n";
 
-    std::string full_vs = shader_prefix + std::string(vs_src);
-    std::string full_fs = shader_prefix + std::string(fs_src);
+    std::string full_vs = shader_prefix + combo_defines + process_shader_source(vs_src, true);
+    std::string full_fs = shader_prefix + combo_defines + process_shader_source(fs_src, false);
 
     // Extract texture labels from comments in fragment shader
     // Supports:
@@ -304,6 +406,8 @@ void ShaderPass::init() {
         }
     }
     sg_shader_desc shd_desc = {};
+    shd_desc.attrs[0].glsl_name = "a_Position";
+    shd_desc.attrs[1].glsl_name = "a_TexCoord";
     shd_desc.vertex_func.source = full_vs.c_str();
     shd_desc.fragment_func.source = full_fs.c_str();
 
@@ -317,8 +421,16 @@ void ShaderPass::init() {
     shd_desc.uniform_blocks[1].size = sizeof(float) * 4 * 4 + sizeof(float) * 4;
     shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture1Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_ParallaxPosition";
-    shd_desc.uniform_blocks[1].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_Texture2Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[2].glsl_name = "g_Texture3Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[3].glsl_name = "g_Texture4Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[4].glsl_name = "g_ParallaxPosition";
+    shd_desc.uniform_blocks[1].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[1].glsl_uniforms[5].glsl_name = "g_Time";
+    shd_desc.uniform_blocks[1].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT;
 
     // Slot 2: Fragment Tint
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -330,10 +442,24 @@ void ShaderPass::init() {
     int u_idx = 3;
     for (auto const& [name, vals] : uniforms) {
         if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
-        shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_FRAGMENT;
+
+        sg_uniform_type type = SG_UNIFORMTYPE_FLOAT4;
+        std::string search_float = "uniform float " + name;
+        if (full_vs.find(search_float) != std::string::npos || full_fs.find(search_float) != std::string::npos) {
+            type = SG_UNIFORMTYPE_FLOAT;
+        }
+
+        bool in_vs = full_vs.find(name) != std::string::npos;
+        bool in_fs = full_fs.find(name) != std::string::npos;
+
+        if (in_vs)
+            shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_VERTEX;
+        else
+            shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_FRAGMENT;
+
         shd_desc.uniform_blocks[u_idx].size = sizeof(float) * 4;
         shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].glsl_name = name.c_str();
-        shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+        shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].type = type;
         u_idx++;
     }
 
@@ -389,7 +515,7 @@ void ShaderPass::apply() {
 }
 
 void ShaderPass::applyUniforms() {
-    int u_idx = 2;
+    int u_idx = 3;
     for (auto const& [name, vals] : uniforms) {
         if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
         float data[4] = {0, 0, 0, 0};
