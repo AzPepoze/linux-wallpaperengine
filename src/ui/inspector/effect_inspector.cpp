@@ -66,7 +66,7 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     int prev_step = pass.debug_step;
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
-	
+
     int max_step = 7;
     if (extra_count + 1 > max_step) max_step = extra_count + 1;
 

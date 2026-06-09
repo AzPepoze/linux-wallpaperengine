@@ -185,6 +185,14 @@ void ShaderPass::init(EngineContext& ctx) {
     free(fs_src);
 
     pass_textures.buildCachedViews();
+
+    // Log fallbacks
+    if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
+        effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using neutral gray fallback", shader_name.c_str());
+    }
+    if (pass_textures.textures.size() < 2 || pass_textures.textures[1].id == SG_INVALID_ID) {
+        effect_log.warn("ShaderPass %s: g_Texture2 (mask) missing, using full white fallback", shader_name.c_str());
+    }
 }
 
 void ShaderPass::apply(EngineContext& ctx) {
