@@ -124,7 +124,7 @@ void Debugger::drawInspectorPanel(float width, float height) {
         ImGui::Separator();
 
         if (state.selected_object == -1) {
-            ImGui::Text("Global Engine Settings");
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "GLOBAL ENGINE SETTINGS");
             ImGui::Separator();
             const char* modes[] = {"Cover", "Fit"};
             int current_mode = (int)state.scaling_mode;
@@ -134,6 +134,28 @@ void Debugger::drawInspectorPanel(float width, float height) {
             ImGui::Text("Resolution: %.0fx%.0f", state.scene_w, state.scene_h);
             ImGui::Text("Render Scale: %.3f", state.render_scale);
             ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+
+            ImGui::Separator();
+            if (ImGui::TreeNodeEx("MASTER EFFECT LIST", ImGuiTreeNodeFlags_DefaultOpen)) {
+                for (int i = 0; i < (int)state.layers.size(); i++) {
+                    Layer* layer = state.layers[i];
+                    if (layer->effects.empty()) continue;
+
+                    ImGui::PushID(i);
+                    if (ImGui::TreeNode(layer->name.c_str())) {
+                        for (int j = 0; j < (int)layer->effects.size(); j++) {
+                            Effect* eff = layer->effects[j];
+                            ImGui::PushID(j);
+                            ImGui::Checkbox(eff->passes.empty() ? "Effect" : eff->passes[0]->shader_name.c_str(),
+                                            &eff->visible);
+                            ImGui::PopID();
+                        }
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::TreePop();
+            }
         } else if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
             Layer* layer = state.layers[state.selected_object];
             ImGui::Text("Selected: %s", layer->name.c_str());

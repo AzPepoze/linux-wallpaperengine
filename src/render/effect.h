@@ -14,6 +14,7 @@ class ShaderPass {
     sg_pipeline pipeline = {SG_INVALID_ID};
     sg_shader shader = {SG_INVALID_ID};
     std::vector<sg_image> textures;
+    std::vector<sg_view> cached_views;
     std::vector<std::string> texture_paths;
     std::vector<bool> texture_masks;
     cJSON* constant_values;

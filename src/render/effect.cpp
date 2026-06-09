@@ -1,5 +1,7 @@
 #include "effect.h"
 
+#include "../../libs/sokol/sokol_app.h"
+#include "../../libs/sokol/sokol_imgui.h"
 #include "../core/context.h"
 #include "../core/logger.h"
 #include "../core/utils.h"
@@ -177,6 +179,10 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
 
 ShaderPass::~ShaderPass() {
     if (constant_values) cJSON_Delete(constant_values);
+    for (auto v : cached_views) {
+        if (v.id != SG_INVALID_ID) sg_destroy_view(v);
+    }
+    cached_views.clear();
     if (pipeline.id != SG_INVALID_ID) sg_destroy_pipeline(pipeline);
     if (shader.id != SG_INVALID_ID) sg_destroy_shader(shader);
 }
@@ -339,32 +345,6 @@ void ShaderPass::init() {
 
     std::string full_vs = shader_prefix + combo_defines + process_shader_source(vs_src, true);
     std::string full_fs = shader_prefix + combo_defines + process_shader_source(fs_src, false);
-
-    // DEBUG: Absolute minimal shaders for depthparallax to isolate pipeline vs shader
-    if (shader_name.find("depthparallax") != std::string::npos) {
-        full_vs =
-            "#version 330\n"
-            "layout(location=0) in vec2 a_Position;\n"
-            "layout(location=1) in vec2 a_TexCoord;\n"
-            "uniform mat4 g_ModelViewProjectionMatrix;\n"
-            "out vec2 v_TexCoord_Debug;\n"
-            "void main() {\n"
-            "    gl_Position = g_ModelViewProjectionMatrix * vec4(a_Position, 0.0, 1.0);\n"
-            "    v_TexCoord_Debug = a_TexCoord;\n"
-            "}\n";
-
-        full_fs =
-            "#version 330\n"
-            "precision mediump float;\n"
-            "in vec2 v_TexCoord_Debug;\n"
-            "uniform sampler2D g_Texture0;\n"
-            "out vec4 frag_color;\n"
-            "void main() {\n"
-            "    frag_color = texture(g_Texture0, v_TexCoord_Debug);\n"
-            "    if (frag_color.a < 0.01) frag_color = vec4(1.0, 0.0, 1.0, 1.0);\n"
-            "}\n";
-        effect_log.info("DEBUG: Injected absolute minimal VS/FS for depthparallax");
-    }
 
     // Extract texture labels from comments in fragment shader
     // 2. uniform sampler2D g_TextureX; // {"label":"..."}
@@ -550,6 +530,21 @@ void ShaderPass::init() {
     } else {
         effect_log.info("Created pipeline for %s", shader_name.c_str());
     }
+
+    // Cache views for all textures for debugging/UI
+    for (auto v : cached_views) {
+        if (v.id != SG_INVALID_ID) sg_destroy_view(v);
+    }
+    cached_views.clear();
+    for (auto img : textures) {
+        if (img.id != SG_INVALID_ID) {
+            sg_view_desc v_desc = {};
+            v_desc.texture.image = img;
+            cached_views.push_back(sg_make_view(&v_desc));
+        } else {
+            cached_views.push_back((sg_view){SG_INVALID_ID});
+        }
+    }
 }
 
 void ShaderPass::apply() {
@@ -585,21 +580,49 @@ void ShaderPass::showInspector(int id) {
     if (textures.empty()) {
         ImGui::TextDisabled("[No textures for this pass]");
     } else {
+        // Texture Grid Visualization
+        if (ImGui::TreeNodeEx("Texture Slots Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
+            float size = 64.0f;
+            float spacing = 8.0f;
+            float avail_x = ImGui::GetContentRegionAvail().x;
+            int columns = (int)(avail_x / (size + spacing));
+            if (columns < 1) columns = 1;
+
+            for (int i = 0; i < (int)textures.size(); i++) {
+                if (i > 0 && i % columns != 0) ImGui::SameLine();
+
+                ImGui::BeginGroup();
+                if (i < (int)cached_views.size() && cached_views[i].id != SG_INVALID_ID) {
+                    ImGui::Image((ImTextureID)simgui_imtextureid(cached_views[i]), ImVec2(size, size));
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("Slot %d: %s", i + 1,
+                                    texture_labels.count(i + 1) ? texture_labels[i + 1].c_str() : "Extra");
+                        ImGui::EndTooltip();
+                    }
+                } else {
+                    ImGui::Dummy(ImVec2(size, size));
+                    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), 0xFF555555);
+                }
+                ImGui::Text("Slot %d", i + 1);
+                ImGui::EndGroup();
+            }
+            ImGui::TreePop();
+        }
+
         for (int i = 0; i < (int)textures.size(); i++) {
             ImGui::PushID(i);
 
             // Texture Slot Description
             const char* slot_desc = "Extra Slot";
-            if (texture_labels.count(i)) {
-                slot_desc = texture_labels[i].c_str();
+            if (texture_labels.count(i + 1)) {
+                slot_desc = texture_labels[i + 1].c_str();
             } else {
                 if (i == 0)
-                    slot_desc = "Main/Mask";
+                    slot_desc = "Depth Map";
                 else if (i == 1)
                     slot_desc = "Secondary/Mask";
                 else if (i == 2)
-                    slot_desc = "Depth Map";
-                else if (i == 3)
                     slot_desc = "Noise/Noise Mask";
             }
 
@@ -609,16 +632,6 @@ void ShaderPass::showInspector(int id) {
                 bool m = texture_masks[i];
                 if (ImGui::Checkbox("##mask", &m)) texture_masks[i] = m;
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle this texture slot");
-                ImGui::SameLine();
-            }
-
-            if (textures[i].id != SG_INVALID_ID) {
-                if (ImGui::SmallButton("View")) {
-                    sg_image_desc desc = sg_query_image_desc(textures[i]);
-                    if (desc.width > 0 && desc.height > 0) {
-                        Debugger::setPreviewTexture(textures[i], (float)desc.width / (float)desc.height);
-                    }
-                }
                 ImGui::SameLine();
             }
 
