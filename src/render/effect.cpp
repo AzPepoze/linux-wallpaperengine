@@ -45,31 +45,37 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
     if (cJSON_IsArray(textures_node)) {
         cJSON* tex_node;
         cJSON_ArrayForEach(tex_node, textures_node) {
+            int current_slot = (int)textures.size();
             if (cJSON_IsString(tex_node)) {
                 std::string path;
                 sg_image img = state.asset_mgr.resolveTexture(tex_node->valuestring, &path);
                 textures.push_back(img);
                 texture_paths.push_back(path);
                 texture_masks.push_back(true);
-                effect_log.info("ShaderPass %s: Loaded texture %d: %s (id: %d)", shader_name.c_str(),
-                                (int)textures.size() - 1, path.c_str(), img.id);
+                effect_log.info("ShaderPass %s: Slot %d - Loaded base texture: %s (id: %d)", shader_name.c_str(),
+                                current_slot, path.c_str(), img.id);
             } else {
-                // Auto-resolve depth map if it's the second slot and previous was a .tex
-                if (textures.size() == 1 && !texture_paths[0].empty() && strstr(texture_paths[0].c_str(), ".tex")) {
-                    std::string path;
-                    sg_image img = state.asset_mgr.resolveTexture(texture_paths[0].c_str(), &path, 1);
-                    if (img.id != SG_INVALID_ID) {
-                        textures.push_back(img);
-                        texture_paths.push_back(path + "#1");
-                        texture_masks.push_back(true);
-                        effect_log.info("ShaderPass %s: Auto-resolved texture 1 from %s (index 1, id: %d)",
-                                        shader_name.c_str(), texture_paths[0].c_str(), img.id);
-                        continue;
+                // Auto-resolve depth map if it's the second slot (g_Texture1)
+                if (current_slot == 1) {
+                    // Try to resolve from Slot 0 path if it's a .tex
+                    const char* source_path = !texture_paths[0].empty() ? texture_paths[0].c_str() : nullptr;
+                    if (source_path && strstr(source_path, ".tex")) {
+                        std::string path;
+                        sg_image img = state.asset_mgr.resolveTexture(source_path, &path, 1);
+                        if (img.id != SG_INVALID_ID) {
+                            textures.push_back(img);
+                            texture_paths.push_back(path + "#1");
+                            texture_masks.push_back(true);
+                            effect_log.info("ShaderPass %s: Slot %d - Auto-resolved depth map from %s (id: %d)",
+                                            shader_name.c_str(), current_slot, source_path, img.id);
+                            continue;
+                        }
                     }
                 }
                 textures.push_back((sg_image){SG_INVALID_ID});
                 texture_paths.push_back("");
                 texture_masks.push_back(true);
+                effect_log.debug("ShaderPass %s: Slot %d - Initialized empty slot", shader_name.c_str(), current_slot);
             }
         }
     }
@@ -95,22 +101,29 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
                             if (textures[i].id != SG_INVALID_ID) sg_destroy_image(textures[i]);
                             textures[i] = img;
                             texture_paths[i] = path;
-                            effect_log.info("ShaderPass %s: Overrode texture %d: %s (id: %d)", shader_name.c_str(), i,
-                                            path.c_str(), img.id);
+                            effect_log.info("ShaderPass %s: Slot %d - Override (Replace): %s (id: %d)",
+                                            shader_name.c_str(), i, path.c_str(), img.id);
                         } else {
                             // Expand and add new slot
                             while ((int)textures.size() < i) {
                                 textures.push_back((sg_image){SG_INVALID_ID});
                                 texture_paths.push_back("");
                                 texture_masks.push_back(true);
+                                effect_log.debug("ShaderPass %s: Slot %d - Padding empty slot for override",
+                                                 shader_name.c_str(), (int)textures.size() - 1);
                             }
                             textures.push_back(img);
                             texture_paths.push_back(path);
                             texture_masks.push_back(true);
-                            effect_log.info("ShaderPass %s: Added texture %d: %s (id: %d)", shader_name.c_str(), i,
-                                            path.c_str(), img.id);
+                            effect_log.info("ShaderPass %s: Slot %d - Override (Add): %s (id: %d)", shader_name.c_str(),
+                                            i, path.c_str(), img.id);
                         }
+                    } else {
+                        effect_log.warn("ShaderPass %s: Slot %d - Failed to resolve override texture: %s",
+                                        shader_name.c_str(), i, tex_node->valuestring);
                     }
+                } else if (cJSON_IsNull(tex_node)) {
+                    effect_log.debug("ShaderPass %s: Slot %d - Explicit null override", shader_name.c_str(), i);
                 }
             }
         }
@@ -190,6 +203,15 @@ ShaderPass::~ShaderPass() {
 static std::string process_shader_source(const std::string& source, bool is_vertex) {
     std::string result = source;
 
+    // 0. Remove existing #version if any (we add our own in shader_prefix)
+    size_t version_pos = result.find("#version");
+    if (version_pos != std::string::npos) {
+        size_t version_end = result.find('\n', version_pos);
+        if (version_end != std::string::npos) {
+            result.erase(version_pos, version_end - version_pos + 1);
+        }
+    }
+
     // 1. Resolve #include "common.h"
     size_t include_pos = result.find("#include \"common.h\"");
     if (include_pos != std::string::npos) {
@@ -265,7 +287,11 @@ void ShaderPass::init() {
     effect_log.info("Initializing ShaderPass: %s", shader_name.c_str());
 
     char vert_path[256], frag_path[256];
-    if (shader_name.find("shaders/") == 0) {
+    if (shader_name.find("depthparallax") != std::string::npos) {
+        effect_log.info("DEBUG: Forcing FULL-SCREEN diagnostic shader for depthparallax");
+        snprintf(vert_path, sizeof(vert_path), "shaders/debug/diagnostic.vert");
+        snprintf(frag_path, sizeof(frag_path), "shaders/debug/diagnostic.frag");
+    } else if (shader_name.find("shaders/") == 0) {
         snprintf(vert_path, sizeof(vert_path), "%s.vert", shader_name.c_str());
         snprintf(frag_path, sizeof(frag_path), "%s.frag", shader_name.c_str());
     } else {
@@ -520,9 +546,7 @@ void ShaderPass::init() {
     pip_desc.colors[0].blend.enabled = true;
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
-    pip_desc.depth.write_enabled = false;
-    pip_desc.stencil.enabled = false;
+    pip_desc.cull_mode = SG_CULLMODE_NONE;
     pipeline = sg_make_pipeline(&pip_desc);
 
     if (pipeline.id == SG_INVALID_ID) {
@@ -595,9 +619,21 @@ void ShaderPass::showInspector(int id) {
                 if (i < (int)cached_views.size() && cached_views[i].id != SG_INVALID_ID) {
                     ImGui::Image((ImTextureID)simgui_imtextureid(cached_views[i]), ImVec2(size, size));
                     if (ImGui::IsItemHovered()) {
+                        const char* tt_desc = "Extra";
+                        if (texture_labels.count(i)) {
+                            tt_desc = texture_labels[i].c_str();
+                        } else {
+                            if (i == 0)
+                                tt_desc = "Main Image";
+                            else if (i == 1)
+                                tt_desc = "Depth Map";
+                            else if (i == 2)
+                                tt_desc = "Opacity Mask";
+                            else if (i == 3)
+                                tt_desc = "Noise/Noise Mask";
+                        }
                         ImGui::BeginTooltip();
-                        ImGui::Text("Slot %d: %s", i + 1,
-                                    texture_labels.count(i + 1) ? texture_labels[i + 1].c_str() : "Extra");
+                        ImGui::Text("Slot %d: %s", i + 1, tt_desc);
                         ImGui::EndTooltip();
                     }
                 } else {
@@ -615,14 +651,16 @@ void ShaderPass::showInspector(int id) {
 
             // Texture Slot Description
             const char* slot_desc = "Extra Slot";
-            if (texture_labels.count(i + 1)) {
-                slot_desc = texture_labels[i + 1].c_str();
+            if (texture_labels.count(i)) {
+                slot_desc = texture_labels[i].c_str();
             } else {
                 if (i == 0)
-                    slot_desc = "Depth Map";
+                    slot_desc = "Main Image";
                 else if (i == 1)
-                    slot_desc = "Secondary/Mask";
+                    slot_desc = "Depth Map";
                 else if (i == 2)
+                    slot_desc = "Opacity Mask";
+                else if (i == 3)
                     slot_desc = "Noise/Noise Mask";
             }
 

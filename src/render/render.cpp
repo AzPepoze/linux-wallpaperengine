@@ -4,6 +4,7 @@
 
 #include "../../libs/sokol/sokol_glue.h"
 #include "../core/context.h"
+#include "../core/logger.h"
 #include "effect.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
@@ -131,9 +132,6 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
 
-        // Slot 0 (g_Texture0) is ALWAYS the layer's main view
-        r->bind.views[0] = main_view;
-
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));
@@ -145,44 +143,34 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
 
-        // Setup Main Image Resolution (Slot 0)
-        {
-            sg_image_desc d = sg_query_image_desc(img);
-            builtin.texture_resolutions[0][0] = d.width > 0 ? (float)d.width : 1.0f;
-            builtin.texture_resolutions[0][1] = d.height > 0 ? (float)d.height : 1.0f;
-            builtin.texture_resolutions[0][2] = builtin.texture_resolutions[0][0];
-            builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
-        }
-
-        // Slot 1+ (Extra Textures)
-        for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
-            sg_image target_img = (sg_image){SG_INVALID_ID};
-            if (i < (int)pass->texture_masks.size() && pass->texture_masks[i]) {
-                target_img = pass->textures[i];
-            }
-
-            int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
-
-            if (target_img.id != SG_INVALID_ID) {
-                sg_view_desc ev_desc = {};
-                ev_desc.texture.image = target_img;
-                r->bind.views[slot] = sg_make_view(&ev_desc);
-
-                // Resolution indices for extra textures (Slot 1..4)
-                if (slot < 5) {
-                    sg_image_desc d = sg_query_image_desc(target_img);
-                    builtin.texture_resolutions[slot][0] = d.width > 0 ? (float)d.width : 1.0f;
-                    builtin.texture_resolutions[slot][1] = d.height > 0 ? (float)d.height : 1.0f;
-                    builtin.texture_resolutions[slot][2] = builtin.texture_resolutions[slot][0];
-                    builtin.texture_resolutions[slot][3] = builtin.texture_resolutions[slot][1];
+        // Slot 0+ (Textures)
+        for (int i = 0; i < 12; i++) {
+            if (i < (int)pass->cached_views.size()) {
+                sg_view v = pass->cached_views[i];
+                if (v.id != SG_INVALID_ID) {
+                    r->bind.views[i] = v;
+                } else {
+                    // Fallback for Slot 0 is the main view, others are black
+                    r->bind.views[i] = (i == 0) ? main_view : r->black_view;
                 }
             } else {
-                r->bind.views[slot] = r->black_view;
-                if (slot < 5) {
-                    builtin.texture_resolutions[slot][0] = 1.0f;
-                    builtin.texture_resolutions[slot][1] = 1.0f;
-                    builtin.texture_resolutions[slot][2] = 1.0f;
-                    builtin.texture_resolutions[slot][3] = 1.0f;
+                r->bind.views[i] = (i == 0) ? main_view : r->black_view;
+            }
+
+            // Resolution indices for textures (Slot 0..4)
+            if (i < 5) {
+                sg_image target_img = sg_query_view_image(r->bind.views[i]);
+                if (target_img.id != SG_INVALID_ID) {
+                    sg_image_desc d = sg_query_image_desc(target_img);
+                    builtin.texture_resolutions[i][0] = d.width > 0 ? (float)d.width : 1.0f;
+                    builtin.texture_resolutions[i][1] = d.height > 0 ? (float)d.height : 1.0f;
+                    builtin.texture_resolutions[i][2] = builtin.texture_resolutions[i][0];
+                    builtin.texture_resolutions[i][3] = builtin.texture_resolutions[i][1];
+                } else {
+                    builtin.texture_resolutions[i][0] = 1.0f;
+                    builtin.texture_resolutions[i][1] = 1.0f;
+                    builtin.texture_resolutions[i][2] = 1.0f;
+                    builtin.texture_resolutions[i][3] = 1.0f;
                 }
             }
         }
@@ -214,14 +202,10 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
 
     sg_draw(0, 6, 1);
 
-    // Only destroy dynamically created views (1+), NEVER destroy main_view (0) or black_view
-    for (int i = 1; i < 12; i++) {
-        if (r->bind.views[i].id != SG_INVALID_ID && r->bind.views[i].id != r->black_view.id) {
-            sg_destroy_view(r->bind.views[i]);
-        }
+    // Clean up bindings for next call
+    for (int i = 0; i < 12; i++) {
         r->bind.views[i] = (sg_view){SG_INVALID_ID};
     }
-    r->bind.views[0] = (sg_view){SG_INVALID_ID};
 }
 
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]) {
