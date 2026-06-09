@@ -325,9 +325,9 @@ void ShaderPass::init() {
 
     const char* shader_prefix =
         "#version 330\n"
-        "#define mul(v, m) (m * v)\n"
+        "#define mul(v, m) ((m) * (v))\n"
         "#define texSample2D(s, uv) texture(s, uv)\n"
-        "#define texture2D texture\n"
+        "#define texture2D(s, uv) texture(s, uv)\n"
         "#define CAST2(x) vec2(x)\n"
         "#define CAST3(x) vec3(x)\n"
         "#define CAST4(x) vec4(x)\n"
@@ -340,9 +340,33 @@ void ShaderPass::init() {
     std::string full_vs = shader_prefix + combo_defines + process_shader_source(vs_src, true);
     std::string full_fs = shader_prefix + combo_defines + process_shader_source(fs_src, false);
 
+    // DEBUG: Absolute minimal shaders for depthparallax to isolate pipeline vs shader
+    if (shader_name.find("depthparallax") != std::string::npos) {
+        full_vs =
+            "#version 330\n"
+            "layout(location=0) in vec2 a_Position;\n"
+            "layout(location=1) in vec2 a_TexCoord;\n"
+            "uniform mat4 g_ModelViewProjectionMatrix;\n"
+            "out vec2 v_TexCoord_Debug;\n"
+            "void main() {\n"
+            "    gl_Position = g_ModelViewProjectionMatrix * vec4(a_Position, 0.0, 1.0);\n"
+            "    v_TexCoord_Debug = a_TexCoord;\n"
+            "}\n";
+
+        full_fs =
+            "#version 330\n"
+            "precision mediump float;\n"
+            "in vec2 v_TexCoord_Debug;\n"
+            "uniform sampler2D g_Texture0;\n"
+            "out vec4 frag_color;\n"
+            "void main() {\n"
+            "    frag_color = texture(g_Texture0, v_TexCoord_Debug);\n"
+            "    if (frag_color.a < 0.01) frag_color = vec4(1.0, 0.0, 1.0, 1.0);\n"
+            "}\n";
+        effect_log.info("DEBUG: Injected absolute minimal VS/FS for depthparallax");
+    }
+
     // Extract texture labels from comments in fragment shader
-    // Supports:
-    // 1. // [Label] g_TextureX
     // 2. uniform sampler2D g_TextureX; // {"label":"..."}
     {
         const char* p = fs_src;
@@ -516,6 +540,9 @@ void ShaderPass::init() {
     pip_desc.colors[0].blend.enabled = true;
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
+    pip_desc.depth.write_enabled = false;
+    pip_desc.stencil.enabled = false;
     pipeline = sg_make_pipeline(&pip_desc);
 
     if (pipeline.id == SG_INVALID_ID) {

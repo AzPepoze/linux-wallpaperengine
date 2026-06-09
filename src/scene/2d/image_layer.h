@@ -6,6 +6,7 @@
 class ImageLayer : public Layer {
    public:
     sg_image img;
+    sg_view cached_view = {SG_INVALID_ID};
 
     ImageLayer(const char* name, sg_image img);
     virtual ~ImageLayer();
@@ -20,6 +21,7 @@ class ImageLayer : public Layer {
    private:
     void loadMaterial(const char* mat_rel_path);
     void loadModel(const char* mdl_rel_path);
+    void updateCachedView();
 };
 
 #endif  // IMAGE_LAYER_H

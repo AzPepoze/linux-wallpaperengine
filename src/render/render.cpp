@@ -28,7 +28,9 @@ void renderer_init(renderer_t* r, float w, float h) {
     s_desc.wrap_u = SG_WRAP_REPEAT;
     s_desc.wrap_v = SG_WRAP_REPEAT;
     r->smp = sg_make_sampler(&s_desc);
-    r->bind.samplers[0] = r->smp;
+    for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
+        r->bind.samplers[i] = r->smp;
+    }
 
     uint32_t pixel = 0xFFFFFFFF;
     sg_image_desc img_desc = {};
@@ -37,6 +39,9 @@ void renderer_init(renderer_t* r, float w, float h) {
     img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
     img_desc.data.mip_levels[0] = {&pixel, 4};
     r->white_pixel = sg_make_image(&img_desc);
+
+    pixel = 0x00000000;
+    r->black_pixel = sg_make_image(&img_desc);
 
     sg_shader_desc shd_desc = {};
     shd_desc.vertex_func.source =
@@ -105,8 +110,8 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
     r->view_height = h;
 }
 
-void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
-                          float tint[4], bool additive, ShaderPass* pass) {
+void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
+                          float rotation, float tint[4], bool additive, ShaderPass* pass) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -118,10 +123,8 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
 
-        // Slot 0 (g_Texture0) is ALWAYS the layer's main image
-        sg_view_desc v0_desc = {};
-        v0_desc.texture.image = img;
-        r->bind.views[0] = sg_make_view(&v0_desc);
+        // Slot 0 (g_Texture0) is ALWAYS the layer's main view
+        r->bind.views[0] = main_view;
 
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
@@ -145,33 +148,35 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
 
         // Slot 1+ (Extra Textures)
         for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
-            if (i == 0) continue;  // g_Texture0 is handled above
-
             sg_image target_img = (sg_image){SG_INVALID_ID};
             if (i < (int)pass->texture_masks.size() && pass->texture_masks[i]) {
                 target_img = pass->textures[i];
             }
 
+            int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
+
             if (target_img.id != SG_INVALID_ID) {
                 sg_view_desc ev_desc = {};
                 ev_desc.texture.image = target_img;
-                r->bind.views[i] = sg_make_view(&ev_desc);
+                r->bind.views[slot] = sg_make_view(&ev_desc);
 
                 // Resolution indices for extra textures (Slot 1..4)
-                if (i < 5) {
+                if (slot < 5) {
                     sg_image_desc d = sg_query_image_desc(target_img);
-                    builtin.texture_resolutions[i][0] = d.width > 0 ? (float)d.width : 1.0f;
-                    builtin.texture_resolutions[i][1] = d.height > 0 ? (float)d.height : 1.0f;
-                    builtin.texture_resolutions[i][2] = builtin.texture_resolutions[i][0];
-                    builtin.texture_resolutions[i][3] = builtin.texture_resolutions[i][1];
+                    builtin.texture_resolutions[slot][0] = d.width > 0 ? (float)d.width : 1.0f;
+                    builtin.texture_resolutions[slot][1] = d.height > 0 ? (float)d.height : 1.0f;
+                    builtin.texture_resolutions[slot][2] = builtin.texture_resolutions[slot][0];
+                    builtin.texture_resolutions[slot][3] = builtin.texture_resolutions[slot][1];
                 }
             } else {
-                r->bind.views[i] = (sg_view){SG_INVALID_ID};
-                if (i < 5) {
-                    builtin.texture_resolutions[i][0] = 1.0f;
-                    builtin.texture_resolutions[i][1] = 1.0f;
-                    builtin.texture_resolutions[i][2] = 1.0f;
-                    builtin.texture_resolutions[i][3] = 1.0f;
+                sg_view_desc ev_desc = {};
+                ev_desc.texture.image = r->black_pixel;
+                r->bind.views[slot] = sg_make_view(&ev_desc);
+                if (slot < 5) {
+                    builtin.texture_resolutions[slot][0] = 1.0f;
+                    builtin.texture_resolutions[slot][1] = 1.0f;
+                    builtin.texture_resolutions[slot][2] = 1.0f;
+                    builtin.texture_resolutions[slot][3] = 1.0f;
                 }
             }
         }
@@ -184,11 +189,12 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
         sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
         sg_apply_uniforms(2, &tint_range);
     } else {
-        sg_view_desc v_desc = {};
-        v_desc.texture.image = img;
-        sg_view view = sg_make_view(&v_desc);
-        r->bind.views[0] = view;
-        for (int i = 1; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
+        r->bind.views[0] = main_view;
+        for (int i = 1; i < 12; i++) {
+            sg_view_desc ev_desc = {};
+            ev_desc.texture.image = r->black_pixel;
+            r->bind.views[i] = sg_make_view(&ev_desc);
+        }
         sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
 
         sg_range mvp_range = SG_RANGE(mvp);
@@ -204,7 +210,8 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
 
     sg_draw(0, 6, 1);
 
-    for (int i = 0; i < 12; i++) {
+    // Only destroy extra views (1+), NEVER destroy main_view (0)
+    for (int i = 1; i < 12; i++) {
         if (r->bind.views[i].id != SG_INVALID_ID) {
             sg_destroy_view(r->bind.views[i]);
             r->bind.views[i] = (sg_view){SG_INVALID_ID};
@@ -257,6 +264,7 @@ void renderer_cleanup(renderer_t* r) {
     sg_destroy_pipeline(r->pip_add);
     sg_destroy_pipeline(r->pip_lines);
     sg_destroy_image(r->white_pixel);
+    sg_destroy_image(r->black_pixel);
     sg_destroy_buffer(r->bind.vertex_buffers[0]);
     sg_destroy_buffer(r->bind.index_buffer);
     sg_destroy_sampler(r->smp);
