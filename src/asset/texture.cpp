@@ -58,11 +58,12 @@ DecodedTexture load_texture(const char* path, int image_index) {
     fseek(f, 8, SEEK_CUR);  // skip TEXI
     fseek(f, 1, SEEK_CUR);
 
-    if (strcmp(magic, "TEXV0005") != 0) {
+    if (strncmp(magic, "TEXV", 4) != 0) {
         LOG_TAG_E(TAG, "Invalid .tex magic: %s in %s", magic, path);
         fclose(f);
         return tex;
     }
+    LOG_TAG_D(TAG, "  .tex version: %s", magic);
 
     uint32_t wp_format = read_u32(f);
     fseek(f, 4, SEEK_CUR);

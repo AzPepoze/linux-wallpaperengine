@@ -10,6 +10,7 @@
 #include "imgui.h"
 
 sg_image Debugger::preview_texture = {SG_INVALID_ID};
+sg_view Debugger::preview_view = {SG_INVALID_ID};
 float Debugger::preview_aspect = 1.0f;
 
 void Debugger::init() {
@@ -18,22 +19,47 @@ void Debugger::init() {
     simgui_setup(&desc);
 }
 
+void Debugger::setPreviewTexture(sg_image img, float aspect) {
+    if (preview_view.id != SG_INVALID_ID) {
+        sg_destroy_view(preview_view);
+        preview_view.id = SG_INVALID_ID;
+    }
+    preview_texture = img;
+    preview_aspect = aspect;
+    if (img.id != SG_INVALID_ID) {
+        sg_view_desc desc = {};
+        desc.texture.image = img;
+        preview_view = sg_make_view(&desc);
+    }
+}
+
 void Debugger::drawHierarchyPanel(float width, float height) {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(width, height));
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus;
+    ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(100, height), ImVec2(sapp_width() * 0.5f, height));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoBringToFrontOnFocus;
 
     if (ImGui::Begin("HierarchyPanel", nullptr, flags)) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "HIERARCHY");
         ImGui::Separator();
 
-        if (ImGui::Selectable("Global Settings", state.selected_object == -1)) {
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        if (ImGui::Selectable("Global Settings", state.selected_object == -1, 0, ImVec2(avail_w - 90, 0))) {
             state.selected_object = -1;
         }
 
         ImGui::SameLine();
-        ImGui::Checkbox("Isolate", &state.test_mode);
+        if (state.test_mode) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.4f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.5f, 0.1f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.3f, 0.0f, 1.0f));
+        }
+        if (ImGui::Button("Isolate", ImVec2(80, 0))) {
+            state.test_mode = !state.test_mode;
+        }
+        if (state.test_mode) ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show ONLY the selected layer and its effects");
 
         ImGui::Separator();
@@ -82,13 +108,17 @@ void Debugger::drawHierarchyPanel(float width, float height) {
 }
 
 void Debugger::drawInspectorPanel(float width, float height) {
-    float x_pos = (float)sapp_width() - width;
+    static float current_width = width;
+    float x_pos = (float)sapp_width() - current_width;
     ImGui::SetNextWindowPos(ImVec2(x_pos, 0));
-    ImGui::SetNextWindowSize(ImVec2(width, height));
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus;
+    ImGui::SetNextWindowSize(ImVec2(current_width, height), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(100, height), ImVec2(sapp_width() * 0.5f, height));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoBringToFrontOnFocus;
 
     if (ImGui::Begin("InspectorPanel", nullptr, flags)) {
+        current_width = ImGui::GetWindowWidth();
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "INSPECTOR");
         ImGui::Separator();
 
@@ -133,7 +163,7 @@ void Debugger::draw() {
             state.layers[state.selected_object]->drawDebug();
         }
 
-        if (preview_texture.id != SG_INVALID_ID) {
+        if (preview_view.id != SG_INVALID_ID) {
             ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
             bool open = true;
             if (ImGui::Begin("Texture Preview", &open)) {
@@ -144,10 +174,10 @@ void Debugger::draw() {
                     h = avail.y;
                     w = h * preview_aspect;
                 }
-                ImGui::Image((ImTextureID)(uintptr_t)preview_texture.id, ImVec2(w, h));
+                ImGui::Image((ImTextureID)simgui_imtextureid(preview_view), ImVec2(w, h));
             }
             ImGui::End();
-            if (!open) preview_texture.id = SG_INVALID_ID;
+            if (!open) setPreviewTexture({SG_INVALID_ID}, 1.0f);
         }
     }
     simgui_render();
