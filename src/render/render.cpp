@@ -175,6 +175,10 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             if (i < (int)pass->pass_textures.cached_views.size() &&
                 pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->pass_textures.cached_views[i];
+            } else if (i == 0) {
+                r->bind.views[slot] = r->gray_view;  // Neutral depth fallback for g_Texture1
+            } else if (i == 1) {
+                r->bind.views[slot] = r->white_view;  // Default to full mask for g_Texture2
             } else {
                 r->bind.views[slot] = r->black_view;
             }
