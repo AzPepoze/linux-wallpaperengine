@@ -40,8 +40,16 @@ void renderer_init(renderer_t* r, float w, float h) {
     img_desc.data.mip_levels[0] = {&pixel, 4};
     r->white_pixel = sg_make_image(&img_desc);
 
+    sg_view_desc wv_desc = {};
+    wv_desc.texture.image = r->white_pixel;
+    r->white_view = sg_make_view(&wv_desc);
+
     pixel = 0x00000000;
     r->black_pixel = sg_make_image(&img_desc);
+
+    sg_view_desc bv_desc = {};
+    bv_desc.texture.image = r->black_pixel;
+    r->black_view = sg_make_view(&bv_desc);
 
     sg_shader_desc shd_desc = {};
     shd_desc.vertex_func.source =
@@ -169,9 +177,7 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
                     builtin.texture_resolutions[slot][3] = builtin.texture_resolutions[slot][1];
                 }
             } else {
-                sg_view_desc ev_desc = {};
-                ev_desc.texture.image = r->black_pixel;
-                r->bind.views[slot] = sg_make_view(&ev_desc);
+                r->bind.views[slot] = r->black_view;
                 if (slot < 5) {
                     builtin.texture_resolutions[slot][0] = 1.0f;
                     builtin.texture_resolutions[slot][1] = 1.0f;
@@ -191,9 +197,7 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
     } else {
         r->bind.views[0] = main_view;
         for (int i = 1; i < 12; i++) {
-            sg_view_desc ev_desc = {};
-            ev_desc.texture.image = r->black_pixel;
-            r->bind.views[i] = sg_make_view(&ev_desc);
+            r->bind.views[i] = r->black_view;
         }
         sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
 
@@ -210,13 +214,14 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
 
     sg_draw(0, 6, 1);
 
-    // Only destroy extra views (1+), NEVER destroy main_view (0)
+    // Only destroy dynamically created views (1+), NEVER destroy main_view (0) or black_view
     for (int i = 1; i < 12; i++) {
-        if (r->bind.views[i].id != SG_INVALID_ID) {
+        if (r->bind.views[i].id != SG_INVALID_ID && r->bind.views[i].id != r->black_view.id) {
             sg_destroy_view(r->bind.views[i]);
-            r->bind.views[i] = (sg_view){SG_INVALID_ID};
         }
+        r->bind.views[i] = (sg_view){SG_INVALID_ID};
     }
+    r->bind.views[0] = (sg_view){SG_INVALID_ID};
 }
 
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]) {
@@ -227,11 +232,8 @@ void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float
 }
 
 void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, float color[4]) {
-    sg_view_desc v_desc = {};
-    v_desc.texture.image = r->white_pixel;
-    sg_view view = sg_make_view(&v_desc);
-    r->bind.views[0] = view;
-    for (int i = 1; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
+    r->bind.views[0] = r->white_view;
+    for (int i = 1; i < 12; i++) r->bind.views[i] = r->black_view;
 
     sg_apply_pipeline(r->pip_lines);
     sg_apply_bindings(&r->bind);
@@ -256,7 +258,7 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
     sg_apply_uniforms(1, &tint_range);
     sg_draw(0, 6, 1);
 
-    sg_destroy_view(view);
+    r->bind.views[0] = (sg_view){SG_INVALID_ID};
 }
 
 void renderer_cleanup(renderer_t* r) {
@@ -264,7 +266,9 @@ void renderer_cleanup(renderer_t* r) {
     sg_destroy_pipeline(r->pip_add);
     sg_destroy_pipeline(r->pip_lines);
     sg_destroy_image(r->white_pixel);
+    sg_destroy_view(r->white_view);
     sg_destroy_image(r->black_pixel);
+    sg_destroy_view(r->black_view);
     sg_destroy_buffer(r->bind.vertex_buffers[0]);
     sg_destroy_buffer(r->bind.index_buffer);
     sg_destroy_sampler(r->smp);
