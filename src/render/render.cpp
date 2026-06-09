@@ -143,34 +143,42 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
 
-        // Slot 0+ (Textures)
-        for (int i = 0; i < 12; i++) {
-            if (i < (int)pass->cached_views.size()) {
-                sg_view v = pass->cached_views[i];
-                if (v.id != SG_INVALID_ID) {
-                    r->bind.views[i] = v;
-                } else {
-                    // Fallback for Slot 0 is the main view, others are black
-                    r->bind.views[i] = (i == 0) ? main_view : r->black_view;
-                }
+        // Slot 0 (g_Texture0) is ALWAYS the layer's main view
+        r->bind.views[0] = main_view;
+
+        // Setup Main Image Resolution (Slot 0)
+        {
+            sg_image_desc d = sg_query_image_desc(img);
+            builtin.texture_resolutions[0][0] = d.width > 0 ? (float)d.width : 1.0f;
+            builtin.texture_resolutions[0][1] = d.height > 0 ? (float)d.height : 1.0f;
+            builtin.texture_resolutions[0][2] = builtin.texture_resolutions[0][0];
+            builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
+        }
+
+        // Slot 1+ (Extra Textures from pass->cached_views)
+        for (int i = 0; i < 11; i++) {
+            int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
+
+            if (i < (int)pass->cached_views.size() && pass->cached_views[i].id != SG_INVALID_ID) {
+                r->bind.views[slot] = pass->cached_views[i];
             } else {
-                r->bind.views[i] = (i == 0) ? main_view : r->black_view;
+                r->bind.views[slot] = r->black_view;
             }
 
-            // Resolution indices for textures (Slot 0..4)
-            if (i < 5) {
-                sg_image target_img = sg_query_view_image(r->bind.views[i]);
+            // Resolution indices for extra textures (Slot 1..4)
+            if (slot < 5) {
+                sg_image target_img = sg_query_view_image(r->bind.views[slot]);
                 if (target_img.id != SG_INVALID_ID) {
                     sg_image_desc d = sg_query_image_desc(target_img);
-                    builtin.texture_resolutions[i][0] = d.width > 0 ? (float)d.width : 1.0f;
-                    builtin.texture_resolutions[i][1] = d.height > 0 ? (float)d.height : 1.0f;
-                    builtin.texture_resolutions[i][2] = builtin.texture_resolutions[i][0];
-                    builtin.texture_resolutions[i][3] = builtin.texture_resolutions[i][1];
+                    builtin.texture_resolutions[slot][0] = d.width > 0 ? (float)d.width : 1.0f;
+                    builtin.texture_resolutions[slot][1] = d.height > 0 ? (float)d.height : 1.0f;
+                    builtin.texture_resolutions[slot][2] = builtin.texture_resolutions[slot][0];
+                    builtin.texture_resolutions[slot][3] = builtin.texture_resolutions[slot][1];
                 } else {
-                    builtin.texture_resolutions[i][0] = 1.0f;
-                    builtin.texture_resolutions[i][1] = 1.0f;
-                    builtin.texture_resolutions[i][2] = 1.0f;
-                    builtin.texture_resolutions[i][3] = 1.0f;
+                    builtin.texture_resolutions[slot][0] = 1.0f;
+                    builtin.texture_resolutions[slot][1] = 1.0f;
+                    builtin.texture_resolutions[slot][2] = 1.0f;
+                    builtin.texture_resolutions[slot][3] = 1.0f;
                 }
             }
         }
