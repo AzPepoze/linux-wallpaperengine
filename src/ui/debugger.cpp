@@ -51,7 +51,8 @@ void Debugger::drawHierarchyPanel(float width, float height) {
         }
 
         ImGui::SameLine();
-        if (state.test_mode) {
+        bool is_test = state.test_mode;
+        if (is_test) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.4f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.5f, 0.1f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.3f, 0.0f, 1.0f));
@@ -59,7 +60,7 @@ void Debugger::drawHierarchyPanel(float width, float height) {
         if (ImGui::Button("Isolate", ImVec2(80, 0))) {
             state.test_mode = !state.test_mode;
         }
-        if (state.test_mode) ImGui::PopStyleColor(3);
+        if (is_test) ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show ONLY the selected layer and its effects");
 
         ImGui::Separator();

@@ -7,14 +7,39 @@
 #include "imgui.h"
 
 ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
-    constant_values = cJSON_Duplicate(cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"), 1);
-    cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(config, "shader");
+    cJSON* base_config = config;
+    char* material_json_str = nullptr;
+
+    // If config has a material reference, load that instead
+    cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(config, "material");
+    if (cJSON_IsString(mat_ref)) {
+        char abs_mat[1024];
+        if (state.asset_mgr.resolvePath(mat_ref->valuestring, abs_mat, sizeof(abs_mat))) {
+            material_json_str = read_file_to_string(abs_mat);
+            if (material_json_str) {
+                cJSON* mat_json = cJSON_Parse(material_json_str);
+                if (mat_json) {
+                    // Check if material has passes, if so use the first one as base
+                    cJSON* passes = cJSON_GetObjectItemCaseSensitive(mat_json, "passes");
+                    if (cJSON_IsArray(passes) && cJSON_GetArraySize(passes) > 0) {
+                        base_config = cJSON_Duplicate(cJSON_GetArrayItem(passes, 0), 1);
+                        cJSON_Delete(mat_json);
+                    } else {
+                        base_config = mat_json;
+                    }
+                }
+            }
+        }
+    }
+
+    constant_values = cJSON_Duplicate(cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"), 1);
+    cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(base_config, "shader");
     if (cJSON_IsString(shader_node)) {
         shader_name = shader_node->valuestring;
     }
 
-    // Load base textures
-    cJSON* textures_node = cJSON_GetObjectItemCaseSensitive(config, "textures");
+    // Load base textures from the resolved base_config
+    cJSON* textures_node = cJSON_GetObjectItemCaseSensitive(base_config, "textures");
     if (cJSON_IsArray(textures_node)) {
         cJSON* tex_node;
         cJSON_ArrayForEach(tex_node, textures_node) {
@@ -45,6 +70,12 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config) {
                 texture_masks.push_back(true);
             }
         }
+    }
+
+    // Clean up temporary material JSON if we loaded one
+    if (material_json_str) {
+        cJSON_Delete(base_config);
+        free(material_json_str);
     }
 
     // Apply instance overrides from scene.json
@@ -139,13 +170,21 @@ ShaderPass::~ShaderPass() {
 }
 
 void ShaderPass::init() {
-    if (shader_name.empty()) return;
+    if (shader_name.empty()) {
+        effect_log.warn("ShaderPass init: shader_name is empty!");
+        return;
+    }
 
     effect_log.info("Initializing ShaderPass: %s", shader_name.c_str());
 
     char vert_path[256], frag_path[256];
-    snprintf(vert_path, sizeof(vert_path), "shaders/%s.vert", shader_name.c_str());
-    snprintf(frag_path, sizeof(frag_path), "shaders/%s.frag", shader_name.c_str());
+    if (shader_name.find("shaders/") == 0) {
+        snprintf(vert_path, sizeof(vert_path), "%s.vert", shader_name.c_str());
+        snprintf(frag_path, sizeof(frag_path), "%s.frag", shader_name.c_str());
+    } else {
+        snprintf(vert_path, sizeof(vert_path), "shaders/%s.vert", shader_name.c_str());
+        snprintf(frag_path, sizeof(frag_path), "shaders/%s.frag", shader_name.c_str());
+    }
 
     char abs_vert[1024], abs_frag[1024];
     char* vs_src = nullptr;
@@ -153,10 +192,26 @@ void ShaderPass::init() {
 
     if (state.asset_mgr.resolvePath(vert_path, abs_vert, sizeof(abs_vert))) {
         vs_src = read_file_to_string(abs_vert);
+    } else {
+        // Try extracted path
+        char extracted_path[512];
+        snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", vert_path);
+        if (state.asset_mgr.resolvePath(extracted_path, abs_vert, sizeof(abs_vert))) {
+            vs_src = read_file_to_string(abs_vert);
+        }
     }
+
     if (state.asset_mgr.resolvePath(frag_path, abs_frag, sizeof(abs_frag))) {
         fs_src = read_file_to_string(abs_frag);
         effect_log.debug("Loaded frag shader for labels: %s", abs_frag);
+    } else {
+        // Try extracted path
+        char extracted_path[512];
+        snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", frag_path);
+        if (state.asset_mgr.resolvePath(extracted_path, abs_frag, sizeof(abs_frag))) {
+            fs_src = read_file_to_string(abs_frag);
+            effect_log.debug("Loaded frag shader for labels: %s", abs_frag);
+        }
     }
 
     if (!vs_src || !fs_src) {
@@ -202,7 +257,6 @@ void ShaderPass::init() {
 
             if (tex_pos != std::string::npos && comment_pos != std::string::npos && comment_pos > tex_pos) {
                 int slot = atoi(line.c_str() + tex_pos + 9);
-                effect_log.debug("Processing line for g_Texture%d: %s", slot, line.c_str());
                 std::string label;
 
                 // Try JSON format: {"label":"..."}
@@ -243,7 +297,7 @@ void ShaderPass::init() {
                     }
 
                     texture_labels[slot] = label;
-                    effect_log.debug("Found label for g_Texture%d: %s", slot, label.c_str());
+                    effect_log.info("Found label for g_Texture%d: %s", slot, label.c_str());
                 }
             }
             p = line_end ? line_end + 1 : nullptr;
