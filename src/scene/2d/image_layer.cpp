@@ -8,7 +8,7 @@
 #include "../../core/utils.h"
 #include "../../render/render.h"
 
-ImageLayer::ImageLayer(const char* name, sg_image img) : Layer(name), img(img) {}
+ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
 ImageLayer::~ImageLayer() {}
 

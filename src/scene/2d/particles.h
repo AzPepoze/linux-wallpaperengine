@@ -69,7 +69,7 @@ class ParticleSystem {
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
 
-    ParticleSystem(cJSON* config, sg_image tex, float sw, float h);
+    ParticleSystem(cJSON* config, GfxImage tex, float sw, float h);
     ~ParticleSystem();
 
     static ParticleSystem* createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh);
