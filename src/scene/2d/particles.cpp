@@ -35,8 +35,8 @@ static float get_float(cJSON* node) {
     return 0.0f;
 }
 
-ParticleSystem::ParticleSystem(cJSON* config, sg_image tex, float sw, float sh)
-    : config(config), texture(tex), scene_w(sw), scene_h(sh) {
+ParticleSystem::ParticleSystem(cJSON* config, GfxImage tex, float sw, float sh)
+    : config(config), texture(std::move(tex)), scene_w(sw), scene_h(sh) {
     cJSON* max_count = cJSON_GetObjectItemCaseSensitive(config, "maxcount");
     max_particles = cJSON_IsNumber(max_count) ? max_count->valueint : 100;
     particles.reserve(max_particles);
@@ -83,7 +83,7 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const IAssetResolver
                         if (mat_tex.id != SG_INVALID_ID) p_tex = std::move(mat_tex);
                     }
 
-                    ParticleSystem* ps = new ParticleSystem(p_json, p_tex, sw, sh);
+                    ParticleSystem* ps = new ParticleSystem(p_json, std::move(p_tex), sw, sh);
                     ps->config_path = p_abs;
                     ps->texture_path = p_tex_path;
 

@@ -11,7 +11,7 @@ class ImageLayer : public Layer {
     GfxImage img;
     GfxView cached_view;
 
-    ImageLayer(const char* name, sg_image img);
+    ImageLayer(const char* name, GfxImage img);
     virtual ~ImageLayer();
 
     static ImageLayer* createFromJSON(cJSON* node, EngineContext& ctx);
