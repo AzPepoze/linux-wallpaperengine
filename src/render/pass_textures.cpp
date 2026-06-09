@@ -64,6 +64,31 @@ void PassTextures::applyInstanceOverrides(cJSON* instance_config, const std::str
     }
 }
 
+bool PassTextures::resolveDepth(const char* source_tex_path, const std::string& shader_name, EngineContext& ctx) {
+    if (!source_tex_path) return false;
+
+    if (textures.empty() || textures[0].id == SG_INVALID_ID) {
+        std::string depth_path;
+        GfxImage depth_img = ctx.asset_mgr.resolveTexture(source_tex_path, &depth_path, 1);
+        if (depth_img.id != SG_INVALID_ID) {
+            if (textures.empty()) {
+                textures.push_back(std::move(depth_img));
+                texture_paths.push_back(depth_path + "#1");
+                texture_masks.push_back(true);
+            } else {
+                textures[0] = std::move(depth_img);
+                texture_paths[0] = depth_path + "#1";
+                texture_masks[0] = true;
+            }
+            buildCachedViews();
+            effect_log.info("ShaderPass %s: Auto-resolved depth map (g_Texture1) from %s", shader_name.c_str(),
+                            depth_path.c_str());
+            return true;
+        }
+    }
+    return false;
+}
+
 void PassTextures::buildCachedViews() {
     cached_views.clear();
     for (auto& img : textures) {

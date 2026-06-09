@@ -211,6 +211,10 @@ void ShaderPass::applyUniforms() {
     }
 }
 
+bool ShaderPass::resolveDepth(const char* source_tex_path, EngineContext& ctx) {
+    return pass_textures.resolveDepth(source_tex_path, shader_name, ctx);
+}
+
 void ShaderPass::rebuildWithDebugMode(int mode, EngineContext& ctx) {
     debug_view_mode = mode;
     compiled = {};
