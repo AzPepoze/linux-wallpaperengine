@@ -49,6 +49,7 @@ class ParticleSystem {
     std::string name;
     cJSON* config;
     sg_image texture;
+    sg_view cached_view = {SG_INVALID_ID};
     std::vector<Particle> particles;
     std::vector<ParticleSystem*> children;
 

@@ -25,6 +25,7 @@ typedef struct {
     sg_bindings bind;
     sg_sampler smp;
     sg_image white_pixel;
+    sg_image black_pixel;
     float view_width;
     float view_height;
 } renderer_t;
@@ -43,8 +44,8 @@ typedef struct {
     mat4x4 effect_texture_projection_inverse;
 } builtin_uniforms_t;
 
-void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,
-                          float tint[4], bool additive, ShaderPass* pass);
+void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
+                          float rotation, float tint[4], bool additive, ShaderPass* pass);
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]);
 void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, float color[4]);
 void renderer_cleanup(renderer_t* r);

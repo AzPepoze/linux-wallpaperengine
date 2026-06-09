@@ -11,6 +11,16 @@ ImageLayer::ImageLayer(const char* name, sg_image img) : Layer(name), img(img) {
 
 ImageLayer::~ImageLayer() {
     if (img.id != SG_INVALID_ID) sg_destroy_image(img);
+    if (cached_view.id != SG_INVALID_ID) sg_destroy_view(cached_view);
+}
+
+void ImageLayer::updateCachedView() {
+    if (img.id != SG_INVALID_ID) {
+        if (cached_view.id != SG_INVALID_ID) sg_destroy_view(cached_view);
+        sg_view_desc v_desc = {};
+        v_desc.texture.image = img;
+        cached_view = sg_make_view(&v_desc);
+    }
 }
 
 ImageLayer* ImageLayer::createFromJSON(cJSON* node) {
@@ -46,6 +56,7 @@ ImageLayer* ImageLayer::createFromJSON(cJSON* node) {
 
 void ImageLayer::loadMaterial(const char* mat_rel_path) {
     img = state.asset_mgr.resolveMaterialTexture(mat_rel_path, &path);
+    updateCachedView();
 }
 
 void ImageLayer::loadModel(const char* mdl_rel_path) {
@@ -67,6 +78,7 @@ void ImageLayer::update(float dt) {
 
 void ImageLayer::draw() {
     if (img.id == SG_INVALID_ID) return;
+    if (cached_view.id == SG_INVALID_ID) updateCachedView();
 
     float rw = size[0] * scale[0] * state.render_scale;
     float rh = size[1] * scale[1] * state.render_scale;
@@ -110,7 +122,7 @@ void ImageLayer::draw() {
         }
     }
 
-    renderer_draw_sprite(&state.renderer, img, rx, ry, rw, rh, rotation, tint, false, pass);
+    renderer_draw_sprite(&state.renderer, img, cached_view, rx, ry, rw, rh, rotation, tint, false, pass);
 }
 
 void ImageLayer::drawDebug() {

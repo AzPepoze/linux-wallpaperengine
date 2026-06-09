@@ -74,6 +74,9 @@ ParticleSystem::ParticleSystem(cJSON* config, sg_image tex, float sw, float sh)
 }
 
 ParticleSystem::~ParticleSystem() {
+    if (config) cJSON_Delete(config);
+    if (texture.id != SG_INVALID_ID) sg_destroy_image(texture);
+    if (cached_view.id != SG_INVALID_ID) sg_destroy_view(cached_view);
     for (auto c : children) delete c;
     children.clear();
 }
@@ -309,6 +312,11 @@ void ParticleSystem::update(float dt) {
 
 void ParticleSystem::draw() {
     if (texture.id == SG_INVALID_ID) return;
+    if (cached_view.id == SG_INVALID_ID) {
+        sg_view_desc v_desc = {};
+        v_desc.texture.image = texture;
+        cached_view = sg_make_view(&v_desc);
+    }
     float px = parallax[0] * state.parallax_smooth_x * 50.0f;
     float py = parallax[1] * state.parallax_smooth_y * 50.0f;
     for (auto& p : particles) {
@@ -316,8 +324,8 @@ void ParticleSystem::draw() {
         float rx = state.offset_x + (layer_origin[0] + px + p.position[0]) * state.render_scale;
         float ry = state.offset_y + (layer_origin[1] + py + p.position[1]) * state.render_scale;
         float rs = p.size * state.render_scale;
-        renderer_draw_sprite(&state.renderer, texture, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation, tint,
-                             is_additive, nullptr);
+        renderer_draw_sprite(&state.renderer, texture, cached_view, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation,
+                             tint, is_additive, nullptr);
     }
     for (auto c : children) {
         c->layer_origin[0] = layer_origin[0];
