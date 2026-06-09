@@ -7,6 +7,7 @@
 #include "../../core/context.h"
 #include "../../core/logger.h"
 #include "../../core/utils.h"
+#include "../../libs/sokol/sokol_app.h"
 #include "../../render/render.h"
 #include "imgui.h"
 
@@ -74,7 +75,6 @@ ParticleSystem::ParticleSystem(cJSON* config, sg_image tex, float sw, float sh)
 }
 
 ParticleSystem::~ParticleSystem() {
-    if (config) cJSON_Delete(config);
     if (texture.id != SG_INVALID_ID) sg_destroy_image(texture);
     if (cached_view.id != SG_INVALID_ID) sg_destroy_view(cached_view);
     for (auto c : children) delete c;
@@ -102,19 +102,10 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const class AssetMan
                         if (mat_tex.id != SG_INVALID_ID) p_tex = mat_tex;
                     }
 
-                    ParticleSystem* ps = new ParticleSystem(p_json, p_tex, sw, sh);
-                    ps->config_path = p_abs;
-                    ps->texture_path = p_tex_path;
-
-                    cJSON* override = cJSON_GetObjectItemCaseSensitive(node, "instanceoverride");
-                    if (cJSON_IsObject(override)) {
-                        cJSON* alpha = cJSON_GetObjectItemCaseSensitive(override, "alpha");
-                        if (cJSON_IsNumber(alpha)) ps->override_alpha = (float)alpha->valuedouble;
-                        cJSON* rate = cJSON_GetObjectItemCaseSensitive(override, "rate");
-                        if (cJSON_IsNumber(rate)) ps->override_rate = (float)rate->valuedouble;
-                    }
-
-                    return ps;
+                    ParticleSystem* sys = new ParticleSystem(p_json, p_tex, sw, sh);
+                    sys->config_path = p_file->valuestring;
+                    sys->texture_path = p_tex_path;
+                    return sys;
                 }
             }
         }
@@ -125,181 +116,147 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const class AssetMan
 void ParticleSystem::spawnParticle() {
     if ((int)particles.size() >= max_particles) return;
 
-    Particle p = {};
-    p.random_seed = rand_f();
-    p.spawn_time = global_time;
-    p.alpha = 1.0f;
-    p.initial_alpha = 1.0f;
-    p.color[0] = 1.0f;
-    p.color[1] = 1.0f;
-    p.color[2] = 1.0f;
-
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     cJSON* emitter;
+    int idx = 0;
     cJSON_ArrayForEach(emitter, emitters) {
-        const char* type = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(emitter, "name"));
-        if (!type) continue;
-        vec3 origin = {0, 0, 0};
-        parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "origin"), origin);
-        if (strcmp(type, "sphererandom") == 0) {
-            float dmin = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemin"));
-            float dmax = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"));
-            float dist = dmin + rand_f() * (dmax - dmin);
-            float angle = rand_f() * 2.0f * M_PI;
-            p.position[0] = origin[0] + cosf(angle) * dist;
-            p.position[1] = origin[1] + sinf(angle) * dist;
-        } else if (strcmp(type, "boxrandom") == 0) {
-            vec3 dmax = {0, 0, 0};
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), dmax);
-            p.position[0] = origin[0] + (rand_f() * 2.0f - 1.0f) * dmax[0];
-            p.position[1] = origin[1] + (rand_f() * 2.0f - 1.0f) * dmax[1];
-        } else {
-            p.position[0] = origin[0];
-            p.position[1] = origin[1];
-        }
-    }
+        float rate = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "rate")) * override_rate;
+        if (rate <= 0) continue;
 
-    cJSON* initializers = cJSON_GetObjectItemCaseSensitive(config, "initializer");
-    cJSON* init;
-    cJSON_ArrayForEach(init, initializers) {
-        const char* name = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(init, "name"));
-        if (!name) continue;
-        if (strcmp(name, "lifetimerandom") == 0) {
-            p.max_life = get_float(cJSON_GetObjectItemCaseSensitive(init, "min")) +
-                         rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(init, "max")) -
-                                     get_float(cJSON_GetObjectItemCaseSensitive(init, "min")));
+        emitter_timers[idx] += (float)sapp_frame_duration();
+        float interval = 1.0f / rate;
+
+        while (emitter_timers[idx] >= interval) {
+            emitter_timers[idx] -= interval;
+            if ((int)particles.size() >= max_particles) break;
+
+            Particle p;
+            parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "origin"), p.base_position);
+
+            const char* name = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(emitter, "name"));
+            if (strcmp(name, "boxrandom") == 0) {
+                vec3 dmin = {0, 0, 0}, dmax = {0, 0, 0};
+                parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemin"), dmin);
+                parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), dmax);
+                p.base_position[0] += dmin[0] + rand_f() * (dmax[0] - dmin[0]);
+                p.base_position[1] += dmin[1] + rand_f() * (dmax[1] - dmin[1]);
+                p.base_position[2] += dmin[2] + rand_f() * (dmax[2] - dmin[2]);
+            } else if (strcmp(name, "sphererandom") == 0) {
+                float dmin = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemin"));
+                float dmax = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"));
+                float dist = dmin + rand_f() * (dmax - dmin);
+                float angle = rand_f() * 2.0f * M_PI;
+                p.base_position[0] += cosf(angle) * dist;
+                p.base_position[1] += sinf(angle) * dist;
+            }
+
+            p.position[0] = p.base_position[0];
+            p.position[1] = p.base_position[1];
+            p.position[2] = p.base_position[2];
+
+            parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "direction"), p.velocity);
+            float speed_min = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "speedmin"));
+            float speed_max = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "speedmax"));
+            float speed = speed_min + rand_f() * (speed_max - speed_min);
+            p.velocity[0] *= speed;
+            p.velocity[1] *= speed;
+            p.velocity[2] *= speed;
+
+            p.max_life = get_float(cJSON_GetObjectItemCaseSensitive(config, "lifetime"));
             p.life = p.max_life;
-        } else if (strcmp(name, "sizerandom") == 0) {
-            p.size = get_float(cJSON_GetObjectItemCaseSensitive(init, "min")) +
-                     rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(init, "max")) -
-                                 get_float(cJSON_GetObjectItemCaseSensitive(init, "min")));
-            p.initial_size = p.size;
-        } else if (strcmp(name, "velocityrandom") == 0) {
-            vec3 min, max;
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "min"), min);
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "max"), max);
-            p.velocity[0] = min[0] + rand_f() * (max[0] - min[0]);
-            p.velocity[1] = min[1] + rand_f() * (max[1] - min[1]);
-        } else if (strcmp(name, "colorrandom") == 0) {
-            vec3 min, max;
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "min"), min);
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "max"), max);
-            p.color[0] = (min[0] + rand_f() * (max[0] - min[0])) / 255.0f;
-            p.color[1] = (min[1] + rand_f() * (max[1] - min[1])) / 255.0f;
-            p.color[2] = (min[2] + rand_f() * (max[2] - min[2])) / 255.0f;
-        } else if (strcmp(name, "alpharandom") == 0) {
-            p.alpha = get_float(cJSON_GetObjectItemCaseSensitive(init, "min")) +
-                      rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(init, "max")) -
-                                  get_float(cJSON_GetObjectItemCaseSensitive(init, "min")));
-            p.initial_alpha = p.alpha;
-        } else if (strcmp(name, "rotationrandom") == 0) {
-            p.rotation = rand_f() * 360.0f;
-        } else if (strcmp(name, "angularvelocityrandom") == 0) {
-            vec3 min, max;
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "min"), min);
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(init, "max"), max);
-            p.angular_vel = min[2] + rand_f() * (max[2] - min[2]);
-        }
-    }
-    p.base_position[0] = p.position[0];
-    p.base_position[1] = p.position[1];
 
-    cJSON* operators = cJSON_GetObjectItemCaseSensitive(config, "operator");
-    cJSON* op;
-    cJSON_ArrayForEach(op, operators) {
-        const char* name = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(op, "name"));
-        if (!name) continue;
-        if (strcmp(name, "movement") == 0) {
-            parse_vec3(cJSON_GetObjectItemCaseSensitive(op, "gravity"), p.gravity);
-            p.drag = get_float(cJSON_GetObjectItemCaseSensitive(op, "drag"));
-        } else if (strcmp(name, "alphafade") == 0) {
-            p.fade_in = get_float(cJSON_GetObjectItemCaseSensitive(op, "fadeintime"));
-            p.fade_out = get_float(cJSON_GetObjectItemCaseSensitive(op, "fadeouttime"));
-            if (p.fade_out == 0) p.fade_out = 1.0f;
-        } else if (strcmp(name, "oscillatealpha") == 0) {
-            p.osc_alpha_freq = get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")) +
-                               rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymax")) -
-                                           get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")));
-            p.osc_alpha_min = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemin"));
-        } else if (strcmp(name, "oscillatesize") == 0) {
-            p.osc_size_freq = get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")) +
-                              rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymax")) -
-                                          get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")));
-            p.osc_size_min = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemin"));
-            p.osc_size_max = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemax"));
-        } else if (strcmp(name, "oscillateposition") == 0) {
-            p.osc_pos_freq = get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")) +
-                             rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymax")) -
-                                         get_float(cJSON_GetObjectItemCaseSensitive(op, "frequencymin")));
-            p.osc_pos_min = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemin"));
-            p.osc_pos_max = get_float(cJSON_GetObjectItemCaseSensitive(op, "scalemax"));
-        } else if (strcmp(name, "turbulence") == 0) {
-            p.turb_speed = get_float(cJSON_GetObjectItemCaseSensitive(op, "speedmin")) +
-                           rand_f() * (get_float(cJSON_GetObjectItemCaseSensitive(op, "speedmax")) -
-                                       get_float(cJSON_GetObjectItemCaseSensitive(op, "speedmin")));
+            p.initial_alpha = get_float(cJSON_GetObjectItemCaseSensitive(config, "alpha"));
+            p.alpha = p.initial_alpha;
+
+            p.initial_size = get_float(cJSON_GetObjectItemCaseSensitive(config, "size"));
+            p.size = p.initial_size;
+
+            p.rotation = rand_f() * 360.0f;
+            p.angular_vel = (rand_f() - 0.5f) * 100.0f;
+
+            p.spawn_time = global_time;
+            p.random_seed = rand_f();
+
+            // Dynamics
+            p.drag = get_float(cJSON_GetObjectItemCaseSensitive(config, "drag"));
+            parse_vec3(cJSON_GetObjectItemCaseSensitive(config, "gravity"), p.gravity);
+            p.fade_in = get_float(cJSON_GetObjectItemCaseSensitive(config, "fadein"));
+            p.fade_out = get_float(cJSON_GetObjectItemCaseSensitive(config, "fadeout"));
+
+            // Oscillation
+            p.osc_alpha_freq = get_float(cJSON_GetObjectItemCaseSensitive(config, "oscillatealphafrequency"));
+            p.osc_alpha_min = get_float(cJSON_GetObjectItemCaseSensitive(config, "oscillatealphamin"));
+            p.osc_size_freq = get_float(cJSON_GetObjectItemCaseSensitive(config, "oscillatesizefrequency"));
+            p.osc_size_min = get_float(cJSON_GetObjectItemCaseSensitive(config, "oscillatesizemin"));
+            p.osc_size_max = get_float(cJSON_GetObjectItemCaseSensitive(config, "oscillatesizemax"));
+
+            p.osc_pos_freq = get_float(cJSON_GetObjectItemCaseSensitive(config, "oscillatepositionfrequency"));
+            parse_vec3(cJSON_GetObjectItemCaseSensitive(config, "oscillatepositionmin"), &p.osc_pos_min);
+            parse_vec3(cJSON_GetObjectItemCaseSensitive(config, "oscillatepositionmax"), &p.osc_pos_max);
+
+            p.turb_speed = get_float(cJSON_GetObjectItemCaseSensitive(config, "turbulencespeed"));
+
+            particles.push_back(p);
         }
+        idx++;
     }
-    particles.push_back(p);
 }
 
 void ParticleSystem::update(float dt) {
     global_time += dt;
-    cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
-    cJSON* emitter;
-    int i = 0;
-    cJSON_ArrayForEach(emitter, emitters) {
-        float rate = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "rate")) * override_rate;
-        if (rate > 0) {
-            emitter_timers[i] += dt;
-            float interval = 1.0f / rate;
-            while (emitter_timers[i] >= interval) {
-                spawnParticle();
-                emitter_timers[i] -= interval;
-            }
-        }
-        i++;
-    }
+    spawnParticle();
 
-    for (size_t i = 0; i < particles.size(); i++) {
+    for (int i = 0; i < (int)particles.size(); i++) {
         Particle& p = particles[i];
         p.life -= dt;
         if (p.life <= 0) {
-            particles[i] = particles.back();
-            particles.pop_back();
+            particles.erase(particles.begin() + i);
             i--;
             continue;
         }
-        p.velocity[0] += p.gravity[0] * dt;
-        p.velocity[1] += p.gravity[1] * dt;
-        if (p.drag > 0) {
-            p.velocity[0] *= (1.0f - p.drag * dt);
-            p.velocity[1] *= (1.0f - p.drag * dt);
-        }
-        if (p.turb_speed > 0) {
-            float angle = p.random_seed * 2.0f * M_PI + global_time * 2.0f;
-            p.velocity[0] += cosf(angle) * p.turb_speed * dt;
-            p.velocity[1] += sinf(angle) * p.turb_speed * dt;
-        }
+
+        // Dynamics
+        p.velocity[0] += (p.gravity[0] - p.velocity[0] * p.drag) * dt;
+        p.velocity[1] += (p.gravity[1] - p.velocity[1] * p.drag) * dt;
+        p.velocity[2] += (p.gravity[2] - p.velocity[2] * p.drag) * dt;
+
         p.base_position[0] += p.velocity[0] * dt;
         p.base_position[1] += p.velocity[1] * dt;
-        p.rotation += p.angular_vel * dt;
+        p.base_position[2] += p.velocity[2] * dt;
+
         p.position[0] = p.base_position[0];
         p.position[1] = p.base_position[1];
+        p.position[2] = p.base_position[2];
+
+        // Oscillation Position
         if (p.osc_pos_freq > 0) {
-            float wave = sinf(global_time * p.osc_pos_freq + p.random_seed * 100.0f);
-            float amp = p.osc_pos_min + (p.osc_pos_max - p.osc_pos_min) * 0.5f;
-            p.position[0] += wave * amp;
-            p.position[1] += cosf(global_time * p.osc_pos_freq) * amp;
+            float wave = (sinf(global_time * p.osc_pos_freq + p.random_seed * 10.0f) + 1.0f) * 0.5f;
+            p.position[0] += p.osc_pos_min + wave * (p.osc_pos_max - p.osc_pos_min);
+            p.position[1] += p.osc_pos_min + wave * (p.osc_pos_max - p.osc_pos_min);
         }
-        float age = p.max_life - p.life;
-        float alpha = p.initial_alpha * override_alpha;
-        if (age < p.fade_in) alpha *= (age / p.fade_in);
-        if (p.life < p.fade_out) alpha *= (p.life / p.fade_out);
+
+        // Turbulence
+        if (p.turb_speed > 0) {
+            p.position[0] += sinf(global_time * p.turb_speed + p.random_seed * 5.0f) * 2.0f;
+            p.position[1] += cosf(global_time * p.turb_speed + p.random_seed * 7.0f) * 2.0f;
+        }
+
+        p.rotation += p.angular_vel * dt;
+
+        // Alpha calculation
+        float alpha = p.initial_alpha;
+        float norm_life = (p.max_life - p.life) / p.max_life;
+
+        if (norm_life < p.fade_in) alpha *= (norm_life / p.fade_in);
+        if (norm_life > p.fade_out) alpha *= (1.0f - (norm_life - p.fade_out) / (1.0f - p.fade_out));
+
         if (p.osc_alpha_freq > 0) {
-            float wave = (sinf(global_time * p.osc_alpha_freq + p.random_seed * 10.0f) + 1.0f) * 0.5f;
+            float wave = (sinf(global_time * p.osc_alpha_freq) + 1.0f) * 0.5f;
             alpha *= (p.osc_alpha_min + wave * (1.0f - p.osc_alpha_min));
         }
         p.alpha = alpha;
+
+        // Size calculation
         float size = p.initial_size;
         if (p.osc_size_freq > 0) {
             float wave = (sinf(global_time * p.osc_size_freq) + 1.0f) * 0.5f;
