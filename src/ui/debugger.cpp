@@ -8,9 +8,12 @@
 #include "../../libs/sokol/sokol_log.h"
 #include "../core/context.h"
 #include "imgui.h"
+#include "inspector/layer_inspector.h"
+#include "../scene/layer.h"
+#include "../render/effect.h"
 
-sg_image Debugger::preview_texture = {SG_INVALID_ID};
-sg_view Debugger::preview_view = {SG_INVALID_ID};
+GfxImage Debugger::preview_texture;
+GfxView Debugger::preview_view;
 float Debugger::preview_aspect = 1.0f;
 
 void Debugger::init() {
@@ -20,20 +23,18 @@ void Debugger::init() {
 }
 
 void Debugger::setPreviewTexture(sg_image img, float aspect) {
-    if (preview_view.id != SG_INVALID_ID) {
-        sg_destroy_view(preview_view);
-        preview_view.id = SG_INVALID_ID;
-    }
     preview_texture = img;
     preview_aspect = aspect;
     if (img.id != SG_INVALID_ID) {
         sg_view_desc desc = {};
         desc.texture.image = img;
         preview_view = sg_make_view(&desc);
+    } else {
+        preview_view = {};
     }
 }
 
-void Debugger::drawHierarchyPanel(float width, float height) {
+void Debugger::drawHierarchyPanel(EngineContext& ctx, float width, float height) {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(100, height), ImVec2(sapp_width() * 0.5f, height));
@@ -46,27 +47,27 @@ void Debugger::drawHierarchyPanel(float width, float height) {
         ImGui::Separator();
 
         float avail_w = ImGui::GetContentRegionAvail().x;
-        if (ImGui::Selectable("Global Settings", state.selected_object == -1, 0, ImVec2(avail_w - 90, 0))) {
-            state.selected_object = -1;
+        if (ImGui::Selectable("Global Settings", ctx.selected_object == -1, 0, ImVec2(avail_w - 90, 0))) {
+            ctx.selected_object = -1;
         }
 
         ImGui::SameLine();
-        bool is_test = state.test_mode;
+        bool is_test = ctx.test_mode;
         if (is_test) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.4f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.5f, 0.1f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.3f, 0.0f, 1.0f));
         }
         if (ImGui::Button("Isolate", ImVec2(80, 0))) {
-            state.test_mode = !state.test_mode;
+            ctx.test_mode = !ctx.test_mode;
         }
         if (is_test) ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show ONLY the selected layer and its effects");
 
         ImGui::Separator();
         ImGui::BeginChild("LayerList");
-        for (int i = 0; i < (int)state.layers.size(); i++) {
-            Layer* layer = state.layers[i];
+        for (int i = 0; i < (int)ctx.layers.size(); i++) {
+            Layer* layer = ctx.layers[i];
             ImGui::PushID(i);
 
             // Visibility Toggle
@@ -93,8 +94,8 @@ void Debugger::drawHierarchyPanel(float width, float height) {
 
             char label[160];
             snprintf(label, sizeof(label), "%02d: %s", i, layer->name.c_str());
-            if (ImGui::Selectable(label, state.selected_object == i)) {
-                state.selected_object = i;
+            if (ImGui::Selectable(label, ctx.selected_object == i)) {
+                ctx.selected_object = i;
                 if (ImGui::GetIO().KeyCtrl) {
                     layer->solo = !layer->solo;
                 }
@@ -108,7 +109,7 @@ void Debugger::drawHierarchyPanel(float width, float height) {
     ImGui::End();
 }
 
-void Debugger::drawInspectorPanel(float width, float height) {
+void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height) {
     static float current_width = width;
     float x_pos = (float)sapp_width() - current_width;
     ImGui::SetNextWindowPos(ImVec2(x_pos, 0));
@@ -123,22 +124,22 @@ void Debugger::drawInspectorPanel(float width, float height) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "INSPECTOR");
         ImGui::Separator();
 
-        if (state.selected_object == -1) {
+        if (ctx.selected_object == -1) {
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "GLOBAL ENGINE SETTINGS");
             ImGui::Separator();
             const char* modes[] = {"Cover", "Fit"};
-            int current_mode = (int)state.scaling_mode;
+            int current_mode = (int)ctx.scaling_mode;
             if (ImGui::Combo("Scaling Mode", &current_mode, modes, 2)) {
-                state.scaling_mode = (scaling_mode_t)current_mode;
+                ctx.scaling_mode = (scaling_mode_t)current_mode;
             }
-            ImGui::Text("Resolution: %.0fx%.0f", state.scene_w, state.scene_h);
-            ImGui::Text("Render Scale: %.3f", state.render_scale);
+            ImGui::Text("Resolution: %.0fx%.0f", ctx.scene_w, ctx.scene_h);
+            ImGui::Text("Render Scale: %.3f", ctx.render_scale);
             ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 
             ImGui::Separator();
             if (ImGui::TreeNodeEx("MASTER EFFECT LIST", ImGuiTreeNodeFlags_DefaultOpen)) {
-                for (int i = 0; i < (int)state.layers.size(); i++) {
-                    Layer* layer = state.layers[i];
+                for (int i = 0; i < (int)ctx.layers.size(); i++) {
+                    Layer* layer = ctx.layers[i];
                     if (layer->effects.empty()) continue;
 
                     ImGui::PushID(i);
@@ -156,17 +157,17 @@ void Debugger::drawInspectorPanel(float width, float height) {
                 }
                 ImGui::TreePop();
             }
-        } else if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
-            Layer* layer = state.layers[state.selected_object];
+        } else if (ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
+            Layer* layer = ctx.layers[ctx.selected_object];
             ImGui::Text("Selected: %s", layer->name.c_str());
             ImGui::Separator();
-            layer->showInspector();
+            Inspector::showLayer(ctx, *layer);
         }
     }
     ImGui::End();
 }
 
-void Debugger::draw() {
+void Debugger::draw(EngineContext& ctx) {
     simgui_frame_desc_t frame_desc = {};
     frame_desc.width = sapp_width();
     frame_desc.height = sapp_height();
@@ -174,16 +175,16 @@ void Debugger::draw() {
     frame_desc.dpi_scale = sapp_dpi_scale();
     simgui_new_frame(&frame_desc);
 
-    if (state.show_ui) {
+    if (ctx.show_ui) {
         float panel_width = 300.0f;
         float screen_height = (float)sapp_height();
 
-        drawHierarchyPanel(panel_width, screen_height);
-        drawInspectorPanel(panel_width, screen_height);
+        drawHierarchyPanel(ctx, panel_width, screen_height);
+        drawInspectorPanel(ctx, panel_width, screen_height);
 
         // Draw debug bounds for selected layer
-        if (state.selected_object >= 0 && state.selected_object < (int)state.layers.size()) {
-            state.layers[state.selected_object]->drawDebug();
+        if (ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
+            ctx.layers[ctx.selected_object]->drawDebug(ctx);
         }
 
         if (preview_view.id != SG_INVALID_ID) {

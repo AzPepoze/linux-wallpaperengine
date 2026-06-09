@@ -7,8 +7,9 @@
 #include "../../libs/linmath.h"
 #include "../../libs/sokol/sokol_gfx.h"
 #include "../render/effect.h"
+#include "../core/interfaces.h"
 
-class Layer {
+class Layer : public ILayer {
    public:
     std::string name;
     bool visible = true;
@@ -33,17 +34,17 @@ class Layer {
     Layer(const Layer&) = delete;
     Layer& operator=(const Layer&) = delete;
 
-    virtual void update(float dt) = 0;
-    virtual void draw() = 0;
-    virtual void drawDebug() {}
-    virtual void showInspector() = 0;
+    virtual void update(float dt, EngineContext& ctx) = 0;
+    virtual void draw(EngineContext& ctx) = 0;
+    virtual void drawDebug(EngineContext& ctx) override {}
+    
+    virtual const std::string& get_name() const override { return name; }
+    virtual bool is_visible() const override { return visible; }
 
     bool draw_debug_bounds = false;
 
    protected:
-    void loadBaseProperties(cJSON* node);
-    void showBaseInspector();
-    void showEffectsInspector();
+    void loadBaseProperties(cJSON* node, EngineContext& ctx);
 };
 
 #endif  // LAYER_H

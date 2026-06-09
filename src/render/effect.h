@@ -7,33 +7,33 @@
 
 #include "../../libs/cJSON.h"
 #include "../../libs/sokol/sokol_gfx.h"
+#include "../core/gfx_resource.h"
+#include "pass_textures.h"
+#include "shader_compiler.h"
+
+class EngineContext;
 
 class ShaderPass {
    public:
     std::string shader_name;
-    sg_pipeline pipeline = {SG_INVALID_ID};
-    sg_shader shader = {SG_INVALID_ID};
-    std::vector<sg_image> textures;
-    std::vector<sg_view> cached_views;
-    std::vector<std::string> texture_paths;
-    std::vector<bool> texture_masks;
+    CompiledShader compiled;
+    PassTextures pass_textures;
     cJSON* constant_values;
     std::map<std::string, std::vector<float>> uniforms;
     std::map<int, std::string> texture_labels;
     bool enabled = true;
     bool show_files = false;
 
-    ShaderPass(cJSON* config, cJSON* instance_config = nullptr);
+    ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx);
     ~ShaderPass();
 
-    void init();
-    void apply();
+    void init(EngineContext& ctx);
+    void apply(EngineContext& ctx);
     void applyUniforms();
-    void showInspector(int id);
-    void rebuildWithDebugMode(int mode);
+    void rebuildWithDebugMode(int mode, EngineContext& ctx);
 
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
-    bool resolveDepth(const char* source_tex_path);
+    bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1-6=progressively simpler
@@ -50,13 +50,12 @@ class Effect {
     bool visible = true;
     bool solo = false;
 
-    Effect(cJSON* config);
+    Effect(cJSON* config, EngineContext& ctx);
     ~Effect();
 
-    static Effect* load(const char* rel_path, cJSON* instance_config);
-    void init();
-    void apply();
-    void showInspector(int id);
+    static Effect* load(const char* rel_path, cJSON* instance_config, EngineContext& ctx);
+    void init(EngineContext& ctx);
+    void apply(EngineContext& ctx);
 };
 
 #endif  // EFFECT_H

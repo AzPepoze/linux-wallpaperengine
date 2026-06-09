@@ -2,25 +2,27 @@
 #define IMAGE_LAYER_H
 
 #include "../layer.h"
+#include "../../core/gfx_resource.h"
+
+class EngineContext;
 
 class ImageLayer : public Layer {
    public:
-    sg_image img;
-    sg_view cached_view = {SG_INVALID_ID};
+    GfxImage img;
+    GfxView cached_view;
 
     ImageLayer(const char* name, sg_image img);
     virtual ~ImageLayer();
 
-    static ImageLayer* createFromJSON(cJSON* node);
+    static ImageLayer* createFromJSON(cJSON* node, EngineContext& ctx);
 
-    void update(float dt) override;
-    void draw() override;
-    void drawDebug() override;
-    void showInspector() override;
+    void update(float dt, EngineContext& ctx) override;
+    void draw(EngineContext& ctx) override;
+    void drawDebug(EngineContext& ctx) override;
 
    private:
-    void loadMaterial(const char* mat_rel_path);
-    void loadModel(const char* mdl_rel_path);
+    void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
+    void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void updateCachedView();
 };
 

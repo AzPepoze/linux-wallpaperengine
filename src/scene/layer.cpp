@@ -1,9 +1,6 @@
 #include "layer.h"
 
-#include "../core/context.h"
-#include "imgui.h"
-
-void Layer::loadBaseProperties(cJSON* node) {
+void Layer::loadBaseProperties(cJSON* node, EngineContext& ctx) {
     cJSON* name_node = cJSON_GetObjectItemCaseSensitive(node, "name");
     if (cJSON_IsString(name_node)) name = name_node->valuestring;
 
@@ -38,25 +35,9 @@ void Layer::loadBaseProperties(cJSON* node) {
         cJSON_ArrayForEach(eff_json, effects_node) {
             cJSON* file_node = cJSON_GetObjectItemCaseSensitive(eff_json, "file");
             if (cJSON_IsString(file_node)) {
-                Effect* effect = Effect::load(file_node->valuestring, eff_json);
+                Effect* effect = Effect::load(file_node->valuestring, eff_json, ctx);
                 if (effect) effects.push_back(effect);
             }
-        }
-    }
-}
-
-void Layer::showBaseInspector() {
-    ImGui::Checkbox("Visible", &visible);
-    ImGui::SameLine();
-    ImGui::Checkbox("Solo", &solo);
-}
-
-void Layer::showEffectsInspector() {
-    if (effects.empty()) return;
-
-    if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < (int)effects.size(); i++) {
-            effects[i]->showInspector(i);
         }
     }
 }
