@@ -75,12 +75,22 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const IAssetResolver
                 cJSON* p_json = cJSON_Parse(p_json_str);
                 free(p_json_str);
                 if (p_json) {
+                    LOG_TAG_I(TAG, "Creating particle system: %s", p_abs);
                     std::string p_tex_path;
                     GfxImage p_tex = assets.resolveTexture("materials/particle.tex", &p_tex_path);
                     cJSON* mat = cJSON_GetObjectItemCaseSensitive(p_json, "material");
                     if (cJSON_IsString(mat)) {
                         GfxImage mat_tex = assets.resolveMaterialTexture(mat->valuestring, &p_tex_path);
-                        if (mat_tex.id != SG_INVALID_ID) p_tex = std::move(mat_tex);
+                        if (mat_tex.id != SG_INVALID_ID) {
+                            LOG_TAG_I(TAG, "  Resolved material texture: %s", p_tex_path.c_str());
+                            p_tex = std::move(mat_tex);
+                        } else {
+                            LOG_TAG_W(TAG, "  Failed to resolve material texture: %s", mat->valuestring);
+                        }
+                    }
+
+                    if (p_tex.id == SG_INVALID_ID) {
+                        LOG_TAG_W(TAG, "  No texture found for particle system, using fallback");
                     }
 
                     ParticleSystem* ps = new ParticleSystem(p_json, std::move(p_tex), sw, sh);
