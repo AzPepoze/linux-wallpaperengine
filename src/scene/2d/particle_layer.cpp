@@ -1,8 +1,8 @@
 #include "particle_layer.h"
 
 #include "../../core/context.h"
+#include "../../core/engine_context.h"
 #include "../../core/utils.h"
-#include "imgui.h"
 
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
 
@@ -10,22 +10,22 @@ ParticleLayer::~ParticleLayer() {
     if (ps) delete ps;
 }
 
-ParticleLayer* ParticleLayer::createFromJSON(cJSON* node) {
-    ParticleSystem* ps = ParticleSystem::createFromJSON(node, state.asset_mgr, state.scene_w, state.scene_h);
+ParticleLayer* ParticleLayer::createFromJSON(cJSON* node, EngineContext& ctx) {
+    ParticleSystem* ps = ParticleSystem::createFromJSON(node, ctx.asset_mgr, ctx.scene_w, ctx.scene_h);
     if (ps) {
         ParticleLayer* layer = new ParticleLayer("Particle", ps);
-        layer->loadBaseProperties(node);
+        layer->loadBaseProperties(node, ctx);
         layer->path = ps->config_path;
         return layer;
     }
     return nullptr;
 }
 
-void ParticleLayer::update(float dt) {
+void ParticleLayer::update(float dt, EngineContext& ctx) {
     if (ps) ps->update(dt);
 }
 
-void ParticleLayer::draw() {
+void ParticleLayer::draw(EngineContext& ctx) {
     if (ps) {
         // Sync transformation to particle system
         ps->layer_origin[0] = origin[0];
@@ -44,32 +44,15 @@ void ParticleLayer::draw() {
 
         for (auto eff : effects) {
             if (any_eff_solo) {
-                if (eff->solo) eff->apply();
+                if (eff->solo) eff->apply(ctx);
             } else {
-                if (eff->visible) eff->apply();
+                if (eff->visible) eff->apply(ctx);
             }
         }
-        ps->draw();
+        ps->draw(ctx);
     }
 }
 
-void ParticleLayer::drawDebug() {
-    if (ps) ps->drawDebugBounds();
-}
-
-void ParticleLayer::showInspector() {
-    showBaseInspector();
-    ImGui::Text("Type: Particle System");
-    if (!path.empty()) {
-        ImGui::Text("Path: %s", path.c_str());
-    }
-
-    ImGui::Separator();
-    if (ps) ps->showInspector();
-
-    ImGui::Separator();
-    ImGui::DragFloat3("Position", (float*)origin, 1.0f);
-    ImGui::DragFloat2("Parallax", (float*)parallax, 0.01f, -10, 10);
-
-    showEffectsInspector();
+void ParticleLayer::drawDebug(EngineContext& ctx) {
+    if (ps) ps->drawDebugBounds(ctx);
 }

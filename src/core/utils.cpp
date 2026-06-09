@@ -3,8 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <string>
 
 #include "logger.h"
+#include "config.h"
 
 char* read_file_to_string(const char* path) {
     FILE* f = fopen(path, "rb");
@@ -22,12 +24,23 @@ char* read_file_to_string(const char* path) {
 }
 
 void detect_engine_path(char* out_path, size_t max_len) {
-    const char* paths[] = {"/mnt/6AB2DBF3B2DBC1AD/Program Files (x86)/Steam/steamapps/common/wallpaper_engine",
-                           "/home/azpepoze/.local/share/Steam/steamapps/common/wallpaper_engine",
-                           "/home/azpepoze/.steam/steam/steamapps/common/wallpaper_engine"};
-    for (int i = 0; i < 3; i++) {
-        if (access(paths[i], F_OK) == 0) {
-            strncpy(out_path, paths[i], max_len - 1);
+    const char* env_path = getenv("WALLPAPER_ENGINE_PATH");
+    if (env_path && access(env_path, F_OK) == 0) {
+        strncpy(out_path, env_path, max_len - 1);
+        LOG_I("Found Wallpaper Engine at: %s (from WALLPAPER_ENGINE_PATH)", out_path);
+        return;
+    }
+
+    const char* home = getenv("HOME");
+    std::string home_str = home ? home : "";
+
+    for (const auto& path : Config::kEngineSearchPaths) {
+        std::string full_path = path;
+        if (full_path.find("~/") == 0 && !home_str.empty()) {
+            full_path.replace(0, 1, home_str);
+        }
+        if (access(full_path.c_str(), F_OK) == 0) {
+            strncpy(out_path, full_path.c_str(), max_len - 1);
             LOG_I("Found Wallpaper Engine at: %s", out_path);
             return;
         }

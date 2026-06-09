@@ -5,12 +5,15 @@
 
 #include "../../libs/linmath.h"
 #include "../../libs/sokol/sokol_gfx.h"
+#include "../core/gfx_resource.h"
 
 #ifdef __cplusplus
 class ShaderPass;
+struct EngineContext;
 extern "C" {
 #else
 typedef struct ShaderPass ShaderPass;
+typedef struct EngineContext EngineContext;
 #endif
 
 typedef struct {
@@ -19,17 +22,19 @@ typedef struct {
 } vertex_t;
 
 typedef struct {
-    sg_pipeline pip_alpha;
-    sg_pipeline pip_add;
-    sg_pipeline pip_lines;
+    GfxPipeline pip_alpha;
+    GfxPipeline pip_add;
+    GfxPipeline pip_lines;
+    GfxBuffer vertex_buffer;
+    GfxBuffer index_buffer;
     sg_bindings bind;
-    sg_sampler smp;
-    sg_image white_pixel;
-    sg_view white_view;
-    sg_image black_pixel;
-    sg_view black_view;
-    sg_image gray_pixel;
-    sg_view gray_view;
+    GfxSampler smp;
+    GfxImage white_pixel;
+    GfxView white_view;
+    GfxImage black_pixel;
+    GfxView black_view;
+    GfxImage gray_pixel;
+    GfxView gray_view;
     float view_width;
     float view_height;
 } renderer_t;
@@ -48,8 +53,14 @@ typedef struct {
     mat4x4 effect_texture_projection_inverse;
 } builtin_uniforms_t;
 
-void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
+#ifdef __cplusplus
+void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
                           float rotation, float tint[4], bool additive, ShaderPass* pass);
+#else
+void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
+                          float rotation, float tint[4], bool additive, ShaderPass* pass);
+#endif
+
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]);
 void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, float color[4]);
 void renderer_cleanup(renderer_t* r);

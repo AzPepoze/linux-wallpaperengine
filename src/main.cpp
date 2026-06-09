@@ -12,15 +12,22 @@
 #include "../libs/sokol/sokol_glue.h"
 #include "../libs/sokol/sokol_imgui.h"
 #include "../libs/sokol/sokol_log.h"
-#include "asset/scene_loader.h"
+#include "scene/scene_renderer.h"
+#include "scene/scene_parser.h"
+#include "asset/unpack.h"
+#include <sys/stat.h>
 #include "core/context.h"
 #include "core/logger.h"
 #include "core/utils.h"
+#include "core/config.h"
 #include "imgui.h"
 #include "ui/debugger.h"
 
+static EngineContext ctx;
+static SceneRenderer* scene_engine = nullptr;
+
 static void init(void) {
-    detect_engine_path(state.engine_path, sizeof(state.engine_path));
+    detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path));
 
     sg_desc s_desc = {};
     s_desc.environment = sglue_environment();
@@ -29,39 +36,67 @@ static void init(void) {
 
     Debugger::init();
 
-    state.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    state.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
+    ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    ctx.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
 
-    scene_loader_init();
+    ctx.show_ui = true;
+    ctx.selected_object = -1;
+    ctx.scaling_mode = sargs_exists("cover") ? SCALING_COVER : SCALING_FIT;
 
-    state.show_ui = true;
-    state.selected_object = -1;
-    state.scaling_mode = sargs_exists("cover") ? SCALING_COVER : SCALING_FIT;
+    scene_engine = new SceneRenderer(ctx);
+    scene_engine->init();
 
-    if (state.wallpaper_path[0] != '\0') {
-        scene_loader_load(state.wallpaper_path);
+    if (ctx.wallpaper_path[0] != '\0') {
+        mkdir("extracted", 0755);
+        strcpy(ctx.asset_root, "extracted");
+        ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
+
+        if (ctx.is_pkg)
+            extract_pkg(ctx.wallpaper_path, "extracted");
+        else {
+            char pkg_file[1024];
+            snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
+            if (access(pkg_file, F_OK) == 0)
+                extract_pkg(pkg_file, "extracted");
+            else
+                strncpy(ctx.asset_root, ctx.wallpaper_path, sizeof(ctx.asset_root) - 1);
+        }
+        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+
+        char scene_path[1024];
+        snprintf(scene_path, sizeof(scene_path), "%s/scene.json", ctx.asset_root);
+        
+        ParsedScene parsed = SceneParser::parse(scene_path, ctx);
+        ctx.layers = std::move(parsed.layers);
+        ctx.scene_w = parsed.design_width;
+        ctx.scene_h = parsed.design_height;
+        if (parsed.has_clear_color) {
+            ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
+            ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1], parsed.clear_color[2], parsed.clear_color[3]};
+        }
+        scene_engine->updateViewport();
     }
     LOG_I("Linux Wallpaper Engine (C Port) Initialized");
 }
 
 static void frame(void) {
-    scene_loader_update_viewport();
+    scene_engine->updateViewport();
     float dt = (float)sapp_frame_duration();
-    state.time += dt;
-    scene_loader_update(dt);
+    ctx.time += dt;
+    scene_engine->update(dt);
 
-    float target_px = (state.mouse_x / (float)sapp_width() - 0.5f) * 2.0f;
-    float target_py = (state.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
-    state.parallax_smooth_x += (target_px - state.parallax_smooth_x) * 0.1f;
-    state.parallax_smooth_y += (target_py - state.parallax_smooth_y) * 0.1f;
+    float target_px = (ctx.mouse_x / (float)sapp_width() - 0.5f) * 2.0f;
+    float target_py = (ctx.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
+    ctx.parallax_smooth_x += (target_px - ctx.parallax_smooth_x) * Config::kParallaxSmoothing;
+    ctx.parallax_smooth_y += (target_py - ctx.parallax_smooth_y) * Config::kParallaxSmoothing;
 
     sg_pass pass = {};
-    pass.action = state.pass_action;
+    pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(&pass);
 
-    scene_loader_draw();
-    Debugger::draw();
+    scene_engine->draw();
+    Debugger::draw(ctx);
 
     sg_end_pass();
     sg_commit();
@@ -70,16 +105,20 @@ static void frame(void) {
 static void event(const sapp_event* e) {
     if (simgui_handle_event(e)) return;
     if (e->type == SAPP_EVENTTYPE_KEY_DOWN) {
-        if (e->key_code == SAPP_KEYCODE_F8) state.show_ui = !state.show_ui;
+        if (e->key_code == SAPP_KEYCODE_F8) ctx.show_ui = !ctx.show_ui;
     }
     if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
-        state.mouse_x = e->mouse_x;
-        state.mouse_y = e->mouse_y;
+        ctx.mouse_x = e->mouse_x;
+        ctx.mouse_y = e->mouse_y;
     }
 }
 
 static void cleanup(void) {
-    scene_loader_cleanup();
+    if (scene_engine) {
+        scene_engine->cleanup();
+        delete scene_engine;
+        scene_engine = nullptr;
+    }
     simgui_shutdown();
     sargs_shutdown();
     sg_shutdown();
@@ -91,10 +130,12 @@ extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
     a_desc.argv = argv;
     sargs_setup(&a_desc);
 
-    if (sargs_exists("pkg"))
-        strncpy(state.wallpaper_path, sargs_value("pkg"), sizeof(state.wallpaper_path) - 1), state.is_pkg = true;
-    else if (argc > 1 && argv[argc - 1][0] != '-')
-        strncpy(state.wallpaper_path, argv[argc - 1], sizeof(state.wallpaper_path) - 1);
+    if (sargs_exists("pkg")) {
+        strncpy(ctx.wallpaper_path, sargs_value("pkg"), sizeof(ctx.wallpaper_path) - 1);
+        ctx.is_pkg = true;
+    } else if (argc > 1 && argv[argc - 1][0] != '-') {
+        strncpy(ctx.wallpaper_path, argv[argc - 1], sizeof(ctx.wallpaper_path) - 1);
+    }
 
     sapp_desc desc = {};
     desc.init_cb = init;

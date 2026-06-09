@@ -4,6 +4,8 @@
 #include "../layer.h"
 #include "particles.h"
 
+class EngineContext;
+
 class ParticleLayer : public Layer {
    public:
     ParticleSystem* ps;
@@ -11,12 +13,11 @@ class ParticleLayer : public Layer {
     ParticleLayer(const char* name, ParticleSystem* ps);
     virtual ~ParticleLayer();
 
-    static ParticleLayer* createFromJSON(cJSON* node);
+    static ParticleLayer* createFromJSON(cJSON* node, EngineContext& ctx);
 
-    void update(float dt) override;
-    void draw() override;
-    void drawDebug() override;
-    void showInspector() override;
+    void update(float dt, EngineContext& ctx) override;
+    void draw(EngineContext& ctx) override;
+    void drawDebug(EngineContext& ctx) override;
 };
 
 #endif  // PARTICLE_LAYER_H

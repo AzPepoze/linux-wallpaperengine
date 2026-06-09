@@ -7,6 +7,8 @@
 #include "../../libs/cJSON.h"
 #include "../../libs/linmath.h"
 #include "../../libs/sokol/sokol_gfx.h"
+#include "../../core/gfx_resource.h"
+#include "../../core/interfaces.h"
 
 struct Particle {
     vec3 position = {0, 0, 0};
@@ -44,12 +46,14 @@ struct Particle {
     float turb_speed = 0.0f;
 };
 
+class EngineContext;
+
 class ParticleSystem {
    public:
     std::string name;
     cJSON* config;
-    sg_image texture;
-    sg_view cached_view = {SG_INVALID_ID};
+    GfxImage texture;
+    GfxView cached_view;
     std::vector<Particle> particles;
     std::vector<ParticleSystem*> children;
 
@@ -68,12 +72,11 @@ class ParticleSystem {
     ParticleSystem(cJSON* config, sg_image tex, float sw, float h);
     ~ParticleSystem();
 
-    static ParticleSystem* createFromJSON(cJSON* node, const class AssetManager& assets, float sw, float sh);
+    static ParticleSystem* createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh);
 
     void update(float dt);
-    void draw();
-    void showInspector();
-    void drawDebugBounds();
+    void draw(EngineContext& ctx);
+    void drawDebugBounds(EngineContext& ctx);
 
     // Debug features
     bool show_bounds = false;

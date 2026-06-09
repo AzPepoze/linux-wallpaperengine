@@ -4,6 +4,7 @@
 
 #include "../../libs/sokol/sokol_glue.h"
 #include "../core/context.h"
+#include "../core/engine_context.h"
 #include "../core/logger.h"
 #include "effect.h"
 
@@ -15,13 +16,15 @@ void renderer_init(renderer_t* r, float w, float h) {
         {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
     sg_buffer_desc v_desc = {};
     v_desc.data = SG_RANGE(vertices);
-    r->bind.vertex_buffers[0] = sg_make_buffer(&v_desc);
+    r->vertex_buffer = sg_make_buffer(&v_desc);
+    r->bind.vertex_buffers[0] = r->vertex_buffer;
 
     uint16_t indices[] = {0, 1, 2, 0, 2, 3};
     sg_buffer_desc i_desc = {};
     i_desc.usage.index_buffer = true;
     i_desc.data = SG_RANGE(indices);
-    r->bind.index_buffer = sg_make_buffer(&i_desc);
+    r->index_buffer = sg_make_buffer(&i_desc);
+    r->bind.index_buffer = r->index_buffer;
 
     sg_sampler_desc s_desc = {};
     s_desc.min_filter = SG_FILTER_LINEAR;
@@ -126,7 +129,7 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
     r->view_height = h;
 }
 
-void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
+void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
                           float rotation, float tint[4], bool additive, ShaderPass* pass) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
@@ -136,15 +139,18 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
     mat4x4_mul(mvp, proj, model);
 
-    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
-        sg_apply_pipeline(pass->pipeline);
+    // Temporary fallback view for g_Texture1 (depth map); must live until after sg_draw().
+    GfxView fallback_view;
+
+    if (pass && pass->enabled && pass->compiled.pipeline.id != SG_INVALID_ID) {
+        sg_apply_pipeline(pass->compiled.pipeline);
 
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));
-        builtin.parallax_pos[0] = state.parallax_smooth_x * 0.5f + 0.5f;
-        builtin.parallax_pos[1] = state.parallax_smooth_y * 0.5f + 0.5f;
-        builtin.time = state.time;
+        builtin.parallax_pos[0] = ctx.parallax_smooth_x * 0.5f + 0.5f;
+        builtin.parallax_pos[1] = ctx.parallax_smooth_y * 0.5f + 0.5f;
+        builtin.time = ctx.time;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
         mat4x4_identity(builtin.effect_texture_projection);
@@ -162,17 +168,19 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
             builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
         }
 
-        // Slot 1+ (Extra Textures from pass->cached_views)
+        // Slot 1+ (Extra Textures from pass->pass_textures.cached_views)
         for (int i = 0; i < 11; i++) {
             int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
 
-            if (i < (int)pass->cached_views.size() && pass->cached_views[i].id != SG_INVALID_ID) {
-                r->bind.views[slot] = pass->cached_views[i];
+            if (i < (int)pass->pass_textures.cached_views.size() && pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
+                r->bind.views[slot] = pass->pass_textures.cached_views[i];
             } else if (i == 0) {
+
                 // g_Texture1 (depth): create view from main image as fallback
                 sg_view_desc fallback_vd = {};
                 fallback_vd.texture.image = img;
-                r->bind.views[slot] = sg_make_view(&fallback_vd);
+                fallback_view = sg_make_view(&fallback_vd);
+                r->bind.views[slot] = fallback_view;
             } else {
                 r->bind.views[slot] = r->black_view;
             }
@@ -216,18 +224,12 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
     }
 
     sg_apply_bindings(&r->bind);
-    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+    if (pass && pass->enabled && pass->compiled.pipeline.id != SG_INVALID_ID) {
         pass->applyUniforms();
     }
 
     sg_draw(0, 6, 1);
-
-    // Destroy dynamic fallback view created for g_Texture1
-    if (pass && pass->enabled && pass->cached_views.size() > 0 && pass->cached_views[0].id == SG_INVALID_ID) {
-        if (r->bind.views[1].id != SG_INVALID_ID && r->bind.views[1].id != r->black_view.id) {
-            sg_destroy_view(r->bind.views[1]);
-        }
-    }
+    // fallback_view auto-destroyed here (after draw) if it was created
 
     // Clean up bindings for next call
     for (int i = 0; i < 12; i++) {
@@ -273,16 +275,18 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
 }
 
 void renderer_cleanup(renderer_t* r) {
-    sg_destroy_pipeline(r->pip_alpha);
-    sg_destroy_pipeline(r->pip_add);
-    sg_destroy_pipeline(r->pip_lines);
-    sg_destroy_image(r->white_pixel);
-    sg_destroy_view(r->white_view);
-    sg_destroy_image(r->black_pixel);
-    sg_destroy_view(r->black_view);
-    sg_destroy_image(r->gray_pixel);
-    sg_destroy_view(r->gray_view);
-    sg_destroy_buffer(r->bind.vertex_buffers[0]);
-    sg_destroy_buffer(r->bind.index_buffer);
-    sg_destroy_sampler(r->smp);
+    // RAII wrappers auto-destroy pipelines, images, views, buffers, and sampler.
+    // Just reset IDs to trigger cleanup.
+    r->pip_alpha = {};
+    r->pip_add = {};
+    r->pip_lines = {};
+    r->vertex_buffer = {};
+    r->index_buffer = {};
+    r->smp = {};
+    r->white_pixel = {};
+    r->white_view = {};
+    r->black_pixel = {};
+    r->black_view = {};
+    r->gray_pixel = {};
+    r->gray_view = {};
 }

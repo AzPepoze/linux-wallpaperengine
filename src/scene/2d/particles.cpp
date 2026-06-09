@@ -5,11 +5,12 @@
 #include <string.h>
 
 #include "../../core/context.h"
+#include "../../core/config.h"
+#include "../../core/engine_context.h"
 #include "../../core/logger.h"
 #include "../../core/utils.h"
 #include "../../libs/sokol/sokol_app.h"
 #include "../../render/render.h"
-#include "imgui.h"
 
 #define TAG "PARTICLE"
 
@@ -53,36 +54,15 @@ ParticleSystem::ParticleSystem(cJSON* config, sg_image tex, float sw, float sh)
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     int emitter_count = cJSON_GetArraySize(emitters);
     emitter_timers.resize(emitter_count, 0.0f);
-
-    // Load Children
-    cJSON* children_node = cJSON_GetObjectItemCaseSensitive(config, "children");
-    if (cJSON_IsArray(children_node)) {
-        cJSON* child_json;
-        cJSON_ArrayForEach(child_json, children_node) {
-            ParticleSystem* child = ParticleSystem::createFromJSON(child_json, state.asset_mgr, sw, sh);
-            if (child) children.push_back(child);
-        }
-    }
-
-    // Initial Warmup
-    float start_time = get_float(cJSON_GetObjectItemCaseSensitive(config, "starttime"));
-    if (start_time > 0) {
-        float step = 0.1f;
-        for (float t = 0; t < start_time; t += step) {
-            update(step);
-        }
-    }
 }
 
 ParticleSystem::~ParticleSystem() {
     if (config) cJSON_Delete(config);
-    if (texture.id != SG_INVALID_ID) sg_destroy_image(texture);
-    if (cached_view.id != SG_INVALID_ID) sg_destroy_view(cached_view);
     for (auto c : children) delete c;
     children.clear();
 }
 
-ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const class AssetManager& assets, float sw, float sh) {
+ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh) {
     cJSON* p_file = cJSON_GetObjectItemCaseSensitive(node, "particle");
     if (!p_file) p_file = cJSON_GetObjectItemCaseSensitive(node, "name");
     if (!p_file) p_file = cJSON_GetObjectItemCaseSensitive(node, "file");
@@ -96,11 +76,11 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const class AssetMan
                 free(p_json_str);
                 if (p_json) {
                     std::string p_tex_path;
-                    sg_image p_tex = assets.resolveTexture("materials/particle.tex", &p_tex_path);
+                    GfxImage p_tex = assets.resolveTexture("materials/particle.tex", &p_tex_path);
                     cJSON* mat = cJSON_GetObjectItemCaseSensitive(p_json, "material");
                     if (cJSON_IsString(mat)) {
-                        sg_image mat_tex = assets.resolveMaterialTexture(mat->valuestring, &p_tex_path);
-                        if (mat_tex.id != SG_INVALID_ID) p_tex = mat_tex;
+                        GfxImage mat_tex = assets.resolveMaterialTexture(mat->valuestring, &p_tex_path);
+                        if (mat_tex.id != SG_INVALID_ID) p_tex = std::move(mat_tex);
                     }
 
                     ParticleSystem* ps = new ParticleSystem(p_json, p_tex, sw, sh);
@@ -113,6 +93,25 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const class AssetMan
                         if (cJSON_IsNumber(alpha)) ps->override_alpha = (float)alpha->valuedouble;
                         cJSON* rate = cJSON_GetObjectItemCaseSensitive(override, "rate");
                         if (cJSON_IsNumber(rate)) ps->override_rate = (float)rate->valuedouble;
+                    }
+
+                    // Load Children
+                    cJSON* children_node = cJSON_GetObjectItemCaseSensitive(p_json, "children");
+                    if (cJSON_IsArray(children_node)) {
+                        cJSON* child_json;
+                        cJSON_ArrayForEach(child_json, children_node) {
+                            ParticleSystem* child = ParticleSystem::createFromJSON(child_json, assets, sw, sh);
+                            if (child) ps->children.push_back(child);
+                        }
+                    }
+
+                    // Initial Warmup
+                    float start_time = get_float(cJSON_GetObjectItemCaseSensitive(p_json, "starttime"));
+                    if (start_time > 0) {
+                        float step = 0.1f;
+                        for (float t = 0; t < start_time; t += step) {
+                            ps->update(step);
+                        }
                     }
 
                     return ps;
@@ -311,21 +310,21 @@ void ParticleSystem::update(float dt) {
     for (auto c : children) c->update(dt);
 }
 
-void ParticleSystem::draw() {
+void ParticleSystem::draw(EngineContext& ctx) {
     if (texture.id == SG_INVALID_ID) return;
     if (cached_view.id == SG_INVALID_ID) {
         sg_view_desc v_desc = {};
         v_desc.texture.image = texture;
         cached_view = sg_make_view(&v_desc);
     }
-    float px = parallax[0] * state.parallax_smooth_x * 50.0f;
-    float py = parallax[1] * state.parallax_smooth_y * 50.0f;
+    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
+    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
     for (auto& p : particles) {
         float tint[4] = {p.color[0], p.color[1], p.color[2], p.alpha};
-        float rx = state.offset_x + (layer_origin[0] + px + p.position[0]) * state.render_scale;
-        float ry = state.offset_y + (layer_origin[1] + py + p.position[1]) * state.render_scale;
-        float rs = p.size * state.render_scale;
-        renderer_draw_sprite(&state.renderer, texture, cached_view, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation,
+        float rx = ctx.offset_x + (layer_origin[0] + px + p.position[0]) * ctx.render_scale;
+        float ry = ctx.offset_y + (layer_origin[1] + py + p.position[1]) * ctx.render_scale;
+        float rs = p.size * ctx.render_scale;
+        renderer_draw_sprite(ctx, &ctx.renderer, texture, cached_view, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation,
                              tint, is_additive, nullptr);
     }
     for (auto c : children) {
@@ -333,15 +332,15 @@ void ParticleSystem::draw() {
         c->layer_origin[1] = layer_origin[1];
         c->parallax[0] = parallax[0];
         c->parallax[1] = parallax[1];
-        c->draw();
+        c->draw(ctx);
     }
 }
 
-void ParticleSystem::drawDebugBounds() {
+void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
     cJSON* emitters = cJSON_GetObjectItemCaseSensitive(config, "emitter");
     cJSON* emitter;
-    float px = parallax[0] * state.parallax_smooth_x * 50.0f;
-    float py = parallax[1] * state.parallax_smooth_y * 50.0f;
+    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
+    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
     cJSON_ArrayForEach(emitter, emitters) {
         const char* type = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(emitter, "name"));
         if (!type) continue;
@@ -351,35 +350,27 @@ void ParticleSystem::drawDebugBounds() {
         if (strcmp(type, "boxrandom") == 0) {
             vec3 dmax = {0, 0, 0};
             parse_vec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), dmax);
-            float bx = state.offset_x + (layer_origin[0] + px + origin[0] - dmax[0]) * state.render_scale;
-            float by = state.offset_y + (layer_origin[1] + py + origin[1] - dmax[1]) * state.render_scale;
-            renderer_draw_rect(&state.renderer, bx, by, dmax[0] * 2.0f * state.render_scale,
-                               dmax[1] * 2.0f * state.render_scale, color);
+            float bx = ctx.offset_x + (layer_origin[0] + px + origin[0] - dmax[0]) * ctx.render_scale;
+            float by = ctx.offset_y + (layer_origin[1] + py + origin[1] - dmax[1]) * ctx.render_scale;
+            renderer_draw_rect(&ctx.renderer, bx, by, dmax[0] * 2.0f * ctx.render_scale,
+                               dmax[1] * 2.0f * ctx.render_scale, color);
         } else if (strcmp(type, "sphererandom") == 0) {
             float dmax = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"));
-            float bx = state.offset_x + (layer_origin[0] + px + origin[0] - dmax) * state.render_scale;
-            float by = state.offset_y + (layer_origin[1] + py + origin[1] - dmax) * state.render_scale;
-            renderer_draw_rect(&state.renderer, bx, by, dmax * 2.0f * state.render_scale,
-                               dmax * 2.0f * state.render_scale, color);
+            float bx = ctx.offset_x + (layer_origin[0] + px + origin[0] - dmax) * ctx.render_scale;
+            float by = ctx.offset_y + (layer_origin[1] + py + origin[1] - dmax) * ctx.render_scale;
+            renderer_draw_rect(&ctx.renderer, bx, by, dmax * 2.0f * ctx.render_scale,
+                               dmax * 2.0f * ctx.render_scale, color);
         }
     }
 
     // Real-time Particle Tracking (draw boxes for each particle)
     float p_color[4] = {1, 0, 0, 1};
     for (auto& p : particles) {
-        float rx = state.offset_x + (layer_origin[0] + px + p.position[0]) * state.render_scale;
-        float ry = state.offset_y + (layer_origin[1] + py + p.position[1]) * state.render_scale;
-        float rs = p.size * state.render_scale;
-        renderer_draw_rect(&state.renderer, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p_color);
+        float rx = ctx.offset_x + (layer_origin[0] + px + p.position[0]) * ctx.render_scale;
+        float ry = ctx.offset_y + (layer_origin[1] + py + p.position[1]) * ctx.render_scale;
+        float rs = p.size * ctx.render_scale;
+        renderer_draw_rect(&ctx.renderer, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p_color);
     }
 
-    for (auto c : children) c->drawDebugBounds();
-}
-
-void ParticleSystem::showInspector() {
-    ImGui::Text("Active Particles: %d / %d", (int)particles.size(), max_particles);
-    if (!config_path.empty()) ImGui::Text("Config: %s", config_path.c_str());
-    if (!texture_path.empty()) ImGui::Text("Texture: %s", texture_path.c_str());
-    ImGui::Text("Blending: %s", is_additive ? "Additive" : "Alpha");
-    ImGui::Text("Children: %d", (int)children.size());
+    for (auto c : children) c->drawDebugBounds(ctx);
 }

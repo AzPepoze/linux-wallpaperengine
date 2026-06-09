@@ -56,7 +56,7 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
     return false;
 }
 
-sg_image AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {
+GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {
     char abs_path[1024];
     char name_with_ext[256];
     if (!strstr(name, "."))
@@ -78,21 +78,21 @@ sg_image AssetManager::resolveTexture(const char* name, std::string* out_path, i
             return img;
         }
     }
-    return (sg_image){SG_INVALID_ID};
+    return {};
 }
 
-sg_image AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::string* out_path) const {
+GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::string* out_path) const {
     char abs_path[1024];
-    if (!resolvePath(mat_rel_path, abs_path, sizeof(abs_path))) return (sg_image){SG_INVALID_ID};
+    if (!resolvePath(mat_rel_path, abs_path, sizeof(abs_path))) return {};
 
     char* json_str = read_file_to_string(abs_path);
-    if (!json_str) return (sg_image){SG_INVALID_ID};
+    if (!json_str) return {};
 
     cJSON* mat_json = cJSON_Parse(json_str);
     free(json_str);
-    if (!mat_json) return (sg_image){SG_INVALID_ID};
+    if (!mat_json) return {};
 
-    sg_image img = {SG_INVALID_ID};
+    GfxImage img;
 
     char mat_dir[512] = "";
     const char* last_slash = strrchr(mat_rel_path, '/');
