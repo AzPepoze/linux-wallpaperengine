@@ -2,8 +2,8 @@
 
 #include <string.h>
 
-#include "../../core/context.h"
 #include "../../core/config.h"
+#include "../../core/context.h"
 #include "../../core/engine_context.h"
 #include "../../core/utils.h"
 #include "../../render/render.h"

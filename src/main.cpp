@@ -12,15 +12,14 @@
 #include "../libs/sokol/sokol_glue.h"
 #include "../libs/sokol/sokol_imgui.h"
 #include "../libs/sokol/sokol_log.h"
-#include "scene/scene_renderer.h"
-#include "scene/scene_parser.h"
 #include "asset/unpack.h"
-#include <sys/stat.h>
+#include "core/config.h"
 #include "core/context.h"
 #include "core/logger.h"
 #include "core/utils.h"
-#include "core/config.h"
 #include "imgui.h"
+#include "scene/scene_parser.h"
+#include "scene/scene_renderer.h"
 #include "ui/debugger.h"
 
 static EngineContext ctx;
@@ -65,14 +64,15 @@ static void init(void) {
 
         char scene_path[1024];
         snprintf(scene_path, sizeof(scene_path), "%s/scene.json", ctx.asset_root);
-        
+
         ParsedScene parsed = SceneParser::parse(scene_path, ctx);
         ctx.layers = std::move(parsed.layers);
         ctx.scene_w = parsed.design_width;
         ctx.scene_h = parsed.design_height;
         if (parsed.has_clear_color) {
             ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
-            ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1], parsed.clear_color[2], parsed.clear_color[3]};
+            ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1],
+                                                     parsed.clear_color[2], parsed.clear_color[3]};
         }
         scene_engine->updateViewport();
     }

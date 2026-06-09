@@ -129,8 +129,8 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
     r->view_height = h;
 }
 
-void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
-                          float rotation, float tint[4], bool additive, ShaderPass* pass) {
+void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
+                          float h, float rotation, float tint[4], bool additive, ShaderPass* pass) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -172,10 +172,10 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         for (int i = 0; i < 11; i++) {
             int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
 
-            if (i < (int)pass->pass_textures.cached_views.size() && pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
+            if (i < (int)pass->pass_textures.cached_views.size() &&
+                pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->pass_textures.cached_views[i];
             } else if (i == 0) {
-
                 // g_Texture1 (depth): create view from main image as fallback
                 sg_view_desc fallback_vd = {};
                 fallback_vd.texture.image = img;

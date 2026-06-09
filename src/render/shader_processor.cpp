@@ -1,5 +1,7 @@
 #include "shader_processor.h"
+
 #include <string.h>
+
 #include "../../libs/cJSON.h"
 
 std::string ShaderSourceProcessor::processShaderSource(const std::string& source, bool is_vertex) {
@@ -102,8 +104,8 @@ std::string ShaderSourceProcessor::extractCombos(const char* fsSource) {
                     if (cJSON_IsString(name) && cJSON_IsNumber(default_val)) {
                         std::string define_name = name->valuestring;
                         if (combo_defines.find("#define " + define_name) == std::string::npos) {
-                            combo_defines += "#define " + define_name + " " +
-                                             std::to_string((int)default_val->valuedouble) + "\n";
+                            combo_defines +=
+                                "#define " + define_name + " " + std::to_string((int)default_val->valuedouble) + "\n";
                         }
                     }
                     cJSON_Delete(combo);
@@ -152,9 +154,12 @@ std::map<int, std::string> ShaderSourceProcessor::extractTextureLabels(const cha
             }
 
             if (!label.empty()) {
-                if (label == "ui_editor_properties_water_normal") label = "Water Normal";
-                else if (label == "ui_editor_properties_opacity_mask") label = "Opacity Mask";
-                else if (label == "ui_editor_properties_specular") label = "Specular";
+                if (label == "ui_editor_properties_water_normal")
+                    label = "Water Normal";
+                else if (label == "ui_editor_properties_opacity_mask")
+                    label = "Opacity Mask";
+                else if (label == "ui_editor_properties_specular")
+                    label = "Specular";
                 else if (label.find("ui_editor_properties_") == 0) {
                     label = label.substr(21);
                     for (size_t i = 0; i < label.length(); i++) {

@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../core/context.h"
 #include "../../core/config.h"
+#include "../../core/context.h"
 #include "../../core/engine_context.h"
 #include "../../core/logger.h"
 #include "../../core/utils.h"
@@ -324,8 +324,8 @@ void ParticleSystem::draw(EngineContext& ctx) {
         float rx = ctx.offset_x + (layer_origin[0] + px + p.position[0]) * ctx.render_scale;
         float ry = ctx.offset_y + (layer_origin[1] + py + p.position[1]) * ctx.render_scale;
         float rs = p.size * ctx.render_scale;
-        renderer_draw_sprite(ctx, &ctx.renderer, texture, cached_view, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs, p.rotation,
-                             tint, is_additive, nullptr);
+        renderer_draw_sprite(ctx, &ctx.renderer, texture, cached_view, rx - rs * 0.5f, ry - rs * 0.5f, rs, rs,
+                             p.rotation, tint, is_additive, nullptr);
     }
     for (auto c : children) {
         c->layer_origin[0] = layer_origin[0];
@@ -358,8 +358,8 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
             float dmax = get_float(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"));
             float bx = ctx.offset_x + (layer_origin[0] + px + origin[0] - dmax) * ctx.render_scale;
             float by = ctx.offset_y + (layer_origin[1] + py + origin[1] - dmax) * ctx.render_scale;
-            renderer_draw_rect(&ctx.renderer, bx, by, dmax * 2.0f * ctx.render_scale,
-                               dmax * 2.0f * ctx.render_scale, color);
+            renderer_draw_rect(&ctx.renderer, bx, by, dmax * 2.0f * ctx.render_scale, dmax * 2.0f * ctx.render_scale,
+                               color);
         }
     }
 

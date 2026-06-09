@@ -1,10 +1,11 @@
 #include "effect.h"
+
 #include <fstream>
 #include <sstream>
 
 #include "../../libs/sokol/sokol_app.h"
-#include "../core/context.h"
 #include "../core/config.h"
+#include "../core/context.h"
 #include "../core/engine_context.h"
 #include "../core/logger.h"
 #include "../core/utils.h"
@@ -50,7 +51,7 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
 
     if (instance_config) {
         pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
-        
+
         cJSON* inst_const = cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues");
         if (cJSON_IsObject(inst_const)) {
             if (!constant_values)
@@ -155,7 +156,7 @@ void ShaderPass::init(EngineContext& ctx) {
             }
         }
     }
-    
+
     for (int i = 0; i < (int)pass_textures.textures.size(); i++) {
         if (pass_textures.textures[i].id != SG_INVALID_ID && pass_textures.texture_masks[i]) {
             if (i == 1) combo_defines += "#define MASK 1\n";
@@ -166,7 +167,7 @@ void ShaderPass::init(EngineContext& ctx) {
     std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
     std::string processed_vs = ShaderSourceProcessor::processShaderSource(vs_src, true);
     std::string processed_fs = ShaderSourceProcessor::processShaderSource(fs_src, false);
-    
+
     std::string full_vs = prefix + combo_defines + processed_vs;
     std::string full_fs = prefix + combo_defines + processed_fs;
 
@@ -179,7 +180,7 @@ void ShaderPass::init(EngineContext& ctx) {
     texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
 
     compiled = ShaderCompiler::compile(shader_name, full_vs, full_fs, uniforms, pass_textures.textures.size());
-    
+
     free(vs_src);
     free(fs_src);
 

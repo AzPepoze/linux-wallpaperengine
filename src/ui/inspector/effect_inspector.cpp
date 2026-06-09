@@ -1,7 +1,8 @@
+#include "effect_inspector.h"
+
 #include "../../libs/sokol/sokol_app.h"
 #include "../../libs/sokol/sokol_gfx.h"
 #include "../../libs/sokol/sokol_imgui.h"
-#include "effect_inspector.h"
 #include "../../render/effect.h"
 #include "imgui.h"
 
@@ -62,13 +63,15 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
                     slot_label = pass.texture_labels[shader_slot].c_str();
                 }
 
-                bool valid = i < (int)pass.pass_textures.cached_views.size() && pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
+                bool valid = i < (int)pass.pass_textures.cached_views.size() &&
+                             pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
                 ImVec4 border_color = valid ? ImVec4(0.3f, 0.3f, 0.3f, 1) : ImVec4(1, 0.2f, 0.2f, 1);
 
                 ImGui::BeginGroup();
                 ImVec2 p0 = ImGui::GetCursorScreenPos();
                 if (valid) {
-                    ImGui::Image((ImTextureID)simgui_imtextureid(pass.pass_textures.cached_views[i]), ImVec2(size, size));
+                    ImGui::Image((ImTextureID)simgui_imtextureid(pass.pass_textures.cached_views[i]),
+                                 ImVec2(size, size));
                 } else {
                     ImGui::Dummy(ImVec2(size, size));
                 }
@@ -78,7 +81,8 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
                     ImGui::Text("g_Texture%d: %s", shader_slot, slot_label ? slot_label : "Extra");
-                    if (i < (int)pass.pass_textures.texture_paths.size() && !pass.pass_textures.texture_paths[i].empty())
+                    if (i < (int)pass.pass_textures.texture_paths.size() &&
+                        !pass.pass_textures.texture_paths[i].empty())
                         ImGui::Text("Path: %s", pass.pass_textures.texture_paths[i].c_str());
                     if (!valid) ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "INVALID - renders as black");
                     ImGui::EndTooltip();
@@ -105,7 +109,8 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
                 slot_desc = pass.texture_labels[shader_slot].c_str();
             }
 
-            bool valid = i < (int)pass.pass_textures.cached_views.size() && pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
+            bool valid = i < (int)pass.pass_textures.cached_views.size() &&
+                         pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
 
             if (i < (int)pass.pass_textures.texture_masks.size()) {
                 bool m = pass.pass_textures.texture_masks[i];
@@ -201,4 +206,4 @@ void showEffect(EngineContext& ctx, ::Effect& effect, int id) {
     ImGui::PopID();
 }
 
-} // namespace Inspector
+}  // namespace Inspector
