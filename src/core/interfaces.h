@@ -2,12 +2,13 @@
 #define INTERFACES_H
 
 #include <string>
+
 #include "gfx_resource.h"
 
 class EngineContext;
 
 class ILayer {
-public:
+   public:
     virtual ~ILayer() = default;
     virtual void update(float dt, EngineContext& ctx) = 0;
     virtual void draw(EngineContext& ctx) = 0;
@@ -17,11 +18,11 @@ public:
 };
 
 class IAssetResolver {
-public:
+   public:
     virtual ~IAssetResolver() = default;
     virtual GfxImage resolveTexture(const char* name, std::string* out_path = nullptr, int image_index = 0) const = 0;
     virtual GfxImage resolveMaterialTexture(const char* mat_rel_path, std::string* out_path = nullptr) const = 0;
     virtual bool resolvePath(const char* rel_path, char* out_abs_path, int max_len) const = 0;
 };
 
-#endif // INTERFACES_H
+#endif  // INTERFACES_H

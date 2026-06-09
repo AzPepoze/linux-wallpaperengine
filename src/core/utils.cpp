@@ -3,10 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 #include <string>
 
-#include "logger.h"
 #include "config.h"
+#include "logger.h"
 
 char* read_file_to_string(const char* path) {
     FILE* f = fopen(path, "rb");

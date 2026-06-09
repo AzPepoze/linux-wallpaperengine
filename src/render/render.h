@@ -27,7 +27,7 @@ typedef struct {
     GfxPipeline pip_lines;
     GfxBuffer vertex_buffer;
     GfxBuffer index_buffer;
-    sg_bindings bind;
+    sg_bindings bind = {};
     GfxSampler smp;
     GfxImage white_pixel;
     GfxView white_view;
@@ -35,8 +35,8 @@ typedef struct {
     GfxView black_view;
     GfxImage gray_pixel;
     GfxView gray_view;
-    float view_width;
-    float view_height;
+    float view_width = 0.0f;
+    float view_height = 0.0f;
 } renderer_t;
 
 void renderer_init(renderer_t* r, float w, float h);
@@ -54,11 +54,11 @@ typedef struct {
 } builtin_uniforms_t;
 
 #ifdef __cplusplus
-void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
-                          float rotation, float tint[4], bool additive, ShaderPass* pass);
+void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
+                          float h, float rotation, float tint[4], bool additive, ShaderPass* pass);
 #else
-void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w, float h,
-                          float rotation, float tint[4], bool additive, ShaderPass* pass);
+void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
+                          float h, float rotation, float tint[4], bool additive, ShaderPass* pass);
 #endif
 
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]);

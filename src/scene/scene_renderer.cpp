@@ -8,8 +8,8 @@
 #include "../core/engine_context.h"
 #include "../core/logger.h"
 #include "../core/utils.h"
-#include "layer.h"
 #include "../render/render.h"
+#include "layer.h"
 
 void SceneRenderer::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());

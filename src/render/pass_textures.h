@@ -1,16 +1,17 @@
 #ifndef PASS_TEXTURES_H
 #define PASS_TEXTURES_H
 
-#include <vector>
-#include <string>
 #include <map>
+#include <string>
+#include <vector>
+
 #include "../../libs/cJSON.h"
 #include "../../libs/sokol/sokol_gfx.h"
-#include "../core/gfx_resource.h"
 #include "../core/engine_context.h"
+#include "../core/gfx_resource.h"
 
 class PassTextures {
-public:
+   public:
     std::vector<GfxImage> textures;
     std::vector<GfxView> cached_views;
     std::vector<std::string> texture_paths;
@@ -22,4 +23,4 @@ public:
     void buildCachedViews();
 };
 
-#endif // PASS_TEXTURES_H
+#endif  // PASS_TEXTURES_H

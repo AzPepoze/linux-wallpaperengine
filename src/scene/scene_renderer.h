@@ -4,16 +4,16 @@
 #include "../core/engine_context.h"
 
 class SceneRenderer {
-public:
+   public:
     SceneRenderer(EngineContext& ctx) : ctx(ctx) {}
-    
+
     void init();
     void update(float dt);
     void draw();
     void updateViewport();
     void cleanup();
 
-private:
+   private:
     EngineContext& ctx;
 };
 

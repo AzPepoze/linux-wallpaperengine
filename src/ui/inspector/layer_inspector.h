@@ -9,4 +9,4 @@ namespace Inspector {
 void showLayer(EngineContext& ctx, Layer& layer);
 }
 
-#endif // LAYER_INSPECTOR_H
+#endif  // LAYER_INSPECTOR_H

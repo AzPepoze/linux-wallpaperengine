@@ -6,8 +6,8 @@
 #include "../../libs/cJSON.h"
 #include "../../libs/linmath.h"
 #include "../../libs/sokol/sokol_gfx.h"
-#include "../render/effect.h"
 #include "../core/interfaces.h"
+#include "../render/effect.h"
 
 class Layer : public ILayer {
    public:
@@ -37,9 +37,13 @@ class Layer : public ILayer {
     virtual void update(float dt, EngineContext& ctx) = 0;
     virtual void draw(EngineContext& ctx) = 0;
     virtual void drawDebug(EngineContext& ctx) override {}
-    
-    virtual const std::string& get_name() const override { return name; }
-    virtual bool is_visible() const override { return visible; }
+
+    virtual const std::string& get_name() const override {
+        return name;
+    }
+    virtual bool is_visible() const override {
+        return visible;
+    }
 
     bool draw_debug_bounds = false;
 

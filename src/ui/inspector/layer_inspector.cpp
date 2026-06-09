@@ -1,8 +1,9 @@
 #include "layer_inspector.h"
-#include "../../scene/layer.h"
+
 #include "../../scene/2d/image_layer.h"
 #include "../../scene/2d/particle_layer.h"
 #include "../../scene/2d/particles.h"
+#include "../../scene/layer.h"
 #include "effect_inspector.h"
 #include "imgui.h"
 
@@ -65,4 +66,4 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
     showEffectsInspector(ctx, layer);
 }
 
-} // namespace Inspector
+}  // namespace Inspector

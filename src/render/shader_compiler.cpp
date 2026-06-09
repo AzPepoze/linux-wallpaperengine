@@ -1,11 +1,14 @@
 #include "shader_compiler.h"
+
 #include "../core/config.h"
 #include "../core/logger.h"
-#include "render.h" // For builtin_uniforms_t
+#include "render.h"  // For builtin_uniforms_t
 
-CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource, const std::string& fragSource, const std::map<std::string, std::vector<float>>& uniforms, int textureCount) {
+CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
+                                       const std::string& fragSource,
+                                       const std::map<std::string, std::vector<float>>& uniforms, int textureCount) {
     CompiledShader result;
-    
+
     sg_shader_desc shd_desc = {};
     shd_desc.attrs[0].glsl_name = "a_Position";
     shd_desc.attrs[1].glsl_name = "a_TexCoord";
@@ -118,7 +121,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
     pip_desc.depth.write_enabled = false;
     pip_desc.stencil.enabled = false;
-    
+
     result.pipeline = sg_make_pipeline(&pip_desc);
 
     if (result.pipeline.id == SG_INVALID_ID) {
@@ -126,13 +129,13 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     } else {
         effect_log.info("Created pipeline for %s", shader_name.c_str());
     }
-    
+
     return result;
 }
 
 std::string ShaderCompiler::applyDebugMode(const std::string& fsSource, int debug_view_mode) {
     if (debug_view_mode == 0) return fsSource;
-    
+
     std::string full_fs = fsSource;
     size_t pos = full_fs.rfind("frag_color = ");
     if (pos != std::string::npos) {
@@ -168,7 +171,7 @@ std::string ShaderCompiler::applyDebugMode(const std::string& fsSource, int debu
 
 std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debug_step) {
     if (debug_step == 0) return fsSource;
-    
+
     std::string full_fs = fsSource;
     size_t main_pos = full_fs.find("void main()");
     if (main_pos != std::string::npos) {
@@ -200,7 +203,8 @@ std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debu
                     "\n\tfloat depth = 0.5;\n"
                     "\tfloat mask = 1.0;\n"
                     "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
-                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * -Config::kDepthOffsetBase;\n"
+                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * "
+                    "-Config::kDepthOffsetBase;\n"
                     "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
                     "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
                 break;
@@ -231,7 +235,8 @@ std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debu
                     "\tmask *= texSample2D(g_Texture2, v_TexCoordMask.xy).r;\n"
                     "#endif\n"
                     "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
-                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * -Config::kDepthOffsetBase;\n"
+                    "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * "
+                    "-Config::kDepthOffsetBase;\n"
                     "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
                     "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
                 break;

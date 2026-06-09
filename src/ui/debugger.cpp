@@ -7,10 +7,10 @@
 #include "../../libs/sokol/sokol_imgui.h"
 #include "../../libs/sokol/sokol_log.h"
 #include "../core/context.h"
+#include "../render/effect.h"
+#include "../scene/layer.h"
 #include "imgui.h"
 #include "inspector/layer_inspector.h"
-#include "../scene/layer.h"
-#include "../render/effect.h"
 
 GfxImage Debugger::preview_texture;
 GfxView Debugger::preview_view;

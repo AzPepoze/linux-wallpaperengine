@@ -46,4 +46,4 @@ struct EngineContext {
     bool test_mode = false;
 };
 
-#endif // ENGINE_CONTEXT_H
+#endif  // ENGINE_CONTEXT_H

@@ -1,4 +1,5 @@
 #include "pass_textures.h"
+
 #include "../core/logger.h"
 
 void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_name, EngineContext& ctx) {
@@ -13,8 +14,8 @@ void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_
                 textures.push_back(std::move(img));
                 texture_paths.push_back(path);
                 texture_masks.push_back(true);
-                effect_log.info("ShaderPass %s: Slot %d (g_Texture%d) - Loaded base texture: %s",
-                                shader_name.c_str(), current_slot, current_slot + 1, path.c_str());
+                effect_log.info("ShaderPass %s: Slot %d (g_Texture%d) - Loaded base texture: %s", shader_name.c_str(),
+                                current_slot, current_slot + 1, path.c_str());
             } else if (cJSON_IsNull(tex_node)) {
                 textures.push_back({});
                 texture_paths.push_back("");
@@ -28,13 +29,13 @@ void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_
 
 void PassTextures::applyInstanceOverrides(cJSON* instance_config, const std::string& shader_name, EngineContext& ctx) {
     if (!instance_config) return;
-    
+
     cJSON* inst_textures = cJSON_GetObjectItemCaseSensitive(instance_config, "textures");
     if (cJSON_IsArray(inst_textures)) {
         for (int i = 0; i < cJSON_GetArraySize(inst_textures); i++) {
             cJSON* tex_node = cJSON_GetArrayItem(inst_textures, i);
-            if (i == 0) continue; // Slot 0 is main view
-            
+            if (i == 0) continue;  // Slot 0 is main view
+
             int pass_idx = i - 1;
             if (cJSON_IsString(tex_node)) {
                 std::string path;
@@ -80,7 +81,8 @@ bool PassTextures::resolveDepth(const char* source_tex_path, const std::string& 
                 texture_masks[0] = true;
             }
             buildCachedViews();
-            effect_log.info("ShaderPass %s: Auto-resolved depth map (g_Texture1) from %s", shader_name.c_str(), depth_path.c_str());
+            effect_log.info("ShaderPass %s: Auto-resolved depth map (g_Texture1) from %s", shader_name.c_str(),
+                            depth_path.c_str());
             return true;
         }
     }

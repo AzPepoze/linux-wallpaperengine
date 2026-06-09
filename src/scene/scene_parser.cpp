@@ -1,29 +1,31 @@
 #include "scene_parser.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "../core/config.h"
 #include "../core/logger.h"
 #include "../core/utils.h"
-#include "../core/config.h"
 #include "2d/image_layer.h"
 #include "2d/particle_layer.h"
 
 ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) {
     ParsedScene out;
-    
+
     char* json_str = read_file_to_string(scene_json_path);
     if (!json_str) {
         LOG_E("Failed to read scene JSON: %s", scene_json_path);
         return out;
     }
-    
+
     cJSON* root = cJSON_Parse(json_str);
     free(json_str);
     if (!root) {
         LOG_E("Failed to parse scene JSON");
         return out;
     }
-    
+
     LOG_I("Scene JSON parsed successfully");
 
     detectResolution(root, out);
