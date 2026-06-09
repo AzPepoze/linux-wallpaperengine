@@ -19,6 +19,9 @@ class PassTextures {
 
     void loadFromConfig(cJSON* base_config, const std::string& shader_name, EngineContext& ctx);
     void applyInstanceOverrides(cJSON* instance_config, const std::string& shader_name, EngineContext& ctx);
+
+    bool resolveDepth(const char* source_tex_path, const std::string& shader_name, EngineContext& ctx);
+
     void buildCachedViews();
 };
 

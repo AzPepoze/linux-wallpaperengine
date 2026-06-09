@@ -31,6 +31,8 @@ class ShaderPass {
     void apply(EngineContext& ctx);
     void applyUniforms();
     void rebuildWithDebugMode(int mode, EngineContext& ctx);
+    // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
+    bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)

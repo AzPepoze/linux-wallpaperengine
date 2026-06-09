@@ -117,6 +117,9 @@ void ImageLayer::draw(EngineContext& ctx) {
 
         if (target_eff && !target_eff->passes.empty()) {
             pass = target_eff->passes[0];
+            if (pass && !path.empty() && strstr(path.c_str(), ".tex")) {
+                pass->resolveDepth(path.c_str(), ctx);
+            }
         }
     }
 
