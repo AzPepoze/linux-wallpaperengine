@@ -30,6 +30,9 @@ class ShaderPass {
     void apply();
     void applyUniforms();
     void showInspector(int id);
+
+    // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
+    bool resolveDepth(const char* source_tex_path);
 };
 
 class Effect {
