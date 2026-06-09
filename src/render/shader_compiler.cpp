@@ -183,7 +183,8 @@ std::string ShaderCompiler::applyDebugMode(const std::string& fsSource, int debu
     return full_fs;
 }
 
-std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debug_step) {
+std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const std::string& fsSource,
+                                           int debug_step) {
     if (debug_step == 0) return fsSource;
 
     std::string full_fs = fsSource;
@@ -202,11 +203,76 @@ std::string ShaderCompiler::applyDebugStep(const std::string& fsSource, int debu
         std::string before = full_fs.substr(0, body_start);
         std::string after = full_fs.substr(body_end);
 
-        char body_buf[128];
-        snprintf(body_buf, sizeof(body_buf), "\n\tfrag_color = texSample2D(g_Texture%d, v_TexCoord.xy);\n",
-                 debug_step - 1);
-        full_fs = before + body_buf + after;
-        effect_log.info("DEBUG STEP %d: forced texture output", debug_step);
+        const char* body = nullptr;
+        char body_buf[512];
+
+        if (shader_name.find("depthparallax") != std::string::npos) {
+            switch (debug_step) {
+                case 1:  // just show g_Texture0 at original UV
+                    body = "\n\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
+                    break;
+                case 2:  // + sample depth (but don't use it for offset yet)
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
+                    break;
+                case 3:  // + offset with neutral depth=0.5 (offset=0 from math, tests g_Scale+v_Parallax)
+                    body =
+                        "\n\tfloat depth = 0.5;\n"
+                        "\tfloat mask = 1.0;\n"
+                        "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
+                        "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * "
+                        "-Config::kDepthOffsetBase;\n"
+                        "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 4:  // + small fixed offset (0.005) to test if ANY offset blanks
+                    body =
+                        "\n\tvec2 offset = vec2(0.005, 0.005);\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 5:  // show depth as grayscale
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
+                        "\tfrag_color = vec4(vec3(depth), 1.0);\n";
+                    break;
+                case 6:  // + hardcode g_Scale=1, real depth
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
+                        "\tfloat mask = 1.0;\n"
+                        "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
+                        "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * 1.0 * "
+                        "-Config::kDepthOffsetBase;\n"
+                        "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 7:  // + sample mask from g_Texture2
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
+                        "\tfloat mask = 1.0;\n"
+                        "#if MASK\n"
+                        "\tmask *= texSample2D(g_Texture2, v_TexCoordMask.xy).r;\n"
+                        "#endif\n"
+                        "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
+                        "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * "
+                        "-Config::kDepthOffsetBase;\n"
+                        "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                default:
+                    snprintf(body_buf, sizeof(body_buf), "\n\tfrag_color = texSample2D(g_Texture%d, v_TexCoord.xy);\n",
+                             debug_step - 1);
+                    body = body_buf;
+                    break;
+            }
+        } else {
+            snprintf(body_buf, sizeof(body_buf), "\n\tfrag_color = texSample2D(g_Texture%d, v_TexCoord.xy);\n",
+                     debug_step - 1);
+            body = body_buf;
+        }
+
+        full_fs = before + body + after;
+        effect_log.info("DEBUG STEP %d: modified FS main()", debug_step);
     }
     return full_fs;
 }

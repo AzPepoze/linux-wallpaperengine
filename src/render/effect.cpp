@@ -175,7 +175,7 @@ void ShaderPass::init(EngineContext& ctx) {
     stored_fs_source = full_fs;
 
     full_fs = ShaderCompiler::applyDebugMode(full_fs, debug_view_mode);
-    full_fs = ShaderCompiler::applyDebugStep(full_fs, debug_step);
+    full_fs = ShaderCompiler::applyDebugStep(shader_name, full_fs, debug_step);
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
 
