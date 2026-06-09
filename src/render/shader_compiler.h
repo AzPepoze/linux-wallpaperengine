@@ -19,7 +19,7 @@ class ShaderCompiler {
                                   const std::string& fragSource,
                                   const std::map<std::string, std::vector<float>>& uniforms, int textureCount);
     static std::string applyDebugMode(const std::string& fsSource, int debug_mode);
-    static std::string applyDebugStep(const std::string& fsSource, int debug_step);
+    static std::string applyDebugStep(const std::string& shader_name, const std::string& fsSource, int debug_step);
 };
 
 #endif  // SHADER_COMPILER_H
