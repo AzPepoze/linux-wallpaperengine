@@ -25,7 +25,9 @@ typedef struct {
     sg_bindings bind;
     sg_sampler smp;
     sg_image white_pixel;
+    sg_view white_view;
     sg_image black_pixel;
+    sg_view black_view;
     float view_width;
     float view_height;
 } renderer_t;
