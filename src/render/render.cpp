@@ -118,13 +118,9 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
 
-        // Slot 0 (g_Texture0)
-        sg_image slot0 = img;
-        if (!pass->textures.empty() && pass->textures[0].id != SG_INVALID_ID && pass->texture_masks[0]) {
-            slot0 = pass->textures[0];
-        }
+        // Slot 0 (g_Texture0) is ALWAYS the layer's main image
         sg_view_desc v0_desc = {};
-        v0_desc.texture.image = slot0;
+        v0_desc.texture.image = img;
         r->bind.views[0] = sg_make_view(&v0_desc);
 
         // Built-in Uniforms Setup
@@ -133,11 +129,24 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
         builtin.parallax_pos[0] = state.parallax_smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = state.parallax_smooth_y * 0.5f + 0.5f;
         builtin.time = state.time;
+        builtin.screen_res[0] = r->view_width;
+        builtin.screen_res[1] = r->view_height;
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
 
-        // Slot 1+ and Resolutions
-        for (int i = 1; i < (int)pass->textures.size() && i < 12; i++) {
+        // Setup Main Image Resolution (Slot 0)
+        {
+            sg_image_desc d = sg_query_image_desc(img);
+            builtin.texture_resolutions[0][0] = d.width > 0 ? (float)d.width : 1.0f;
+            builtin.texture_resolutions[0][1] = d.height > 0 ? (float)d.height : 1.0f;
+            builtin.texture_resolutions[0][2] = builtin.texture_resolutions[0][0];
+            builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
+        }
+
+        // Slot 1+ (Extra Textures)
+        for (int i = 0; i < (int)pass->textures.size() && i < 11; i++) {
+            if (i == 0) continue;  // g_Texture0 is handled above
+
             sg_image target_img = (sg_image){SG_INVALID_ID};
             if (i < (int)pass->texture_masks.size() && pass->texture_masks[i]) {
                 target_img = pass->textures[i];
@@ -148,15 +157,22 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
                 ev_desc.texture.image = target_img;
                 r->bind.views[i] = sg_make_view(&ev_desc);
 
-                if (i <= 4) {
+                // Resolution indices for extra textures (Slot 1..4)
+                if (i < 5) {
                     sg_image_desc d = sg_query_image_desc(target_img);
-                    builtin.texture_resolutions[i - 1][0] = (float)d.width;
-                    builtin.texture_resolutions[i - 1][1] = (float)d.height;
-                    builtin.texture_resolutions[i - 1][2] = 1.0f / (float)d.width;
-                    builtin.texture_resolutions[i - 1][3] = 1.0f / (float)d.height;
+                    builtin.texture_resolutions[i][0] = d.width > 0 ? (float)d.width : 1.0f;
+                    builtin.texture_resolutions[i][1] = d.height > 0 ? (float)d.height : 1.0f;
+                    builtin.texture_resolutions[i][2] = builtin.texture_resolutions[i][0];
+                    builtin.texture_resolutions[i][3] = builtin.texture_resolutions[i][1];
                 }
             } else {
                 r->bind.views[i] = (sg_view){SG_INVALID_ID};
+                if (i < 5) {
+                    builtin.texture_resolutions[i][0] = 1.0f;
+                    builtin.texture_resolutions[i][1] = 1.0f;
+                    builtin.texture_resolutions[i][2] = 1.0f;
+                    builtin.texture_resolutions[i][3] = 1.0f;
+                }
             }
         }
 

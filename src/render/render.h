@@ -33,10 +33,12 @@ void renderer_init(renderer_t* r, float w, float h);
 void renderer_update_viewport(renderer_t* r, float w, float h);
 typedef struct {
     mat4x4 mvp;
-    vec4 texture_resolutions[4];  // w, h, 1/w, 1/h
+    vec4 texture_resolutions[5];  // 0: main image, 1-4: effect textures
     vec2 parallax_pos;            // 0..1
     float time;
     float padding;
+    vec2 screen_res;
+    vec2 padding2;
     mat4x4 effect_texture_projection;
     mat4x4 effect_texture_projection_inverse;
 } builtin_uniforms_t;

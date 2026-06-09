@@ -334,7 +334,8 @@ void ShaderPass::init() {
         "#define CAST3X3(x) mat3(x)\n"
         "#define saturate(x) clamp(x, 0.0, 1.0)\n"
         "#define lerp mix\n"
-        "precision mediump float;\n";
+        "precision mediump float;\n"
+        "uniform vec4 tint;\n";
 
     std::string full_vs = shader_prefix + combo_defines + process_shader_source(vs_src, true);
     std::string full_fs = shader_prefix + combo_defines + process_shader_source(fs_src, false);
@@ -419,22 +420,26 @@ void ShaderPass::init() {
 
     shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);  // -mvp
-    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture1Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_Texture2Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_Texture1Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[2].glsl_name = "g_Texture3Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[2].glsl_name = "g_Texture2Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[3].glsl_name = "g_Texture4Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[3].glsl_name = "g_Texture3Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[4].glsl_name = "g_ParallaxPosition";
-    shd_desc.uniform_blocks[1].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[1].glsl_uniforms[5].glsl_name = "g_Time";
-    shd_desc.uniform_blocks[1].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT;
-    shd_desc.uniform_blocks[1].glsl_uniforms[6].glsl_name = "g_EffectTextureProjectionMatrix";
-    shd_desc.uniform_blocks[1].glsl_uniforms[6].type = SG_UNIFORMTYPE_MAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[7].glsl_name = "g_EffectTextureProjectionMatrixInverse";
-    shd_desc.uniform_blocks[1].glsl_uniforms[7].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[4].glsl_name = "g_Texture4Resolution";
+    shd_desc.uniform_blocks[1].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[5].glsl_name = "g_ParallaxPosition";
+    shd_desc.uniform_blocks[1].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[1].glsl_uniforms[6].glsl_name = "g_Time";
+    shd_desc.uniform_blocks[1].glsl_uniforms[6].type = SG_UNIFORMTYPE_FLOAT;
+    shd_desc.uniform_blocks[1].glsl_uniforms[7].glsl_name = "g_Screen";
+    shd_desc.uniform_blocks[1].glsl_uniforms[7].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[1].glsl_uniforms[8].glsl_name = "g_EffectTextureProjectionMatrix";
+    shd_desc.uniform_blocks[1].glsl_uniforms[8].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[9].glsl_name = "g_EffectTextureProjectionMatrixInverse";
+    shd_desc.uniform_blocks[1].glsl_uniforms[9].type = SG_UNIFORMTYPE_MAT4;
 
     // Slot 2: Fragment Tint
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -448,9 +453,15 @@ void ShaderPass::init() {
         if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
 
         sg_uniform_type type = SG_UNIFORMTYPE_FLOAT4;
-        std::string search_float = "uniform float " + name;
-        if (full_vs.find(search_float) != std::string::npos || full_fs.find(search_float) != std::string::npos) {
+        if (full_vs.find("uniform float " + name) != std::string::npos ||
+            full_fs.find("uniform float " + name) != std::string::npos) {
             type = SG_UNIFORMTYPE_FLOAT;
+        } else if (full_vs.find("uniform vec2 " + name) != std::string::npos ||
+                   full_fs.find("uniform vec2 " + name) != std::string::npos) {
+            type = SG_UNIFORMTYPE_FLOAT2;
+        } else if (full_vs.find("uniform vec3 " + name) != std::string::npos ||
+                   full_fs.find("uniform vec3 " + name) != std::string::npos) {
+            type = SG_UNIFORMTYPE_FLOAT3;
         }
 
         bool in_vs = full_vs.find(name) != std::string::npos;
