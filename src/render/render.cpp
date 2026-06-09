@@ -175,12 +175,6 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             if (i < (int)pass->pass_textures.cached_views.size() &&
                 pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->pass_textures.cached_views[i];
-            } else if (i == 0) {
-                // g_Texture1 (depth): create view from main image as fallback
-                sg_view_desc fallback_vd = {};
-                fallback_vd.texture.image = img;
-                fallback_view = sg_make_view(&fallback_vd);
-                r->bind.views[slot] = fallback_view;
             } else {
                 r->bind.views[slot] = r->black_view;
             }
