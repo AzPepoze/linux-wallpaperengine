@@ -47,13 +47,29 @@ bool extract_pkg(const char* pkg_path, const char* output_dir) {
     char magic[5];
     fread(magic, 1, 4, f);
     magic[4] = '\0';
+
     if (strcmp(magic, "PKGV") != 0) {
-        printf("Unpacker: Invalid magic: %s\n", magic);
-        fclose(f);
-        return false;
+        // Some packages have 4 bytes of unknown data before PKGV
+        fseek(f, 4, SEEK_SET);
+        fread(magic, 1, 4, f);
+        if (strcmp(magic, "PKGV") != 0) {
+            printf("Unpacker: Invalid magic at 0 or 4: %s\n", magic);
+            fclose(f);
+            return false;
+        }
     }
 
-    uint32_t version = read_u32(f);
+    uint32_t version = 0;
+    char version_buf[5];
+    fread(version_buf, 1, 4, f);
+    version_buf[4] = '\0';
+
+    // Check if version is a number string (e.g. "0018") or raw bytes
+    if (version_buf[0] >= '0' && version_buf[0] <= '9') {
+        version = atoi(version_buf);
+    } else {
+        version = *(uint32_t*)version_buf;
+    }
     printf("Unpacker: Package Version: PKGV%04u\n", version);
 
     uint32_t file_count = read_u32(f);
