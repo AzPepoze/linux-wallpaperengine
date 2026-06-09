@@ -37,6 +37,8 @@ typedef struct {
     vec2 parallax_pos;            // 0..1
     float time;
     float padding;
+    mat4x4 effect_texture_projection;
+    mat4x4 effect_texture_projection_inverse;
 } builtin_uniforms_t;
 
 void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w, float h, float rotation,

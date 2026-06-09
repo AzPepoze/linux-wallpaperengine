@@ -418,7 +418,7 @@ void ShaderPass::init() {
     shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
 
     shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
-    shd_desc.uniform_blocks[1].size = sizeof(float) * 4 * 4 + sizeof(float) * 4;
+    shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);  // -mvp
     shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture1Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
     shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_Texture2Resolution";
@@ -431,6 +431,10 @@ void ShaderPass::init() {
     shd_desc.uniform_blocks[1].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT2;
     shd_desc.uniform_blocks[1].glsl_uniforms[5].glsl_name = "g_Time";
     shd_desc.uniform_blocks[1].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT;
+    shd_desc.uniform_blocks[1].glsl_uniforms[6].glsl_name = "g_EffectTextureProjectionMatrix";
+    shd_desc.uniform_blocks[1].glsl_uniforms[6].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[7].glsl_name = "g_EffectTextureProjectionMatrixInverse";
+    shd_desc.uniform_blocks[1].glsl_uniforms[7].type = SG_UNIFORMTYPE_MAT4;
 
     // Slot 2: Fragment Tint
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -617,6 +621,12 @@ Effect::~Effect() {
 }
 
 Effect* Effect::load(const char* rel_path, cJSON* instance_config) {
+    // Only support depthparallax for now as requested
+    if (strstr(rel_path, "depthparallax") == nullptr) {
+        effect_log.warn("Ignoring unsupported effect: %s", rel_path);
+        return nullptr;
+    }
+
     char abs_path[1024];
     if (!state.asset_mgr.resolvePath(rel_path, abs_path, sizeof(abs_path))) return nullptr;
 
