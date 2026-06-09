@@ -18,6 +18,7 @@ class ShaderPass {
     std::vector<bool> texture_masks;
     cJSON* constant_values;
     std::map<std::string, std::vector<float>> uniforms;
+    std::map<int, std::string> texture_labels;
     bool enabled = true;
     bool show_files = false;
 

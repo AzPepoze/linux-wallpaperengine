@@ -156,10 +156,12 @@ void ShaderPass::init() {
     }
     if (state.asset_mgr.resolvePath(frag_path, abs_frag, sizeof(abs_frag))) {
         fs_src = read_file_to_string(abs_frag);
+        effect_log.debug("Loaded frag shader for labels: %s", abs_frag);
     }
 
     if (!vs_src || !fs_src) {
-        effect_log.error("Failed to load shader sources for %s", shader_name.c_str());
+        effect_log.error("Failed to load shader sources for %s (vert: %s, frag: %s)", shader_name.c_str(), vert_path,
+                         frag_path);
         if (vs_src) free(vs_src);
         if (fs_src) free(fs_src);
         return;
@@ -180,6 +182,73 @@ void ShaderPass::init() {
     std::string full_vs = shader_prefix + std::string(vs_src);
     std::string full_fs = shader_prefix + std::string(fs_src);
 
+    // Extract texture labels from comments in fragment shader
+    // Supports:
+    // 1. // [Label] g_TextureX
+    // 2. uniform sampler2D g_TextureX; // {"label":"..."}
+    {
+        const char* p = fs_src;
+        while (p && *p) {
+            const char* line_end = strchr(p, '\n');
+            std::string line;
+            if (line_end) {
+                line = std::string(p, line_end - p);
+            } else {
+                line = std::string(p);
+            }
+
+            size_t tex_pos = line.find("g_Texture");
+            size_t comment_pos = line.find("//");
+
+            if (tex_pos != std::string::npos && comment_pos != std::string::npos && comment_pos > tex_pos) {
+                int slot = atoi(line.c_str() + tex_pos + 9);
+                effect_log.debug("Processing line for g_Texture%d: %s", slot, line.c_str());
+                std::string label;
+
+                // Try JSON format: {"label":"..."}
+                size_t json_start = line.find('{', comment_pos);
+                size_t label_key = line.find("\"label\"", comment_pos);
+                if (json_start != std::string::npos && label_key != std::string::npos) {
+                    size_t colon = line.find(':', label_key);
+                    size_t quote1 = line.find('\"', colon);
+                    size_t quote2 = line.find('\"', quote1 + 1);
+                    if (quote1 != std::string::npos && quote2 != std::string::npos) {
+                        label = line.substr(quote1 + 1, quote2 - quote1 - 1);
+                    }
+                }
+                // Try bracket format: [Label]
+                else {
+                    size_t b_open = line.find('[', comment_pos);
+                    size_t b_close = line.find(']', b_open);
+                    if (b_open != std::string::npos && b_close != std::string::npos) {
+                        label = line.substr(b_open + 1, b_close - b_open - 1);
+                    }
+                }
+
+                if (!label.empty()) {
+                    // Map common localization keys
+                    if (label == "ui_editor_properties_water_normal")
+                        label = "Water Normal";
+                    else if (label == "ui_editor_properties_opacity_mask")
+                        label = "Opacity Mask";
+                    else if (label == "ui_editor_properties_specular")
+                        label = "Specular";
+                    else if (label.find("ui_editor_properties_") == 0) {
+                        // Clean up other keys: remove prefix and replace underscores
+                        label = label.substr(21);
+                        for (size_t i = 0; i < label.length(); i++) {
+                            if (label[i] == '_') label[i] = ' ';
+                            if (i == 0 || label[i - 1] == ' ') label[i] = toupper(label[i]);
+                        }
+                    }
+
+                    texture_labels[slot] = label;
+                    effect_log.debug("Found label for g_Texture%d: %s", slot, label.c_str());
+                }
+            }
+            p = line_end ? line_end + 1 : nullptr;
+        }
+    }
     sg_shader_desc shd_desc = {};
     shd_desc.vertex_func.source = full_vs.c_str();
     shd_desc.fragment_func.source = full_fs.c_str();
@@ -279,22 +348,45 @@ void ShaderPass::applyUniforms() {
 
 void ShaderPass::showInspector(int id) {
     ImGui::PushID(id);
-    ImGui::Checkbox(shader_name.empty() ? "Pass" : shader_name.c_str(), &enabled);
+
+    // Pass header with enable toggle
+    bool was_enabled = enabled;
+    if (ImGui::Checkbox(shader_name.empty() ? "Pass" : shader_name.c_str(), &enabled)) {
+        // Toggle logic if needed
+    }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Toggle this specific shader pass");
     }
 
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Files")) show_files = !show_files;
-
-    if (show_files) {
-        ImGui::Indent();
-        ImGui::Text("Textures (%d):", (int)textures.size());
+    // Always show textures if the pass is enabled (or just always show them if expanded)
+    ImGui::Indent();
+    if (textures.empty()) {
+        ImGui::TextDisabled("[No textures for this pass]");
+    } else {
         for (int i = 0; i < (int)textures.size(); i++) {
             ImGui::PushID(i);
+
+            // Texture Slot Description
+            const char* slot_desc = "Extra Slot";
+            if (texture_labels.count(i)) {
+                slot_desc = texture_labels[i].c_str();
+            } else {
+                if (i == 0)
+                    slot_desc = "Main/Mask";
+                else if (i == 1)
+                    slot_desc = "Secondary/Mask";
+                else if (i == 2)
+                    slot_desc = "Depth Map";
+                else if (i == 3)
+                    slot_desc = "Noise/Noise Mask";
+            }
+
+            // Mask/Enable toggle for this specific texture
+
             if (i < (int)texture_masks.size()) {
                 bool m = texture_masks[i];
                 if (ImGui::Checkbox("##mask", &m)) texture_masks[i] = m;
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle this texture slot");
                 ImGui::SameLine();
             }
 
@@ -302,22 +394,30 @@ void ShaderPass::showInspector(int id) {
                 if (ImGui::SmallButton("View")) {
                     sg_image_desc desc = sg_query_image_desc(textures[i]);
                     if (desc.width > 0 && desc.height > 0) {
-                        Debugger::preview_texture = textures[i];
-                        Debugger::preview_aspect = (float)desc.width / (float)desc.height;
+                        Debugger::setPreviewTexture(textures[i], (float)desc.width / (float)desc.height);
                     }
                 }
                 ImGui::SameLine();
             }
 
             if (!texture_paths[i].empty()) {
-                ImGui::Text("Slot %d: %s", i + 1, texture_paths[i].c_str());
+                // Extract filename from path for cleaner UI
+                const char* full_path = texture_paths[i].c_str();
+                const char* filename = strrchr(full_path, '/');
+                if (filename)
+                    filename++;
+                else
+                    filename = full_path;
+
+                ImGui::Text("%s: %s", slot_desc, filename);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", full_path);
             } else {
-                ImGui::Text("Slot %d: [Empty]", i + 1);
+                ImGui::TextDisabled("%s: [Empty]", slot_desc);
             }
             ImGui::PopID();
         }
-        ImGui::Unindent();
     }
+    ImGui::Unindent();
     ImGui::PopID();
 }
 

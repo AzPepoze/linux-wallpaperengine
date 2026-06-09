@@ -36,14 +36,18 @@ target("linux-wallpaperengine")
 task("check")
     set_menu {
         usage = "xmake check",
-        description = "Check code formatting and run fast static analysis"
+        description = "Format code and run fast static analysis"
     }
     on_run(function ()
-        -- 1. Check Formatting (Fast)
+        -- 1. Format code first
+        print("--> Formatting files...")
+        os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format -i"})
+
+        -- 2. Check Formatting (Fast)
         print("--> Checking formatting (clang-format)...")
         os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
         
-        -- 2. Fast Static Analysis
+        -- 3. Fast Static Analysis
         print("--> Running static analysis (cppcheck)...")
         -- We suppress libs/ and provide some common defines to avoid false positives or syntax errors in 3rd party headers
         os.execv("sh", {"-c", "cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 " ..

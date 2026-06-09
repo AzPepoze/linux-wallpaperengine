@@ -8,7 +8,10 @@ class Debugger {
     static void init();
     static void draw();
 
+    static void setPreviewTexture(sg_image img, float aspect);
+
     static sg_image preview_texture;
+    static sg_view preview_view;
     static float preview_aspect;
 
    private:
