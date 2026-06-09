@@ -21,7 +21,7 @@ typedef struct {
     float u, v;
 } vertex_t;
 
-typedef struct {
+struct renderer_t {
     GfxPipeline pip_alpha;
     GfxPipeline pip_add;
     GfxPipeline pip_lines;
@@ -37,7 +37,7 @@ typedef struct {
     GfxView gray_view;
     float view_width = 0.0f;
     float view_height = 0.0f;
-} renderer_t;
+};
 
 void renderer_init(renderer_t* r, float w, float h);
 void renderer_update_viewport(renderer_t* r, float w, float h);
