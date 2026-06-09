@@ -133,6 +133,8 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
         builtin.parallax_pos[0] = state.parallax_smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = state.parallax_smooth_y * 0.5f + 0.5f;
         builtin.time = state.time;
+        mat4x4_identity(builtin.effect_texture_projection);
+        mat4x4_identity(builtin.effect_texture_projection_inverse);
 
         // Slot 1+ and Resolutions
         for (int i = 1; i < (int)pass->textures.size() && i < 12; i++) {
@@ -160,8 +162,7 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
 
         sg_range b_range = SG_RANGE(builtin.mvp);
         sg_apply_uniforms(0, &b_range);
-        sg_range res_range = {.ptr = builtin.texture_resolutions,
-                              .size = sizeof(float) * 4 * 4 + sizeof(float) * 4};  // + parallax_pos
+        sg_range res_range = {.ptr = builtin.texture_resolutions, .size = sizeof(builtin_uniforms_t) - sizeof(mat4x4)};
         sg_apply_uniforms(1, &res_range);
 
         sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
