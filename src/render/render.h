@@ -28,6 +28,8 @@ typedef struct {
     sg_view white_view;
     sg_image black_pixel;
     sg_view black_view;
+    sg_image gray_pixel;
+    sg_view gray_view;
     float view_width;
     float view_height;
 } renderer_t;
