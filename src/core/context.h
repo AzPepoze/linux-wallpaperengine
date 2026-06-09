@@ -41,6 +41,7 @@ struct app_state_t {
     float mouse_y = 0.0f;
     float parallax_smooth_x = 0.0f;
     float parallax_smooth_y = 0.0f;
+    float time = 0.0f;
 
     scaling_mode_t scaling_mode = SCALING_FIT;
     int selected_object = -1;

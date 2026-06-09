@@ -132,6 +132,7 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, float x, float y, float w
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));
         builtin.parallax_pos[0] = state.parallax_smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = state.parallax_smooth_y * 0.5f + 0.5f;
+        builtin.time = state.time;
 
         // Slot 1+ and Resolutions
         for (int i = 1; i < (int)pass->textures.size() && i < 12; i++) {
