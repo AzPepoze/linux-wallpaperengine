@@ -30,9 +30,17 @@ class ShaderPass {
     void apply();
     void applyUniforms();
     void showInspector(int id);
+    void rebuildWithDebugMode(int mode);
 
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path);
+
+    int debug_view_mode = 0;
+    int debug_step = 0;  // 0=full shader, 1-6=progressively simpler
+
+   private:
+    std::string stored_vs_source;
+    std::string stored_fs_source;
 };
 
 class Effect {

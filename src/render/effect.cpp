@@ -1,5 +1,8 @@
 #include "effect.h"
 
+#include <fstream>
+#include <sstream>
+
 #include "../../libs/sokol/sokol_app.h"
 #include "../../libs/sokol/sokol_imgui.h"
 #include "../core/context.h"
@@ -205,6 +208,15 @@ ShaderPass::~ShaderPass() {
 static std::string process_shader_source(const std::string& source, bool is_vertex) {
     std::string result = source;
 
+    // Fix: g_Screen is declared vec3 in some WPE shaders but our uniform block uses vec2.
+    // The type mismatch corrupts uniform offsets for subsequent uniforms.
+    if (is_vertex) {
+        size_t pos = result.find("uniform vec3 g_Screen;");
+        if (pos != std::string::npos) {
+            result.replace(pos, 22, "uniform vec2 g_Screen;");
+        }
+    }
+
     // 0. Remove existing #version if any (we add our own in shader_prefix)
     size_t version_pos = result.find("#version");
     if (version_pos != std::string::npos) {
@@ -245,28 +257,24 @@ static std::string process_shader_source(const std::string& source, bool is_vert
         result.replace(include_pos, 31, common_perspective_h);
     }
 
-    // 3. Translate attribute/varying
+    // GLSL 330 translation: attribute→in, varying→in/out, gl_FragColor→frag_color
     if (is_vertex) {
-        // attribute -> in
         size_t pos = 0;
         while ((pos = result.find("attribute ", pos)) != std::string::npos) {
             result.replace(pos, 9, "in ");
             pos += 3;
         }
-        // varying -> out
         pos = 0;
         while ((pos = result.find("varying ", pos)) != std::string::npos) {
             result.replace(pos, 8, "out ");
             pos += 4;
         }
     } else {
-        // varying -> in
         size_t pos = 0;
         while ((pos = result.find("varying ", pos)) != std::string::npos) {
             result.replace(pos, 8, "in ");
             pos += 3;
         }
-        // gl_FragColor -> frag_color
         if (result.find("gl_FragColor") != std::string::npos) {
             result = "out vec4 frag_color;\n" + result;
             size_t frag_pos = 0;
@@ -304,7 +312,6 @@ void ShaderPass::init() {
     if (state.asset_mgr.resolvePath(vert_path, abs_vert, sizeof(abs_vert))) {
         vs_src = read_file_to_string(abs_vert);
     } else {
-        // Try extracted path
         char extracted_path[512];
         snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", vert_path);
         if (state.asset_mgr.resolvePath(extracted_path, abs_vert, sizeof(abs_vert))) {
@@ -316,7 +323,6 @@ void ShaderPass::init() {
         fs_src = read_file_to_string(abs_frag);
         effect_log.debug("Loaded frag shader for labels: %s", abs_frag);
     } else {
-        // Try extracted path
         char extracted_path[512];
         snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", frag_path);
         if (state.asset_mgr.resolvePath(extracted_path, abs_frag, sizeof(abs_frag))) {
@@ -369,8 +375,170 @@ void ShaderPass::init() {
         "#define highp\n"
         "uniform vec4 tint;\n";
 
-    std::string full_vs = shader_prefix + combo_defines + process_shader_source(vs_src, true);
-    std::string full_fs = shader_prefix + combo_defines + process_shader_source(fs_src, false);
+    // Parse COMBO defaults from fragment shader comments (one COMBO per line)
+    // Format: // [COMBO] {"combo":"QUALITY","default":1,...}
+    {
+        const char* p = fs_src;
+        while (p && *p) {
+            const char* line_end = strchr(p, '\n');
+            if (!line_end) line_end = p + strlen(p);
+            // Check for COMBO on this line
+            const char* combo_pos = strstr(p, "// [COMBO]");
+            if (combo_pos && combo_pos < line_end) {
+                const char* json_start = strchr(combo_pos, '{');
+                if (json_start && json_start < line_end) {
+                    std::string json(json_start, line_end - json_start);
+                    cJSON* combo = cJSON_Parse(json.c_str());
+                    if (combo) {
+                        cJSON* name = cJSON_GetObjectItemCaseSensitive(combo, "combo");
+                        cJSON* default_val = cJSON_GetObjectItemCaseSensitive(combo, "default");
+                        if (cJSON_IsString(name) && cJSON_IsNumber(default_val)) {
+                            std::string define_name = name->valuestring;
+                            if (combo_defines.find("#define " + define_name) == std::string::npos) {
+                                combo_defines += "#define " + define_name + " " +
+                                                 std::to_string((int)default_val->valuedouble) + "\n";
+                                effect_log.info("COMBO: %s=%d", define_name.c_str(),
+                                                (int)default_val->valuedouble);
+                            }
+                        }
+                        cJSON_Delete(combo);
+                    }
+                }
+            }
+            p = (*line_end) ? line_end + 1 : nullptr;
+        }
+    }
+
+    std::string processed_vs = process_shader_source(vs_src, true);
+    std::string processed_fs = process_shader_source(fs_src, false);
+    std::string full_vs = shader_prefix + combo_defines + processed_vs;
+    std::string full_fs = shader_prefix + combo_defines + processed_fs;
+
+    // DEBUG: dump FS to /tmp/depthparallax_fs.glsl
+    {
+        std::ofstream out("/tmp/depthparallax_fs.glsl");
+        if (out) {
+            out << full_fs;
+            out.close();
+        }
+    }
+
+    // Store base source for debug rebuild
+    stored_vs_source = full_vs;
+    stored_fs_source = full_fs;
+
+    // --- DEBUG: inject visual debug output into fragment shader ---
+    if (debug_view_mode > 0) {
+        size_t pos = full_fs.rfind("frag_color = ");
+        if (pos != std::string::npos) {
+            size_t end = full_fs.find(';', pos);
+            if (end != std::string::npos) {
+                std::string debug_line;
+                switch (debug_view_mode) {
+                    case 1:  // raw albedo (no displacement)
+                        debug_line = "frag_color = texSample2D(g_Texture0, v_TexCoord.xy)";
+                        break;
+                    case 2:  // g_Texture1 at v_TexCoord.zw
+                        debug_line = "frag_color = vec4(vec3(texSample2D(g_Texture1, v_TexCoord.zw).r), 1.0)";
+                        break;
+                    case 3:  // g_Texture2 at .xy
+                        debug_line = "frag_color = vec4(vec3(texSample2D(g_Texture2, v_TexCoord.xy).r), 1.0)";
+                        break;
+                    case 4:  // g_Texture0 at .xy
+                        debug_line = "frag_color = vec4(vec3(texSample2D(g_Texture0, v_TexCoord.xy).r), 1.0)";
+                        break;
+                    case 5:  // parallax offset
+                        debug_line = "frag_color = vec4(v_ParallaxOffset, 0.0, 1.0)";
+                        break;
+                    default:
+                        debug_line = "frag_color = vec4(1,0,1,1)";  // magenta for unknown
+                        break;
+                }
+                full_fs.replace(pos, end - pos + 1, debug_line + ";");
+                effect_log.info("DEBUG: Overriding FS output with mode %d", debug_view_mode);
+            }
+        }
+    }
+
+    // --- DEBUG STEP: progressively restore original shader to find the break ---
+    if (debug_step > 0) {
+        // Find main() and replace its body based on step
+        size_t main_pos = full_fs.find("void main()");
+        if (main_pos != std::string::npos) {
+            size_t body_start = full_fs.find('{', main_pos) + 1;
+            // Find matching } by counting braces (rfind('}') hits JSON in comments)
+            int depth = 1;
+            size_t body_end = body_start;
+            while (body_end < full_fs.size() && depth > 0) {
+                if (full_fs[body_end] == '{') depth++;
+                if (full_fs[body_end] == '}') depth--;
+                body_end++;
+            }
+            body_end--;  // point to the matching }
+            std::string before = full_fs.substr(0, body_start);
+            std::string after = full_fs.substr(body_end);
+
+            const char* body = nullptr;
+            switch (debug_step) {
+                case 1:  // just show g_Texture0 at original UV
+                    body = "\n\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
+                    break;
+                case 2:  // + sample depth (but don't use it for offset yet)
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture0, v_TexCoord.xy).r;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
+                    break;
+                case 3:  // + offset with neutral depth=0.5 (offset=0 from math, tests g_Scale+v_Parallax)
+                    body =
+                        "\n\tfloat depth = 0.5;\n"
+                        "\tfloat mask = 1.0;\n"
+                        "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
+                        "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * -0.04;\n"
+                        "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 4:  // + small fixed offset (0.005) to test if ANY offset blanks
+                    body =
+                        "\n\tvec2 offset = vec2(0.005, 0.005);\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 5:  // show depth as grayscale
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.zw).r;\n"
+                        "\tfrag_color = vec4(vec3(depth), 1.0);\n";
+                    break;
+                case 6:  // + hardcode g_Scale=1, real depth
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture0, v_TexCoord.xy).r;\n"
+                        "\tfloat mask = 1.0;\n"
+                        "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
+                        "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * 1.0 * -0.04;\n"
+                        "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 7:  // + sample mask from g_Texture2
+                    body =
+                        "\n\tfloat depth = texSample2D(g_Texture0, v_TexCoord.xy).r;\n"
+                        "\tfloat mask = 1.0;\n"
+                        "#if MASK\n"
+                        "\tmask *= texSample2D(g_Texture2, v_TexCoordMask.xy).r;\n"
+                        "#endif\n"
+                        "\tvec2 pointer = vec2(v_TexCoord.z, 1.0 - v_TexCoord.w);\n"
+                        "\tpointer = (pointer - v_ParallaxOffset) * vec2(2.0, -2.0) * g_Scale * -0.04;\n"
+                        "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
+                        "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
+                    break;
+                case 8:  // full original (equivalent to step 0, but explicit)
+                default:
+                    body = nullptr;
+                    break;
+            }
+            if (body) {
+                full_fs = before + body + after;
+                effect_log.info("DEBUG STEP %d: simplified FS main()", debug_step);
+            }
+        }
+    }
 
     // Extract texture labels from comments in fragment shader
     // 2. uniform sampler2D g_TextureX; // {"label":"..."}
@@ -628,6 +796,23 @@ bool ShaderPass::resolveDepth(const char* source_tex_path) {
     return false;
 }
 
+void ShaderPass::rebuildWithDebugMode(int mode) {
+    debug_view_mode = mode;
+    if (pipeline.id != SG_INVALID_ID) {
+        sg_destroy_pipeline(pipeline);
+        pipeline.id = SG_INVALID_ID;
+    }
+    if (shader.id != SG_INVALID_ID) {
+        sg_destroy_shader(shader);
+        shader.id = SG_INVALID_ID;
+    }
+    for (auto& v : cached_views) {
+        if (v.id != SG_INVALID_ID) sg_destroy_view(v);
+    }
+    cached_views.clear();
+    init();
+}
+
 void ShaderPass::showInspector(int id) {
     ImGui::PushID(id);
 
@@ -640,72 +825,94 @@ void ShaderPass::showInspector(int id) {
         ImGui::SetTooltip("Toggle this specific shader pass");
     }
 
-    // Always show textures if the pass is enabled (or just always show them if expanded)
+    // Debug view mode selector
+    const char* debug_modes[] = {"Normal", "Albedo", "g_Tex1@xy", "g_Tex2@xy", "g_Tex0@xy", "Parallax"};
+    int prev_mode = debug_view_mode;
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(140);
+    if (ImGui::Combo("##debugview", &debug_view_mode, debug_modes, 6)) {
+        if (debug_view_mode != prev_mode) {
+            rebuildWithDebugMode(debug_view_mode);
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Visual debug: override fragment output to inspect shader values");
+
+    int prev_step = debug_step;
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    if (ImGui::SliderInt("##debugstep", &debug_step, 0, 8)) {
+        if (debug_step != prev_step) {
+            rebuildWithDebugMode(debug_view_mode);
+        }
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Debug Step: 0=full shader, 1=passthrough, 2=+depth sample, 3=+offset, 4=+mask, 5=full");
+
     ImGui::Indent();
     if (textures.empty()) {
         ImGui::TextDisabled("[No textures for this pass]");
     } else {
         // Texture Grid Visualization
         if (ImGui::TreeNodeEx("Texture Slots Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
-            float size = 64.0f;
-            float spacing = 8.0f;
-            float avail_x = ImGui::GetContentRegionAvail().x;
-            int columns = (int)(avail_x / (size + spacing));
-            if (columns < 1) columns = 1;
+            float size = 72.0f;
+            float avl_x = ImGui::GetContentRegionAvail().x;
+            int cols = (int)(avl_x / (size + 8.0f));
+            if (cols < 1) cols = 1;
 
             for (int i = 0; i < (int)textures.size(); i++) {
-                if (i > 0 && i % columns != 0) ImGui::SameLine();
+                if (i > 0 && i % cols != 0) ImGui::SameLine();
+                int shader_slot = i + 1;  // textures[0] = g_Texture1, textures[1] = g_Texture2, ...
+
+                // Resolve label from shader-parsed texture_labels (keyed by g_Texture#)
+                const char* slot_label = nullptr;
+                if (texture_labels.count(shader_slot)) {
+                    slot_label = texture_labels[shader_slot].c_str();
+                }
+
+                bool valid = i < (int)cached_views.size() && cached_views[i].id != SG_INVALID_ID;
+                ImVec4 border_color = valid ? ImVec4(0.3f, 0.3f, 0.3f, 1) : ImVec4(1, 0.2f, 0.2f, 1);
 
                 ImGui::BeginGroup();
-                if (i < (int)cached_views.size() && cached_views[i].id != SG_INVALID_ID) {
+                ImVec2 p0 = ImGui::GetCursorScreenPos();
+                if (valid) {
                     ImGui::Image((ImTextureID)simgui_imtextureid(cached_views[i]), ImVec2(size, size));
-                    if (ImGui::IsItemHovered()) {
-                        const char* tt_desc = "Extra";
-                        if (texture_labels.count(i)) {
-                            tt_desc = texture_labels[i].c_str();
-                        } else {
-                            if (i == 0)
-                                tt_desc = "Main Image";
-                            else if (i == 1)
-                                tt_desc = "Depth Map";
-                            else if (i == 2)
-                                tt_desc = "Opacity Mask";
-                            else if (i == 3)
-                                tt_desc = "Noise/Noise Mask";
-                        }
-                        ImGui::BeginTooltip();
-                        ImGui::Text("Slot %d: %s", i + 1, tt_desc);
-                        ImGui::EndTooltip();
-                    }
                 } else {
                     ImGui::Dummy(ImVec2(size, size));
-                    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), 0xFF555555);
                 }
-                ImGui::Text("Slot %d", i + 1);
+                ImVec2 p1 = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRect(p0, p1, ImColor(border_color), 0, 0, valid ? 1.0f : 2.0f);
+
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("g_Texture%d: %s", shader_slot, slot_label ? slot_label : "Extra");
+                    if (i < (int)texture_paths.size() && !texture_paths[i].empty())
+                        ImGui::Text("Path: %s", texture_paths[i].c_str());
+                    if (!valid) ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "INVALID - renders as black");
+                    ImGui::EndTooltip();
+                }
+
+                ImGui::Text("g_Tex%d", shader_slot);
+                if (slot_label)
+                    ImGui::TextDisabled("%s", slot_label);
+                else
+                    ImGui::TextDisabled("-");
                 ImGui::EndGroup();
             }
             ImGui::TreePop();
         }
 
+        // List view with paths
         for (int i = 0; i < (int)textures.size(); i++) {
             ImGui::PushID(i);
+            int shader_slot = i + 1;
 
-            // Texture Slot Description
-            const char* slot_desc = "Extra Slot";
-            if (texture_labels.count(i)) {
-                slot_desc = texture_labels[i].c_str();
-            } else {
-                if (i == 0)
-                    slot_desc = "Main Image";
-                else if (i == 1)
-                    slot_desc = "Depth Map";
-                else if (i == 2)
-                    slot_desc = "Opacity Mask";
-                else if (i == 3)
-                    slot_desc = "Noise/Noise Mask";
+            // Label from shader
+            const char* slot_desc = "Extra";
+            if (texture_labels.count(shader_slot)) {
+                slot_desc = texture_labels[shader_slot].c_str();
             }
 
-            // Mask/Enable toggle for this specific texture
+            bool valid = i < (int)cached_views.size() && cached_views[i].id != SG_INVALID_ID;
 
             if (i < (int)texture_masks.size()) {
                 bool m = texture_masks[i];
@@ -714,19 +921,19 @@ void ShaderPass::showInspector(int id) {
                 ImGui::SameLine();
             }
 
-            if (!texture_paths[i].empty()) {
-                // Extract filename from path for cleaner UI
+            if (!valid) {
+                ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "g_Texture%d [%s]: INVALID", shader_slot, slot_desc);
+            } else if (!texture_paths[i].empty()) {
                 const char* full_path = texture_paths[i].c_str();
                 const char* filename = strrchr(full_path, '/');
                 if (filename)
                     filename++;
                 else
                     filename = full_path;
-
-                ImGui::Text("%s: %s", slot_desc, filename);
+                ImGui::Text("g_Texture%d [%s]: %s", shader_slot, slot_desc, filename);
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", full_path);
             } else {
-                ImGui::TextDisabled("%s: [Empty]", slot_desc);
+                ImGui::Text("g_Texture%d [%s]: (ok)", shader_slot, slot_desc);
             }
             ImGui::PopID();
         }

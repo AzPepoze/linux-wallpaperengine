@@ -52,6 +52,13 @@ void renderer_init(renderer_t* r, float w, float h) {
     bv_desc.texture.image = r->black_pixel;
     r->black_view = sg_make_view(&bv_desc);
 
+    pixel = 0x808080FF;  // 50% gray = neutral depth
+    r->gray_pixel = sg_make_image(&img_desc);
+
+    sg_view_desc gv_desc = {};
+    gv_desc.texture.image = r->gray_pixel;
+    r->gray_view = sg_make_view(&gv_desc);
+
     sg_shader_desc shd_desc = {};
     shd_desc.vertex_func.source =
         "#version 330\n"
@@ -161,6 +168,11 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
 
             if (i < (int)pass->cached_views.size() && pass->cached_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->cached_views[i];
+            } else if (i == 0) {
+                // g_Texture1 (depth): create view from main image as fallback
+                sg_view_desc fallback_vd = {};
+                fallback_vd.texture.image = img;
+                r->bind.views[slot] = sg_make_view(&fallback_vd);
             } else {
                 r->bind.views[slot] = r->black_view;
             }
@@ -209,6 +221,13 @@ void renderer_draw_sprite(renderer_t* r, sg_image img, sg_view main_view, float 
     }
 
     sg_draw(0, 6, 1);
+
+    // Destroy dynamic fallback view created for g_Texture1
+    if (pass && pass->enabled && pass->cached_views.size() > 0 && pass->cached_views[0].id == SG_INVALID_ID) {
+        if (r->bind.views[1].id != SG_INVALID_ID && r->bind.views[1].id != r->black_view.id) {
+            sg_destroy_view(r->bind.views[1]);
+        }
+    }
 
     // Clean up bindings for next call
     for (int i = 0; i < 12; i++) {
@@ -261,6 +280,8 @@ void renderer_cleanup(renderer_t* r) {
     sg_destroy_view(r->white_view);
     sg_destroy_image(r->black_pixel);
     sg_destroy_view(r->black_view);
+    sg_destroy_image(r->gray_pixel);
+    sg_destroy_view(r->gray_view);
     sg_destroy_buffer(r->bind.vertex_buffers[0]);
     sg_destroy_buffer(r->bind.index_buffer);
     sg_destroy_sampler(r->smp);
