@@ -66,9 +66,9 @@ bool extract_pkg(const char* pkg_path, const char* output_dir) {
 
     // Check if version is a number string (e.g. "0018") or raw bytes
     if (version_buf[0] >= '0' && version_buf[0] <= '9') {
-        version = atoi(version_buf);
+        version = (uint32_t)atoi(version_buf);
     } else {
-        version = *(uint32_t*)version_buf;
+        memcpy(&version, version_buf, 4);
     }
     printf("Unpacker: Package Version: PKGV%04u\n", version);
 

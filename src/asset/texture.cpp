@@ -86,7 +86,6 @@ DecodedTexture load_texture(const char* path, int image_index) {
     }
 
     const char* format_name = "Unknown";
-    // ... rest of format detection ...
     switch (wp_format) {
         case 0:
             format_name = "RGBA8";
@@ -102,6 +101,9 @@ DecodedTexture load_texture(const char* path, int image_index) {
             break;
         case 9:
             format_name = "R8 (Grayscale)";
+            break;
+        case 8:
+            format_name = "RGBA8 (Raw?)";
             break;
     }
 
@@ -178,9 +180,14 @@ DecodedTexture load_texture(const char* path, int image_index) {
 
                 switch (wp_format) {
                     case 0:
+                    case 8:  // Format 8 seems to be raw RGBA8 or similar
                         tex.format = SG_PIXELFORMAT_RGBA8;
                         tex.pixels = (uint8_t*)malloc(decomp_size);
-                        if (tex.pixels) memcpy(tex.pixels, raw_data, decomp_size);
+                        if (tex.pixels) {
+                            memcpy(tex.pixels, raw_data, decomp_size);
+                        } else {
+                            LOG_TAG_E(TAG, "  Failed to allocate %u bytes for RGBA8 pixels", decomp_size);
+                        }
                         break;
                     case 4:
                         tex.format = SG_PIXELFORMAT_BC1_RGBA;

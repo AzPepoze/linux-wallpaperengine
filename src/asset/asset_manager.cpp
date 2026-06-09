@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "../../libs/cJSON.h"
+#include "../core/logger.h"
 #include "../core/utils.h"
 #include "texture.h"
 
@@ -78,6 +79,8 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
             return img;
         }
     }
+
+    LOG_W("Failed to resolve texture: %s", name);
     return {};
 }
 
