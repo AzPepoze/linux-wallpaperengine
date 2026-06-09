@@ -21,16 +21,23 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
 
     // Debug view mode selector
     std::vector<std::string> mode_names = {"Normal"};
-    mode_names.push_back("g_Texture0");  // Main layer texture
+    mode_names.push_back("g_Texture0 [Color]");
+
+    // Resolve labels for dropdown
     for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "g_Texture%d", i + 1);
+        int slot = i + 1;
+        char buf[64];
+        const char* label = pass.texture_labels.count(slot) ? pass.texture_labels[slot].c_str() : "Extra";
+        snprintf(buf, sizeof(buf), "g_Texture%d [%s]", slot, label);
         mode_names.push_back(buf);
     }
+
     mode_names.push_back("g_Texture0 (Red)");
     for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "g_Texture%d (Red)", i + 1);
+        int slot = i + 1;
+        char buf[64];
+        const char* label = pass.texture_labels.count(slot) ? pass.texture_labels[slot].c_str() : "Extra";
+        snprintf(buf, sizeof(buf), "g_Texture%d [%s] (Red)", slot, label);
         mode_names.push_back(buf);
     }
 
@@ -48,7 +55,7 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     }
 
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(140);
+    ImGui::SetNextItemWidth(180);
     if (ImGui::Combo("##debugview", &current_idx, mode_ptrs.data(), (int)mode_ptrs.size())) {
         if (current_idx == 0)
             pass.debug_view_mode = 0;
@@ -67,7 +74,7 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
 
-    int max_step = 7;
+    int max_step = 8;
     if (extra_count + 1 > max_step) max_step = extra_count + 1;
 
     if (ImGui::SliderInt("##debugstep", &pass.debug_step, 0, max_step)) {
@@ -75,7 +82,13 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
             pass.rebuildWithDebugMode(pass.debug_view_mode, ctx);
         }
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Debug Step: forced texture output or specialized parallax steps");
+    if (ImGui::IsItemHovered()) {
+        if (pass.shader_name.find("depthparallax") != std::string::npos) {
+            ImGui::SetTooltip("0:Full, 1:Color, 2:Depth, 3:Mask, 4:Neutral, 5:Offset, 6:Grayscale, 7:Full(explicit)");
+        } else {
+            ImGui::SetTooltip("Debug Step: forced texture output for slot N");
+        }
+    }
 
     ImGui::Indent();
     if (pass.pass_textures.textures.empty()) {
