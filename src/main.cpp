@@ -1,5 +1,4 @@
 #define SOKOL_GLCORE
-#define SOKOL_TIME_IMPL
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
