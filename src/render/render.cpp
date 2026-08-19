@@ -2,11 +2,14 @@
 
 #include <math.h>
 
+#include <string>
+
 #include "../../libs/sokol/sokol_glue.h"
 #include "../core/context.h"
 #include "../core/engine_context.h"
 #include "../core/logger.h"
 #include "effect.h"
+#include "shader_backend.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
     r->view_width = w;
@@ -62,8 +65,7 @@ void renderer_init(renderer_t* r, float w, float h) {
     gv_desc.texture.image = r->gray_pixel;
     r->gray_view = sg_make_view(&gv_desc);
 
-    sg_shader_desc shd_desc = {};
-    shd_desc.vertex_func.source =
+    const std::string vertex_source =
         "#version 330\n"
         "uniform mat4 mvp;\n"
         "layout(location=0) in vec2 position;\n"
@@ -73,7 +75,7 @@ void renderer_init(renderer_t* r, float w, float h) {
         "  gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
         "  uv = texcoord0;\n"
         "}\n";
-    shd_desc.fragment_func.source =
+    const std::string fragment_source =
         "#version 330\n"
         "precision mediump float;\n"
         "uniform sampler2D tex;\n"
@@ -83,6 +85,8 @@ void renderer_init(renderer_t* r, float w, float h) {
         "void main() {\n"
         "  frag_color = texture(tex, uv) * tint;\n"
         "}\n";
+
+    sg_shader_desc shd_desc = {};
     shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
     shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "mvp";
@@ -102,7 +106,7 @@ void renderer_init(renderer_t* r, float w, float h) {
     shd_desc.texture_sampler_pairs[0].view_slot = 0;
     shd_desc.texture_sampler_pairs[0].sampler_slot = 0;
 
-    sg_shader shd = sg_make_shader(&shd_desc);
+    sg_shader shd = create_backend_shader(&shd_desc, vertex_source, fragment_source, "renderer-default");
 
     sg_pipeline_desc pip_desc = {};
     pip_desc.shader = shd;
