@@ -1,4 +1,5 @@
 #define SOKOL_GLCORE
+#define SOKOL_TIME_IMPL
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #include "../libs/sokol/sokol_glue.h"
 #include "../libs/sokol/sokol_imgui.h"
 #include "../libs/sokol/sokol_log.h"
+#include "../libs/sokol/sokol_time.h"
 #include "asset/unpack.h"
 #include "core/config.h"
 #include "core/context.h"
@@ -26,6 +28,7 @@ static EngineContext ctx;
 static SceneRenderer* scene_engine = nullptr;
 
 static void init(void) {
+    stm_setup();
     detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path));
 
     sg_desc s_desc = {};
@@ -80,6 +83,10 @@ static void init(void) {
 }
 
 static void frame(void) {
+    const uint64_t frame_start = stm_now();
+    ctx.renderer.draw_calls = 0;
+
+    const uint64_t update_start = stm_now();
     scene_engine->updateViewport();
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
@@ -89,17 +96,36 @@ static void frame(void) {
     float target_py = (ctx.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
     ctx.parallax_smooth_x += (target_px - ctx.parallax_smooth_x) * Config::kParallaxSmoothing;
     ctx.parallax_smooth_y += (target_py - ctx.parallax_smooth_y) * Config::kParallaxSmoothing;
+    ctx.profiler.update_ms = stm_ms(stm_since(update_start));
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(&pass);
 
+    const uint64_t render_start = stm_now();
     scene_engine->draw();
+    ctx.profiler.render_ms = stm_ms(stm_since(render_start));
+
+    const uint64_t ui_start = stm_now();
     Debugger::draw(ctx);
+    ctx.profiler.ui_ms = stm_ms(stm_since(ui_start));
 
     sg_end_pass();
     sg_commit();
+
+    ctx.profiler.frame_ms = stm_ms(stm_since(frame_start));
+    ctx.profiler.draw_calls = ctx.renderer.draw_calls;
+    ctx.profiler.frame_index++;
+
+    if (ctx.profiler.frame_index == 1) {
+        ctx.profiler.frame_avg_ms = ctx.profiler.frame_ms;
+    } else {
+        ctx.profiler.frame_avg_ms += (ctx.profiler.frame_ms - ctx.profiler.frame_avg_ms) * 0.05;
+    }
+    if (ctx.profiler.frame_ms > ctx.profiler.frame_peak_ms) {
+        ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
+    }
 }
 
 static void event(const sapp_event* e) {
