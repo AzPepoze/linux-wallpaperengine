@@ -7,10 +7,18 @@
 #include "../../libs/sokol/sokol_imgui.h"
 #include "../../libs/sokol/sokol_log.h"
 #include "../core/context.h"
+#include "../core/logger.h"
 #include "../render/effect.h"
 #include "../scene/layer.h"
 #include "imgui.h"
 #include "inspector/layer_inspector.h"
+
+namespace {
+bool g_log_debug_ui_layout = true;
+int g_last_surface_width = -1;
+int g_last_surface_height = -1;
+float g_last_dpi_scale = -1.0f;
+}  // namespace
 
 GfxImage Debugger::preview_texture;
 GfxView Debugger::preview_view;
@@ -42,7 +50,16 @@ void Debugger::drawHierarchyPanel(EngineContext& ctx, float width, float height)
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
                              ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    if (ImGui::Begin("HierarchyPanel", nullptr, flags)) {
+    bool visible = ImGui::Begin("HierarchyPanel", nullptr, flags);
+    if (g_log_debug_ui_layout) {
+        const ImVec2 pos = ImGui::GetWindowPos();
+        const ImVec2 size = ImGui::GetWindowSize();
+        LOG_TAG_D("DEBUG_UI",
+                  "HierarchyPanel: visible=%d requested=(0.0,0.0 %.1fx%.1f) actual=(%.1f,%.1f %.1fx%.1f)",
+                  visible ? 1 : 0, width, height, pos.x, pos.y, size.x, size.y);
+    }
+
+    if (visible) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "HIERARCHY");
         ImGui::Separator();
 
@@ -119,7 +136,16 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
                              ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    if (ImGui::Begin("InspectorPanel", nullptr, flags)) {
+    bool visible = ImGui::Begin("InspectorPanel", nullptr, flags);
+    if (g_log_debug_ui_layout) {
+        const ImVec2 pos = ImGui::GetWindowPos();
+        const ImVec2 size = ImGui::GetWindowSize();
+        LOG_TAG_D("DEBUG_UI",
+                  "InspectorPanel: visible=%d requested=(%.1f,0.0 %.1fx%.1f) actual=(%.1f,%.1f %.1fx%.1f)",
+                  visible ? 1 : 0, x_pos, current_width, height, pos.x, pos.y, size.x, size.y);
+    }
+
+    if (visible) {
         current_width = ImGui::GetWindowWidth();
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "INSPECTOR");
         ImGui::Separator();
@@ -185,16 +211,35 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
 }
 
 void Debugger::draw(EngineContext& ctx) {
+    const int surface_width = sapp_width();
+    const int surface_height = sapp_height();
+    const float dpi_scale = sapp_dpi_scale();
+
+    if (surface_width != g_last_surface_width || surface_height != g_last_surface_height || dpi_scale != g_last_dpi_scale) {
+        g_log_debug_ui_layout = true;
+        g_last_surface_width = surface_width;
+        g_last_surface_height = surface_height;
+        g_last_dpi_scale = dpi_scale;
+    }
+
     simgui_frame_desc_t frame_desc = {};
-    frame_desc.width = sapp_width();
-    frame_desc.height = sapp_height();
+    frame_desc.width = surface_width;
+    frame_desc.height = surface_height;
     frame_desc.delta_time = (float)sapp_frame_duration();
-    frame_desc.dpi_scale = sapp_dpi_scale();
+    frame_desc.dpi_scale = dpi_scale;
     simgui_new_frame(&frame_desc);
+
+    if (g_log_debug_ui_layout) {
+        const ImGuiIO& io = ImGui::GetIO();
+        LOG_TAG_D("DEBUG_UI",
+                  "Frame setup: show_ui=%d surface=%dx%d dpi=%.3f display=%.1fx%.1f framebuffer_scale=%.3fx%.3f",
+                  ctx.show_ui ? 1 : 0, surface_width, surface_height, dpi_scale, io.DisplaySize.x, io.DisplaySize.y,
+                  io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+    }
 
     if (ctx.show_ui) {
         float panel_width = 300.0f;
-        float screen_height = (float)sapp_height();
+        float screen_height = (float)surface_height;
 
         drawHierarchyPanel(ctx, panel_width, screen_height);
         drawInspectorPanel(ctx, panel_width, screen_height);
@@ -222,4 +267,18 @@ void Debugger::draw(EngineContext& ctx) {
         }
     }
     simgui_render();
+
+    if (g_log_debug_ui_layout) {
+        const ImDrawData* draw_data = ImGui::GetDrawData();
+        if (draw_data) {
+            LOG_TAG_D("DEBUG_UI",
+                      "Draw data: valid=%d cmd_lists=%d vertices=%d indices=%d display_pos=(%.1f,%.1f) display_size=(%.1f,%.1f) framebuffer_scale=(%.3f,%.3f)",
+                      draw_data->Valid ? 1 : 0, draw_data->CmdListsCount, draw_data->TotalVtxCount,
+                      draw_data->TotalIdxCount, draw_data->DisplayPos.x, draw_data->DisplayPos.y, draw_data->DisplaySize.x,
+                      draw_data->DisplaySize.y, draw_data->FramebufferScale.x, draw_data->FramebufferScale.y);
+        } else {
+            LOG_TAG_W("DEBUG_UI", "Draw data is null after simgui_render()");
+        }
+        g_log_debug_ui_layout = false;
+    }
 }
