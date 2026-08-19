@@ -3,6 +3,7 @@
 #include "../core/config.h"
 #include "../core/logger.h"
 #include "render.h"  // For builtin_uniforms_t
+#include "shader_backend.h"
 
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
                                        const std::string& fragSource,
@@ -12,8 +13,6 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     sg_shader_desc shd_desc = {};
     shd_desc.attrs[0].glsl_name = "a_Position";
     shd_desc.attrs[1].glsl_name = "a_TexCoord";
-    shd_desc.vertex_func.source = vertSource.c_str();
-    shd_desc.fragment_func.source = fragSource.c_str();
 
     // Slot 0: Built-in Uniforms (WPE style)
     shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
@@ -101,28 +100,31 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         u_idx++;
     }
 
+    static const char* kTextureNames[] = {"g_Texture0", "g_Texture1", "g_Texture2", "g_Texture3",
+                                          "g_Texture4", "g_Texture5", "g_Texture6", "g_Texture7",
+                                          "g_Texture8", "g_Texture9", "g_Texture10", "g_Texture11"};
+
     // Samplers
     shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
     shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
     shd_desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.texture_sampler_pairs[0].glsl_name = "g_Texture0";
+    shd_desc.texture_sampler_pairs[0].glsl_name = kTextureNames[0];
     shd_desc.texture_sampler_pairs[0].view_slot = 0;
     shd_desc.texture_sampler_pairs[0].sampler_slot = 0;
 
     for (int i = 0; i < textureCount && i < 11; i++) {
-        char tex_name[32];
-        snprintf(tex_name, sizeof(tex_name), "g_Texture%d", i + 1);
-        shd_desc.views[i + 1].texture.stage = SG_SHADERSTAGE_FRAGMENT;
-        shd_desc.views[i + 1].texture.image_type = SG_IMAGETYPE_2D;
-        shd_desc.texture_sampler_pairs[i + 1].stage = SG_SHADERSTAGE_FRAGMENT;
-        shd_desc.texture_sampler_pairs[i + 1].glsl_name = tex_name;
-        shd_desc.texture_sampler_pairs[i + 1].view_slot = i + 1;
-        shd_desc.texture_sampler_pairs[i + 1].sampler_slot = 0;  // Use same sampler
+        const int slot = i + 1;
+        shd_desc.views[slot].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+        shd_desc.views[slot].texture.image_type = SG_IMAGETYPE_2D;
+        shd_desc.texture_sampler_pairs[slot].stage = SG_SHADERSTAGE_FRAGMENT;
+        shd_desc.texture_sampler_pairs[slot].glsl_name = kTextureNames[slot];
+        shd_desc.texture_sampler_pairs[slot].view_slot = slot;
+        shd_desc.texture_sampler_pairs[slot].sampler_slot = 0;  // Use same sampler
     }
 
-    result.shader = sg_make_shader(&shd_desc);
+    result.shader = create_backend_shader(&shd_desc, vertSource, fragSource, shader_name.c_str());
 
     if (result.shader.id == SG_INVALID_ID) {
         effect_log.error("Failed to create shader for %s", shader_name.c_str());

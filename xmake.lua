@@ -1,10 +1,24 @@
 add_rules("mode.debug", "mode.release")
 
+option("vulkan")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build with the experimental Sokol Vulkan backend")
+option_end()
+
 add_requires("imgui")
+if has_config("vulkan") then
+    add_requires("shaderc")
+end
 
 target("linux-wallpaperengine")
     set_kind("binary")
     add_packages("imgui")
+
+    if has_config("vulkan") then
+        add_packages("shaderc")
+        add_defines("LWE_SOKOL_VULKAN")
+    end
     
     -- Source files
     add_files("src/main.cpp")
@@ -18,7 +32,11 @@ target("linux-wallpaperengine")
     add_includedirs("src")
 
     -- System libraries
-    add_syslinks("GL", "X11", "Xcursor", "Xi", "m", "pthread")
+    if has_config("vulkan") then
+        add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
+    else
+        add_syslinks("GL", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
+    end
 
     -- Optimization for release
     if is_mode("release") then
