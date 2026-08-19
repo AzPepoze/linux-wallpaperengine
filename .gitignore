@@ -32,3 +32,4 @@ linux_wallpaperengine
 
 # Logs
 *.log
+config.json

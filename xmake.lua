@@ -98,11 +98,27 @@ task("dev")
             end
         end
         
-        -- Default test path if no argument is provided
-        if not path then
-            path = "/mnt/6AB2DBF3B2DBC1AD/Program Files (x86)/Steam/steamapps/workshop/content/431960/2950288512"
+        -- Resolve from environment variable
+        if not path or path == "" then
+            path = os.getenv("DEFAULT_WALLPAPER_PATH") or os.getenv("WALLPAPER_PATH")
         end
 
-        print("--> Running with: " .. path)
-        os.execv("xmake", {"run", "linux-wallpaperengine", path})
+        -- Resolve from config.json
+        if not path or path == "" then
+            if os.isfile("config.json") then
+                import("core.base.json")
+                local cfg = try { function() return json.loadfile("config.json") end }
+                if cfg and (cfg.default_wallpaper or cfg.wallpaper_path) then
+                    path = cfg.default_wallpaper or cfg.wallpaper_path
+                end
+            end
+        end
+
+        if path and path ~= "" then
+            print("--> Running with: " .. path)
+            os.execv("xmake", {"run", "linux-wallpaperengine", path})
+        else
+            print("--> Running without wallpaper argument (configure 'default_wallpaper' in config.json or pass path)")
+            os.execv("xmake", {"run", "linux-wallpaperengine"})
+        end
     end)

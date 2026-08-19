@@ -135,6 +135,15 @@ extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
         ctx.is_pkg = true;
     } else if (argc > 1 && argv[argc - 1][0] != '-') {
         strncpy(ctx.wallpaper_path, argv[argc - 1], sizeof(ctx.wallpaper_path) - 1);
+    } else {
+        detect_default_wallpaper(ctx.wallpaper_path, sizeof(ctx.wallpaper_path));
+    }
+
+    if (ctx.wallpaper_path[0] != '\0' && !ctx.is_pkg) {
+        size_t len = strlen(ctx.wallpaper_path);
+        if (len >= 4 && strcmp(ctx.wallpaper_path + len - 4, ".pkg") == 0) {
+            ctx.is_pkg = true;
+        }
     }
 
     sapp_desc desc = {};
