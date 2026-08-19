@@ -37,6 +37,7 @@ struct renderer_t {
     GfxView gray_view;
     float view_width = 0.0f;
     float view_height = 0.0f;
+    uint32_t draw_calls = 0;
 };
 
 void renderer_init(renderer_t* r, float w, float h);
