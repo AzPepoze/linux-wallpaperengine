@@ -1,0 +1,36 @@
+name: Vulkan backend check
+
+on:
+  push:
+    branches:
+      - agent/vulkan-backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [opengl, vulkan]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libvulkan-dev
+
+      - name: Set up xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+
+      - name: Configure OpenGL
+        if: matrix.backend == 'opengl'
+        run: xmake f -m release
+
+      - name: Configure Vulkan
+        if: matrix.backend == 'vulkan'
+        run: xmake f -m release --vulkan=y
+
+      - name: Build
+        run: xmake -v
