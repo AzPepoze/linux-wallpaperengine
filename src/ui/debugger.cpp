@@ -137,6 +137,23 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
             ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 
             ImGui::Separator();
+            if (ImGui::TreeNodeEx("PERFORMANCE", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Text("CPU Frame: %.3f ms", ctx.profiler.frame_ms);
+                ImGui::Text("Rolling Avg: %.3f ms", ctx.profiler.frame_avg_ms);
+                ImGui::Text("Peak: %.3f ms", ctx.profiler.frame_peak_ms);
+                ImGui::Separator();
+                ImGui::Text("Update: %.3f ms", ctx.profiler.update_ms);
+                ImGui::Text("Render: %.3f ms", ctx.profiler.render_ms);
+                ImGui::Text("Debug UI: %.3f ms", ctx.profiler.ui_ms);
+                ImGui::Text("Draw Calls: %u", ctx.profiler.draw_calls);
+                ImGui::Text("Frame: %llu", (unsigned long long)ctx.profiler.frame_index);
+                if (ImGui::Button("Reset Peak")) {
+                    ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
+                }
+                ImGui::TreePop();
+            }
+
+            ImGui::Separator();
             if (ImGui::TreeNodeEx("MASTER EFFECT LIST", ImGuiTreeNodeFlags_DefaultOpen)) {
                 for (int i = 0; i < (int)ctx.layers.size(); i++) {
                     Layer* layer = ctx.layers[i];

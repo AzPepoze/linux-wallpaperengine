@@ -227,6 +227,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     }
 
     sg_draw(0, 6, 1);
+    r->draw_calls++;
     // fallback_view auto-destroyed here (after draw) if it was created
 
     // Clean up bindings for next call
@@ -268,6 +269,7 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
     sg_range tint_range = {.ptr = color, .size = sizeof(float) * 4};
     sg_apply_uniforms(1, &tint_range);
     sg_draw(0, 6, 1);
+    r->draw_calls++;
 
     r->bind.views[0] = (sg_view){SG_INVALID_ID};
 }

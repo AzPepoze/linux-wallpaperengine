@@ -1,6 +1,7 @@
 #ifndef ENGINE_CONTEXT_H
 #define ENGINE_CONTEXT_H
 
+#include <stdint.h>
 #include <vector>
 
 #include "../../libs/cJSON.h"
@@ -14,6 +15,17 @@ typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } 
 
 class Layer;
 
+struct profiler_stats_t {
+    double frame_ms = 0.0;
+    double frame_avg_ms = 0.0;
+    double frame_peak_ms = 0.0;
+    double update_ms = 0.0;
+    double render_ms = 0.0;
+    double ui_ms = 0.0;
+    uint32_t draw_calls = 0;
+    uint64_t frame_index = 0;
+};
+
 struct EngineContext {
     sg_pass_action pass_action = {};
     char wallpaper_path[512] = {};
@@ -25,6 +37,7 @@ struct EngineContext {
     cJSON* scene_json = nullptr;
     renderer_t renderer = {};
     AssetManager asset_mgr = {};
+    profiler_stats_t profiler = {};
 
     std::vector<Layer*> layers;
 
