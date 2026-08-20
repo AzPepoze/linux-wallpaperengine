@@ -195,6 +195,22 @@ void ShaderPass::init(EngineContext& ctx) {
     std::string processed_vs = ShaderSourceProcessor::processShaderSource(vs_src, true);
     std::string processed_fs = ShaderSourceProcessor::processShaderSource(fs_src, false);
 
+    if (is_depth_parallax) {
+        // Wallpaper Engine opacity masks are painted in display/gamma space. The runtime effect expects the mask
+        // intensity in linear space; without this conversion a dark brush floor such as 42/255 behaves like 16.5%
+        // displacement instead of roughly 2.3%.
+        const std::string mask_sample = "texSample2D(g_Texture2, v_TexCoordMask.xy).r";
+        const size_t mask_sample_pos = processed_fs.find(mask_sample);
+        if (mask_sample_pos != std::string::npos) {
+            processed_fs.replace(mask_sample_pos, mask_sample.size(), "lwe_srgb_to_linear(" + mask_sample + ")");
+            processed_fs =
+                "float lwe_srgb_to_linear(float c) {\n"
+                "    return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);\n"
+                "}\n" +
+                processed_fs;
+        }
+    }
+
     std::string full_vs = prefix + combo_defines + processed_vs;
     std::string full_fs = prefix + combo_defines + processed_fs;
 
@@ -216,7 +232,8 @@ void ShaderPass::init(EngineContext& ctx) {
     // Log only effect-specific fallbacks. Extra texture meanings differ between effects.
     if (is_depth_parallax) {
         if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
-            effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using neutral gray fallback", shader_name.c_str());
+            effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using Wallpaper Engine black fallback",
+                            shader_name.c_str());
         }
         if (pass_textures.textures.size() < 2 || pass_textures.textures[1].id == SG_INVALID_ID) {
             effect_log.warn("ShaderPass %s: g_Texture2 (mask) missing, using full white fallback", shader_name.c_str());
