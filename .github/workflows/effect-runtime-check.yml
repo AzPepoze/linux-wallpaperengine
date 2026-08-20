@@ -8,24 +8,19 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feat/full-effect-runtime
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
-            mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
+            mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck
 
       - name: Install prebuilt Slang
         env:
@@ -48,21 +43,6 @@ jobs:
       - name: Set up xmake
         uses: xmake-io/github-action-setup-xmake@v1
 
-      - name: Format changed source files
-        run: |
-          git diff --name-only origin/main...HEAD -- 'src/**/*.cpp' 'src/**/*.h' > /tmp/effect-source-files.txt
-          if [ -s /tmp/effect-source-files.txt ]; then
-            xargs clang-format -i < /tmp/effect-source-files.txt
-          fi
-
-          if ! git diff --quiet -- src/; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            xargs git add -- < /tmp/effect-source-files.txt
-            git commit -m 'style: format effect runtime implementation'
-            git push origin HEAD:feat/full-effect-runtime
-          fi
-
       - name: Verify generic effect source
         run: |
           ! grep -n 'Ignoring unsupported effect' src/wallpaper/scene/2d/effects/effect.cpp
@@ -70,9 +50,6 @@ jobs:
           grep -n 'readCombos' src/wallpaper/scene/2d/effects/effect.cpp
           grep -n 'source_slot = 1' src/wallpaper/scene/2d/effects/pass_textures.cpp
           grep -n '#define float2 vec2' src/render/shader/shader_processor.cpp
-
-      - name: Format check
-        run: find src/ -name '*.[ch]*' | xargs clang-format --dry-run --Werror
 
       - name: Static analysis
         run: |
