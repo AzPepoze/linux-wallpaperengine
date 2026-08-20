@@ -33,21 +33,32 @@ void detect_engine_path(char* out_path, size_t max_len) {
         return;
     }
 
-    char* config_str = read_file_to_string("config.json");
-    if (config_str) {
+    auto try_config = [&](const char* config_file) -> bool {
+        char* config_str = read_file_to_string(config_file);
+        if (!config_str) return false;
         cJSON* config_json = cJSON_Parse(config_str);
         if (config_json) {
             cJSON* path = cJSON_GetObjectItemCaseSensitive(config_json, "engine_path");
-            if (cJSON_IsString(path) && path->valuestring[0] != '\0' && access(path->valuestring, F_OK) == 0) {
-                strncpy(out_path, path->valuestring, max_len - 1);
-                LOG_I("Found Wallpaper Engine at: %s (from config.json)", out_path);
-                cJSON_Delete(config_json);
-                free(config_str);
-                return;
+            if (cJSON_IsString(path) && path->valuestring[0] != '\0') {
+                std::string assets_test = std::string(path->valuestring) + "/assets";
+                if (access(assets_test.c_str(), F_OK) == 0 || access(path->valuestring, F_OK) == 0) {
+                    strncpy(out_path, path->valuestring, max_len - 1);
+                    LOG_I("Found Wallpaper Engine at: %s (from %s)", out_path, config_file);
+                    cJSON_Delete(config_json);
+                    free(config_str);
+                    return true;
+                }
             }
             cJSON_Delete(config_json);
         }
         free(config_str);
+        return false;
+    };
+
+    const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
+                                       "../../../../config.json"};
+    for (const char* cfg : config_candidates) {
+        if (try_config(cfg)) return;
     }
 
     const char* home = getenv("HOME");
@@ -58,7 +69,8 @@ void detect_engine_path(char* out_path, size_t max_len) {
         if (full_path.find("~/") == 0 && !home_str.empty()) {
             full_path.replace(0, 1, home_str);
         }
-        if (access(full_path.c_str(), F_OK) == 0) {
+        std::string assets_dir = full_path + "/assets";
+        if (access(assets_dir.c_str(), F_OK) == 0) {
             strncpy(out_path, full_path.c_str(), max_len - 1);
             LOG_I("Found Wallpaper Engine at: %s", out_path);
             return;
@@ -80,23 +92,27 @@ void detect_default_wallpaper(char* out_path, size_t max_len) {
         }
     }
 
-    char* config_str = read_file_to_string("config.json");
-    if (config_str) {
-        cJSON* config_json = cJSON_Parse(config_str);
-        if (config_json) {
-            cJSON* path = cJSON_GetObjectItemCaseSensitive(config_json, "default_wallpaper");
-            if (!path) {
-                path = cJSON_GetObjectItemCaseSensitive(config_json, "wallpaper_path");
-            }
-            if (cJSON_IsString(path) && path->valuestring[0] != '\0' && access(path->valuestring, F_OK) == 0) {
-                strncpy(out_path, path->valuestring, max_len - 1);
-                LOG_I("Found default wallpaper at: %s (from config.json)", out_path);
+    const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
+                                       "../../../../config.json"};
+    for (const char* cfg : config_candidates) {
+        char* config_str = read_file_to_string(cfg);
+        if (config_str) {
+            cJSON* config_json = cJSON_Parse(config_str);
+            if (config_json) {
+                cJSON* path = cJSON_GetObjectItemCaseSensitive(config_json, "default_wallpaper");
+                if (!path) {
+                    path = cJSON_GetObjectItemCaseSensitive(config_json, "wallpaper_path");
+                }
+                if (cJSON_IsString(path) && path->valuestring[0] != '\0' && access(path->valuestring, F_OK) == 0) {
+                    strncpy(out_path, path->valuestring, max_len - 1);
+                    LOG_I("Found default wallpaper at: %s (from %s)", out_path, cfg);
+                    cJSON_Delete(config_json);
+                    free(config_str);
+                    return;
+                }
                 cJSON_Delete(config_json);
-                free(config_str);
-                return;
             }
-            cJSON_Delete(config_json);
+            free(config_str);
         }
-        free(config_str);
     }
 }

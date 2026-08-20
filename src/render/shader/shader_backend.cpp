@@ -224,6 +224,26 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
         }
     }
 
+    std::string dummy_uses;
+    for (int slot = 0; slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS; ++slot) {
+        const sg_shader_uniform_block& block = desc.uniform_blocks[slot];
+        if (block.stage != stage) continue;
+        const char* first_member = block.glsl_uniforms[0].glsl_name;
+        if (first_member && first_member[0]) {
+            dummy_uses += "    (void)" + std::string(first_member) + ";\n";
+        }
+    }
+    if (!dummy_uses.empty()) {
+        declarations += "void _lwe_retain_uniforms() {\n" + dummy_uses + "}\n";
+        size_t main_pos = source.find("main()");
+        if (main_pos != std::string::npos) {
+            size_t brace_pos = source.find('{', main_pos);
+            if (brace_pos != std::string::npos) {
+                source.insert(brace_pos + 1, "\n    _lwe_retain_uniforms();\n");
+            }
+        }
+    }
+
     bool emitted_views[SG_MAX_VIEW_BINDSLOTS] = {};
     bool emitted_samplers[SG_MAX_SAMPLER_BINDSLOTS] = {};
     bool emitted_adapter_2d = false;

@@ -26,6 +26,7 @@ class ShaderPass {
     std::map<int, std::string> texture_labels;
     bool enabled = true;
     bool show_files = false;
+    bool is_fullscreen_quad = false;
     std::string render_target;
     float render_scale = 1.0f;
     std::map<int, std::string> render_texture_bindings;

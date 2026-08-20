@@ -194,11 +194,31 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 render_pass.override_views = override_views.data();
                 render_pass.num_override_views = override_views.size();
             }
+            render_pass.is_fullscreen_quad = pass->is_fullscreen_quad;
 
             renderer_draw_sprite(ctx, &ctx.renderer, shader_input_image, shader_input_view, 0.0f, 0.0f,
                                  (float)target_width, (float)target_height, 0.0f, effect_tint, false, &render_pass);
 
             sg_end_pass();
+
+            sg_image out_img = named_target ? named_target->image : effect_images[write_index];
+            static int s_trace_count = 0;
+            if (s_trace_count < 25) {
+                sg_image_desc in_d = sg_query_image_desc(shader_input_image);
+                sg_image_desc out_d = sg_query_image_desc(out_img);
+                std::string bind_summary;
+                for (const auto& [b_slot, b_src] : pass->render_texture_bindings) {
+                    if (!bind_summary.empty()) bind_summary += ", ";
+                    bind_summary += "slot" + std::to_string(b_slot) + "<-" + b_src;
+                }
+                effect_log.info(
+                    "[EffectTrace] Effect: %s | Pass: %s | Target: %s (%dx%d, img=%u) | Input0: %dx%d (img=%u) | "
+                    "Binds: [%s]",
+                    effect->file_path.c_str(), pass->shader_name.c_str(),
+                    pass->render_target.empty() ? "(pingpong)" : pass->render_target.c_str(), out_d.width, out_d.height,
+                    out_img.id, in_d.width, in_d.height, shader_input_image.id, bind_summary.c_str());
+                s_trace_count++;
+            }
 
             if (named_target) {
                 input_image = named_target->image;

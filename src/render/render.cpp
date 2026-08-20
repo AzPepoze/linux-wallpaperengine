@@ -21,6 +21,12 @@ void renderer_init(renderer_t* r, float w, float h) {
     r->vertex_buffer = sg_make_buffer(&v_desc);
     r->bind.vertex_buffers[0] = r->vertex_buffer;
 
+    vertex_t fullscreen_vertices[] = {
+        {-1.0f, 1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 0.0f}, {1.0f, -1.0f, 1.0f, 1.0f}, {-1.0f, -1.0f, 0.0f, 1.0f}};
+    sg_buffer_desc fsv_desc = {};
+    fsv_desc.data = SG_RANGE(fullscreen_vertices);
+    r->fullscreen_vertex_buffer = sg_make_buffer(&fsv_desc);
+
     uint16_t indices[] = {0, 1, 2, 0, 2, 3};
     sg_buffer_desc i_desc = {};
     i_desc.usage.index_buffer = true;
@@ -144,6 +150,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
 
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
+        r->bind.vertex_buffers[0] = pass->is_fullscreen_quad ? r->fullscreen_vertex_buffer : r->vertex_buffer;
 
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
@@ -154,6 +161,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.time = ctx.time;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
+        builtin.texel_size[0] = r->view_width > 0.0f ? 1.0f / r->view_width : 0.0f;
+        builtin.texel_size[1] = r->view_height > 0.0f ? 1.0f / r->view_height : 0.0f;
         builtin.pointer_position[0] = 0.5f;
         builtin.pointer_position[1] = 0.5f;
         if (ctx.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
