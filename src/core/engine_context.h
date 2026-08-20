@@ -50,7 +50,6 @@ struct EngineContext {
 
     float mouse_x = 0.0f;
     float mouse_y = 0.0f;
-    bool mouse_position_valid = false;
     float parallax_smooth_x = 0.0f;
     float parallax_smooth_y = 0.0f;
     bool camera_parallax_enabled = false;
