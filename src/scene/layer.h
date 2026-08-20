@@ -1,6 +1,8 @@
 #ifndef LAYER_H
 #define LAYER_H
 
+#include <stdint.h>
+
 #include <string>
 
 #include "../../libs/cJSON.h"
@@ -11,6 +13,7 @@
 
 class Layer : public ILayer {
    public:
+    uint32_t scene_object_id = 0;
     std::string name;
     bool visible = true;
     bool solo = false;
