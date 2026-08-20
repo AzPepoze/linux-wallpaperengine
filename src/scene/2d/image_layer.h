@@ -24,6 +24,15 @@ class ImageLayer : public Layer {
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void updateCachedView();
+    bool ensureEffectTargets();
+    void renderEffectChain(EngineContext& ctx);
+
+    GfxImage effect_images[2];
+    GfxView effect_texture_views[2];
+    GfxView effect_attachment_views[2];
+    int effect_target_width = 0;
+    int effect_target_height = 0;
+    int effect_output_index = -1;
 };
 
 #endif  // IMAGE_LAYER_H
