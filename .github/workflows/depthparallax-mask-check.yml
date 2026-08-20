@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/vulkan-backend
+  pull_request:
+    branches:
+      - c-sokol
 
 jobs:
   build:
