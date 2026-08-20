@@ -8,7 +8,14 @@ option_end()
 
 add_requires("imgui")
 if has_config("vulkan") then
-    add_requires("shaderc")
+    add_requires("cmake::slang", {
+        alias = "slang_shader",
+        system = true,
+        configs = {
+            search_mode = "config",
+            link_libraries = {"slang::slang"}
+        }
+    })
 end
 
 target("linux-wallpaperengine")
@@ -16,7 +23,7 @@ target("linux-wallpaperengine")
     add_packages("imgui")
 
     if has_config("vulkan") then
-        add_packages("shaderc")
+        add_packages("slang_shader")
         add_defines("LWE_SOKOL_VULKAN")
     end
     
