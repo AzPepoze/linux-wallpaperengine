@@ -5,7 +5,7 @@
 <p align="center">
      <strong>◈ A wallpaper engine implementation for Linux ◈</strong>
      <br>
-     <strong>◈ Written in Go (Raylib) ◈</strong>
+     <strong>◈ Written in C (Sokol) ◈</strong>
 </p>
 
 <p align="center">
@@ -17,229 +17,51 @@
      </a>
 </p>
 
-<p align="center">
-  <strong>⚠️ EARLY DEVELOPMENT - BUT YOU CAN TRY IT OUT! ⚠️</strong>
-</p>
-
-## CONTENTS
-
-- [CONTENTS](#contents)
-- [ABOUT](#about)
-- [USAGE](#usage)
-     - [Basic Usage](#basic-usage)
-     - [Arguments](#arguments)
-     - [Debug Mode](#debug-mode)
-- [BUILD FROM SOURCE](#build-from-source)
-- [DEVELOPMENT](#development)
-- [CURRENT STATUS](#current-status)
-- [ACKNOWLEDGMENTS](#acknowledgments)
-- [CONTRIBUTING](#contributing)
-- [STONKS!](#stonks)
-
-<img src="docs/preview.png" alt="Preview" />
-
 ## ABOUT
 
-Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. Inspired by [Almamu&#39;s linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), this project is written in Go and runs Wallpaper Engine content on Linux.
-
-**Why This Project?**
-
-While developing a [GUI](https://github.com/AzPepoze/linux-wallpaperengine-gui) for [Almamu&#39;s linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine), I decided to create a native Go implementation focusing on performance and compatibility. This implementation maintains argument compatibility with the original project for seamless integration.
-
-> [!Important]
-> **Wallpaper Engine Assets:**
->
-> You must own and have installed Wallpaper Engine from Steam to use this project. This tool does not provide any wallpapers or assets by itself; you need to supply your own content from the official Wallpaper Engine.
-
-> [!Important]
-> **Asset Discovery:**
->
-> It currently attempts to detect assets in the following locations:
->
-> ```
-> ~/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Standard Steam)
-> ~/.steam/steam/steamapps/common/wallpaper_engine/assets (Steam Symlink)
-> ~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/wallpaper_engine/assets (Flatpak Steam)
-> /usr/share/wallpaper_engine/assets (System wide)
-> ```
->
-> ```bash
-> # Example of manual asset directory specification
-> ./linux-wallpaperengine /path/to/wallpaper/folder --assets-dir /custom/path/to/assets
-> ```
-
-> [!WARNING]
-> This project is in **very early development** stage. Most features are incomplete or unusable. Expect bugs, crashes, and missing functionality. Not recommended for daily use yet.
-
-## USAGE
-
-### Basic Usage
-
-Point the executable to your wallpaper's folder or scene.json:
-
-```bash
-./linux-wallpaperengine /path/to/wallpaper/folder
-```
-
-### Arguments
-
-- `--scaling <mode>` : Set scaling mode to `fit` (default) or `cover`.
-- `--assets-dir <path>` : Set custom path for assets (overrides automatic discovery).
-- `--debug` : Enable verbose debug logging and show debug UI.
-- `--debug-ui` : Show debug overlay UI without verbose terminal logs.
-- `--info` : Enable informational logging (INFO level).
-- `--info-raylib` : Show internal Raylib logs.
-- `--pkg <path>` : Explicitly specify path to `scene.pkg` or scene folder.
-
-### Debug Mode
-
-Enable the debug overlay with `--debug` flag:
-
-```bash
-./linux-wallpaperengine /path/to/wallpaper/folder --debug
-```
-
-**Debug Features:**
-
-- **Hierarchy Tab** – Browse scene objects with full property inspector
-- **Particle Tab** – Monitor active particle systems and counts
-- **Performance Tab** – Real-time FPS, memory usage, and system metrics
-- **Object Inspector** – View and toggle properties (Visible, Effects, etc.)
-- **Bounding Boxes** – Visualize object bounds and particle positions
-
-**Controls:**
-
-- `F8` – Toggle debug overlay
+Linux Wallpaper Engine is a native reimplementation of Wallpaper Engine for Linux systems. This version is written in pure C using Sokol headers for maximum performance and portability.
 
 ## BUILD FROM SOURCE
 
 **Requirements:**
 
-- [Go](https://golang.org/) 1.21+
-- Build essentials (gcc, make)
-- OpenGL development libraries
-- Audio development libraries (libasound2-dev/pulseaudio-dev)
+- [xmake](https://xmake.io/)
+- GCC or Clang
+- OpenGL development libraries (libGL)
+- X11 development libraries (libX11, libXcursor, libXi)
 
-**On Debian/Ubuntu:**
-
+**On Arch / CachyOS:**
 ```bash
-sudo apt install golang-go build-essential libgl1-mesa-dev libasound2-dev
-```
-
-**On Arch Linux:**
-
-```bash
-sudo pacman -S go base-devel mesa alsa-lib
+sudo pacman -S xmake libglvnd libx11 libxcursor libxi
 ```
 
 **Build Steps:**
 
-1. **Clone the repository:**
+```bash
+xmake
+```
 
-     ```bash
-     git clone https://github.com/AzPepoze/linux-wallpaperengine
-     cd linux-wallpaperengine
-     ```
+The executable will be generated in the `bin` folder.
 
-2. **Download dependencies:**
+## USAGE
 
-     ```bash
-     go mod download
-     ```
+```bash
+# Run with custom wallpaper
+xmake run linux-wallpaperengine "/path/to/wallpaper"
 
-3. **Build:**
-
-     ```bash
-     make build
-     ```
-
-> [!Important]
-> And you can see the built an executable in the `bin` folder.
+# Run in debug mode
+xmake run -d linux-wallpaperengine
+```
 
 ## DEVELOPMENT
 
-**Run in development mode:**
+The project uses `xmake` for a modern development workflow.
 
 ```bash
-make dev
+# Clean build
+xmake clean
+xmake
+
+# Rebuild and run
+xmake run
 ```
-
-You can pass custom arguments using the ARGS variable, for example:
-
-```bash
-make dev ARGS="/path/to/wallpaper/folder --debug"
-```
-
-## CURRENT STATUS
-
-(Maybe already completed I just forgot to update this)
-
-- [x] **Core & I/O**
-     - [x] Unpacker & Parallel Texture Conversion
-     - [x] Basic Rendering (Linear Filtering, Scaling)
-     - [x] Project Structure (utils, convert, wallpaper, feature)
-
-- [x] **Audio System**
-     - [x] Malgo Implementation (PipeWire Support)
-     - [x] Multiple Sound Streams & Loop Support
-
-- [x] **Visual Features (Basic)**
-     - [x] Real-time Clock (Hour, Minute, Second)
-     - [x] Global Mouse Parallax (X11 Integration)
-     - [x] Smooth Shake Effect (Sine Wave logic)
-
-- [ ] **Visual Features (Intermediate)**
-     - [ ] **Text Rendering Enhancement**:
-          - [ ] Support custom `.otf`/`.ttf` fonts from `fonts/` folder
-          - [ ] Implement text alignment (Horizontal/Vertical)
-          - [ ] Support complex date/time formats
-     - [ ] **Property Binding**:
-          - [ ] Link Object properties (Alpha, Scale, Color) to JSON values or scripts
-
-- [ ] **Visual Features (Advanced - Shaders)**
-     - [x] **Color & Transparency**:
-          - [x] `opacity` effect pass
-          - [x] `tint` effect (Color mixing)
-     - [ ] **Dynamic Distortions**:
-          - [ ] `waterflow` (Water surface movement)
-          - [ ] `foliagesway` (Wind swaying effect)
-          - [ ] `perspective` (Perspective warping)
-     - [ ] **Post-Processing**:
-          - [ ] `vhs` (Scanlines, noise, chromatic aberration)
-          - [ ] `edgedetection` (Edge highlighting)
-          - [ ] `pulse` (Beating/scaling effects)
-
-- [ ] **Particle System (High Priority)**
-     - [x] Particle emitter logic (Basic)
-     - [ ] Support for: `Rain`, `Stars`, `Smoke`, `Fireworks`, `Dust motes`
-
-- [ ] **System Integration**
-     - [ ] **MPRIS Support**: Show current playing song/artist from system players (Spotify, etc.)
-     - [ ] **User Options**: Read `project.json` for user-defined properties (intensity, toggles)
-
-## ACKNOWLEDGMENTS
-
-This project is inspired by and maintains compatibility with:
-
-- **[Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)** – The original C++ implementation that pioneered Wallpaper Engine support on Linux. This project aims to provide similar functionality while being written from scratch in Go for better memory safety and easier maintenance.
-
-Special thanks to the Wallpaper Engine community and all contributors who helped document the file formats and rendering techniques.
-
-## CONTRIBUTING
-
-Feel free to open a PR or issue if you want to contribute or report a bug!
-
-## STONKS!
-
-<div align="center">
-  <a href="https://www.star-history.com/#AzPepoze/linux-wallpaperengine&type=date&legend=top-left">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&theme=dark&legend=top-left" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&legend=top-left" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&legend=top-left" width="600" />
-    </picture>
-  </a>
-  <br>
-  <br>
-  <strong>✦ Made with ♥︎ by AzPepoze ✦</strong>
-</div>
