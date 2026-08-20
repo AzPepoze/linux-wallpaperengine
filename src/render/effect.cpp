@@ -186,12 +186,21 @@ void ShaderPass::init(EngineContext& ctx) {
 
     pass_textures.buildCachedViews();
 
-    // Log fallbacks
-    if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
-        effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using neutral gray fallback", shader_name.c_str());
-    }
-    if (pass_textures.textures.size() < 2 || pass_textures.textures[1].id == SG_INVALID_ID) {
-        effect_log.warn("ShaderPass %s: g_Texture2 (mask) missing, using full white fallback", shader_name.c_str());
+    const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
+    const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
+
+    // Log only effect-specific fallbacks. Extra texture meanings differ between effects.
+    if (is_depth_parallax) {
+        if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
+            effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using neutral gray fallback", shader_name.c_str());
+        }
+        if (pass_textures.textures.size() < 2 || pass_textures.textures[1].id == SG_INVALID_ID) {
+            effect_log.warn("ShaderPass %s: g_Texture2 (mask) missing, using full white fallback", shader_name.c_str());
+        }
+    } else if (is_waterwaves) {
+        if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
+            effect_log.warn("ShaderPass %s: g_Texture1 (mask) missing, using full white fallback", shader_name.c_str());
+        }
     }
 }
 
@@ -237,7 +246,9 @@ Effect::~Effect() {
 }
 
 Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext& ctx) {
-    if (strstr(rel_path, "depthparallax") == nullptr) {
+    const bool is_depth_parallax = strstr(rel_path, "depthparallax") != nullptr;
+    const bool is_waterwaves = strstr(rel_path, "waterwaves") != nullptr;
+    if (!is_depth_parallax && !is_waterwaves) {
         effect_log.warn("Ignoring unsupported effect: %s", rel_path);
         return nullptr;
     }
