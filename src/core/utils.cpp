@@ -1,12 +1,12 @@
 #include "utils.h"
 
+#include <cjson/cJSON.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include <string>
 
-#include "../../libs/cJSON.h"
 #include "config.h"
 #include "logger.h"
 

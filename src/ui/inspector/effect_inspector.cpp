@@ -3,8 +3,8 @@
 #include "../../libs/sokol/sokol_app.h"
 #include "../../libs/sokol/sokol_gfx.h"
 #include "../../libs/sokol/sokol_imgui.h"
-#include "../../render/effect.h"
 #include "imgui.h"
+#include "wallpaper/scene/2d/effects/effect.h"
 
 namespace Inspector {
 
