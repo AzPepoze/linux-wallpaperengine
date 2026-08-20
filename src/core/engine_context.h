@@ -52,6 +52,10 @@ struct EngineContext {
     float mouse_y = 0.0f;
     float parallax_smooth_x = 0.0f;
     float parallax_smooth_y = 0.0f;
+    bool camera_parallax_enabled = false;
+    float camera_parallax_amount = 0.0f;
+    float camera_parallax_delay = 0.1f;
+    float camera_parallax_mouse_influence = 0.0f;
     float time = 0.0f;
 
     scaling_mode_t scaling_mode = SCALING_FIT;
