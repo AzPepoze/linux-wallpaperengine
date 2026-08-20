@@ -1,4 +1,5 @@
 #define SOKOL_VULKAN
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,6 +72,10 @@ static void init(void) {
         ctx.layers = std::move(parsed.layers);
         ctx.scene_w = parsed.design_width;
         ctx.scene_h = parsed.design_height;
+        ctx.camera_parallax_enabled = parsed.camera_parallax_enabled;
+        ctx.camera_parallax_amount = parsed.camera_parallax_amount;
+        ctx.camera_parallax_delay = parsed.camera_parallax_delay;
+        ctx.camera_parallax_mouse_influence = parsed.camera_parallax_mouse_influence;
         if (parsed.has_clear_color) {
             ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
             ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1],
@@ -89,12 +94,24 @@ static void frame(void) {
     scene_engine->updateViewport();
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
-    scene_engine->update(dt);
 
-    float target_px = (ctx.mouse_x / (float)sapp_width() - 0.5f) * 2.0f;
-    float target_py = (ctx.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
-    ctx.parallax_smooth_x += (target_px - ctx.parallax_smooth_x) * Config::kParallaxSmoothing;
-    ctx.parallax_smooth_y += (target_py - ctx.parallax_smooth_y) * Config::kParallaxSmoothing;
+    float target_px = 0.0f;
+    float target_py = 0.0f;
+    if (ctx.camera_parallax_enabled && sapp_width() > 0 && sapp_height() > 0) {
+        const float mouse_x = (ctx.mouse_x / (float)sapp_width() - 0.5f) * 2.0f;
+        const float mouse_y = (ctx.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
+        target_px = mouse_x * ctx.camera_parallax_mouse_influence;
+        target_py = mouse_y * ctx.camera_parallax_mouse_influence;
+    }
+
+    float smoothing = 1.0f;
+    if (ctx.camera_parallax_delay > 0.0f) {
+        smoothing = 1.0f - expf(-dt / ctx.camera_parallax_delay);
+    }
+    ctx.parallax_smooth_x += (target_px - ctx.parallax_smooth_x) * smoothing;
+    ctx.parallax_smooth_y += (target_py - ctx.parallax_smooth_y) * smoothing;
+
+    scene_engine->update(dt);
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
 
     sg_pass pass = {};
