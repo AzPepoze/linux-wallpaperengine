@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/full-effect-runtime
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
