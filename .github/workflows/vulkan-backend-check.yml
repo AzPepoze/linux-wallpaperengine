@@ -29,11 +29,11 @@ jobs:
 
       - name: Configure OpenGL
         if: matrix.backend == 'opengl'
-        run: xmake f -m release
+        run: xmake f -y -m release
 
       - name: Configure Vulkan
         if: matrix.backend == 'vulkan'
-        run: xmake f -m release --vulkan=y
+        run: xmake f -y -m release --vulkan=y
 
       - name: Build
         run: xmake -v
