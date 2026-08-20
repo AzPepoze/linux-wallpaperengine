@@ -33,6 +33,10 @@ static void init(void) {
     sg_desc s_desc = {};
     s_desc.environment = sglue_environment();
     s_desc.logger.func = slog_func;
+    s_desc.image_pool_size = 512;
+    s_desc.view_pool_size = 1024;
+    s_desc.shader_pool_size = 128;
+    s_desc.pipeline_pool_size = 256;
     sg_setup(&s_desc);
 
     Debugger::init();

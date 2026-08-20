@@ -202,6 +202,7 @@ void setComboDefine(std::string& combo_defines, const std::string& requested_nam
     // the authored material/pass semantics.
     combo_defines += "#define " + requested_name + " " + std::to_string(value) + "\n";
 }
+
 }  // namespace
 
 ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx) {
@@ -325,31 +326,10 @@ void ShaderPass::init(EngineContext& ctx) {
 
     std::string raw_vs = vs_src;
     std::string raw_fs = fs_src;
-    std::string combo_defines = ShaderSourceProcessor::extractCombos(fs_src);
-
-    for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
+    std::string combo_defines;
 
     const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
     const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
-
-    // These two effects have well-known optional texture combos. Keep their
-    // compatibility fallback, while every other effect is driven entirely by
-    // material/pass combo data.
-    if (is_depth_parallax) {
-        setComboDefine(combo_defines, "MASK", 0);
-        if (pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID) {
-            setComboDefine(combo_defines, "MASK", 1);
-        }
-    } else if (is_waterwaves) {
-        setComboDefine(combo_defines, "MASK", 0);
-        setComboDefine(combo_defines, "TIMEOFFSET", 0);
-        if (!pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID) {
-            setComboDefine(combo_defines, "MASK", 1);
-        }
-        if (pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID) {
-            setComboDefine(combo_defines, "TIMEOFFSET", 1);
-        }
-    }
 
     // Resolve lowercase JSON keys such as `animationspeed` against the actual
     // shader declaration (for example g_AnimationSpeed) before building Sokol
@@ -367,6 +347,14 @@ void ShaderPass::init(EngineContext& ctx) {
     std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
     std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, abs_vert, ctx.asset_mgr, true);
     std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, abs_frag, ctx.asset_mgr, false);
+    combo_defines = ShaderSourceProcessor::extractCombos(processed_fs.c_str());
+    for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
+    if (is_depth_parallax) {
+        setComboDefine(combo_defines, "MASK", pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
+    } else if (is_waterwaves) {
+        setComboDefine(combo_defines, "MASK", !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
+        setComboDefine(combo_defines, "TIMEOFFSET", pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
+    }
 
     if (is_depth_parallax) {
         // Wallpaper Engine opacity masks are painted in display/gamma space. The runtime effect expects the mask
@@ -471,11 +459,39 @@ void ShaderPass::rebuildWithDebugMode(int mode, EngineContext& ctx) {
 }
 
 Effect::Effect(cJSON* config, EngineContext& ctx) {
+    std::map<std::string, float> target_scales;
+    cJSON* fbos_node = cJSON_GetObjectItemCaseSensitive(config, "fbos");
+    if (cJSON_IsArray(fbos_node)) {
+        cJSON* fbo;
+        cJSON_ArrayForEach(fbo, fbos_node) {
+            cJSON* name = cJSON_GetObjectItemCaseSensitive(fbo, "name");
+            cJSON* scale = cJSON_GetObjectItemCaseSensitive(fbo, "scale");
+            if (cJSON_IsString(name) && name->valuestring && cJSON_IsNumber(scale) && scale->valuedouble > 0.0)
+                target_scales[name->valuestring] = (float)scale->valuedouble;
+        }
+    }
     cJSON* passes_node = cJSON_GetObjectItemCaseSensitive(config, "passes");
     if (cJSON_IsArray(passes_node)) {
         cJSON* pass_json;
         cJSON_ArrayForEach(pass_json, passes_node) {
-            passes.push_back(new ShaderPass(pass_json, nullptr, ctx));
+            auto* pass = new ShaderPass(pass_json, nullptr, ctx);
+            cJSON* target = cJSON_GetObjectItemCaseSensitive(pass_json, "target");
+            if (cJSON_IsString(target) && target->valuestring) {
+                pass->render_target = target->valuestring;
+                auto scale = target_scales.find(pass->render_target);
+                if (scale != target_scales.end()) pass->render_scale = scale->second;
+            }
+            cJSON* bind = cJSON_GetObjectItemCaseSensitive(pass_json, "bind");
+            if (cJSON_IsArray(bind)) {
+                cJSON* entry;
+                cJSON_ArrayForEach(entry, bind) {
+                    cJSON* slot = cJSON_GetObjectItemCaseSensitive(entry, "index");
+                    cJSON* source = cJSON_GetObjectItemCaseSensitive(entry, "name");
+                    if (cJSON_IsNumber(slot) && cJSON_IsString(source) && source->valuestring)
+                        pass->render_texture_bindings[slot->valueint] = source->valuestring;
+                }
+            }
+            passes.push_back(pass);
         }
     }
 }

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <regex>
 #include <set>
 
 namespace {
@@ -16,6 +17,68 @@ void replaceAll(std::string& text, const std::string& from, const std::string& t
         text.replace(pos, from.size(), to);
         pos += to.size();
     }
+}
+
+bool isVectorReference(const std::string& expression, const std::string& name) {
+    size_t pos = 0;
+    while ((pos = expression.find(name, pos)) != std::string::npos) {
+        const size_t end = pos + name.size();
+        const bool left_boundary =
+            pos == 0 || !(std::isalnum((unsigned char)expression[pos - 1]) || expression[pos - 1] == '_');
+        const bool right_boundary =
+            end == expression.size() || !(std::isalnum((unsigned char)expression[end]) || expression[end] == '_');
+        if (!left_boundary || !right_boundary) {
+            pos = end;
+            continue;
+        }
+
+        size_t swizzle = end;
+        while (swizzle < expression.size() && std::isspace((unsigned char)expression[swizzle])) ++swizzle;
+        if (swizzle >= expression.size() || expression[swizzle] != '.') return true;
+        ++swizzle;
+        size_t swizzle_end = swizzle;
+        while (swizzle_end < expression.size() && (expression[swizzle_end] == 'x' || expression[swizzle_end] == 'y' ||
+                                                   expression[swizzle_end] == 'z' || expression[swizzle_end] == 'w')) {
+            ++swizzle_end;
+        }
+        if (swizzle_end - swizzle != 1) return true;
+        pos = swizzle_end;
+    }
+    return false;
+}
+
+void normalizeHlslVectorToScalarInitializers(std::string& source) {
+    static const std::regex vector_uniform(R"(\buniform\s+(?:vec[234]|float[234])\s+([A-Za-z_][A-Za-z0-9_]*))");
+    static const std::regex float_initializer(
+        R"(\bfloat\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z0-9_\.\s\+\-\*/\(\)]+);)");
+
+    std::set<std::string> vector_names;
+    for (std::sregex_iterator it(source.begin(), source.end(), vector_uniform), end; it != end; ++it) {
+        vector_names.insert((*it)[1].str());
+    }
+
+    std::string normalized;
+    size_t copied = 0;
+    for (std::sregex_iterator it(source.begin(), source.end(), float_initializer), end; it != end; ++it) {
+        const std::smatch& match = *it;
+        const std::string expression = match[2].str();
+        bool vector_expression = false;
+        for (const std::string& vector_name : vector_names) {
+            if (isVectorReference(expression, vector_name)) {
+                vector_expression = true;
+                break;
+            }
+        }
+        if (!vector_expression) continue;
+
+        const size_t match_pos = (size_t)match.position();
+        normalized.append(source, copied, match_pos - copied);
+        normalized += "float " + match[1].str() + " = (" + expression + ").x;";
+        copied = match_pos + match.length();
+    }
+    if (copied == 0) return;
+    normalized.append(source, copied, std::string::npos);
+    source.swap(normalized);
 }
 
 const char* legacyHeader(const std::string& include) {
@@ -93,8 +156,6 @@ std::string expandIncludes(const std::string& source, const std::string& sourceP
             std::string includeSource;
             if (readInclude(include, sourcePath, assets, includePath, includeSource)) {
                 if (active.count(includePath)) {
-                    // Include guards normally make this harmless; dropping an active include prevents malformed
-                    // Workshop headers from recursing forever.
                 } else if (!expanded.count(includePath)) {
                     active.insert(includePath);
                     result += expandIncludes(includeSource, includePath, assets, active, expanded);
@@ -104,7 +165,6 @@ std::string expandIncludes(const std::string& source, const std::string& sourceP
             } else if (const char* compatibility = legacyHeader(include)) {
                 result += compatibility;
             } else {
-                // Leave unsupported directives intact so Slang reports the original source location.
                 result += line;
                 result += '\n';
             }
@@ -125,11 +185,8 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
     std::set<std::string> expanded;
     std::string result = expandIncludes(source, source_path ? source_path : "", assets, active, expanded);
 
-    // Fix: g_Screen is declared vec3 in some WPE shaders but our uniform block uses vec2.
     if (is_vertex) replaceAll(result, "uniform vec3 g_Screen;", "uniform vec2 g_Screen;");
 
-    // Remove existing #version directives. The runtime injects the version used by
-    // the active backend before compilation.
     size_t version_pos = 0;
     while ((version_pos = result.find("#version", version_pos)) != std::string::npos) {
         size_t version_end = result.find('\n', version_pos);
@@ -137,7 +194,6 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
                      version_end == std::string::npos ? result.size() - version_pos : version_end - version_pos + 1);
     }
 
-    // GLSL translation for Wallpaper Engine's hybrid GLSL/HLSL shader dialect.
     if (is_vertex) {
         replaceAll(result, "attribute ", "in ");
         replaceAll(result, "varying ", "out ");
@@ -149,6 +205,8 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
             replaceAll(result, "gl_FragData[0]", "frag_color");
         }
     }
+
+    normalizeHlslVectorToScalarInitializers(result);
 
     return result;
 }
@@ -239,9 +297,6 @@ std::map<int, std::string> ShaderSourceProcessor::extractTextureLabels(const cha
 }
 
 std::string ShaderSourceProcessor::buildShaderPrefix() {
-    // Wallpaper Engine shaders are a GLSL/HLSL hybrid. Slang accepts most of
-    // the syntax directly, while these aliases cover the common HLSL-style
-    // types/intrinsics used by stock and Workshop image effects.
     return "#version 330\n"
            "#define HLSL 0\n"
            "#define GLSL 1\n"
