@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "../wallpaper/scene/graph/scene_graph.h"
+#include "wallpaper/scene/graph/scene_graph.h"
 
 namespace {
 
@@ -21,7 +21,6 @@ void parallax_update(EngineContext& ctx, float dt, int viewport_width, int viewp
         target_y = clamp01(ctx.mouse_y / (float)viewport_height);
     }
 
-    // Advance the delayed pointer by approximately frame_delta / camera delay.
     float response = 1.0f;
     if (ctx.camera_parallax_delay > 0.0f) {
         response = dt > 0.0f ? clamp01(dt / ctx.camera_parallax_delay) : 0.0f;
@@ -53,11 +52,9 @@ parallax_offset_t parallax_layer_offset(const EngineContext& ctx, uint32_t scene
 
     if (depth[0] == 0.0f && depth[1] == 0.0f) return result;
 
-    // The default orthographic camera is centered on half the authored scene extent.
     const float camera_x = ctx.scene_w * 0.5f;
     const float camera_y = ctx.scene_h * 0.5f;
 
-    // Layer-space camera convention: X uses (0.5 - px), Y uses (py - 0.5).
     const float mouse_x = (0.5f - ctx.parallax_pointer_x) * ctx.scene_w * ctx.camera_parallax_mouse_influence;
     const float mouse_y = (ctx.parallax_pointer_y - 0.5f) * ctx.scene_h * ctx.camera_parallax_mouse_influence;
 
@@ -73,8 +70,6 @@ parallax_position_t parallax_shader_position(const EngineContext& ctx) {
     const float centered_x = ctx.parallax_pointer_x - 0.5f;
     const float centered_y = ctx.parallax_pointer_y - 0.5f;
 
-    // g_ParallaxPosition is normalized shader input and intentionally excludes
-    // camera_parallax_amount; Y is flipped only for this shader builtin.
     result.x = 0.5f + centered_x * ctx.camera_parallax_mouse_influence;
     result.y = 0.5f - centered_y * ctx.camera_parallax_mouse_influence;
     return result;

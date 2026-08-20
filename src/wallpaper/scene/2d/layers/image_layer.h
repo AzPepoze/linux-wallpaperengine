@@ -1,8 +1,8 @@
 #ifndef IMAGE_LAYER_H
 #define IMAGE_LAYER_H
 
-#include "../../core/gfx_resource.h"
-#include "../layer.h"
+#include "core/gfx_resource.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 
 class EngineContext;
 

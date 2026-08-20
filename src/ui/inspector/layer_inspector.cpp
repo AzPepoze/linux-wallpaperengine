@@ -1,9 +1,9 @@
 #include "layer_inspector.h"
 
-#include "../../scene/2d/image_layer.h"
-#include "../../scene/2d/particle_layer.h"
-#include "../../scene/2d/particles.h"
-#include "../../scene/layer.h"
+#include "wallpaper/scene/2d/layers/image_layer.h"
+#include "wallpaper/scene/2d/layers/particle_layer.h"
+#include "wallpaper/scene/2d/particles/particle_system.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 #include "effect_inspector.h"
 #include "imgui.h"
 
@@ -17,11 +17,8 @@ static void showBaseInspector(::Layer& layer) {
 
 static void showEffectsInspector(EngineContext& ctx, ::Layer& layer) {
     if (layer.effects.empty()) return;
-
     if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < (int)layer.effects.size(); i++) {
-            showEffect(ctx, *layer.effects[i], i);
-        }
+        for (int i = 0; i < (int)layer.effects.size(); i++) showEffect(ctx, *layer.effects[i], i);
     }
 }
 
@@ -38,9 +35,7 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
 
     if (auto* il = dynamic_cast<::ImageLayer*>(&layer)) {
         ImGui::Text("Type: Image");
-        if (!il->path.empty()) {
-            ImGui::Text("Path: %s", il->path.c_str());
-        }
+        if (!il->path.empty()) ImGui::Text("Path: %s", il->path.c_str());
 
         ImGui::Separator();
         ImGui::DragFloat3("Position", (float*)il->origin, 1.0f);
@@ -51,9 +46,7 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         ImGui::DragFloat2("Parallax", (float*)il->parallax, 0.01f, -10, 10);
     } else if (auto* pl = dynamic_cast<::ParticleLayer*>(&layer)) {
         ImGui::Text("Type: Particle System");
-        if (!pl->path.empty()) {
-            ImGui::Text("Path: %s", pl->path.c_str());
-        }
+        if (!pl->path.empty()) ImGui::Text("Path: %s", pl->path.c_str());
 
         ImGui::Separator();
         if (pl->ps) showParticleSystem(*pl->ps);

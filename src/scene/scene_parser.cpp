@@ -2,8 +2,8 @@
 
 #include "../core/logger.h"
 #include "../formats/wallpaper_engine/scene/scene_parser.h"
-#include "2d/image_layer.h"
-#include "2d/particle_layer.h"
+#include "wallpaper/scene/2d/layers/image_layer.h"
+#include "wallpaper/scene/2d/layers/particle_layer.h"
 
 ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) {
     ParsedScene out;
@@ -19,8 +19,6 @@ ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) 
     out.camera_parallax_delay = document.camera_parallax_delay;
     out.camera_parallax_mouse_influence = document.camera_parallax_mouse_influence;
 
-    // Layer constructors (notably particles) need the authored orthographic
-    // extent while runtime objects are instantiated.
     ctx.scene_w = out.design_width;
     ctx.scene_h = out.design_height;
 
@@ -40,9 +38,6 @@ ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) 
     }
     out.scene_graph->rebuildHierarchy();
 
-    // Transitional adapter: legacy layer factories still consume cJSON. The
-    // Wallpaper Engine parser has already finished; the source payload keeps
-    // behavior stable until typed layer constructors replace this path.
     for (const auto& object : document.objects) {
         if (object.source_json.empty()) continue;
         cJSON* object_json = cJSON_Parse(object.source_json.c_str());

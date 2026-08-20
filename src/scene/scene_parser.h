@@ -5,10 +5,10 @@
 
 #include "../core/engine_context.h"
 #include "../wallpaper/scene/graph/scene_graph.h"
-#include "layer.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 
 struct ParsedScene {
-    std::vector<Layer*> layers;  // Transitional raw ownership; SceneRuntime owns these after parsing.
+    std::vector<Layer*> layers;
     SceneGraph* scene_graph = nullptr;
     float design_width = 0.0f;
     float design_height = 0.0f;
@@ -21,9 +21,6 @@ struct ParsedScene {
     scene_type_t type = SCENE_TYPE_2D;
 };
 
-// Runtime adapter. Wallpaper Engine JSON parsing lives in
-// formats/wallpaper_engine/scene; this class turns the typed document into the
-// legacy runtime objects until the typed-layer migration is complete.
 class SceneParser {
    public:
     static ParsedScene parse(const char* scene_json_path, EngineContext& ctx);

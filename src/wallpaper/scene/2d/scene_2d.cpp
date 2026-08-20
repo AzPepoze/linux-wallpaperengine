@@ -1,21 +1,14 @@
-#include "scene_renderer.h"
+#include "scene_2d.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "sokol_app.h"
+#include "render/render.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 
-#include "../../libs/sokol/sokol_app.h"
-#include "../core/engine_context.h"
-#include "../core/logger.h"
-#include "../core/utils.h"
-#include "../render/render.h"
-#include "layer.h"
-
-void SceneRenderer::init() {
+void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
 }
 
-void SceneRenderer::update(float dt) {
+void Scene2DRuntime::update(float dt) {
     if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
         ctx.layers[ctx.selected_object]->update(dt, ctx);
         return;
@@ -23,7 +16,7 @@ void SceneRenderer::update(float dt) {
     for (auto layer : ctx.layers) layer->update(dt, ctx);
 }
 
-void SceneRenderer::draw() {
+void Scene2DRuntime::draw() {
     if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
         ctx.layers[ctx.selected_object]->draw(ctx);
         return;
@@ -40,13 +33,13 @@ void SceneRenderer::draw() {
     for (auto layer : ctx.layers) {
         if (any_solo) {
             if (layer->solo) layer->draw(ctx);
-        } else {
-            if (layer->visible) layer->draw(ctx);
+        } else if (layer->visible) {
+            layer->draw(ctx);
         }
     }
 }
 
-void SceneRenderer::updateViewport() {
+void Scene2DRuntime::updateViewport() {
     float sw = (float)sapp_width();
     float sh = (float)sapp_height();
     renderer_update_viewport(&ctx.renderer, sw, sh);
@@ -57,27 +50,17 @@ void SceneRenderer::updateViewport() {
     float aspect_window = sw / sh;
 
     if (ctx.scaling_mode == SCALING_FIT) {
-        if (aspect_window > aspect_scene) {
-            ctx.render_scale = sh / ctx.scene_h;
-        } else {
-            ctx.render_scale = sw / ctx.scene_w;
-        }
-    } else {  // COVER
-        if (aspect_window > aspect_scene) {
-            ctx.render_scale = sw / ctx.scene_w;
-        } else {
-            ctx.render_scale = sh / ctx.scene_h;
-        }
+        ctx.render_scale = aspect_window > aspect_scene ? sh / ctx.scene_h : sw / ctx.scene_w;
+    } else {
+        ctx.render_scale = aspect_window > aspect_scene ? sw / ctx.scene_w : sh / ctx.scene_h;
     }
 
     ctx.offset_x = (sw - ctx.scene_w * ctx.render_scale) * 0.5f;
     ctx.offset_y = (sh - ctx.scene_h * ctx.render_scale) * 0.5f;
 }
 
-void SceneRenderer::cleanup() {
-    for (auto l : ctx.layers) delete l;
+void Scene2DRuntime::cleanup() {
+    for (auto layer : ctx.layers) delete layer;
     ctx.layers.clear();
-    if (ctx.scene_json) cJSON_Delete(ctx.scene_json);
-    ctx.scene_json = nullptr;
     renderer_cleanup(&ctx.renderer);
 }
