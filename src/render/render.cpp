@@ -143,9 +143,6 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
     mat4x4_mul(mvp, proj, model);
 
-    // Temporary fallback view for g_Texture1 (depth map); must live until after sg_draw().
-    GfxView fallback_view;
-
     if (pass && pass->enabled && pass->compiled.pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->compiled.pipeline);
 
@@ -160,7 +157,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
 
-        // Slot 0 (g_Texture0) is ALWAYS the layer's main view
+        // Slot 0 (g_Texture0) is ALWAYS the current effect input view.
         r->bind.views[0] = main_view;
 
         // Setup Main Image Resolution (Slot 0)
@@ -172,6 +169,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
         }
 
+        const bool is_waterwaves = pass->shader_name.find("waterwaves") != std::string::npos;
+
         // Slot 1+ (Extra Textures from pass->pass_textures.cached_views)
         for (int i = 0; i < 11; i++) {
             int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
@@ -180,7 +179,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
                 pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->pass_textures.cached_views[i];
             } else if (i == 0) {
-                r->bind.views[slot] = r->gray_view;  // Neutral depth fallback for g_Texture1
+                // g_Texture1 is depth for depthparallax, but a mask for waterwaves.
+                r->bind.views[slot] = is_waterwaves ? (sg_view)r->white_view : (sg_view)r->gray_view;
             } else if (i == 1) {
                 r->bind.views[slot] = r->white_view;  // Default to full mask for g_Texture2
             } else {
@@ -232,7 +232,6 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
 
     sg_draw(0, 6, 1);
     r->draw_calls++;
-    // fallback_view auto-destroyed here (after draw) if it was created
 
     // Clean up bindings for next call
     for (int i = 0; i < 12; i++) {
