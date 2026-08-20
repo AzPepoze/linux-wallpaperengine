@@ -1,11 +1,12 @@
 #ifndef EFFECT_H
 #define EFFECT_H
 
+#include <cjson/cJSON.h>
+
 #include <map>
 #include <string>
 #include <vector>
 
-#include "cJSON.h"
 #include "core/gfx_resource.h"
 #include "pass_textures.h"
 #include "render/render.h"

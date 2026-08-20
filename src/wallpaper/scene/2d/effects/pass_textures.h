@@ -1,11 +1,12 @@
 #ifndef PASS_TEXTURES_H
 #define PASS_TEXTURES_H
 
+#include <cjson/cJSON.h>
+
 #include <map>
 #include <string>
 #include <vector>
 
-#include "cJSON.h"
 #include "core/engine_context.h"
 #include "core/gfx_resource.h"
 #include "sokol_gfx.h"
