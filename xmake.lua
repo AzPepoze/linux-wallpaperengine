@@ -4,6 +4,7 @@ add_requires("imgui")
 add_requires("vulkan-headers")
 add_requires("lz4")
 add_requires("cjson")
+add_requires("stb")
 add_requires("cmake::slang", {
     alias = "slang_shader",
     system = true,
@@ -15,7 +16,7 @@ add_requires("cmake::slang", {
 
 target("linux-wallpaperengine")
     set_kind("binary")
-    add_packages("imgui", "slang_shader", "vulkan-headers", "lz4", "cjson")
+    add_packages("imgui", "slang_shader", "vulkan-headers", "lz4", "cjson", "stb")
     
     -- Source files
     add_files("src/**/*.cpp")
