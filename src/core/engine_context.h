@@ -14,7 +14,7 @@ typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;
 
 class Layer;
-class SceneGraph;
+class SceneTree;
 
 struct profiler_stats_t {
     double frame_ms = 0.0;
@@ -40,7 +40,7 @@ struct EngineContext {
     profiler_stats_t profiler = {};
 
     std::vector<Layer*> layers;
-    SceneGraph* scene_graph = nullptr;
+    SceneTree* scene_tree = nullptr;
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;

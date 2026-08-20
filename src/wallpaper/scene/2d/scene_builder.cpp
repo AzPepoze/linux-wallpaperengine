@@ -26,11 +26,11 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     ctx.scene_w = out.design_width;
     ctx.scene_h = out.design_height;
 
-    out.scene_graph = new SceneGraph();
+    out.scene_tree = new SceneTree();
     for (const auto& object : document.objects) {
         if (!object.node.valid) continue;
 
-        SceneGraphNode node;
+        SceneTreeNode node;
         node.id = object.node.id;
         node.parent_id = object.node.parent_id;
         node.origin = object.node.origin;
@@ -38,9 +38,9 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         node.angles = object.node.angles;
         node.parallax_depth = object.node.parallax_depth;
         node.propagate_to_children = object.node.propagate_to_children;
-        out.scene_graph->addNode(node);
+        out.scene_tree->addNode(node);
     }
-    out.scene_graph->rebuildHierarchy();
+    out.scene_tree->rebuildHierarchy();
 
     for (const auto& object : document.objects) {
         Layer* layer = nullptr;
@@ -52,6 +52,6 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         if (layer) out.layers.push_back(layer);
     }
 
-    LOG_I("Built scene graph with %zu nodes and %zu layers", out.scene_graph->size(), out.layers.size());
+    LOG_I("Built scene tree with %zu nodes and %zu layers", out.scene_tree->size(), out.layers.size());
     return out;
 }

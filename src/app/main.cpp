@@ -69,7 +69,7 @@ static void init(void) {
 
         ParsedScene parsed = SceneBuilder::load(scene_path, ctx);
         ctx.layers = std::move(parsed.layers);
-        ctx.scene_graph = parsed.scene_graph;
+        ctx.scene_tree = parsed.scene_tree;
         ctx.scene_w = parsed.design_width;
         ctx.scene_h = parsed.design_height;
         ctx.camera_parallax_enabled = parsed.camera_parallax_enabled;
@@ -144,8 +144,8 @@ static void cleanup(void) {
         delete scene_engine;
         scene_engine = nullptr;
     }
-    delete ctx.scene_graph;
-    ctx.scene_graph = nullptr;
+    delete ctx.scene_tree;
+    ctx.scene_tree = nullptr;
     simgui_shutdown();
     sargs_shutdown();
     sg_shutdown();

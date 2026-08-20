@@ -1,5 +1,5 @@
-#ifndef SCENE_GRAPH_H
-#define SCENE_GRAPH_H
+#ifndef SCENE_TREE_H
+#define SCENE_TREE_H
 
 #include <stdint.h>
 
@@ -9,7 +9,7 @@
 
 #include "linmath.h"
 
-struct SceneGraphNode {
+struct SceneTreeNode {
     uint32_t id = 0;
     uint32_t parent_id = 0;
     std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
@@ -20,14 +20,14 @@ struct SceneGraphNode {
     std::vector<uint32_t> children;
 };
 
-class SceneGraph {
+class SceneTree {
    public:
     void clear();
-    void addNode(const SceneGraphNode& node);
+    void addNode(const SceneTreeNode& node);
     void rebuildHierarchy();
 
-    const SceneGraphNode* find(uint32_t id) const;
-    const SceneGraphNode* resolveParallaxNode(uint32_t id) const;
+    const SceneTreeNode* find(uint32_t id) const;
+    const SceneTreeNode* resolveParallaxNode(uint32_t id) const;
     bool localTransform(uint32_t id, mat4x4 out) const;
     bool worldTransform(uint32_t id, mat4x4 out) const;
     bool worldPosition(uint32_t id, float out[3]) const;
@@ -37,7 +37,7 @@ class SceneGraph {
     }
 
    private:
-    std::unordered_map<uint32_t, SceneGraphNode> nodes_;
+    std::unordered_map<uint32_t, SceneTreeNode> nodes_;
 };
 
-#endif  // SCENE_GRAPH_H
+#endif  // SCENE_TREE_H
