@@ -1,7 +1,7 @@
 #include "scene_2d.h"
 
-#include "sokol_app.h"
 #include "render/render.h"
+#include "sokol_app.h"
 #include "wallpaper/scene/2d/layers/layer.h"
 
 void Scene2DRuntime::init() {

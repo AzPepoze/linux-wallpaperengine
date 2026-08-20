@@ -1,8 +1,8 @@
 #include "shader_compiler.h"
 
-#include "../core/config.h"
-#include "../core/logger.h"
-#include "render.h"  // For builtin_uniforms_t
+#include "core/config.h"
+#include "core/logger.h"
+#include "render/render.h"  // For builtin_uniforms_t
 #include "shader_backend.h"
 
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,

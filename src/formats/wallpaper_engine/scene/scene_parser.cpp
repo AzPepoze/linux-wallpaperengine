@@ -80,8 +80,7 @@ SceneNodeDocument parseNode(const cJSON* object) {
         }
     }
 
-    out.propagate_to_children =
-        !parseBool(cJSON_GetObjectItemCaseSensitive(object, "disablepropagation"), false);
+    out.propagate_to_children = !parseBool(cJSON_GetObjectItemCaseSensitive(object, "disablepropagation"), false);
     return out;
 }
 
@@ -154,8 +153,60 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     }
 
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
-          out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount,
-          out.camera_parallax_delay, out.camera_parallax_mouse_influence);
+          out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount, out.camera_parallax_delay,
+          out.camera_parallax_mouse_influence);
+}
+
+SceneObjectDocument parseObject(const cJSON* object) {
+    SceneObjectDocument doc;
+    doc.kind = detectObjectKind(object);
+    doc.node = parseNode(object);
+
+    const cJSON* name = cJSON_GetObjectItemCaseSensitive(object, "name");
+    if (cJSON_IsString(name) && name->valuestring) {
+        doc.name = name->valuestring;
+    }
+
+    doc.visible = parseBool(cJSON_GetObjectItemCaseSensitive(object, "visible"), true);
+
+    const cJSON* image = cJSON_GetObjectItemCaseSensitive(object, "image");
+    if (cJSON_IsString(image) && image->valuestring) {
+        doc.image.image = image->valuestring;
+    }
+
+    const cJSON* model = cJSON_GetObjectItemCaseSensitive(object, "model");
+    if (cJSON_IsString(model) && model->valuestring) {
+        doc.image.model = model->valuestring;
+    }
+
+    parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.image.size.data(), 2);
+
+    const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
+    if (cJSON_IsString(particle) && particle->valuestring) {
+        doc.particle.particle = particle->valuestring;
+    }
+
+    const cJSON* effects = cJSON_GetObjectItemCaseSensitive(object, "effects");
+    if (cJSON_IsArray(effects)) {
+        const cJSON* eff_json;
+        cJSON_ArrayForEach(eff_json, effects) {
+            const cJSON* file = cJSON_GetObjectItemCaseSensitive(eff_json, "file");
+            if (cJSON_IsString(file) && file->valuestring) {
+                EffectInstanceDocument eff_doc;
+                eff_doc.file = file->valuestring;
+                eff_doc.visible = parseBool(cJSON_GetObjectItemCaseSensitive(eff_json, "visible"), true);
+
+                char* serialized = cJSON_PrintUnformatted(eff_json);
+                if (serialized) {
+                    eff_doc.instance_config_json = serialized;
+                    cJSON_free(serialized);
+                }
+                doc.effects.push_back(std::move(eff_doc));
+            }
+        }
+    }
+
+    return doc;
 }
 
 }  // namespace
@@ -182,16 +233,7 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out) {
     if (cJSON_IsArray(objects)) {
         const cJSON* object;
         cJSON_ArrayForEach(object, objects) {
-            SceneObjectDocument document_object;
-            document_object.kind = detectObjectKind(object);
-            document_object.node = parseNode(object);
-
-            char* serialized = cJSON_PrintUnformatted(object);
-            if (serialized) {
-                document_object.source_json = serialized;
-                cJSON_free(serialized);
-            }
-            out.objects.push_back(std::move(document_object));
+            out.objects.push_back(parseObject(object));
         }
     }
 

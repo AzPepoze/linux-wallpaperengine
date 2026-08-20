@@ -1,14 +1,18 @@
-#include "scene_parser.h"
+#include "scene_builder.h"
 
-#include "../core/logger.h"
-#include "../formats/wallpaper_engine/scene/scene_parser.h"
+#include "core/logger.h"
+#include "formats/wallpaper_engine/scene/scene_parser.h"
 #include "wallpaper/scene/2d/layers/image_layer.h"
 #include "wallpaper/scene/2d/layers/particle_layer.h"
 
-ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) {
-    ParsedScene out;
+ParsedScene SceneBuilder::load(const char* scene_json_path, EngineContext& ctx) {
     wallpaper_engine::SceneDocument document;
-    if (!wallpaper_engine::parseSceneFile(scene_json_path, document)) return out;
+    if (!wallpaper_engine::parseSceneFile(scene_json_path, document)) return {};
+    return buildFromDocument(document, ctx);
+}
+
+ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocument& document, EngineContext& ctx) {
+    ParsedScene out;
 
     out.design_width = document.design_width;
     out.design_height = document.design_height;
@@ -39,21 +43,15 @@ ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) 
     out.scene_graph->rebuildHierarchy();
 
     for (const auto& object : document.objects) {
-        if (object.source_json.empty()) continue;
-        cJSON* object_json = cJSON_Parse(object.source_json.c_str());
-        if (!object_json) continue;
-
-        Layer* layer = createLayer(object_json, ctx);
+        Layer* layer = nullptr;
+        if (object.kind == wallpaper_engine::SceneObjectKind::Particle) {
+            layer = ParticleLayer::createFromDocument(object, ctx);
+        } else if (object.kind == wallpaper_engine::SceneObjectKind::Image) {
+            layer = ImageLayer::createFromDocument(object, ctx);
+        }
         if (layer) out.layers.push_back(layer);
-        cJSON_Delete(object_json);
     }
 
-    LOG_I("Built scene graph with %zu nodes", out.scene_graph->size());
+    LOG_I("Built scene graph with %zu nodes and %zu layers", out.scene_graph->size(), out.layers.size());
     return out;
-}
-
-Layer* SceneParser::createLayer(cJSON* obj_json, EngineContext& ctx) {
-    Layer* layer = ParticleLayer::createFromJSON(obj_json, ctx);
-    if (!layer) layer = ImageLayer::createFromJSON(obj_json, ctx);
-    return layer;
 }

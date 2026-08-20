@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "../../libs/sokol/sokol_gfx.h"
+#include "sokol_gfx.h"
 
 sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_source,
                                 const std::string& fragment_source, const char* label = nullptr);

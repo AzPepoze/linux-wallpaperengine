@@ -1,8 +1,7 @@
 #include "shader_processor.h"
 
+#include <stdlib.h>
 #include <string.h>
-
-#include "../../libs/cJSON.h"
 
 std::string ShaderSourceProcessor::processShaderSource(const std::string& source, bool is_vertex) {
     std::string result = source;
@@ -91,28 +90,33 @@ std::string ShaderSourceProcessor::extractCombos(const char* fsSource) {
     const char* p = fsSource;
     while (p && *p) {
         const char* line_end = strchr(p, '\n');
-        if (!line_end) line_end = p + strlen(p);
-        const char* combo_pos = strstr(p, "// [COMBO]");
-        if (combo_pos && combo_pos < line_end) {
-            const char* json_start = strchr(combo_pos, '{');
-            if (json_start && json_start < line_end) {
-                std::string json(json_start, line_end - json_start);
-                cJSON* combo = cJSON_Parse(json.c_str());
-                if (combo) {
-                    cJSON* name = cJSON_GetObjectItemCaseSensitive(combo, "combo");
-                    cJSON* default_val = cJSON_GetObjectItemCaseSensitive(combo, "default");
-                    if (cJSON_IsString(name) && cJSON_IsNumber(default_val)) {
-                        std::string define_name = name->valuestring;
-                        if (combo_defines.find("#define " + define_name) == std::string::npos) {
-                            combo_defines +=
-                                "#define " + define_name + " " + std::to_string((int)default_val->valuedouble) + "\n";
-                        }
+        std::string line;
+        if (line_end) {
+            line = std::string(p, line_end - p);
+        } else {
+            line = std::string(p);
+        }
+
+        size_t combo_pos = line.find("// [COMBO]");
+        if (combo_pos != std::string::npos) {
+            size_t combo_key = line.find("\"combo\"", combo_pos);
+            size_t default_key = line.find("\"default\"", combo_pos);
+            if (combo_key != std::string::npos && default_key != std::string::npos) {
+                size_t colon_combo = line.find(':', combo_key);
+                size_t q1 = (colon_combo != std::string::npos) ? line.find('\"', colon_combo) : std::string::npos;
+                size_t q2 = (q1 != std::string::npos) ? line.find('\"', q1 + 1) : std::string::npos;
+
+                size_t colon_def = line.find(':', default_key);
+                if (q1 != std::string::npos && q2 != std::string::npos && colon_def != std::string::npos) {
+                    std::string define_name = line.substr(q1 + 1, q2 - q1 - 1);
+                    int default_val = atoi(line.c_str() + colon_def + 1);
+                    if (!define_name.empty() && combo_defines.find("#define " + define_name) == std::string::npos) {
+                        combo_defines += "#define " + define_name + " " + std::to_string(default_val) + "\n";
                     }
-                    cJSON_Delete(combo);
                 }
             }
         }
-        p = (*line_end) ? line_end + 1 : nullptr;
+        p = line_end ? line_end + 1 : nullptr;
     }
     return combo_defines;
 }

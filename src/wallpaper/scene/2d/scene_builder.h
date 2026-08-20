@@ -1,11 +1,12 @@
-#ifndef SCENE_PARSER_H
-#define SCENE_PARSER_H
+#ifndef SCENE_BUILDER_H
+#define SCENE_BUILDER_H
 
 #include <vector>
 
-#include "../core/engine_context.h"
-#include "../wallpaper/scene/graph/scene_graph.h"
+#include "core/engine_context.h"
+#include "formats/wallpaper_engine/scene/scene_document.h"
 #include "wallpaper/scene/2d/layers/layer.h"
+#include "wallpaper/scene/graph/scene_graph.h"
 
 struct ParsedScene {
     std::vector<Layer*> layers;
@@ -21,12 +22,10 @@ struct ParsedScene {
     scene_type_t type = SCENE_TYPE_2D;
 };
 
-class SceneParser {
+class SceneBuilder {
    public:
-    static ParsedScene parse(const char* scene_json_path, EngineContext& ctx);
-
-   private:
-    static Layer* createLayer(cJSON* obj_json, EngineContext& ctx);
+    static ParsedScene buildFromDocument(const wallpaper_engine::SceneDocument& document, EngineContext& ctx);
+    static ParsedScene load(const char* scene_json_path, EngineContext& ctx);
 };
 
-#endif  // SCENE_PARSER_H
+#endif  // SCENE_BUILDER_H

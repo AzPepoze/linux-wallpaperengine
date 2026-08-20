@@ -13,7 +13,7 @@ class ParticleLayer : public Layer {
     ParticleLayer(const char* name, ParticleSystem* ps);
     virtual ~ParticleLayer();
 
-    static ParticleLayer* createFromJSON(cJSON* node, EngineContext& ctx);
+    static ParticleLayer* createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
 
     void update(float dt, EngineContext& ctx) override;
     void draw(EngineContext& ctx) override;

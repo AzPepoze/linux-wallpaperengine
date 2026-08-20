@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "../core/logger.h"
+#include "core/logger.h"
 
 namespace {
 
@@ -91,7 +91,8 @@ void emit_sampler_adapter(std::string& declarations, sg_image_type type, bool& e
             emitted_array = true;
             declarations +=
                 "struct LweCombinedSampler2DArray { Texture2DArray t; SamplerState s; };\n"
-                "vec4 texture(LweCombinedSampler2DArray sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+                "vec4 texture(LweCombinedSampler2DArray sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); "
+                "}\n";
             return;
         case SG_IMAGETYPE_3D:
             if (emitted_3d) return;
@@ -256,8 +257,8 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
 
         if (!emitted_samplers[pair.sampler_slot]) {
             const int sampler_binding = SG_MAX_VIEW_BINDSLOTS + pair.sampler_slot;
-            declarations += "layout(set = 1, binding = " + std::to_string(sampler_binding) + ") SamplerState _lwe_sampler" +
-                            std::to_string(pair.sampler_slot) + ";\n";
+            declarations += "layout(set = 1, binding = " + std::to_string(sampler_binding) +
+                            ") SamplerState _lwe_sampler" + std::to_string(pair.sampler_slot) + ";\n";
             emitted_samplers[pair.sampler_slot] = true;
         }
 
@@ -325,8 +326,8 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
     const std::string virtual_source_name = module_name + "/" + source_name;
 
     Slang::ComPtr<slang::IBlob> diagnostics;
-    slang::IModule* module = context.session->loadModuleFromSourceString(module_name.c_str(), virtual_source_name.c_str(),
-                                                                         source.c_str(), diagnostics.writeRef());
+    slang::IModule* module = context.session->loadModuleFromSourceString(
+        module_name.c_str(), virtual_source_name.c_str(), source.c_str(), diagnostics.writeRef());
     if (!module) {
         log_slang_diagnostics(source_name, diagnostics.get());
         core_log.error("Slang failed to load GLSL module for %s", source_name);

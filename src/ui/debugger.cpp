@@ -8,10 +8,10 @@
 #include "../../libs/sokol/sokol_log.h"
 #include "../core/context.h"
 #include "../core/logger.h"
-#include "../render/effect.h"
-#include "wallpaper/scene/2d/layers/layer.h"
 #include "imgui.h"
 #include "inspector/layer_inspector.h"
+#include "wallpaper/scene/2d/effects/effect.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 
 namespace {
 bool g_log_debug_ui_layout = true;
@@ -195,7 +195,8 @@ void Debugger::draw(EngineContext& ctx) {
     const int surface_height = sapp_height();
     const float dpi_scale = sapp_dpi_scale();
 
-    if (surface_width != g_last_surface_width || surface_height != g_last_surface_height || dpi_scale != g_last_dpi_scale) {
+    if (surface_width != g_last_surface_width || surface_height != g_last_surface_height ||
+        dpi_scale != g_last_dpi_scale) {
         g_log_debug_ui_layout = true;
         g_last_surface_width = surface_width;
         g_last_surface_height = surface_height;

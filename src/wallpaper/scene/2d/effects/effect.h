@@ -5,11 +5,12 @@
 #include <string>
 #include <vector>
 
-#include "../../libs/cJSON.h"
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../core/gfx_resource.h"
+#include "cJSON.h"
+#include "core/gfx_resource.h"
 #include "pass_textures.h"
-#include "shader_compiler.h"
+#include "render/render.h"
+#include "render/shader/shader_compiler.h"
+#include "sokol_gfx.h"
 
 class EngineContext;
 
@@ -34,6 +35,18 @@ class ShaderPass {
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
+    render_effect_pass_t getRenderPass() const {
+        render_effect_pass_t r = {};
+        r.enabled = enabled;
+        r.pipeline = compiled.pipeline;
+        r.shader_name = shader_name.c_str();
+        r.extra_views = pass_textures.cached_views.data();
+        r.num_extra_views = pass_textures.cached_views.size();
+        r.apply_custom_uniforms = [](void* ud) { static_cast<ShaderPass*>(ud)->applyUniforms(); };
+        r.user_data = const_cast<ShaderPass*>(this);
+        return r;
+    }
+
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
 
@@ -41,6 +54,10 @@ class ShaderPass {
     std::string stored_vs_source;
     std::string stored_fs_source;
 };
+
+namespace wallpaper_engine {
+struct EffectInstanceDocument;
+}
 
 class Effect {
    public:
@@ -53,6 +70,7 @@ class Effect {
     ~Effect();
 
     static Effect* load(const char* rel_path, cJSON* instance_config, EngineContext& ctx);
+    static Effect* loadFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx);
     void init(EngineContext& ctx);
     void apply(EngineContext& ctx);
 };

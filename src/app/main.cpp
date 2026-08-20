@@ -5,24 +5,23 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../../libs/cJSON.h"
-#include "../../libs/sokol/sokol_app.h"
-#include "../../libs/sokol/sokol_args.h"
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../../libs/sokol/sokol_glue.h"
-#include "../../libs/sokol/sokol_imgui.h"
-#include "../../libs/sokol/sokol_log.h"
-#include "../../libs/sokol/sokol_time.h"
-#include "../assets/unpack.h"
-#include "../core/config.h"
-#include "../core/context.h"
-#include "../core/logger.h"
-#include "../core/utils.h"
+#include "assets/unpack.h"
+#include "core/config.h"
+#include "core/context.h"
+#include "core/logger.h"
+#include "core/utils.h"
 #include "imgui.h"
-#include "../scene/scene_parser.h"
-#include "../ui/debugger.h"
+#include "sokol_app.h"
+#include "sokol_args.h"
+#include "sokol_gfx.h"
+#include "sokol_glue.h"
+#include "sokol_imgui.h"
+#include "sokol_log.h"
+#include "sokol_time.h"
+#include "ui/debugger.h"
 #include "wallpaper/scene/2d/parallax.h"
 #include "wallpaper/scene/2d/scene_2d.h"
+#include "wallpaper/scene/2d/scene_builder.h"
 
 static EngineContext ctx;
 static Scene2DRuntime* scene_engine = nullptr;
@@ -68,7 +67,7 @@ static void init(void) {
         char scene_path[1024];
         snprintf(scene_path, sizeof(scene_path), "%s/scene.json", ctx.asset_root);
 
-        ParsedScene parsed = SceneParser::parse(scene_path, ctx);
+        ParsedScene parsed = SceneBuilder::load(scene_path, ctx);
         ctx.layers = std::move(parsed.layers);
         ctx.scene_graph = parsed.scene_graph;
         ctx.scene_w = parsed.design_width;

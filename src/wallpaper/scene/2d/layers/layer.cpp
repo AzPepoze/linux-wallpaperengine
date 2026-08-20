@@ -1,47 +1,23 @@
 #include "layer.h"
 
-void Layer::loadBaseProperties(cJSON* node, EngineContext& ctx) {
-    cJSON* id_node = cJSON_GetObjectItemCaseSensitive(node, "id");
-    if (cJSON_IsNumber(id_node) && id_node->valuedouble > 0.0) {
-        scene_object_id = (uint32_t)id_node->valuedouble;
+void Layer::initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+    if (doc.node.valid && doc.node.id > 0) {
+        scene_object_id = doc.node.id;
     }
+    name = doc.name;
+    visible = doc.visible;
+    origin[0] = doc.node.origin[0];
+    origin[1] = doc.node.origin[1];
+    origin[2] = doc.node.origin[2];
+    scale[0] = doc.node.scale[0];
+    scale[1] = doc.node.scale[1];
+    scale[2] = doc.node.scale[2];
+    rotation = doc.node.angles[2];
+    parallax[0] = doc.node.parallax_depth[0];
+    parallax[1] = doc.node.parallax_depth[1];
 
-    cJSON* name_node = cJSON_GetObjectItemCaseSensitive(node, "name");
-    if (cJSON_IsString(name_node)) name = name_node->valuestring;
-
-    cJSON* origin_node = cJSON_GetObjectItemCaseSensitive(node, "origin");
-    if (cJSON_IsString(origin_node)) {
-        sscanf(origin_node->valuestring, "%f %f %f", &origin[0], &origin[1], &origin[2]);
-    }
-
-    cJSON* scale_node = cJSON_GetObjectItemCaseSensitive(node, "scale");
-    if (cJSON_IsString(scale_node)) {
-        sscanf(scale_node->valuestring, "%f %f %f", &scale[0], &scale[1], &scale[2]);
-    }
-
-    cJSON* parallax_node = cJSON_GetObjectItemCaseSensitive(node, "parallaxDepth");
-    if (!parallax_node) parallax_node = cJSON_GetObjectItemCaseSensitive(node, "parallax");
-    if (cJSON_IsString(parallax_node)) {
-        sscanf(parallax_node->valuestring, "%f %f", &parallax[0], &parallax[1]);
-    }
-
-    cJSON* visible_node = cJSON_GetObjectItemCaseSensitive(node, "visible");
-    if (cJSON_IsBool(visible_node)) {
-        visible = cJSON_IsTrue(visible_node);
-    } else if (cJSON_IsObject(visible_node)) {
-        cJSON* val = cJSON_GetObjectItemCaseSensitive(visible_node, "value");
-        if (cJSON_IsBool(val)) visible = cJSON_IsTrue(val);
-    }
-
-    cJSON* effects_node = cJSON_GetObjectItemCaseSensitive(node, "effects");
-    if (cJSON_IsArray(effects_node)) {
-        cJSON* eff_json;
-        cJSON_ArrayForEach(eff_json, effects_node) {
-            cJSON* file_node = cJSON_GetObjectItemCaseSensitive(eff_json, "file");
-            if (cJSON_IsString(file_node)) {
-                Effect* effect = Effect::load(file_node->valuestring, eff_json, ctx);
-                if (effect) effects.push_back(effect);
-            }
-        }
+    for (const auto& eff_doc : doc.effects) {
+        Effect* effect = Effect::loadFromDocument(eff_doc, ctx);
+        if (effect) effects.push_back(effect);
     }
 }

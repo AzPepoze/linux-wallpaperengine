@@ -5,10 +5,10 @@
 #include <string>
 #include <vector>
 
-#include "../../libs/cJSON.h"
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../core/engine_context.h"
-#include "../core/gfx_resource.h"
+#include "cJSON.h"
+#include "core/engine_context.h"
+#include "core/gfx_resource.h"
+#include "sokol_gfx.h"
 
 class PassTextures {
    public:

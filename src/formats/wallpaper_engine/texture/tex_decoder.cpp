@@ -125,8 +125,8 @@ DecodedImage decodeTexture(const char* path, int image_index) {
     }
 
     LOG_TAG_D(TAG, "  .tex version: %s", magic);
-    LOG_TAG_D(TAG, "  Format: %s (wp:%u), Size: %ux%u, Container: %s", format_name, wallpaper_format,
-              image_width, image_height, container_magic);
+    LOG_TAG_D(TAG, "  Format: %s (wp:%u), Size: %ux%u, Container: %s", format_name, wallpaper_format, image_width,
+              image_height, container_magic);
 
     if (strcmp(container_magic, "TEXB0003") == 0) readU32(file);
 
@@ -162,8 +162,8 @@ DecodedImage decodeTexture(const char* path, int image_index) {
                 int width = 0;
                 int height = 0;
                 int channels = 0;
-                stbi_uc* pixels = stbi_load_from_memory(data_block.data(), (int)data_block.size(), &width, &height,
-                                                        &channels, 4);
+                stbi_uc* pixels =
+                    stbi_load_from_memory(data_block.data(), (int)data_block.size(), &width, &height, &channels, 4);
                 if (pixels) {
                     image.width = (uint32_t)width;
                     image.height = (uint32_t)height;

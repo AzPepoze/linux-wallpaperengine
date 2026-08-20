@@ -3,13 +3,14 @@
 #include <fstream>
 #include <sstream>
 
-#include "../../libs/sokol/sokol_app.h"
-#include "../core/config.h"
-#include "../core/context.h"
-#include "../core/engine_context.h"
-#include "../core/logger.h"
-#include "../core/utils.h"
-#include "shader_processor.h"
+#include "core/config.h"
+#include "core/context.h"
+#include "core/engine_context.h"
+#include "core/logger.h"
+#include "core/utils.h"
+#include "formats/wallpaper_engine/scene/scene_document.h"
+#include "render/shader/shader_processor.h"
+#include "sokol_app.h"
 
 ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx) {
     cJSON* base_config = config;
@@ -349,6 +350,19 @@ Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext
 
     cJSON_Delete(config);
     return effect;
+}
+
+Effect* Effect::loadFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx) {
+    cJSON* inst_json = nullptr;
+    if (!doc.instance_config_json.empty()) {
+        inst_json = cJSON_Parse(doc.instance_config_json.c_str());
+    }
+    Effect* eff = load(doc.file.c_str(), inst_json, ctx);
+    if (eff) {
+        eff->visible = doc.visible;
+    }
+    if (inst_json) cJSON_Delete(inst_json);
+    return eff;
 }
 
 void Effect::init(EngineContext& ctx) {

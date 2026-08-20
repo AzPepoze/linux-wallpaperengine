@@ -9,8 +9,8 @@
 #include "core/engine_context.h"
 #include "core/logger.h"
 #include "core/utils.h"
-#include "sokol_app.h"
 #include "render/render.h"
+#include "sokol_app.h"
 
 #define TAG "PARTICLE"
 
@@ -61,68 +61,78 @@ ParticleSystem::~ParticleSystem() {
     children.clear();
 }
 
+ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, const IAssetResolver& assets, float sw,
+                                               float sh, float override_alpha, float override_rate) {
+    if (!particle_path || particle_path[0] == '\0') return nullptr;
+
+    char p_abs[1024];
+    if (!assets.resolvePath(particle_path, p_abs, sizeof(p_abs))) return nullptr;
+
+    char* p_json_str = read_file_to_string(p_abs);
+    if (!p_json_str) return nullptr;
+
+    cJSON* p_json = cJSON_Parse(p_json_str);
+    free(p_json_str);
+    if (!p_json) return nullptr;
+
+    LOG_TAG_I(TAG, "Creating particle system: %s", p_abs);
+    std::string p_tex_path;
+    GfxImage p_tex = assets.resolveTexture("materials/particle.tex", &p_tex_path);
+    cJSON* mat = cJSON_GetObjectItemCaseSensitive(p_json, "material");
+    if (cJSON_IsString(mat)) {
+        GfxImage mat_tex = assets.resolveMaterialTexture(mat->valuestring, &p_tex_path);
+        if (mat_tex.id != SG_INVALID_ID) {
+            LOG_TAG_I(TAG, "  Resolved material texture: %s", p_tex_path.c_str());
+            p_tex = std::move(mat_tex);
+        } else {
+            LOG_TAG_W(TAG, "  Failed to resolve material texture: %s", mat->valuestring);
+        }
+    }
+
+    if (p_tex.id == SG_INVALID_ID) {
+        LOG_TAG_W(TAG, "  No texture found for particle system, using fallback");
+    }
+
+    ParticleSystem* ps = new ParticleSystem(p_json, std::move(p_tex), sw, sh);
+    ps->config_path = p_abs;
+    ps->texture_path = p_tex_path;
+    ps->override_alpha = override_alpha;
+    ps->override_rate = override_rate;
+
+    cJSON* children_node = cJSON_GetObjectItemCaseSensitive(p_json, "children");
+    if (cJSON_IsArray(children_node)) {
+        cJSON* child_json;
+        cJSON_ArrayForEach(child_json, children_node) {
+            ParticleSystem* child = ParticleSystem::createFromJSON(child_json, assets, sw, sh);
+            if (child) ps->children.push_back(child);
+        }
+    }
+
+    float start_time = get_float(cJSON_GetObjectItemCaseSensitive(p_json, "starttime"));
+    if (start_time > 0) {
+        float step = 0.1f;
+        for (float t = 0; t < start_time; t += step) ps->update(step);
+    }
+
+    return ps;
+}
+
 ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh) {
     cJSON* p_file = cJSON_GetObjectItemCaseSensitive(node, "particle");
     if (!p_file) p_file = cJSON_GetObjectItemCaseSensitive(node, "name");
     if (!p_file) p_file = cJSON_GetObjectItemCaseSensitive(node, "file");
 
     if (p_file && cJSON_IsString(p_file)) {
-        char p_abs[1024];
-        if (assets.resolvePath(p_file->valuestring, p_abs, sizeof(p_abs))) {
-            char* p_json_str = read_file_to_string(p_abs);
-            if (p_json_str) {
-                cJSON* p_json = cJSON_Parse(p_json_str);
-                free(p_json_str);
-                if (p_json) {
-                    LOG_TAG_I(TAG, "Creating particle system: %s", p_abs);
-                    std::string p_tex_path;
-                    GfxImage p_tex = assets.resolveTexture("materials/particle.tex", &p_tex_path);
-                    cJSON* mat = cJSON_GetObjectItemCaseSensitive(p_json, "material");
-                    if (cJSON_IsString(mat)) {
-                        GfxImage mat_tex = assets.resolveMaterialTexture(mat->valuestring, &p_tex_path);
-                        if (mat_tex.id != SG_INVALID_ID) {
-                            LOG_TAG_I(TAG, "  Resolved material texture: %s", p_tex_path.c_str());
-                            p_tex = std::move(mat_tex);
-                        } else {
-                            LOG_TAG_W(TAG, "  Failed to resolve material texture: %s", mat->valuestring);
-                        }
-                    }
-
-                    if (p_tex.id == SG_INVALID_ID) {
-                        LOG_TAG_W(TAG, "  No texture found for particle system, using fallback");
-                    }
-
-                    ParticleSystem* ps = new ParticleSystem(p_json, std::move(p_tex), sw, sh);
-                    ps->config_path = p_abs;
-                    ps->texture_path = p_tex_path;
-
-                    cJSON* override = cJSON_GetObjectItemCaseSensitive(node, "instanceoverride");
-                    if (cJSON_IsObject(override)) {
-                        cJSON* alpha = cJSON_GetObjectItemCaseSensitive(override, "alpha");
-                        if (cJSON_IsNumber(alpha)) ps->override_alpha = (float)alpha->valuedouble;
-                        cJSON* rate = cJSON_GetObjectItemCaseSensitive(override, "rate");
-                        if (cJSON_IsNumber(rate)) ps->override_rate = (float)rate->valuedouble;
-                    }
-
-                    cJSON* children_node = cJSON_GetObjectItemCaseSensitive(p_json, "children");
-                    if (cJSON_IsArray(children_node)) {
-                        cJSON* child_json;
-                        cJSON_ArrayForEach(child_json, children_node) {
-                            ParticleSystem* child = ParticleSystem::createFromJSON(child_json, assets, sw, sh);
-                            if (child) ps->children.push_back(child);
-                        }
-                    }
-
-                    float start_time = get_float(cJSON_GetObjectItemCaseSensitive(p_json, "starttime"));
-                    if (start_time > 0) {
-                        float step = 0.1f;
-                        for (float t = 0; t < start_time; t += step) ps->update(step);
-                    }
-
-                    return ps;
-                }
-            }
+        float override_alpha = 1.0f;
+        float override_rate = 1.0f;
+        cJSON* override = cJSON_GetObjectItemCaseSensitive(node, "instanceoverride");
+        if (cJSON_IsObject(override)) {
+            cJSON* alpha = cJSON_GetObjectItemCaseSensitive(override, "alpha");
+            if (cJSON_IsNumber(alpha)) override_alpha = (float)alpha->valuedouble;
+            cJSON* rate = cJSON_GetObjectItemCaseSensitive(override, "rate");
+            if (cJSON_IsNumber(rate)) override_rate = (float)rate->valuedouble;
         }
+        return createFromPath(p_file->valuestring, assets, sw, sh, override_alpha, override_rate);
     }
     return nullptr;
 }

@@ -8,13 +8,21 @@
 #include "../core/gfx_resource.h"
 
 #ifdef __cplusplus
-class ShaderPass;
 struct EngineContext;
 extern "C" {
 #else
-typedef struct ShaderPass ShaderPass;
 typedef struct EngineContext EngineContext;
 #endif
+
+typedef struct {
+    bool enabled;
+    sg_pipeline pipeline;
+    const char* shader_name;
+    const GfxView* extra_views;
+    size_t num_extra_views;
+    void (*apply_custom_uniforms)(void* user_data);
+    void* user_data;
+} render_effect_pass_t;
 
 typedef struct {
     float x, y;
@@ -56,10 +64,10 @@ typedef struct {
 
 #ifdef __cplusplus
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
-                          float h, float rotation, float tint[4], bool additive, ShaderPass* pass);
+                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);
 #else
 void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
-                          float h, float rotation, float tint[4], bool additive, ShaderPass* pass);
+                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);
 #endif
 
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]);
