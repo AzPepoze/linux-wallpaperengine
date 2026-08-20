@@ -1,25 +1,6 @@
-#ifndef SHADER_COMPILER_H
-#define SHADER_COMPILER_H
+#ifndef RENDER_SHADER_COMPILER_COMPAT_H
+#define RENDER_SHADER_COMPILER_COMPAT_H
 
-#include <map>
-#include <string>
-#include <vector>
+#include "render/shader/shader_compiler.h"
 
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../core/gfx_resource.h"
-
-struct CompiledShader {
-    GfxShader shader;
-    GfxPipeline pipeline;
-};
-
-class ShaderCompiler {
-   public:
-    static CompiledShader compile(const std::string& shader_name, const std::string& vertSource,
-                                  const std::string& fragSource,
-                                  const std::map<std::string, std::vector<float>>& uniforms, int textureCount);
-    static std::string applyDebugMode(const std::string& fsSource, int debug_mode);
-    static std::string applyDebugStep(const std::string& shader_name, const std::string& fsSource, int debug_step);
-};
-
-#endif  // SHADER_COMPILER_H
+#endif  // RENDER_SHADER_COMPILER_COMPAT_H

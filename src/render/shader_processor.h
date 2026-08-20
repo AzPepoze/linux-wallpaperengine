@@ -1,15 +1,6 @@
-#ifndef SHADER_PROCESSOR_H
-#define SHADER_PROCESSOR_H
+#ifndef RENDER_SHADER_PROCESSOR_COMPAT_H
+#define RENDER_SHADER_PROCESSOR_COMPAT_H
 
-#include <map>
-#include <string>
+#include "render/shader/shader_processor.h"
 
-class ShaderSourceProcessor {
-   public:
-    static std::string processShaderSource(const std::string& source, bool isVertex);
-    static std::string extractCombos(const char* fsSource);
-    static std::map<int, std::string> extractTextureLabels(const char* fsSource);
-    static std::string buildShaderPrefix();
-};
-
-#endif  // SHADER_PROCESSOR_H
+#endif  // RENDER_SHADER_PROCESSOR_COMPAT_H
