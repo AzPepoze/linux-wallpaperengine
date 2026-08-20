@@ -119,8 +119,20 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             const render_effect_pass_t render_pass = pass->getRenderPass();
-            renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)effect_target_width,
-                                 (float)effect_target_height, 0.0f, effect_tint, false, &render_pass);
+
+            // WE only substitutes the current/previous effect result for g_Texture0
+            // when the material's textures[0] is empty. Preserve an explicit slot 0.
+            sg_image shader_input_image = input_image;
+            sg_view shader_input_view = input_view;
+            if (pass->pass_textures.texture0.id != SG_INVALID_ID &&
+                pass->pass_textures.texture0_view.id != SG_INVALID_ID) {
+                shader_input_image = pass->pass_textures.texture0;
+                shader_input_view = pass->pass_textures.texture0_view;
+            }
+
+            renderer_draw_sprite(ctx, &ctx.renderer, shader_input_image, shader_input_view, 0.0f, 0.0f,
+                                 (float)effect_target_width, (float)effect_target_height, 0.0f, effect_tint, false,
+                                 &render_pass);
 
             sg_end_pass();
 
