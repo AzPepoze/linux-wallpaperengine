@@ -9,6 +9,7 @@
 
 struct ParsedScene {
     std::vector<Layer*> layers;  // Using raw pointers as Layer doesn't support smart pointers well yet
+    std::vector<scene_parallax_node_t> parallax_nodes;
     float design_width = 0.0f;
     float design_height = 0.0f;
     float clear_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
