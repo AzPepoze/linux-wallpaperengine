@@ -72,7 +72,14 @@ const SceneGraphNode* SceneGraph::resolveParallaxNode(uint32_t id) const {
     return resolved;
 }
 
-bool SceneGraph::worldPosition(uint32_t id, float out[3]) const {
+bool SceneGraph::localTransform(uint32_t id, mat4x4 out) const {
+    const SceneGraphNode* node = find(id);
+    if (!node || !out) return false;
+    ::localTransform(*node, out);
+    return true;
+}
+
+bool SceneGraph::worldTransform(uint32_t id, mat4x4 out) const {
     const SceneGraphNode* node = find(id);
     if (!node || !out) return false;
 
@@ -93,9 +100,17 @@ bool SceneGraph::worldPosition(uint32_t id, float out[3]) const {
     mat4x4_identity(world);
     for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
         mat4x4 local;
-        localTransform(**it, local);
+        ::localTransform(**it, local);
         mat4x4_mul(world, world, local);
     }
+
+    memcpy(out, world, sizeof(mat4x4));
+    return true;
+}
+
+bool SceneGraph::worldPosition(uint32_t id, float out[3]) const {
+    mat4x4 world;
+    if (!worldTransform(id, world)) return false;
 
     out[0] = world[3][0];
     out[1] = world[3][1];

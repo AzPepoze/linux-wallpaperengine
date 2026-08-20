@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 
-#include "cJSON.h"
+#include "core/interfaces.h"
+#include "formats/wallpaper_engine/scene/scene_document.h"
 #include "linmath.h"
 #include "sokol_gfx.h"
-#include "core/interfaces.h"
-#include "render/effect.h"
+#include "wallpaper/scene/2d/effects/effect.h"
 
 class Layer : public ILayer {
    public:
@@ -50,8 +50,7 @@ class Layer : public ILayer {
 
     bool draw_debug_bounds = false;
 
-   protected:
-    void loadBaseProperties(cJSON* node, EngineContext& ctx);
+    void initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
 };
 
 #endif  // LAYER_H

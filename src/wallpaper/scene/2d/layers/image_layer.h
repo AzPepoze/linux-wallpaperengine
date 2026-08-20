@@ -14,7 +14,7 @@ class ImageLayer : public Layer {
     ImageLayer(const char* name, GfxImage img);
     virtual ~ImageLayer();
 
-    static ImageLayer* createFromJSON(cJSON* node, EngineContext& ctx);
+    static ImageLayer* createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
 
     void update(float dt, EngineContext& ctx) override;
     void draw(EngineContext& ctx) override;

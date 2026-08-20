@@ -1,11 +1,11 @@
 #include "layer_inspector.h"
 
-#include "wallpaper/scene/2d/layers/image_layer.h"
-#include "wallpaper/scene/2d/layers/particle_layer.h"
-#include "wallpaper/scene/2d/particles/particle_system.h"
-#include "wallpaper/scene/2d/layers/layer.h"
 #include "effect_inspector.h"
 #include "imgui.h"
+#include "wallpaper/scene/2d/layers/image_layer.h"
+#include "wallpaper/scene/2d/layers/layer.h"
+#include "wallpaper/scene/2d/layers/particle_layer.h"
+#include "wallpaper/scene/2d/particles/particle_system.h"
 
 namespace Inspector {
 

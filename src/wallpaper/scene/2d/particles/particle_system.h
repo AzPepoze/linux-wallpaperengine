@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
+#include "cJSON.h"
 #include "core/gfx_resource.h"
 #include "core/interfaces.h"
-#include "cJSON.h"
 #include "linmath.h"
 #include "sokol_gfx.h"
 
@@ -69,6 +69,8 @@ class ParticleSystem {
     ~ParticleSystem();
 
     static ParticleSystem* createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh);
+    static ParticleSystem* createFromPath(const char* particle_path, const IAssetResolver& assets, float sw, float sh,
+                                          float override_alpha = 1.0f, float override_rate = 1.0f);
 
     void update(float dt);
     void draw(EngineContext& ctx);

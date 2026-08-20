@@ -1,6 +1,6 @@
 #include "pass_textures.h"
 
-#include "../core/logger.h"
+#include "core/logger.h"
 
 void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_name, EngineContext& ctx) {
     cJSON* textures_node = cJSON_GetObjectItemCaseSensitive(base_config, "textures");

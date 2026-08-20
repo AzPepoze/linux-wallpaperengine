@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "linmath.h"
+
 struct SceneGraphNode {
     uint32_t id = 0;
     uint32_t parent_id = 0;
@@ -26,6 +28,8 @@ class SceneGraph {
 
     const SceneGraphNode* find(uint32_t id) const;
     const SceneGraphNode* resolveParallaxNode(uint32_t id) const;
+    bool localTransform(uint32_t id, mat4x4 out) const;
+    bool worldTransform(uint32_t id, mat4x4 out) const;
     bool worldPosition(uint32_t id, float out[3]) const;
 
     size_t size() const {

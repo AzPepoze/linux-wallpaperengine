@@ -27,14 +27,31 @@ struct SceneNodeDocument {
     bool propagate_to_children = true;
 };
 
+struct EffectInstanceDocument {
+    std::string file;
+    bool visible = true;
+    std::string instance_config_json;
+};
+
+struct ImageObjectDocument {
+    std::string image;
+    std::string model;
+    std::array<float, 2> size = {0.0f, 0.0f};
+};
+
+struct ParticleObjectDocument {
+    std::string particle;
+};
+
 struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
     SceneNodeDocument node;
+    std::string name;
+    bool visible = true;
 
-    // Transitional compatibility payload. Runtime layer constructors still
-    // consume cJSON today; later migration stages replace this with typed layer
-    // and effect documents without exposing cJSON across the format boundary.
-    std::string source_json;
+    ImageObjectDocument image;
+    ParticleObjectDocument particle;
+    std::vector<EffectInstanceDocument> effects;
 };
 
 struct SceneDocument {

@@ -8,8 +8,7 @@
 #include "../core/context.h"
 #include "../core/engine_context.h"
 #include "../core/logger.h"
-#include "effect.h"
-#include "shader_backend.h"
+#include "shader/shader_backend.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
     r->view_width = w;
@@ -134,7 +133,7 @@ void renderer_update_viewport(renderer_t* r, float w, float h) {
 }
 
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
-                          float h, float rotation, float tint[4], bool additive, ShaderPass* pass) {
+                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -143,8 +142,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
     mat4x4_mul(mvp, proj, model);
 
-    if (pass && pass->enabled && pass->compiled.pipeline.id != SG_INVALID_ID) {
-        sg_apply_pipeline(pass->compiled.pipeline);
+    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+        sg_apply_pipeline(pass->pipeline);
 
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
@@ -169,16 +168,15 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
         }
 
-        const bool is_depth_parallax = pass->shader_name.find("depthparallax") != std::string::npos;
-        const bool is_waterwaves = pass->shader_name.find("waterwaves") != std::string::npos;
+        const bool is_depth_parallax = pass->shader_name && strstr(pass->shader_name, "depthparallax") != nullptr;
+        const bool is_waterwaves = pass->shader_name && strstr(pass->shader_name, "waterwaves") != nullptr;
 
-        // Slot 1+ (Extra Textures from pass->pass_textures.cached_views)
+        // Slot 1+ (Extra Textures from pass->extra_views)
         for (int i = 0; i < 11; i++) {
             int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
 
-            if (i < (int)pass->pass_textures.cached_views.size() &&
-                pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
-                r->bind.views[slot] = pass->pass_textures.cached_views[i];
+            if (pass->extra_views && i < (int)pass->num_extra_views && pass->extra_views[i].id != SG_INVALID_ID) {
+                r->bind.views[slot] = pass->extra_views[i];
             } else if (i == 0) {
                 // WPE metadata declares util/black for missing depthparallax depth and a full mask for waterwaves.
                 if (is_waterwaves) {
@@ -214,12 +212,13 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
 
         sg_range b_range = SG_RANGE(builtin.mvp);
         sg_apply_uniforms(0, &b_range);
-        sg_range res_range = {.ptr = builtin.texture_resolutions, .size = sizeof(builtin_uniforms_t) - sizeof(mat4x4)};
+        constexpr size_t kBuiltinRestSize = sizeof(builtin_uniforms_t) - sizeof(mat4x4);
+        const uint8_t* builtin_rest = reinterpret_cast<const uint8_t*>(&builtin) + sizeof(mat4x4);
+        sg_range res_range = {.ptr = builtin_rest, .size = kBuiltinRestSize};
         sg_apply_uniforms(1, &res_range);
 
-        constexpr size_t kBuiltinRestSize = sizeof(builtin_uniforms_t) - sizeof(mat4x4);
         alignas(16) uint8_t fragment_uniforms[kBuiltinRestSize + sizeof(float) * 4] = {};
-        memcpy(fragment_uniforms, builtin.texture_resolutions, kBuiltinRestSize);
+        memcpy(fragment_uniforms, builtin_rest, kBuiltinRestSize);
         memcpy(fragment_uniforms + kBuiltinRestSize, tint, sizeof(float) * 4);
         sg_range fragment_range = {.ptr = fragment_uniforms, .size = sizeof(fragment_uniforms)};
         sg_apply_uniforms(2, &fragment_range);
@@ -237,8 +236,10 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     }
 
     sg_apply_bindings(&r->bind);
-    if (pass && pass->enabled && pass->compiled.pipeline.id != SG_INVALID_ID) {
-        pass->applyUniforms();
+    if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
+        if (pass->apply_custom_uniforms) {
+            pass->apply_custom_uniforms(pass->user_data);
+        }
     }
 
     sg_draw(0, 6, 1);

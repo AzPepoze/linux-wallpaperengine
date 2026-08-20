@@ -5,8 +5,8 @@
 #include <string>
 #include <vector>
 
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../core/gfx_resource.h"
+#include "core/gfx_resource.h"
+#include "sokol_gfx.h"
 
 struct CompiledShader {
     GfxShader shader;
