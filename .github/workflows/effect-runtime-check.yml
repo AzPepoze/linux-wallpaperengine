@@ -8,12 +8,17 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: feat/full-effect-runtime
 
       - name: Install system dependencies
         run: |
@@ -42,6 +47,21 @@ jobs:
 
       - name: Set up xmake
         uses: xmake-io/github-action-setup-xmake@v1
+
+      - name: Format changed source files
+        run: |
+          git diff --name-only origin/main...HEAD -- 'src/**/*.cpp' 'src/**/*.h' > /tmp/effect-source-files.txt
+          if [ -s /tmp/effect-source-files.txt ]; then
+            xargs clang-format -i < /tmp/effect-source-files.txt
+          fi
+
+          if ! git diff --quiet -- src/; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            xargs git add -- < /tmp/effect-source-files.txt
+            git commit -m 'style: format effect runtime implementation'
+            git push origin HEAD:feat/full-effect-runtime
+          fi
 
       - name: Verify generic effect source
         run: |
