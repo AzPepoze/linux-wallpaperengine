@@ -3,7 +3,6 @@
 #include "../../core/context.h"
 #include "../../core/engine_context.h"
 #include "../../core/utils.h"
-#include "../parallax.h"
 
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
 
@@ -28,16 +27,12 @@ void ParticleLayer::update(float dt, EngineContext& ctx) {
 
 void ParticleLayer::draw(EngineContext& ctx) {
     if (ps) {
-        const parallax_offset_t camera_offset = parallax_layer_offset(ctx, parallax);
-
-        // Apply normal camera parallax once at the layer level. ParticleSystem
-        // keeps its own parallax fields zero so children inherit the translated
-        // layer origin instead of applying the shift a second time.
-        ps->layer_origin[0] = origin[0] + camera_offset.x;
-        ps->layer_origin[1] = origin[1] + camera_offset.y;
+        // Sync transformation to particle system
+        ps->layer_origin[0] = origin[0];
+        ps->layer_origin[1] = origin[1];
         ps->layer_origin[2] = origin[2];
-        ps->parallax[0] = 0.0f;
-        ps->parallax[1] = 0.0f;
+        ps->parallax[0] = parallax[0];
+        ps->parallax[1] = parallax[1];
 
         bool any_eff_solo = false;
         for (auto eff : effects) {
@@ -59,13 +54,5 @@ void ParticleLayer::draw(EngineContext& ctx) {
 }
 
 void ParticleLayer::drawDebug(EngineContext& ctx) {
-    if (!ps) return;
-
-    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, parallax);
-    ps->layer_origin[0] = origin[0] + camera_offset.x;
-    ps->layer_origin[1] = origin[1] + camera_offset.y;
-    ps->layer_origin[2] = origin[2];
-    ps->parallax[0] = 0.0f;
-    ps->parallax[1] = 0.0f;
-    ps->drawDebugBounds(ctx);
+    if (ps) ps->drawDebugBounds(ctx);
 }
