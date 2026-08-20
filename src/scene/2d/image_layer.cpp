@@ -2,12 +2,12 @@
 
 #include <string.h>
 
-#include "../../core/config.h"
 #include "../../core/context.h"
 #include "../../core/engine_context.h"
 #include "../../core/logger.h"
 #include "../../core/utils.h"
 #include "../../render/render.h"
+#include "../parallax.h"
 
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
@@ -196,13 +196,11 @@ void ImageLayer::draw(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
 
-    const float camera_amount = ctx.camera_parallax_enabled ? ctx.camera_parallax_amount : 0.0f;
-    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale * camera_amount;
-    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale * camera_amount;
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, parallax);
 
-    // Center image on its origin
-    float rx = ctx.offset_x + (origin[0] + px) * ctx.render_scale - (rw * 0.5f);
-    float ry = ctx.offset_y + (origin[1] + py) * ctx.render_scale - (rh * 0.5f);
+    // Center image on its origin after applying normal camera parallax in scene space.
+    float rx = ctx.offset_x + (origin[0] + camera_offset.x) * ctx.render_scale - (rw * 0.5f);
+    float ry = ctx.offset_y + (origin[1] + camera_offset.y) * ctx.render_scale - (rh * 0.5f);
 
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
@@ -218,11 +216,9 @@ void ImageLayer::draw(EngineContext& ctx) {
 void ImageLayer::drawDebug(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
-    const float camera_amount = ctx.camera_parallax_enabled ? ctx.camera_parallax_amount : 0.0f;
-    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale * camera_amount;
-    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale * camera_amount;
-    float rx = ctx.offset_x + (origin[0] + px) * ctx.render_scale - (rw * 0.5f);
-    float ry = ctx.offset_y + (origin[1] + py) * ctx.render_scale - (rh * 0.5f);
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, parallax);
+    float rx = ctx.offset_x + (origin[0] + camera_offset.x) * ctx.render_scale - (rw * 0.5f);
+    float ry = ctx.offset_y + (origin[1] + camera_offset.y) * ctx.render_scale - (rh * 0.5f);
 
     float color[4] = {0, 1, 0, 0.3f};
     renderer_draw_rect(&ctx.renderer, rx, ry, rw, rh, color);
