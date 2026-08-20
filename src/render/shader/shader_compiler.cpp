@@ -1,5 +1,7 @@
 #include "shader_compiler.h"
 
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -185,15 +187,13 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.attrs[0].glsl_name = "a_Position";
     shd_desc.attrs[1].glsl_name = "a_TexCoord";
 
-    // Slot 0: MVP used by vertex shaders.
     shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
     shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrix";
     shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
 
-    // Slot 1: shared Wallpaper Engine built-ins for the vertex stage.
     shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
-    shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);  // -mvp
+    shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);
     shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
     shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
     shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_Texture1Resolution";
@@ -219,8 +219,6 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[1].glsl_uniforms[11].glsl_name = "g_EffectTextureProjectionMatrixInverse";
     shd_desc.uniform_blocks[1].glsl_uniforms[11].type = SG_UNIFORMTYPE_MAT4;
 
-    // Slot 2: the same built-ins for fragment shaders plus tint. Sokol uniform blocks are
-    // stage-specific, so effects such as waterwaves need their own fragment-visible binding.
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.uniform_blocks[2].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4) + sizeof(float) * 4;
     shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
@@ -250,9 +248,6 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[2].glsl_uniforms[12].glsl_name = "tint";
     shd_desc.uniform_blocks[2].glsl_uniforms[12].type = SG_UNIFORMTYPE_FLOAT4;
 
-    // Pack authored effect uniforms into vec4-backed uniform blocks. This avoids
-    // consuming one Sokol bind slot per value (stock effects routinely have more
-    // than five constants) while keeping a predictable 16-byte ABI per uniform.
     std::vector<CustomUniformDecl> vertex_uniforms;
     std::vector<CustomUniformDecl> fragment_uniforms;
     for (const auto& [name, values] : uniforms) {
@@ -273,7 +268,6 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
                                           "g_Texture4", "g_Texture5", "g_Texture6",  "g_Texture7",
                                           "g_Texture8", "g_Texture9", "g_Texture10", "g_Texture11"};
 
-    // Samplers
     shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
     shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
@@ -290,7 +284,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         shd_desc.texture_sampler_pairs[slot].stage = SG_SHADERSTAGE_FRAGMENT;
         shd_desc.texture_sampler_pairs[slot].glsl_name = kTextureNames[slot];
         shd_desc.texture_sampler_pairs[slot].view_slot = slot;
-        shd_desc.texture_sampler_pairs[slot].sampler_slot = 0;  // Use same sampler
+        shd_desc.texture_sampler_pairs[slot].sampler_slot = 0;
     }
 
     result.shader =
@@ -306,9 +300,6 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.index_type = SG_INDEXTYPE_UINT16;
-    // Effect passes render into a freshly-cleared ping-pong target and should
-    // write their shader output directly. Layer blending happens when the final
-    // image is composed into the scene, not between image-effect passes.
     pip_desc.colors[0].blend.enabled = false;
     pip_desc.cull_mode = SG_CULLMODE_NONE;
     pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
@@ -336,18 +327,16 @@ std::string ShaderCompiler::applyDebugMode(const std::string& fsSource, int debu
         if (end != std::string::npos) {
             std::string debug_line;
             if (debug_view_mode >= 1 && debug_view_mode <= 10) {
-                // Show Texture N
                 char buf[64];
                 snprintf(buf, sizeof(buf), "frag_color = texSample2D(g_Texture%d, v_TexCoord.xy)", debug_view_mode - 1);
                 debug_line = buf;
             } else if (debug_view_mode >= 11 && debug_view_mode <= 20) {
-                // Show Texture N Red Channel (Grayscale)
                 char buf[128];
                 snprintf(buf, sizeof(buf), "frag_color = vec4(vec3(texSample2D(g_Texture%d, v_TexCoord.xy).r), 1.0)",
                          debug_view_mode - 11);
                 debug_line = buf;
             } else {
-                debug_line = "frag_color = vec4(1,0,1,1)";  // magenta for unknown
+                debug_line = "frag_color = vec4(1,0,1,1)";
             }
             full_fs.replace(pos, end - pos + 1, debug_line + ";");
             effect_log.info("DEBUG: Overriding FS output with mode %d", debug_view_mode);
@@ -364,7 +353,6 @@ std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const
     size_t main_pos = full_fs.find("void main()");
     if (main_pos != std::string::npos) {
         size_t body_start = full_fs.find('{', main_pos) + 1;
-        // Find matching } by counting braces
         int depth = 1;
         size_t body_end = body_start;
         while (body_end < full_fs.size() && depth > 0) {
@@ -372,7 +360,7 @@ std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const
             if (full_fs[body_end] == '}') depth--;
             body_end++;
         }
-        body_end--;  // point to the matching }
+        body_end--;
         std::string before = full_fs.substr(0, body_start);
         std::string after = full_fs.substr(body_end);
 
@@ -381,15 +369,15 @@ std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const
 
         if (shader_name.find("depthparallax") != std::string::npos) {
             switch (debug_step) {
-                case 1:  // just show g_Texture0 at original UV
+                case 1:
                     body = "\n\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
                     break;
-                case 2:  // + sample depth (but don't use it for offset yet)
+                case 2:
                     body =
                         "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
                         "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy);\n";
                     break;
-                case 3:  // + offset with neutral depth=0.5 (offset=0 from math, tests g_Scale+v_Parallax)
+                case 3:
                     body =
                         "\n\tfloat depth = 0.5;\n"
                         "\tfloat mask = 1.0;\n"
@@ -399,17 +387,17 @@ std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const
                         "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
                         "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
                     break;
-                case 4:  // + small fixed offset (0.005) to test if ANY offset blanks
+                case 4:
                     body =
                         "\n\tvec2 offset = vec2(0.005, 0.005);\n"
                         "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
                     break;
-                case 5:  // show depth as grayscale
+                case 5:
                     body =
                         "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
                         "\tfrag_color = vec4(vec3(depth), 1.0);\n";
                     break;
-                case 6:  // + hardcode g_Scale=1, real depth
+                case 6:
                     body =
                         "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
                         "\tfloat mask = 1.0;\n"
@@ -419,7 +407,7 @@ std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const
                         "\tvec2 offset = (depth * 2.0 - 1.0) * pointer * mask;\n"
                         "\tfrag_color = texSample2D(g_Texture0, v_TexCoord.xy + offset);\n";
                     break;
-                case 7:  // + sample mask from g_Texture2
+                case 7:
                     body =
                         "\n\tfloat depth = texSample2D(g_Texture1, v_TexCoord.xy).r;\n"
                         "\tfloat mask = 1.0;\n"
