@@ -245,7 +245,25 @@ void ShaderPass::applyUniforms() {
 }
 
 bool ShaderPass::resolveDepth(const char* source_tex_path, EngineContext& ctx) {
-    return pass_textures.resolveDepth(source_tex_path, shader_name, ctx);
+    const bool first_attempt = !pass_textures.depth_attempted;
+    const bool resolved = pass_textures.resolveDepth(source_tex_path, shader_name, ctx);
+
+    if (resolved || !first_attempt || shader_name.find("depthparallax") == std::string::npos) return resolved;
+
+    const bool has_depth = !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID;
+    const bool has_mask = pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID;
+    if (!has_depth && has_mask) {
+        auto center = uniforms.find("g_Center");
+        if (center != uniforms.end() && !center->second.empty()) {
+            center->second[0] = 0.0f;
+            effect_log.info(
+                "ShaderPass %s: depth map unavailable; disabling unmasked focal-plane shift while preserving masked "
+                "parallax",
+                shader_name.c_str());
+        }
+    }
+
+    return resolved;
 }
 
 void ShaderPass::rebuildWithDebugMode(int mode, EngineContext& ctx) {
