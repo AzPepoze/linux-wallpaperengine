@@ -94,6 +94,29 @@ void SceneParser::parseGeneral(cJSON* general, ParsedScene& out) {
             out.has_clear_color = true;
         }
     }
+
+    cJSON* camera_parallax = cJSON_GetObjectItemCaseSensitive(general, "cameraparallax");
+    if (cJSON_IsBool(camera_parallax)) {
+        out.camera_parallax_enabled = cJSON_IsTrue(camera_parallax);
+    } else if (cJSON_IsObject(camera_parallax)) {
+        cJSON* value = cJSON_GetObjectItemCaseSensitive(camera_parallax, "value");
+        if (cJSON_IsBool(value)) out.camera_parallax_enabled = cJSON_IsTrue(value);
+    }
+
+    cJSON* amount = cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxamount");
+    if (cJSON_IsNumber(amount)) out.camera_parallax_amount = (float)amount->valuedouble;
+
+    cJSON* delay = cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxdelay");
+    if (cJSON_IsNumber(delay)) out.camera_parallax_delay = (float)delay->valuedouble;
+
+    cJSON* mouse_influence = cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxmouseinfluence");
+    if (cJSON_IsNumber(mouse_influence)) {
+        out.camera_parallax_mouse_influence = (float)mouse_influence->valuedouble;
+    }
+
+    LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
+          out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount,
+          out.camera_parallax_delay, out.camera_parallax_mouse_influence);
 }
 
 Layer* SceneParser::createLayer(cJSON* obj_json, EngineContext& ctx) {
