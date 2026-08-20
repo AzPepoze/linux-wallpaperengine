@@ -37,6 +37,24 @@ class ShaderPass {
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
+    void applyCompiledUniforms() {
+        for (const auto& block : compiled.custom_uniform_blocks) {
+            if (block.slot < 0 || block.uniform_names.empty()) continue;
+
+            std::vector<float> packed(block.uniform_names.size() * 4, 0.0f);
+            for (size_t i = 0; i < block.uniform_names.size(); ++i) {
+                auto value = uniforms.find(block.uniform_names[i]);
+                if (value == uniforms.end()) continue;
+                for (size_t component = 0; component < value->second.size() && component < 4; ++component) {
+                    packed[i * 4 + component] = value->second[component];
+                }
+            }
+
+            sg_range range = {.ptr = packed.data(), .size = packed.size() * sizeof(float)};
+            sg_apply_uniforms(block.slot, &range);
+        }
+    }
+
     render_effect_pass_t getRenderPass() const {
         render_effect_pass_t r = {};
         r.enabled = enabled;
@@ -44,7 +62,7 @@ class ShaderPass {
         r.shader_name = shader_name.c_str();
         r.extra_views = pass_textures.cached_views.data();
         r.num_extra_views = pass_textures.cached_views.size();
-        r.apply_custom_uniforms = [](void* ud) { static_cast<ShaderPass*>(ud)->applyUniforms(); };
+        r.apply_custom_uniforms = [](void* ud) { static_cast<ShaderPass*>(ud)->applyCompiledUniforms(); };
         r.user_data = const_cast<ShaderPass*>(this);
         return r;
     }
