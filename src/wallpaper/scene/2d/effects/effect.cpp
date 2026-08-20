@@ -106,10 +106,17 @@ void readCombos(cJSON* config, std::map<std::string, int>& combos) {
     }
 }
 
+struct ShaderUniformMetadata {
+    std::string name;
+    std::string material;
+};
+
 std::string normalizeUniformName(const std::string& name) {
     std::string normalized;
     size_t start = 0;
-    if (name.size() > 2 && (name[0] == 'g' || name[0] == 'G') && name[1] == '_') start = 2;
+    if (name.size() > 2 && (name[0] == 'g' || name[0] == 'G' || name[0] == 'u' || name[0] == 'U') &&
+        name[1] == '_')
+        start = 2;
     for (size_t i = start; i < name.size(); ++i) {
         unsigned char c = (unsigned char)name[i];
         if (std::isalnum(c)) normalized.push_back((char)std::tolower(c));
@@ -117,8 +124,8 @@ std::string normalizeUniformName(const std::string& name) {
     return normalized;
 }
 
-std::vector<std::string> extractUniformNames(const std::string& source) {
-    std::vector<std::string> result;
+std::vector<ShaderUniformMetadata> extractShaderUniforms(const std::string& source) {
+    std::vector<ShaderUniformMetadata> result;
     size_t search = 0;
     while ((search = source.find("uniform", search)) != std::string::npos) {
         if (search > 0) {
@@ -131,48 +138,105 @@ std::vector<std::string> extractUniformNames(const std::string& source) {
 
         const size_t semicolon = source.find(';', search + 7);
         if (semicolon == std::string::npos) break;
-        std::string declaration = source.substr(search + 7, semicolon - search - 7);
-        const size_t comment = declaration.find("//");
-        if (comment != std::string::npos) declaration.erase(comment);
+        const std::string declaration = source.substr(search + 7, semicolon - search - 7);
 
         std::istringstream stream(declaration);
         std::vector<std::string> tokens;
         std::string token;
-        while (stream >> token) tokens.push_back(token);
-        if (tokens.size() >= 2) {
+        bool is_sampler = false;
+        while (stream >> token) {
+            if (token.find("sampler") != std::string::npos) is_sampler = true;
+            tokens.push_back(token);
+        }
+        if (!is_sampler && tokens.size() >= 2) {
             std::string name = tokens.back();
             const size_t array = name.find('[');
             if (array != std::string::npos) name.erase(array);
             const size_t assign = name.find('=');
             if (assign != std::string::npos) name.erase(assign);
-            if (!name.empty()) result.push_back(name);
+
+            std::string material;
+            const size_t line_end = source.find('\n', semicolon + 1);
+            const size_t comment = source.find("//", semicolon + 1);
+            if (comment != std::string::npos && (line_end == std::string::npos || comment < line_end)) {
+                const size_t json_start = source.find('{', comment + 2);
+                const size_t json_limit = line_end == std::string::npos ? source.size() : line_end;
+                if (json_start != std::string::npos && json_start < json_limit && json_limit > 0) {
+                    const size_t json_end = source.rfind('}', json_limit - 1);
+                    if (json_end != std::string::npos && json_end >= json_start) {
+                        const std::string metadata_text = source.substr(json_start, json_end - json_start + 1);
+                        cJSON* metadata = cJSON_Parse(metadata_text.c_str());
+                        if (metadata) {
+                            cJSON* material_node = cJSON_GetObjectItemCaseSensitive(metadata, "material");
+                            if (cJSON_IsString(material_node) && material_node->valuestring)
+                                material = material_node->valuestring;
+                            cJSON_Delete(metadata);
+                        }
+                    }
+                }
+            }
+
+            if (!name.empty()) result.push_back({name, material});
         }
         search = semicolon + 1;
     }
     return result;
 }
 
-std::string resolveUniformName(const std::string& authored, const std::vector<std::string>& shader_uniforms) {
+bool resolveUniformName(const std::string& authored, const std::vector<ShaderUniformMetadata>& shader_uniforms,
+                        std::string& resolved) {
     std::string preferred = authored;
     auto mapped = Config::kUniformNameMap.find(authored);
     if (mapped != Config::kUniformNameMap.end()) preferred = mapped->second;
 
-    for (const auto& candidate : shader_uniforms) {
-        if (candidate == preferred) return candidate;
-    }
+    auto find_name = [&](const std::string& requested) {
+        for (const auto& candidate : shader_uniforms) {
+            if (candidate.name == requested) {
+                resolved = candidate.name;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (find_name(preferred) || (preferred != authored && find_name(authored))) return true;
+
+    auto find_material = [&](const std::string& requested, bool normalized) {
+        std::string match;
+        const std::string wanted = normalized ? normalizeUniformName(requested) : requested;
+        for (const auto& candidate : shader_uniforms) {
+            if (candidate.material.empty()) continue;
+            const std::string material = normalized ? normalizeUniformName(candidate.material) : candidate.material;
+            if (material != wanted) continue;
+            if (!match.empty() && match != candidate.name) return false;
+            match = candidate.name;
+        }
+        if (match.empty()) return false;
+        resolved = match;
+        return true;
+    };
+
+    if (find_material(authored, false) || (preferred != authored && find_material(preferred, false))) return true;
+    if (find_material(authored, true) || (preferred != authored && find_material(preferred, true))) return true;
 
     const std::string wanted = normalizeUniformName(preferred);
     for (const auto& candidate : shader_uniforms) {
-        if (normalizeUniformName(candidate) == wanted) return candidate;
+        if (normalizeUniformName(candidate.name) == wanted) {
+            resolved = candidate.name;
+            return true;
+        }
+    }
+    if (preferred != authored) {
+        const std::string authored_wanted = normalizeUniformName(authored);
+        for (const auto& candidate : shader_uniforms) {
+            if (normalizeUniformName(candidate.name) == authored_wanted) {
+                resolved = candidate.name;
+                return true;
+            }
+        }
     }
 
-    if (preferred.find("g_") != 0 && !preferred.empty()) {
-        std::string fallback = "g_";
-        fallback += (char)std::toupper((unsigned char)preferred[0]);
-        fallback += preferred.substr(1);
-        return fallback;
-    }
-    return preferred;
+    return false;
 }
 
 void setComboDefine(std::string& combo_defines, const std::string& requested_name, int value) {
@@ -323,13 +387,35 @@ void ShaderPass::init(EngineContext& ctx) {
     int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
     is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
 
-    std::vector<std::string> shader_uniforms = extractUniformNames(raw_vs);
-    std::vector<std::string> fragment_uniforms = extractUniformNames(raw_fs);
+    std::vector<ShaderUniformMetadata> shader_uniforms = extractShaderUniforms(raw_vs);
+    std::vector<ShaderUniformMetadata> fragment_uniforms = extractShaderUniforms(raw_fs);
     shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
 
     std::map<std::string, std::vector<float>> resolved_uniforms;
     for (const auto& [name, values] : uniforms) {
-        resolved_uniforms[resolveUniformName(name, shader_uniforms)] = values;
+        std::string resolved_name;
+        if (!resolveUniformName(name, shader_uniforms, resolved_name)) {
+            effect_log.warn("ShaderPass %s: authored constant '%s' has no matching shader uniform; value will not be bound",
+                            shader_name.c_str(), name.c_str());
+            continue;
+        }
+
+        auto existing = resolved_uniforms.find(resolved_name);
+        if (existing != resolved_uniforms.end() && existing->second != values) {
+            effect_log.warn("ShaderPass %s: authored constant '%s' collides on shader uniform '%s'; using latest value",
+                            shader_name.c_str(), name.c_str(), resolved_name.c_str());
+        }
+        resolved_uniforms[resolved_name] = values;
+
+        if (resolved_name != name) {
+            std::ostringstream value_text;
+            for (size_t i = 0; i < values.size(); ++i) {
+                if (i > 0) value_text << ',';
+                value_text << values[i];
+            }
+            effect_log.debug("ShaderPass %s: mapped authored constant '%s' -> '%s' = [%s]", shader_name.c_str(),
+                             name.c_str(), resolved_name.c_str(), value_text.str().c_str());
+        }
     }
     uniforms = std::move(resolved_uniforms);
 
