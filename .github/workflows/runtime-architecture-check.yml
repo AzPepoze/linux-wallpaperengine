@@ -38,7 +38,7 @@ jobs:
           test -f src/formats/wallpaper_engine/scene/scene_document.h
           test -f src/formats/wallpaper_engine/texture/tex_decoder.h
           test -f src/wallpaper/scene/graph/scene_graph.h
-          test -f src/wallpaper/scene/2d/scene_2d_runtime.cpp
+          test -f src/wallpaper/scene/2d/scene_2d.cpp
 
           if grep -R -nE 'sokol_|SG_PIXELFORMAT|sg_pixel_format|vulkan' src/formats/wallpaper_engine; then
             echo 'Wallpaper Engine format layer depends on GPU/backend types'
