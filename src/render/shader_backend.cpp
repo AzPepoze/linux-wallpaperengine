@@ -1,5 +1,6 @@
 #include "shader_backend.h"
 
+#include <atomic>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -7,7 +8,8 @@
 #include "../core/logger.h"
 
 #ifdef LWE_SOKOL_VULKAN
-#include <shaderc/shaderc.h>
+#include <slang-com-ptr.h>
+#include <slang.h>
 #endif
 
 namespace {
@@ -238,50 +240,108 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
     return "#version 450\n" + declarations + source;
 }
 
-bool compile_spirv(shaderc_compiler_t compiler, shaderc_shader_kind kind, const std::string& source,
-                   const char* source_name, std::vector<uint32_t>& output) {
-    shaderc_compile_options_t options = shaderc_compile_options_initialize();
-    if (!options) {
-        core_log.error("Failed to initialize shaderc compile options");
+struct SlangCompilerContext {
+    Slang::ComPtr<slang::IGlobalSession> global_session;
+    Slang::ComPtr<slang::ISession> session;
+
+    bool initialize() {
+        if (session) return true;
+
+        SlangGlobalSessionDesc global_desc = {};
+        global_desc.enableGLSL = true;
+        if (slang_createGlobalSession2(&global_desc, global_session.writeRef()) != SLANG_OK || !global_session) {
+            core_log.error("Failed to initialize Slang global session");
+            return false;
+        }
+
+        slang::TargetDesc target_desc = {};
+        target_desc.format = SLANG_SPIRV;
+        target_desc.profile = global_session->findProfile("spirv_1_3");
+
+        slang::SessionDesc session_desc = {};
+        session_desc.targetCount = 1;
+        session_desc.targets = &target_desc;
+        if (global_session->createSession(session_desc, session.writeRef()) != SLANG_OK || !session) {
+            core_log.error("Failed to initialize Slang SPIR-V session");
+            return false;
+        }
+        return true;
+    }
+};
+
+SlangCompilerContext& slang_context() {
+    static SlangCompilerContext context;
+    return context;
+}
+
+std::atomic<uint64_t> slang_module_counter{0};
+
+void log_slang_diagnostics(const char* source_name, slang::IBlob* diagnostics) {
+    if (!diagnostics || !diagnostics->getBufferPointer() || diagnostics->getBufferSize() == 0) return;
+    std::string text(static_cast<const char*>(diagnostics->getBufferPointer()), diagnostics->getBufferSize());
+    core_log.error("Slang diagnostics for %s: %s", source_name, text.c_str());
+}
+
+bool compile_spirv(SlangStage stage, const std::string& source, const char* source_name, std::vector<uint32_t>& output) {
+    SlangCompilerContext& context = slang_context();
+    if (!context.initialize()) return false;
+
+    const uint64_t module_id = slang_module_counter.fetch_add(1, std::memory_order_relaxed);
+    const std::string module_name = "lwe_runtime_shader_" + std::to_string(module_id);
+
+    Slang::ComPtr<slang::IBlob> diagnostics;
+    slang::IModule* module = context.session->loadModuleFromSourceString(
+        module_name.c_str(), source_name, source.c_str(), diagnostics.writeRef());
+    if (!module) {
+        log_slang_diagnostics(source_name, diagnostics.get());
+        core_log.error("Slang failed to load GLSL module for %s", source_name);
         return false;
     }
 
-    shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_0);
-    shaderc_compile_options_set_target_spirv(options, shaderc_spirv_version_1_0);
-    shaderc_compile_options_set_auto_map_locations(options, true);
-    shaderc_compile_options_set_vulkan_rules_relaxed(options, true);
-#ifdef NDEBUG
-    shaderc_compile_options_set_optimization_level(options, shaderc_optimization_level_performance);
-#else
-    shaderc_compile_options_set_optimization_level(options, shaderc_optimization_level_zero);
-#endif
-
-    shaderc_compilation_result_t result =
-        shaderc_compile_into_spv(compiler, source.c_str(), source.size(), kind, source_name, "main", options);
-    shaderc_compile_options_release(options);
-
-    if (!result) {
-        core_log.error("shaderc returned no result for %s", source_name);
+    Slang::ComPtr<slang::IEntryPoint> entry_point;
+    diagnostics.setNull();
+    if (module->findAndCheckEntryPoint("main", stage, entry_point.writeRef(), diagnostics.writeRef()) != SLANG_OK ||
+        !entry_point) {
+        log_slang_diagnostics(source_name, diagnostics.get());
+        core_log.error("Slang failed to resolve main() for %s", source_name);
         return false;
     }
 
-    if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
-        core_log.error("Vulkan shader compilation failed for %s: %s", source_name,
-                       shaderc_result_get_error_message(result));
-        shaderc_result_release(result);
+    slang::IComponentType* components[2] = {module, entry_point.get()};
+    Slang::ComPtr<slang::IComponentType> composed_program;
+    diagnostics.setNull();
+    if (context.session->createCompositeComponentType(components, 2, composed_program.writeRef(),
+                                                       diagnostics.writeRef()) != SLANG_OK ||
+        !composed_program) {
+        log_slang_diagnostics(source_name, diagnostics.get());
+        core_log.error("Slang failed to compose shader program for %s", source_name);
         return false;
     }
 
-    const size_t byte_length = shaderc_result_get_length(result);
+    Slang::ComPtr<slang::IComponentType> linked_program;
+    diagnostics.setNull();
+    if (composed_program->link(linked_program.writeRef(), diagnostics.writeRef()) != SLANG_OK || !linked_program) {
+        log_slang_diagnostics(source_name, diagnostics.get());
+        core_log.error("Slang failed to link shader program for %s", source_name);
+        return false;
+    }
+
+    Slang::ComPtr<slang::IBlob> code;
+    diagnostics.setNull();
+    if (linked_program->getEntryPointCode(0, 0, code.writeRef(), diagnostics.writeRef()) != SLANG_OK || !code) {
+        log_slang_diagnostics(source_name, diagnostics.get());
+        core_log.error("Slang failed to emit SPIR-V for %s", source_name);
+        return false;
+    }
+
+    const size_t byte_length = code->getBufferSize();
     if (byte_length == 0 || (byte_length % sizeof(uint32_t)) != 0) {
-        core_log.error("shaderc produced invalid SPIR-V length for %s", source_name);
-        shaderc_result_release(result);
+        core_log.error("Slang produced invalid SPIR-V length for %s", source_name);
         return false;
     }
 
     output.resize(byte_length / sizeof(uint32_t));
-    std::memcpy(output.data(), shaderc_result_get_bytes(result), byte_length);
-    shaderc_result_release(result);
+    std::memcpy(output.data(), code->getBufferPointer(), byte_length);
     return true;
 }
 
@@ -300,23 +360,13 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
     const std::string vulkan_vs = make_vulkan_source(*desc, vertex_source, SG_SHADERSTAGE_VERTEX);
     const std::string vulkan_fs = make_vulkan_source(*desc, fragment_source, SG_SHADERSTAGE_FRAGMENT);
 
-    shaderc_compiler_t compiler = shaderc_compiler_initialize();
-    if (!compiler) {
-        core_log.error("Failed to initialize shaderc compiler");
-        return {SG_INVALID_ID};
-    }
-
     std::vector<uint32_t> vertex_spirv;
     std::vector<uint32_t> fragment_spirv;
     const std::string vertex_name = std::string(label ? label : "shader") + ".vert";
     const std::string fragment_name = std::string(label ? label : "shader") + ".frag";
 
-    const bool vertex_ok =
-        compile_spirv(compiler, shaderc_glsl_vertex_shader, vulkan_vs, vertex_name.c_str(), vertex_spirv);
-    const bool fragment_ok =
-        compile_spirv(compiler, shaderc_glsl_fragment_shader, vulkan_fs, fragment_name.c_str(), fragment_spirv);
-    shaderc_compiler_release(compiler);
-
+    const bool vertex_ok = compile_spirv(SLANG_STAGE_VERTEX, vulkan_vs, vertex_name.c_str(), vertex_spirv);
+    const bool fragment_ok = compile_spirv(SLANG_STAGE_FRAGMENT, vulkan_fs, fragment_name.c_str(), fragment_spirv);
     if (!vertex_ok || !fragment_ok) return {SG_INVALID_ID};
 
     desc->vertex_func.source = nullptr;
