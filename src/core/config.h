@@ -7,8 +7,6 @@
 
 namespace Config {
 
-constexpr float kParallaxSmoothing = 0.1f;
-constexpr float kParallaxScale = 50.0f;
 constexpr float kDepthOffsetBase = 0.04f;
 
 constexpr float kDefaultSceneWidth = 1920.0f;
