@@ -23,6 +23,9 @@ target("linux-wallpaperengine")
     add_includedirs("libs")
     add_includedirs("libs/sokol")
     add_includedirs("src")
+    -- Transitional search root for sources moved out of src/render while their
+    -- internal include directives are normalized in later cleanup commits.
+    add_includedirs("src/render")
 
     -- System libraries
     add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
