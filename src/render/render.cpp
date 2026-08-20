@@ -154,6 +154,12 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.time = ctx.time;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
+        builtin.pointer_position[0] = 0.5f;
+        builtin.pointer_position[1] = 0.5f;
+        if (ctx.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
+            builtin.pointer_position[0] = std::max(0.0f, std::min(1.0f, ctx.mouse_x / r->view_width));
+            builtin.pointer_position[1] = std::max(0.0f, std::min(1.0f, ctx.mouse_y / r->view_height));
+        }
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
 
@@ -176,7 +182,11 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         for (int i = 0; i < 11; i++) {
             int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
 
-            if (pass->extra_views && i < (int)pass->num_extra_views && pass->extra_views[i].id != SG_INVALID_ID) {
+            if (pass->override_views && i < (int)pass->num_override_views &&
+                pass->override_views[i].id != SG_INVALID_ID) {
+                r->bind.views[slot] = pass->override_views[i];
+            } else if (pass->extra_views && i < (int)pass->num_extra_views &&
+                       pass->extra_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->extra_views[i];
             } else if (i == 0) {
                 // WPE metadata declares util/black for missing depthparallax depth and a full mask for waterwaves.

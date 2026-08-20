@@ -26,6 +26,9 @@ class ShaderPass {
     std::map<int, std::string> texture_labels;
     bool enabled = true;
     bool show_files = false;
+    std::string render_target;
+    float render_scale = 1.0f;
+    std::map<int, std::string> render_texture_bindings;
 
     ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx);
     ~ShaderPass();
@@ -62,6 +65,8 @@ class ShaderPass {
         r.shader_name = shader_name.c_str();
         r.extra_views = pass_textures.cached_views.data();
         r.num_extra_views = pass_textures.cached_views.size();
+        r.override_views = nullptr;
+        r.num_override_views = 0;
         r.apply_custom_uniforms = [](void* ud) { static_cast<ShaderPass*>(ud)->applyCompiledUniforms(); };
         r.user_data = const_cast<ShaderPass*>(this);
         return r;

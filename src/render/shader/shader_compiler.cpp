@@ -209,12 +209,16 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
                                    "g_Screen",
                                    "g_Padding2",
                                    "g_EffectTextureProjectionMatrix",
-                                   "g_EffectTextureProjectionMatrixInverse"};
+                                   "g_EffectTextureProjectionMatrixInverse",
+                                   "g_PointerPosition",
+                                   "g_Padding3"};
     const sg_uniform_type builtin_types[] = {SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
                                              SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2,
-                                             SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4};
-    for (int i = 0; i < 12; ++i) {
+                                             SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,
+                                             SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_FLOAT2};
+    constexpr int kBuiltinMemberCount = sizeof(builtin_names) / sizeof(builtin_names[0]);
+    for (int i = 0; i < kBuiltinMemberCount; ++i) {
         shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
         shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].type = builtin_types[i];
     }
@@ -223,12 +227,12 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[2].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4) + sizeof(float) * 4;
     shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrixInverse";
     shd_desc.uniform_blocks[2].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < kBuiltinMemberCount; ++i) {
         shd_desc.uniform_blocks[2].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
         shd_desc.uniform_blocks[2].glsl_uniforms[i + 1].type = builtin_types[i];
     }
-    shd_desc.uniform_blocks[2].glsl_uniforms[13].glsl_name = "tint";
-    shd_desc.uniform_blocks[2].glsl_uniforms[13].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].glsl_name = "tint";
+    shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].type = SG_UNIFORMTYPE_FLOAT4;
 
     std::vector<CustomUniformDecl> vertex_uniforms;
     std::vector<CustomUniformDecl> fragment_uniforms;

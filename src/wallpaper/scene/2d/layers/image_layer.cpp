@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+#include <algorithm>
+#include <cmath>
+
 #include "core/context.h"
 #include "core/engine_context.h"
 #include "core/logger.h"
@@ -91,6 +94,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
 
     sg_image input_image = img;
     sg_view input_view = cached_view;
+    const sg_image source_image = img;
+    const sg_view source_view = cached_view;
     int write_index = 0;
     bool rendered_any = false;
 
@@ -110,18 +115,46 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 pass->resolveDepth(path.c_str(), ctx);
             }
 
+            int target_width = effect_target_width;
+            int target_height = effect_target_height;
+            EffectTarget* named_target = nullptr;
+            if (!pass->render_target.empty()) {
+                target_width = std::max(1, (int)std::lround(effect_target_width / pass->render_scale));
+                target_height = std::max(1, (int)std::lround(effect_target_height / pass->render_scale));
+                auto& target = named_effect_targets[pass->render_target];
+                if (target.width != target_width || target.height != target_height ||
+                    target.image.id == SG_INVALID_ID) {
+                    target = {};
+                    sg_image_desc image_desc = {};
+                    image_desc.usage.color_attachment = true;
+                    image_desc.width = target_width;
+                    image_desc.height = target_height;
+                    image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+                    target.image = sg_make_image(&image_desc);
+                    sg_view_desc texture_desc = {};
+                    texture_desc.texture.image = target.image;
+                    target.texture_view = sg_make_view(&texture_desc);
+                    sg_view_desc attachment_desc = {};
+                    attachment_desc.color_attachment.image = target.image;
+                    target.attachment_view = sg_make_view(&attachment_desc);
+                    target.width = target_width;
+                    target.height = target_height;
+                }
+                named_target = &target;
+            }
+
             sg_pass offscreen_pass = {};
             offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
             offscreen_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
             offscreen_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-            offscreen_pass.attachments.colors[0] = effect_attachment_views[write_index];
+            offscreen_pass.attachments.colors[0] =
+                named_target ? named_target->attachment_view : effect_attachment_views[write_index];
             sg_begin_pass(&offscreen_pass);
+            renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-            const render_effect_pass_t render_pass = pass->getRenderPass();
+            render_effect_pass_t render_pass = pass->getRenderPass();
 
-            // WE only substitutes the current/previous effect result for g_Texture0
-            // when the material's textures[0] is empty. Preserve an explicit slot 0.
             sg_image shader_input_image = input_image;
             sg_view shader_input_view = input_view;
             if (pass->pass_textures.texture0.id != SG_INVALID_ID &&
@@ -130,16 +163,49 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 shader_input_view = pass->pass_textures.texture0_view;
             }
 
+            std::vector<sg_view> override_views(11, sg_view{SG_INVALID_ID});
+            bool has_overrides = false;
+            for (const auto& [slot, binding] : pass->render_texture_bindings) {
+                if (slot < 0 || slot > 11) continue;
+                if (binding == "previous") {
+                    if (slot == 0) {
+                        shader_input_image = source_image;
+                        shader_input_view = source_view;
+                    } else {
+                        override_views[slot - 1] = source_view;
+                    }
+                    has_overrides = true;
+                } else {
+                    auto target = named_effect_targets.find(binding);
+                    if (target == named_effect_targets.end()) continue;
+                    if (slot == 0) {
+                        shader_input_image = target->second.image;
+                        shader_input_view = target->second.texture_view;
+                    } else {
+                        override_views[slot - 1] = target->second.texture_view;
+                    }
+                    has_overrides = true;
+                }
+            }
+            if (has_overrides) {
+                render_pass.override_views = override_views.data();
+                render_pass.num_override_views = override_views.size();
+            }
+
             renderer_draw_sprite(ctx, &ctx.renderer, shader_input_image, shader_input_view, 0.0f, 0.0f,
-                                 (float)effect_target_width, (float)effect_target_height, 0.0f, effect_tint, false,
-                                 &render_pass);
+                                 (float)target_width, (float)target_height, 0.0f, effect_tint, false, &render_pass);
 
             sg_end_pass();
 
-            input_image = effect_images[write_index];
-            input_view = effect_texture_views[write_index];
-            effect_output_index = write_index;
-            write_index = 1 - write_index;
+            if (named_target) {
+                input_image = named_target->image;
+                input_view = named_target->texture_view;
+            } else {
+                input_image = effect_images[write_index];
+                input_view = effect_texture_views[write_index];
+                effect_output_index = write_index;
+                write_index = 1 - write_index;
+            }
             rendered_any = true;
         }
     }
