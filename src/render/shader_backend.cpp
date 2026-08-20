@@ -37,33 +37,71 @@ const char* uniform_type_to_glsl(sg_uniform_type type) {
     }
 }
 
-const char* texture_type_to_glsl(sg_image_type type) {
+const char* texture_type_to_slang(sg_image_type type) {
     switch (type) {
         case SG_IMAGETYPE_2D:
-            return "texture2D";
+            return "Texture2D";
         case SG_IMAGETYPE_CUBE:
-            return "textureCube";
+            return "TextureCube";
         case SG_IMAGETYPE_ARRAY:
-            return "texture2DArray";
+            return "Texture2DArray";
         case SG_IMAGETYPE_3D:
-            return "texture3D";
+            return "Texture3D";
         default:
             return nullptr;
     }
 }
 
-const char* sampler_constructor_to_glsl(sg_image_type type) {
+const char* combined_sampler_type(sg_image_type type) {
     switch (type) {
         case SG_IMAGETYPE_2D:
-            return "sampler2D";
+            return "LweCombinedSampler2D";
         case SG_IMAGETYPE_CUBE:
-            return "samplerCube";
+            return "LweCombinedSamplerCube";
         case SG_IMAGETYPE_ARRAY:
-            return "sampler2DArray";
+            return "LweCombinedSampler2DArray";
         case SG_IMAGETYPE_3D:
-            return "sampler3D";
+            return "LweCombinedSampler3D";
         default:
             return nullptr;
+    }
+}
+
+void emit_sampler_adapter(std::string& declarations, sg_image_type type, bool& emitted_2d, bool& emitted_cube,
+                          bool& emitted_array, bool& emitted_3d) {
+    switch (type) {
+        case SG_IMAGETYPE_2D:
+            if (emitted_2d) return;
+            emitted_2d = true;
+            declarations +=
+                "struct LweCombinedSampler2D { Texture2D t; SamplerState s; };\n"
+                "vec4 texture(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
+                "vec4 texSample2D(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
+                "vec4 texture2D(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+            return;
+        case SG_IMAGETYPE_CUBE:
+            if (emitted_cube) return;
+            emitted_cube = true;
+            declarations +=
+                "struct LweCombinedSamplerCube { TextureCube t; SamplerState s; };\n"
+                "vec4 texture(LweCombinedSamplerCube sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+            return;
+        case SG_IMAGETYPE_ARRAY:
+            if (emitted_array) return;
+            emitted_array = true;
+            declarations +=
+                "struct LweCombinedSampler2DArray { Texture2DArray t; SamplerState s; };\n"
+                "vec4 texture(LweCombinedSampler2DArray sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+            return;
+        case SG_IMAGETYPE_3D:
+            if (emitted_3d) return;
+            emitted_3d = true;
+            declarations +=
+                "struct LweCombinedSampler3D { Texture3D t; SamplerState s; };\n"
+                "vec4 texture(LweCombinedSampler3D sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+            return;
+        default:
+            return;
     }
 }
 
@@ -178,24 +216,19 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
             }
             declarations += ";\n";
         }
-        declarations += "} _lwe_ub" + std::to_string(slot) + ";\n";
+        declarations += "};\n";
 
         if (!has_member) {
             core_log.error("Vulkan uniform block %d has no GLSL member metadata", slot);
-        }
-
-        for (int member = 0; member < SG_MAX_UNIFORMBLOCK_MEMBERS; ++member) {
-            const char* member_name = block.glsl_uniforms[member].glsl_name;
-            if (!member_name || !member_name[0]) break;
-            if (std::strncmp(member_name, "dummy_pad_", 10) == 0) continue;
-            declarations += "#define ";
-            declarations += member_name;
-            declarations += " _lwe_ub" + std::to_string(slot) + "." + member_name + "\n";
         }
     }
 
     bool emitted_views[SG_MAX_VIEW_BINDSLOTS] = {};
     bool emitted_samplers[SG_MAX_SAMPLER_BINDSLOTS] = {};
+    bool emitted_adapter_2d = false;
+    bool emitted_adapter_cube = false;
+    bool emitted_adapter_array = false;
+    bool emitted_adapter_3d = false;
     const size_t pair_count = sizeof(desc.texture_sampler_pairs) / sizeof(desc.texture_sampler_pairs[0]);
     for (size_t pair_slot = 0; pair_slot < pair_count; ++pair_slot) {
         const sg_shader_texture_sampler_pair& pair = desc.texture_sampler_pairs[pair_slot];
@@ -204,15 +237,18 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
         if (pair.view_slot >= SG_MAX_VIEW_BINDSLOTS || pair.sampler_slot >= SG_MAX_SAMPLER_BINDSLOTS) continue;
 
         const sg_shader_texture_view& texture = desc.views[pair.view_slot].texture;
-        const char* texture_type = texture_type_to_glsl(texture.image_type);
-        const char* sampler_constructor = sampler_constructor_to_glsl(texture.image_type);
-        if (!texture_type || !sampler_constructor) {
+        const char* texture_type = texture_type_to_slang(texture.image_type);
+        const char* adapter_type = combined_sampler_type(texture.image_type);
+        if (!texture_type || !adapter_type) {
             core_log.error("Unsupported Vulkan image type for shader texture '%s'", pair.glsl_name);
             continue;
         }
 
+        emit_sampler_adapter(declarations, texture.image_type, emitted_adapter_2d, emitted_adapter_cube,
+                             emitted_adapter_array, emitted_adapter_3d);
+
         if (!emitted_views[pair.view_slot]) {
-            declarations += "layout(set = 1, binding = " + std::to_string(pair.view_slot) + ") uniform ";
+            declarations += "layout(set = 1, binding = " + std::to_string(pair.view_slot) + ") ";
             declarations += texture_type;
             declarations += " _lwe_view" + std::to_string(pair.view_slot) + ";\n";
             emitted_views[pair.view_slot] = true;
@@ -220,15 +256,15 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
 
         if (!emitted_samplers[pair.sampler_slot]) {
             const int sampler_binding = SG_MAX_VIEW_BINDSLOTS + pair.sampler_slot;
-            declarations += "layout(set = 1, binding = " + std::to_string(sampler_binding) +
-                            ") uniform sampler _lwe_sampler" + std::to_string(pair.sampler_slot) + ";\n";
+            declarations += "layout(set = 1, binding = " + std::to_string(sampler_binding) + ") SamplerState _lwe_sampler" +
+                            std::to_string(pair.sampler_slot) + ";\n";
             emitted_samplers[pair.sampler_slot] = true;
         }
 
         declarations += "#define ";
         declarations += pair.glsl_name;
         declarations += " ";
-        declarations += sampler_constructor;
+        declarations += adapter_type;
         declarations += "(_lwe_view" + std::to_string(pair.view_slot) + ", _lwe_sampler" +
                         std::to_string(pair.sampler_slot) + ")\n";
     }
