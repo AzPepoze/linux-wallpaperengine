@@ -1,9 +1,5 @@
 #define SOKOL_IMPL
-#if defined(LWE_SOKOL_VULKAN)
 #define SOKOL_VULKAN
-#else
-#define SOKOL_GLCORE
-#endif
 #define SOKOL_LOG_IMPL
 #define SOKOL_ARGS_IMPL
 #define SOKOL_IMGUI_IMPL
