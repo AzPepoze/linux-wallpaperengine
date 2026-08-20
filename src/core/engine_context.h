@@ -7,7 +7,7 @@
 
 #include "../../libs/cJSON.h"
 #include "../../libs/sokol/sokol_gfx.h"
-#include "../asset/asset_manager.h"
+#include "../assets/asset_manager.h"
 #include "../render/render.h"
 #include "wallpaper_api.h"
 

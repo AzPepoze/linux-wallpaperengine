@@ -15,7 +15,6 @@ target("linux-wallpaperengine")
     add_packages("imgui", "slang_shader")
     
     -- Source files
-    add_files("src/main.cpp")
     add_files("src/**/*.cpp")
     add_files("libs/cJSON.c")
     add_files("libs/lz4.c")
