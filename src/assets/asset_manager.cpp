@@ -4,10 +4,31 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../libs/cJSON.h"
-#include "../core/logger.h"
-#include "../core/utils.h"
-#include "texture.h"
+#include "cJSON.h"
+#include "core/logger.h"
+#include "core/utils.h"
+#include "formats/wallpaper_engine/texture/tex_decoder.h"
+
+namespace {
+
+sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
+    switch (format) {
+        case wallpaper_engine::PixelFormat::RGBA8:
+            return SG_PIXELFORMAT_RGBA8;
+        case wallpaper_engine::PixelFormat::BC1:
+            return SG_PIXELFORMAT_BC1_RGBA;
+        case wallpaper_engine::PixelFormat::BC2:
+            return SG_PIXELFORMAT_BC2_RGBA;
+        case wallpaper_engine::PixelFormat::BC3:
+            return SG_PIXELFORMAT_BC3_RGBA;
+        case wallpaper_engine::PixelFormat::R8:
+            return SG_PIXELFORMAT_R8;
+        default:
+            return SG_PIXELFORMAT_NONE;
+    }
+}
+
+}  // namespace
 
 void AssetManager::init(const char* ep, const char* wp) {
     engine_path = ep;
@@ -15,23 +36,18 @@ void AssetManager::init(const char* ep, const char* wp) {
 }
 
 bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {
-    // 1. Try Local Wallpaper Path (or tmp extracted)
     snprintf(out_abs_path, max_len, "%s/%s", wallpaper_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
-    // 2. Try Engine Assets Path
     snprintf(out_abs_path, max_len, "%s/assets/%s", engine_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
-    // 3. Try specifically under assets/materials/ (common for particles and masks)
     snprintf(out_abs_path, max_len, "%s/assets/materials/%s", engine_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
-    // 4. Try under materials/ in the wallpaper/extracted root (common for masks)
     snprintf(out_abs_path, max_len, "%s/materials/%s", wallpaper_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
-    // 5. Try specifically under assets/presets/
     const char* filename = strrchr(rel_path, '/');
     if (filename) {
         filename++;
@@ -50,16 +66,13 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
         }
     }
 
-    // 5. Fallback
     snprintf(out_abs_path, max_len, "%s/%s", engine_path.c_str(), rel_path);
-    if (access(out_abs_path, F_OK) == 0) return true;
-
-    return false;
+    return access(out_abs_path, F_OK) == 0;
 }
 
 GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {
     char abs_path[1024];
-    char name_with_ext[256];
+    char name_with_ext[256] = {};
     if (!strstr(name, "."))
         snprintf(name_with_ext, sizeof(name_with_ext), "%s.tex", name);
     else
@@ -67,24 +80,24 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
 
     if (resolvePath(name_with_ext, abs_path, sizeof(abs_path))) {
         if (out_path) *out_path = abs_path;
-        DecodedTexture tex = load_texture(abs_path, image_index);
-        if (tex.pixels) {
-            sg_image_desc desc = {};
-            desc.width = (int)tex.width;
-            desc.height = (int)tex.height;
-            desc.pixel_format = tex.format;
-            desc.data.mip_levels[0] = {tex.pixels, tex.data_size};
-            sg_image img = sg_make_image(&desc);
-            free_texture(tex);
-            return img;
+        wallpaper_engine::DecodedImage image = wallpaper_engine::decodeTexture(abs_path, image_index);
+        if (image.valid()) {
+            const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
+            if (pixel_format != SG_PIXELFORMAT_NONE) {
+                sg_image_desc desc = {};
+                desc.width = (int)image.width;
+                desc.height = (int)image.height;
+                desc.pixel_format = pixel_format;
+                desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
+                return sg_make_image(&desc);
+            }
         }
     }
 
-    if (image_index == 0) {
+    if (image_index == 0)
         LOG_W("Failed to resolve texture: %s", name);
-    } else {
+    else
         LOG_D("Optional texture not found or index not present: %s (index %d)", name, image_index);
-    }
     return {};
 }
 
