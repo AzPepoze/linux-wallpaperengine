@@ -148,6 +148,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));
+        mat4x4_invert(builtin.mvp_inverse, mvp);
         builtin.parallax_pos[0] = ctx.parallax_smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = ctx.parallax_smooth_y * 0.5f + 0.5f;
         builtin.time = ctx.time;

@@ -30,7 +30,9 @@ struct CustomUniformDecl {
     CustomUniformType type = CustomUniformType::Unknown;
 };
 
-bool isTokenChar(char c) { return std::isalnum((unsigned char)c) || c == '_'; }
+bool isTokenChar(char c) {
+    return std::isalnum((unsigned char)c) || c == '_';
+}
 
 CustomUniformType parseUniformType(const std::string& declaration) {
     std::istringstream stream(declaration);
@@ -194,59 +196,39 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
 
     shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);
-    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
-    shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[1].glsl_name = "g_Texture1Resolution";
-    shd_desc.uniform_blocks[1].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[2].glsl_name = "g_Texture2Resolution";
-    shd_desc.uniform_blocks[1].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[3].glsl_name = "g_Texture3Resolution";
-    shd_desc.uniform_blocks[1].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[4].glsl_name = "g_Texture4Resolution";
-    shd_desc.uniform_blocks[1].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[5].glsl_name = "g_ParallaxPosition";
-    shd_desc.uniform_blocks[1].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[1].glsl_uniforms[6].glsl_name = "g_Time";
-    shd_desc.uniform_blocks[1].glsl_uniforms[6].type = SG_UNIFORMTYPE_FLOAT;
-    shd_desc.uniform_blocks[1].glsl_uniforms[7].glsl_name = "g_Padding1";
-    shd_desc.uniform_blocks[1].glsl_uniforms[7].type = SG_UNIFORMTYPE_FLOAT;
-    shd_desc.uniform_blocks[1].glsl_uniforms[8].glsl_name = "g_Screen";
-    shd_desc.uniform_blocks[1].glsl_uniforms[8].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[1].glsl_uniforms[9].glsl_name = "g_Padding2";
-    shd_desc.uniform_blocks[1].glsl_uniforms[9].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[1].glsl_uniforms[10].glsl_name = "g_EffectTextureProjectionMatrix";
-    shd_desc.uniform_blocks[1].glsl_uniforms[10].type = SG_UNIFORMTYPE_MAT4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[11].glsl_name = "g_EffectTextureProjectionMatrixInverse";
-    shd_desc.uniform_blocks[1].glsl_uniforms[11].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrixInverse";
+    shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
+    const char* builtin_names[] = {"g_Texture0Resolution",
+                                   "g_Texture1Resolution",
+                                   "g_Texture2Resolution",
+                                   "g_Texture3Resolution",
+                                   "g_Texture4Resolution",
+                                   "g_ParallaxPosition",
+                                   "g_Time",
+                                   "g_Padding1",
+                                   "g_Screen",
+                                   "g_Padding2",
+                                   "g_EffectTextureProjectionMatrix",
+                                   "g_EffectTextureProjectionMatrixInverse"};
+    const sg_uniform_type builtin_types[] = {SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
+                                             SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT2,
+                                             SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2,
+                                             SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4};
+    for (int i = 0; i < 12; ++i) {
+        shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
+        shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].type = builtin_types[i];
+    }
 
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.uniform_blocks[2].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4) + sizeof(float) * 4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
-    shd_desc.uniform_blocks[2].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[1].glsl_name = "g_Texture1Resolution";
-    shd_desc.uniform_blocks[2].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[2].glsl_name = "g_Texture2Resolution";
-    shd_desc.uniform_blocks[2].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[3].glsl_name = "g_Texture3Resolution";
-    shd_desc.uniform_blocks[2].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[4].glsl_name = "g_Texture4Resolution";
-    shd_desc.uniform_blocks[2].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[5].glsl_name = "g_ParallaxPosition";
-    shd_desc.uniform_blocks[2].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[2].glsl_uniforms[6].glsl_name = "g_Time";
-    shd_desc.uniform_blocks[2].glsl_uniforms[6].type = SG_UNIFORMTYPE_FLOAT;
-    shd_desc.uniform_blocks[2].glsl_uniforms[7].glsl_name = "g_Padding1";
-    shd_desc.uniform_blocks[2].glsl_uniforms[7].type = SG_UNIFORMTYPE_FLOAT;
-    shd_desc.uniform_blocks[2].glsl_uniforms[8].glsl_name = "g_Screen";
-    shd_desc.uniform_blocks[2].glsl_uniforms[8].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[2].glsl_uniforms[9].glsl_name = "g_Padding2";
-    shd_desc.uniform_blocks[2].glsl_uniforms[9].type = SG_UNIFORMTYPE_FLOAT2;
-    shd_desc.uniform_blocks[2].glsl_uniforms[10].glsl_name = "g_EffectTextureProjectionMatrix";
-    shd_desc.uniform_blocks[2].glsl_uniforms[10].type = SG_UNIFORMTYPE_MAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[11].glsl_name = "g_EffectTextureProjectionMatrixInverse";
-    shd_desc.uniform_blocks[2].glsl_uniforms[11].type = SG_UNIFORMTYPE_MAT4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[12].glsl_name = "tint";
-    shd_desc.uniform_blocks[2].glsl_uniforms[12].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrixInverse";
+    shd_desc.uniform_blocks[2].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
+    for (int i = 0; i < 12; ++i) {
+        shd_desc.uniform_blocks[2].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
+        shd_desc.uniform_blocks[2].glsl_uniforms[i + 1].type = builtin_types[i];
+    }
+    shd_desc.uniform_blocks[2].glsl_uniforms[13].glsl_name = "tint";
+    shd_desc.uniform_blocks[2].glsl_uniforms[13].type = SG_UNIFORMTYPE_FLOAT4;
 
     std::vector<CustomUniformDecl> vertex_uniforms;
     std::vector<CustomUniformDecl> fragment_uniforms;
@@ -287,8 +269,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         shd_desc.texture_sampler_pairs[slot].sampler_slot = 0;
     }
 
-    result.shader =
-        create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
+    result.shader = create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
 
     if (result.shader.id == SG_INVALID_ID) {
         effect_log.error("Failed to create shader for %s", shader_name.c_str());
