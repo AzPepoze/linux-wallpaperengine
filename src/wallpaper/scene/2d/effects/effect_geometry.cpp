@@ -113,7 +113,7 @@ Truth evaluateCondition(std::string expression, const std::map<std::string, int>
 
     if (!isIdentifier(expression)) return Truth::Unknown;
     auto it = defines.find(expression);
-    if (it == defines.end()) return Truth::Unknown;
+    if (it == defines.end()) return Truth::False;
     return it->second == 0 ? Truth::False : Truth::True;
 }
 
