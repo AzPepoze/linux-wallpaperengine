@@ -46,7 +46,8 @@ bool ImageLayer::ensureEffectTargets() {
 
     effect_target_width = source_desc.width;
     effect_target_height = source_desc.height;
-    effect_output_index = -1;
+    effect_output_image = {SG_INVALID_ID};
+    effect_output_view = {SG_INVALID_ID};
 
     for (int i = 0; i < 2; ++i) {
         sg_image_desc image_desc = {};
@@ -79,7 +80,8 @@ bool ImageLayer::ensureEffectTargets() {
 }
 
 void ImageLayer::renderEffectChain(EngineContext& ctx) {
-    effect_output_index = -1;
+    effect_output_image = {SG_INVALID_ID};
+    effect_output_view = {SG_INVALID_ID};
     if (effects.empty() || img.id == SG_INVALID_ID) return;
     if (cached_view.id == SG_INVALID_ID) updateCachedView();
     if (cached_view.id == SG_INVALID_ID || !ensureEffectTargets()) return;
@@ -94,8 +96,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
 
     sg_image input_image = img;
     sg_view input_view = cached_view;
-    const sg_image source_image = img;
-    const sg_view source_view = cached_view;
     int write_index = 0;
     bool rendered_any = false;
 
@@ -106,6 +106,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
     for (auto effect : effects) {
         if (!effect) continue;
         if (any_effect_solo ? !effect->solo : !effect->visible) continue;
+
+        const sg_image effect_source_image = input_image;
+        const sg_view effect_source_view = input_view;
 
         for (auto pass : effect->passes) {
             if (!pass || !pass->enabled || pass->compiled.pipeline.id == SG_INVALID_ID) continue;
@@ -169,10 +172,10 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 if (slot < 0 || slot > 11) continue;
                 if (binding == "previous") {
                     if (slot == 0) {
-                        shader_input_image = source_image;
-                        shader_input_view = source_view;
+                        shader_input_image = effect_source_image;
+                        shader_input_view = effect_source_view;
                     } else {
-                        override_views[slot - 1] = source_view;
+                        override_views[slot - 1] = effect_source_view;
                     }
                     has_overrides = true;
                 } else {
@@ -203,15 +206,19 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
             } else {
                 input_image = effect_images[write_index];
                 input_view = effect_texture_views[write_index];
-                effect_output_index = write_index;
                 write_index = 1 - write_index;
             }
+            effect_output_image = input_image;
+            effect_output_view = input_view;
             rendered_any = true;
         }
     }
 
     renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
-    if (!rendered_any) effect_output_index = -1;
+    if (!rendered_any) {
+        effect_output_image = {SG_INVALID_ID};
+        effect_output_view = {SG_INVALID_ID};
+    }
 }
 
 ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
@@ -290,9 +297,9 @@ void ImageLayer::draw(EngineContext& ctx) {
 
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
-    if (effect_output_index >= 0) {
-        draw_image = effect_images[effect_output_index];
-        draw_view = effect_texture_views[effect_output_index];
+    if (effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID) {
+        draw_image = effect_output_image;
+        draw_view = effect_output_view;
     }
 
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rx, ry, rw, rh, layer_rotation, tint, false,
