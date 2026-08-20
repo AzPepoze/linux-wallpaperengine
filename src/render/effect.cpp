@@ -146,21 +146,48 @@ void ShaderPass::init(EngineContext& ctx) {
     }
 
     std::string combo_defines = ShaderSourceProcessor::extractCombos(fs_src);
+    auto set_combo_define = [&combo_defines](const std::string& name, int value) {
+        const std::string prefix = "#define " + name + " ";
+        const std::string replacement = prefix + std::to_string(value);
+        const size_t pos = combo_defines.find(prefix);
+        if (pos == std::string::npos) {
+            combo_defines += replacement + "\n";
+            return;
+        }
+        size_t end = combo_defines.find('\n', pos);
+        if (end == std::string::npos) end = combo_defines.size();
+        combo_defines.replace(pos, end - pos, replacement);
+    };
+
     if (constant_values) {
         cJSON* item;
         cJSON_ArrayForEach(item, constant_values) {
             if (cJSON_IsNumber(item)) {
                 std::string name = item->string;
                 for (auto& c : name) c = toupper(c);
-                combo_defines += "#define " + name + " " + std::to_string((int)item->valuedouble) + "\n";
+                set_combo_define(name, (int)item->valuedouble);
             }
         }
     }
 
-    for (int i = 0; i < (int)pass_textures.textures.size(); i++) {
-        if (pass_textures.textures[i].id != SG_INVALID_ID && pass_textures.texture_masks[i]) {
-            if (i == 1) combo_defines += "#define MASK 1\n";
-            if (i == 2) combo_defines += "#define TIMEOFFSET 1\n";
+    const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
+    const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
+
+    if (is_depth_parallax) {
+        // depthparallax: g_Texture1=depth, g_Texture2=optional mask.
+        set_combo_define("MASK", 0);
+        if (pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID) {
+            set_combo_define("MASK", 1);
+        }
+    } else if (is_waterwaves) {
+        // waterwaves: g_Texture1=optional mask, g_Texture2=optional time-offset texture.
+        set_combo_define("MASK", 0);
+        set_combo_define("TIMEOFFSET", 0);
+        if (!pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID) {
+            set_combo_define("MASK", 1);
+        }
+        if (pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID) {
+            set_combo_define("TIMEOFFSET", 1);
         }
     }
 
@@ -185,9 +212,6 @@ void ShaderPass::init(EngineContext& ctx) {
     free(fs_src);
 
     pass_textures.buildCachedViews();
-
-    const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
-    const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
 
     // Log only effect-specific fallbacks. Extra texture meanings differ between effects.
     if (is_depth_parallax) {
