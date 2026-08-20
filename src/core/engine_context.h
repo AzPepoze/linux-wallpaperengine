@@ -5,7 +5,6 @@
 
 #include <vector>
 
-#include "../../libs/cJSON.h"
 #include "../../libs/sokol/sokol_gfx.h"
 #include "../assets/asset_manager.h"
 #include "../render/render.h"
@@ -36,7 +35,6 @@ struct EngineContext {
     bool is_pkg = false;
 
     scene_type_t scene_type = SCENE_TYPE_2D;
-    cJSON* scene_json = nullptr;
     renderer_t renderer = {};
     AssetManager asset_mgr = {};
     profiler_stats_t profiler = {};

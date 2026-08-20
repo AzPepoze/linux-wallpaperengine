@@ -1,10 +1,10 @@
 #include "asset_manager.h"
 
+#include <cjson/cJSON.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "cJSON.h"
 #include "core/logger.h"
 #include "core/utils.h"
 #include "formats/wallpaper_engine/texture/tex_decoder.h"

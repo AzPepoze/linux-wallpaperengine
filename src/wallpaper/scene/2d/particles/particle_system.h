@@ -1,10 +1,11 @@
 #ifndef PARTICLE_SYSTEM_H
 #define PARTICLE_SYSTEM_H
 
+#include <cjson/cJSON.h>
+
 #include <string>
 #include <vector>
 
-#include "cJSON.h"
 #include "core/gfx_resource.h"
 #include "core/interfaces.h"
 #include "linmath.h"

@@ -1,12 +1,12 @@
 #include "scene_parser.h"
 
+#include <cjson/cJSON.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <utility>
 
-#include "../../../../libs/cJSON.h"
 #include "../../../core/config.h"
 #include "../../../core/logger.h"
 #include "../../../core/utils.h"
