@@ -52,6 +52,7 @@ void renderer_init(renderer_t* r, float w, float h);
 void renderer_update_viewport(renderer_t* r, float w, float h);
 typedef struct {
     mat4x4 mvp;
+    mat4x4 mvp_inverse;
     vec4 texture_resolutions[5];  // 0: main image, 1-4: effect textures
     vec2 parallax_pos;            // 0..1
     float time;

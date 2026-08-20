@@ -2,9 +2,11 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cctype>
+#include <set>
 
 namespace {
 void replaceAll(std::string& text, const std::string& from, const std::string& to) {
@@ -15,10 +17,113 @@ void replaceAll(std::string& text, const std::string& from, const std::string& t
         pos += to.size();
     }
 }
+
+const char* legacyHeader(const std::string& include) {
+    if (include == "common.h") {
+        return "#define M_PI 3.14159265358979323846\n"
+               "#define M_PI_2 1.57079632679\n"
+               "#define M_2PI 6.28318530718\n"
+               "vec2 rotateVec2(vec2 v, float a) {\n"
+               "    float s = sin(a);\n"
+               "    float c = cos(a);\n"
+               "    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);\n"
+               "}\n";
+    }
+    if (include == "common_perspective.h") {
+        return "mat3 squareToQuad(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {\n"
+               "    float dx1 = p1.x - p2.x, dy1 = p1.y - p2.y;\n"
+               "    float dx2 = p3.x - p2.x, dy2 = p3.y - p2.y;\n"
+               "    float sx = p0.x - p1.x + p2.x - p3.x, sy = p0.y - p1.y + p2.y - p3.y;\n"
+               "    float g = (sx * dy2 - dx2 * sy) / (dx1 * dy2 - dx2 * dy1);\n"
+               "    float h = (dx1 * sy - sx * dy1) / (dx1 * dy2 - dx2 * dy1);\n"
+               "    return mat3(p1.x - p0.x + g * p1.x, p1.y - p0.y + g * p1.y, g, p3.x - p0.x + h * p3.x, p3.y - p0.y "
+               "+ "
+               "h * p3.y, h, p0.x, p0.y, 1.0);\n"
+               "}\n";
+    }
+    return nullptr;
+}
+
+bool readInclude(const std::string& include, const std::string& sourcePath, const IAssetResolver& assets,
+                 std::string& resolvedPath, std::string& contents) {
+    char path[1024] = {};
+    const size_t slash = sourcePath.rfind('/');
+    if (slash != std::string::npos) {
+        const std::string localPath = sourcePath.substr(0, slash + 1) + include;
+        if (access(localPath.c_str(), R_OK) == 0) {
+            strncpy(path, localPath.c_str(), sizeof(path) - 1);
+        }
+    }
+    if (path[0] == '\0' && !assets.resolvePath(include.c_str(), path, sizeof(path))) {
+        const std::string stockPath = "shaders/" + include;
+        if (!assets.resolvePath(stockPath.c_str(), path, sizeof(path))) return false;
+    }
+
+    FILE* file = fopen(path, "rb");
+    if (!file) return false;
+    fseek(file, 0, SEEK_END);
+    const long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (size < 0) {
+        fclose(file);
+        return false;
+    }
+    contents.resize((size_t)size);
+    if (size > 0) fread(contents.data(), 1, (size_t)size, file);
+    fclose(file);
+    resolvedPath = path;
+    return true;
+}
+
+std::string expandIncludes(const std::string& source, const std::string& sourcePath, const IAssetResolver& assets,
+                           std::set<std::string>& active, std::set<std::string>& expanded) {
+    std::string result;
+    size_t start = 0;
+    while (start < source.size()) {
+        const size_t end = source.find('\n', start);
+        const size_t length = (end == std::string::npos ? source.size() : end) - start;
+        const std::string line = source.substr(start, length);
+        const size_t directive = line.find_first_not_of(" \t");
+        const bool includeDirective = directive != std::string::npos && line.compare(directive, 8, "#include") == 0;
+        const size_t quote1 = includeDirective ? line.find('"', directive + 8) : std::string::npos;
+        const size_t quote2 = quote1 == std::string::npos ? std::string::npos : line.find('"', quote1 + 1);
+        if (quote1 != std::string::npos && quote2 != std::string::npos) {
+            const std::string include = line.substr(quote1 + 1, quote2 - quote1 - 1);
+            std::string includePath;
+            std::string includeSource;
+            if (readInclude(include, sourcePath, assets, includePath, includeSource)) {
+                if (active.count(includePath)) {
+                    // Include guards normally make this harmless; dropping an active include prevents malformed
+                    // Workshop headers from recursing forever.
+                } else if (!expanded.count(includePath)) {
+                    active.insert(includePath);
+                    result += expandIncludes(includeSource, includePath, assets, active, expanded);
+                    active.erase(includePath);
+                    expanded.insert(includePath);
+                }
+            } else if (const char* compatibility = legacyHeader(include)) {
+                result += compatibility;
+            } else {
+                // Leave unsupported directives intact so Slang reports the original source location.
+                result += line;
+                result += '\n';
+            }
+        } else {
+            result += line;
+            result += '\n';
+        }
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return result;
+}
 }  // namespace
 
-std::string ShaderSourceProcessor::processShaderSource(const std::string& source, bool is_vertex) {
-    std::string result = source;
+std::string ShaderSourceProcessor::processShaderSource(const std::string& source, const char* source_path,
+                                                       const IAssetResolver& assets, bool is_vertex) {
+    std::set<std::string> active;
+    std::set<std::string> expanded;
+    std::string result = expandIncludes(source, source_path ? source_path : "", assets, active, expanded);
 
     // Fix: g_Screen is declared vec3 in some WPE shaders but our uniform block uses vec2.
     if (is_vertex) replaceAll(result, "uniform vec3 g_Screen;", "uniform vec2 g_Screen;");
@@ -31,29 +136,6 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
         result.erase(version_pos,
                      version_end == std::string::npos ? result.size() - version_pos : version_end - version_pos + 1);
     }
-
-    const char* common_h =
-        "#define M_PI 3.14159265358979323846\n"
-        "#define M_PI_2 1.57079632679\n"
-        "#define M_2PI 6.28318530718\n"
-        "vec2 rotateVec2(vec2 v, float a) {\n"
-        "    float s = sin(a);\n"
-        "    float c = cos(a);\n"
-        "    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);\n"
-        "}\n";
-    replaceAll(result, "#include \"common.h\"", common_h);
-
-    const char* common_perspective_h =
-        "mat3 squareToQuad(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {\n"
-        "    float dx1 = p1.x - p2.x, dy1 = p1.y - p2.y;\n"
-        "    float dx2 = p3.x - p2.x, dy2 = p3.y - p2.y;\n"
-        "    float sx = p0.x - p1.x + p2.x - p3.x, sy = p0.y - p1.y + p2.y - p3.y;\n"
-        "    float g = (sx * dy2 - dx2 * sy) / (dx1 * dy2 - dx2 * dy1);\n"
-        "    float h = (dx1 * sy - sx * dy1) / (dx1 * dy2 - dx2 * dy1);\n"
-        "    return mat3(p1.x - p0.x + g * p1.x, p1.y - p0.y + g * p1.y, g, p3.x - p0.x + h * p3.x, p3.y - p0.y + "
-        "h * p3.y, h, p0.x, p0.y, 1.0);\n"
-        "}\n";
-    replaceAll(result, "#include \"common_perspective.h\"", common_perspective_h);
 
     // GLSL translation for Wallpaper Engine's hybrid GLSL/HLSL shader dialect.
     if (is_vertex) {
@@ -91,7 +173,8 @@ std::string ShaderSourceProcessor::extractCombos(const char* fsSource) {
                 if (q1 != std::string::npos && q2 != std::string::npos && colon_def != std::string::npos) {
                     std::string define_name = line.substr(q1 + 1, q2 - q1 - 1);
                     int default_val = atoi(line.c_str() + colon_def + 1);
-                    if (!define_name.empty() && combo_defines.find("#define " + define_name + " ") == std::string::npos) {
+                    if (!define_name.empty() &&
+                        combo_defines.find("#define " + define_name + " ") == std::string::npos) {
                         combo_defines += "#define " + define_name + " " + std::to_string(default_val) + "\n";
                     }
                 }
@@ -160,6 +243,8 @@ std::string ShaderSourceProcessor::buildShaderPrefix() {
     // the syntax directly, while these aliases cover the common HLSL-style
     // types/intrinsics used by stock and Workshop image effects.
     return "#version 330\n"
+           "#define HLSL 0\n"
+           "#define GLSL 1\n"
            "#define float2 vec2\n"
            "#define float3 vec3\n"
            "#define float4 vec4\n"

@@ -54,7 +54,9 @@ bool jsonToFloats(cJSON* node, std::vector<float>& out) {
     if (cJSON_IsArray(node)) {
         bool parsed = false;
         cJSON* item;
-        cJSON_ArrayForEach(item, node) { parsed = jsonToFloats(item, out) || parsed; }
+        cJSON_ArrayForEach(item, node) {
+            parsed = jsonToFloats(item, out) || parsed;
+        }
         return parsed;
     }
     if (cJSON_IsObject(node)) {
@@ -192,8 +194,7 @@ void setComboDefine(std::string& combo_defines, const std::string& requested_nam
     if (replace_define(requested_name)) return;
 
     std::string upper = requested_name;
-    std::transform(upper.begin(), upper.end(), upper.begin(),
-                   [](unsigned char c) { return (char)std::toupper(c); });
+    std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return (char)std::toupper(c); });
     if (replace_define(upper)) return;
 
     // Custom effects may provide a combo that is consumed by #if without a
@@ -364,8 +365,8 @@ void ShaderPass::init(EngineContext& ctx) {
     uniforms = std::move(resolved_uniforms);
 
     std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
-    std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, true);
-    std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, false);
+    std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, abs_vert, ctx.asset_mgr, true);
+    std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, abs_frag, ctx.asset_mgr, false);
 
     if (is_depth_parallax) {
         // Wallpaper Engine opacity masks are painted in display/gamma space. The runtime effect expects the mask
@@ -402,7 +403,8 @@ void ShaderPass::init(EngineContext& ctx) {
     pass_textures.buildCachedViews();
 
     if (compiled.pipeline.id == SG_INVALID_ID) {
-        effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped", shader_name.c_str());
+        effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped",
+                        shader_name.c_str());
         return;
     }
 
@@ -472,7 +474,9 @@ Effect::Effect(cJSON* config, EngineContext& ctx) {
     cJSON* passes_node = cJSON_GetObjectItemCaseSensitive(config, "passes");
     if (cJSON_IsArray(passes_node)) {
         cJSON* pass_json;
-        cJSON_ArrayForEach(pass_json, passes_node) { passes.push_back(new ShaderPass(pass_json, nullptr, ctx)); }
+        cJSON_ArrayForEach(pass_json, passes_node) {
+            passes.push_back(new ShaderPass(pass_json, nullptr, ctx));
+        }
     }
 }
 
