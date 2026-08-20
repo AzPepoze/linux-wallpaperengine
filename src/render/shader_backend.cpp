@@ -322,9 +322,10 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
 
     const uint64_t module_id = slang_module_counter.fetch_add(1, std::memory_order_relaxed);
     const std::string module_name = "lwe_runtime_shader_" + std::to_string(module_id);
+    const std::string virtual_source_name = module_name + "/" + source_name;
 
     Slang::ComPtr<slang::IBlob> diagnostics;
-    slang::IModule* module = context.session->loadModuleFromSourceString(module_name.c_str(), source_name,
+    slang::IModule* module = context.session->loadModuleFromSourceString(module_name.c_str(), virtual_source_name.c_str(),
                                                                          source.c_str(), diagnostics.writeRef());
     if (!module) {
         log_slang_diagnostics(source_name, diagnostics.get());
