@@ -60,8 +60,6 @@ bool jsonToFloats(cJSON* node, std::vector<float>& out) {
         return parsed;
     }
     if (cJSON_IsObject(node)) {
-        // Wallpaper Engine wraps animated/user-bound values in objects while
-        // preserving the authored fallback in `value`.
         return jsonToFloats(cJSON_GetObjectItemCaseSensitive(node, "value"), out);
     }
     return false;
@@ -168,9 +166,6 @@ std::string resolveUniformName(const std::string& authored, const std::vector<st
         if (normalizeUniformName(candidate) == wanted) return candidate;
     }
 
-    // Most WE constant keys omit the g_ prefix and use lowercase spelling.
-    // Keep the old fallback for custom shaders where declaration discovery
-    // cannot identify a matching name.
     if (preferred.find("g_") != 0 && !preferred.empty()) {
         std::string fallback = "g_";
         fallback += (char)std::toupper((unsigned char)preferred[0]);
@@ -197,9 +192,6 @@ void setComboDefine(std::string& combo_defines, const std::string& requested_nam
     std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return (char)std::toupper(c); });
     if (replace_define(upper)) return;
 
-    // Custom effects may provide a combo that is consumed by #if without a
-    // Wallpaper Engine metadata comment. Defining it is harmless and preserves
-    // the authored material/pass semantics.
     combo_defines += "#define " + requested_name + " " + std::to_string(value) + "\n";
 }
 
@@ -209,9 +201,6 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     cJSON* base_config = config;
     cJSON* owned_base_config = nullptr;
 
-    // Effect passes frequently point at a Wallpaper Engine material. Resolve
-    // the first material pass, then layer effect-pass and instance overrides on
-    // top of it just like the native runtime does.
     cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(config, "material");
     if (cJSON_IsString(mat_ref) && mat_ref->valuestring) {
         char abs_mat[1024];
@@ -237,7 +226,6 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(base_config, "shader");
     if (cJSON_IsString(shader_node) && shader_node->valuestring) shader_name = shader_node->valuestring;
 
-    // A pass can override fields supplied by its material.
     if (base_config != config) {
         cJSON* pass_shader = cJSON_GetObjectItemCaseSensitive(config, "shader");
         if (cJSON_IsString(pass_shader) && pass_shader->valuestring) shader_name = pass_shader->valuestring;
@@ -331,9 +319,6 @@ void ShaderPass::init(EngineContext& ctx) {
     const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
     const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
 
-    // Resolve lowercase JSON keys such as `animationspeed` against the actual
-    // shader declaration (for example g_AnimationSpeed) before building Sokol
-    // uniform metadata.
     std::vector<std::string> shader_uniforms = extractUniformNames(raw_vs);
     std::vector<std::string> fragment_uniforms = extractUniformNames(raw_fs);
     shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
@@ -357,9 +342,6 @@ void ShaderPass::init(EngineContext& ctx) {
     }
 
     if (is_depth_parallax) {
-        // Wallpaper Engine opacity masks are painted in display/gamma space. The runtime effect expects the mask
-        // intensity in linear space; without this conversion a dark brush floor such as 42/255 behaves like 16.5%
-        // displacement instead of roughly 2.3%.
         const std::string mask_sample = "texSample2D(g_Texture2, v_TexCoordMask.xy).r";
         const size_t mask_sample_pos = processed_fs.find(mask_sample);
         if (mask_sample_pos != std::string::npos) {
@@ -396,7 +378,6 @@ void ShaderPass::init(EngineContext& ctx) {
         return;
     }
 
-    // Log only effect-specific fallbacks. Extra texture meanings differ between effects.
     if (is_depth_parallax) {
         if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
             effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using Wallpaper Engine black fallback",
@@ -523,7 +504,6 @@ Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext
     Effect* effect = new Effect(config, ctx);
     effect->file_path = rel_path;
 
-    // Instance pass data overrides the matching pass from the effect definition.
     cJSON* inst_passes = cJSON_GetObjectItemCaseSensitive(instance_config, "passes");
     cJSON* config_passes = cJSON_GetObjectItemCaseSensitive(config, "passes");
     if (cJSON_IsArray(inst_passes) && cJSON_IsArray(config_passes)) {
@@ -531,8 +511,13 @@ Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext
             if (i >= (int)effect->passes.size() || i >= cJSON_GetArraySize(config_passes)) break;
             cJSON* pass_config = cJSON_GetArrayItem(config_passes, i);
             cJSON* inst_pass_config = cJSON_GetArrayItem(inst_passes, i);
-            delete effect->passes[i];
-            effect->passes[i] = new ShaderPass(pass_config, inst_pass_config, ctx);
+            ShaderPass* old_pass = effect->passes[i];
+            auto* new_pass = new ShaderPass(pass_config, inst_pass_config, ctx);
+            new_pass->render_target = old_pass->render_target;
+            new_pass->render_scale = old_pass->render_scale;
+            new_pass->render_texture_bindings = old_pass->render_texture_bindings;
+            delete old_pass;
+            effect->passes[i] = new_pass;
         }
     }
 
