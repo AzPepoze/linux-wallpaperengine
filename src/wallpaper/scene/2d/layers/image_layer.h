@@ -42,7 +42,8 @@ class ImageLayer : public Layer {
     GfxView effect_attachment_views[2];
     int effect_target_width = 0;
     int effect_target_height = 0;
-    int effect_output_index = -1;
+    sg_image effect_output_image = {SG_INVALID_ID};
+    sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, EffectTarget> named_effect_targets;
 };
 
