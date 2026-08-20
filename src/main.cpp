@@ -1,8 +1,4 @@
-#if defined(LWE_SOKOL_VULKAN)
 #define SOKOL_VULKAN
-#else
-#define SOKOL_GLCORE
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
