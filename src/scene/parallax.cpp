@@ -20,7 +20,7 @@ const scene_parallax_node_t* find_node(const EngineContext& ctx, uint32_t id) {
 }
 
 void local_transform(const scene_parallax_node_t& node, mat4x4 out) {
-    // OWE SceneNode::GetLocalTrans(): T * Rz * Ry * Rx * S.
+    // Scene-node local transform order: T * Rz * Ry * Rx * S.
     mat4x4_identity(out);
     mat4x4_translate_in_place(out, node.origin[0], node.origin[1], node.origin[2]);
     mat4x4_rotate_Z(out, out, node.angles[2]);
@@ -58,9 +58,7 @@ bool world_position(const EngineContext& ctx, const scene_parallax_node_t& node,
 
 const scene_parallax_node_t* resolve_parallax_node(const EngineContext& ctx,
                                                     const scene_parallax_node_t& node) {
-    // Match UniformSceneState::ResolveParallaxState(): a parent only takes over
-    // when that parent explicitly allows propagation to its children. Continue
-    // walking upward while each selected ancestor propagates.
+    // A parent takes over the parallax state only while propagation remains enabled.
     const scene_parallax_node_t* resolved = &node;
     uint32_t parent_id = node.parent_id;
 
@@ -86,9 +84,7 @@ void parallax_update(EngineContext& ctx, float dt, int viewport_width, int viewp
         target_y = clamp01(ctx.mouse_y / (float)viewport_height);
     }
 
-    // OWE's pointer-delay runtime advances the current pointer toward the input
-    // by approximately frame_delta / cameraparallaxdelay every frame. Do the
-    // equivalent here instead of using an exponential time constant.
+    // Advance the delayed pointer by approximately frame_delta / camera delay.
     float response = 1.0f;
     if (ctx.camera_parallax_delay > 0.0f) {
         response = dt > 0.0f ? clamp01(dt / ctx.camera_parallax_delay) : 0.0f;
@@ -121,13 +117,11 @@ parallax_offset_t parallax_layer_offset(const EngineContext& ctx, uint32_t scene
 
     if (depth[0] == 0.0f && depth[1] == 0.0f) return result;
 
-    // The default orthographic camera is attached at half the authored scene extent.
+    // The default orthographic camera is centered on half the authored scene extent.
     const float camera_x = ctx.scene_w * 0.5f;
     const float camera_y = ctx.scene_h * 0.5f;
 
-    // Exact OWE TransformUniformSource convention:
-    //   pointer_offset = Scaling(1,-1) * (vec2(0.5) - pointer)
-    // so X is (0.5 - px), while Y is (py - 0.5).
+    // Layer-space camera convention: X uses (0.5 - px), Y uses (py - 0.5).
     const float mouse_x = (0.5f - ctx.parallax_pointer_x) * ctx.scene_w * ctx.camera_parallax_mouse_influence;
     const float mouse_y = (ctx.parallax_pointer_y - 0.5f) * ctx.scene_h * ctx.camera_parallax_mouse_influence;
 
@@ -143,8 +137,8 @@ parallax_position_t parallax_shader_position(const EngineContext& ctx) {
     const float centered_x = ctx.parallax_pointer_x - 0.5f;
     const float centered_y = ctx.parallax_pointer_y - 0.5f;
 
-    // g_ParallaxPosition is a normalized shader input and intentionally does not
-    // include camera_parallax_amount. OWE flips Y only for this shader builtin.
+    // g_ParallaxPosition is normalized shader input and intentionally excludes
+    // camera_parallax_amount; Y is flipped only for this shader builtin.
     result.x = 0.5f + centered_x * ctx.camera_parallax_mouse_influence;
     result.y = 0.5f - centered_y * ctx.camera_parallax_mouse_influence;
     return result;
