@@ -11,10 +11,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [opengl, vulkan]
 
     steps:
       - uses: actions/checkout@v4
@@ -22,10 +18,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libvulkan-dev
+          sudo apt-get install -y \
+            libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
+            mesa-vulkan-drivers vulkan-tools xvfb xauth
 
       - name: Install prebuilt Slang
-        if: matrix.backend == 'vulkan'
         env:
           SLANG_VERSION: '2026.14'
         run: |
@@ -46,13 +43,28 @@ jobs:
       - name: Set up xmake
         uses: xmake-io/github-action-setup-xmake@v1
 
-      - name: Configure OpenGL
-        if: matrix.backend == 'opengl'
+      - name: Configure
         run: xmake f -y -m release
-
-      - name: Configure Vulkan
-        if: matrix.backend == 'vulkan'
-        run: xmake f -y -m release --vulkan=y
 
       - name: Build
         run: xmake -v
+
+      - name: Check software Vulkan
+        run: xvfb-run -a vulkaninfo --summary
+
+      - name: Smoke test Vulkan + Slang runtime
+        run: |
+          set +e
+          timeout 5s xvfb-run -a ./bin/linux_wallpaperengine > runtime.log 2>&1
+          status=$?
+          set -e
+          cat runtime.log
+
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            exit "$status"
+          fi
+
+          if grep -E "Slang failed|Failed to create shader|Failed to initialize Slang" runtime.log; then
+            echo "Runtime shader compilation failed"
+            exit 1
+          fi
