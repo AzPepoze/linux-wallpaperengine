@@ -19,8 +19,6 @@ void Layer::loadBaseProperties(cJSON* node, EngineContext& ctx) {
         sscanf(scale_node->valuestring, "%f %f %f", &scale[0], &scale[1], &scale[2]);
     }
 
-    // parallaxDepth is the canonical Wallpaper Engine scene property. Keep the
-    // old alias only as a compatibility fallback for loose/custom scene JSON.
     cJSON* parallax_node = cJSON_GetObjectItemCaseSensitive(node, "parallaxDepth");
     if (!parallax_node) parallax_node = cJSON_GetObjectItemCaseSensitive(node, "parallax");
     if (cJSON_IsString(parallax_node)) {
@@ -35,7 +33,6 @@ void Layer::loadBaseProperties(cJSON* node, EngineContext& ctx) {
         if (cJSON_IsBool(val)) visible = cJSON_IsTrue(val);
     }
 
-    // Load Effects
     cJSON* effects_node = cJSON_GetObjectItemCaseSensitive(node, "effects");
     if (cJSON_IsArray(effects_node)) {
         cJSON* eff_json;

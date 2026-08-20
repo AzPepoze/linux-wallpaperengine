@@ -1,14 +1,14 @@
-#ifndef PARTICLES_H
-#define PARTICLES_H
+#ifndef PARTICLE_SYSTEM_H
+#define PARTICLE_SYSTEM_H
 
 #include <string>
 #include <vector>
 
-#include "../../core/gfx_resource.h"
-#include "../../core/interfaces.h"
-#include "../../libs/cJSON.h"
-#include "../../libs/linmath.h"
-#include "../../libs/sokol/sokol_gfx.h"
+#include "core/gfx_resource.h"
+#include "core/interfaces.h"
+#include "cJSON.h"
+#include "linmath.h"
+#include "sokol_gfx.h"
 
 struct Particle {
     vec3 position = {0, 0, 0};
@@ -26,13 +26,11 @@ struct Particle {
     float spawn_time = 0.0f;
     float random_seed = 0.0f;
 
-    // Dynamics state
     float drag = 0.0f;
     vec3 gravity = {0, 0, 0};
     float fade_in = 0.0f;
     float fade_out = 1.0f;
 
-    // Oscillation state
     float osc_alpha_freq = 0.0f;
     float osc_alpha_min = 1.0f;
     float osc_size_freq = 0.0f;
@@ -42,7 +40,6 @@ struct Particle {
     float osc_pos_min = 0.0f;
     float osc_pos_max = 0.0f;
 
-    // Turbulence state
     float turb_speed = 0.0f;
 };
 
@@ -65,7 +62,6 @@ class ParticleSystem {
     vec2 parallax = {0, 0};
     bool is_additive = false;
 
-    // Overrides
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
 
@@ -78,7 +74,6 @@ class ParticleSystem {
     void draw(EngineContext& ctx);
     void drawDebugBounds(EngineContext& ctx);
 
-    // Debug features
     bool show_bounds = false;
     std::string config_path;
     std::string texture_path;
@@ -87,4 +82,4 @@ class ParticleSystem {
     void spawnParticle();
 };
 
-#endif  // PARTICLES_H
+#endif  // PARTICLE_SYSTEM_H

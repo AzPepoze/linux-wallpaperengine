@@ -19,13 +19,13 @@
 #include "../core/logger.h"
 #include "../core/utils.h"
 #include "imgui.h"
-#include "../scene/parallax.h"
 #include "../scene/scene_parser.h"
-#include "../scene/scene_renderer.h"
 #include "../ui/debugger.h"
+#include "wallpaper/scene/2d/parallax.h"
+#include "wallpaper/scene/2d/scene_2d.h"
 
 static EngineContext ctx;
-static SceneRenderer* scene_engine = nullptr;
+static Scene2DRuntime* scene_engine = nullptr;
 
 static void init(void) {
     stm_setup();
@@ -45,7 +45,7 @@ static void init(void) {
     ctx.selected_object = -1;
     ctx.scaling_mode = sargs_exists("cover") ? SCALING_COVER : SCALING_FIT;
 
-    scene_engine = new SceneRenderer(ctx);
+    scene_engine = new Scene2DRuntime(ctx);
     scene_engine->init();
 
     if (ctx.wallpaper_path[0] != '\0') {
@@ -97,7 +97,6 @@ static void frame(void) {
     ctx.time += dt;
 
     parallax_update(ctx, dt, sapp_width(), sapp_height());
-
     scene_engine->update(dt);
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
 
@@ -126,9 +125,7 @@ static void frame(void) {
     } else {
         ctx.profiler.frame_avg_ms += (ctx.profiler.frame_ms - ctx.profiler.frame_avg_ms) * 0.05;
     }
-    if (ctx.profiler.frame_ms > ctx.profiler.frame_peak_ms) {
-        ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
-    }
+    if (ctx.profiler.frame_ms > ctx.profiler.frame_peak_ms) ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
 }
 
 static void event(const sapp_event* e) {
@@ -139,9 +136,7 @@ static void event(const sapp_event* e) {
     }
 
     if (simgui_handle_event(e)) return;
-    if (e->type == SAPP_EVENTTYPE_KEY_DOWN) {
-        if (e->key_code == SAPP_KEYCODE_F8) ctx.show_ui = !ctx.show_ui;
-    }
+    if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) ctx.show_ui = !ctx.show_ui;
 }
 
 static void cleanup(void) {
@@ -174,9 +169,7 @@ extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
 
     if (ctx.wallpaper_path[0] != '\0' && !ctx.is_pkg) {
         size_t len = strlen(ctx.wallpaper_path);
-        if (len >= 4 && strcmp(ctx.wallpaper_path + len - 4, ".pkg") == 0) {
-            ctx.is_pkg = true;
-        }
+        if (len >= 4 && strcmp(ctx.wallpaper_path + len - 4, ".pkg") == 0) ctx.is_pkg = true;
     }
 
     sapp_desc desc = {};

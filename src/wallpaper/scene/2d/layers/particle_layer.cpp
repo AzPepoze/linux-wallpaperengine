@@ -1,9 +1,9 @@
 #include "particle_layer.h"
 
-#include "../../core/context.h"
-#include "../../core/engine_context.h"
-#include "../../core/utils.h"
-#include "../parallax.h"
+#include "core/context.h"
+#include "core/engine_context.h"
+#include "core/utils.h"
+#include "wallpaper/scene/2d/parallax.h"
 
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
 
@@ -29,11 +29,8 @@ void ParticleLayer::update(float dt, EngineContext& ctx) {
 void ParticleLayer::draw(EngineContext& ctx) {
     if (!ps) return;
 
-    const parallax_offset_t camera_offset =
-        parallax_layer_offset(ctx, scene_object_id, origin, parallax);
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, origin, parallax);
 
-    // Normal camera parallax belongs to the layer transform. Feed particles the
-    // translated layer origin and keep ParticleSystem's old local parallax path disabled.
     ps->layer_origin[0] = origin[0] + camera_offset.x;
     ps->layer_origin[1] = origin[1] + camera_offset.y;
     ps->layer_origin[2] = origin[2];
@@ -61,8 +58,7 @@ void ParticleLayer::draw(EngineContext& ctx) {
 void ParticleLayer::drawDebug(EngineContext& ctx) {
     if (!ps) return;
 
-    const parallax_offset_t camera_offset =
-        parallax_layer_offset(ctx, scene_object_id, origin, parallax);
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, origin, parallax);
     ps->layer_origin[0] = origin[0] + camera_offset.x;
     ps->layer_origin[1] = origin[1] + camera_offset.y;
     ps->layer_origin[2] = origin[2];

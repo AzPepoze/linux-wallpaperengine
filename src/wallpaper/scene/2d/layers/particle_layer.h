@@ -1,8 +1,8 @@
 #ifndef PARTICLE_LAYER_H
 #define PARTICLE_LAYER_H
 
-#include "../layer.h"
-#include "particles.h"
+#include "wallpaper/scene/2d/layers/layer.h"
+#include "wallpaper/scene/2d/particles/particle_system.h"
 
 class EngineContext;
 

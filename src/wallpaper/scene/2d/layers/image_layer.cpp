@@ -2,12 +2,12 @@
 
 #include <string.h>
 
-#include "../../core/context.h"
-#include "../../core/engine_context.h"
-#include "../../core/logger.h"
-#include "../../core/utils.h"
-#include "../../render/render.h"
-#include "../parallax.h"
+#include "core/context.h"
+#include "core/engine_context.h"
+#include "core/logger.h"
+#include "core/utils.h"
+#include "render/render.h"
+#include "wallpaper/scene/2d/parallax.h"
 
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
@@ -34,7 +34,6 @@ bool ImageLayer::ensureEffectTargets() {
         return true;
     }
 
-    // Views must be released before their backing images.
     for (int i = 0; i < 2; ++i) {
         effect_texture_views[i] = {};
         effect_attachment_views[i] = {};
@@ -155,7 +154,6 @@ ImageLayer* ImageLayer::createFromJSON(cJSON* node, EngineContext& ctx) {
 
         if (layer->img.id != SG_INVALID_ID) {
             sg_image_desc desc = sg_query_image_desc(layer->img);
-            // If size wasn't in JSON, use asset size
             if (layer->size[0] == 0) {
                 layer->size[0] = (float)desc.width;
                 layer->size[1] = (float)desc.height;
@@ -196,10 +194,8 @@ void ImageLayer::draw(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
 
-    const parallax_offset_t camera_offset =
-        parallax_layer_offset(ctx, scene_object_id, origin, parallax);
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, origin, parallax);
 
-    // Center image on its parallax-adjusted scene origin.
     float rx = ctx.offset_x + (origin[0] + camera_offset.x) * ctx.render_scale - (rw * 0.5f);
     float ry = ctx.offset_y + (origin[1] + camera_offset.y) * ctx.render_scale - (rh * 0.5f);
 
@@ -210,15 +206,13 @@ void ImageLayer::draw(EngineContext& ctx) {
         draw_view = effect_texture_views[effect_output_index];
     }
 
-    // Effects have already been evaluated into the offscreen chain during update().
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rx, ry, rw, rh, rotation, tint, false, nullptr);
 }
 
 void ImageLayer::drawDebug(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
-    const parallax_offset_t camera_offset =
-        parallax_layer_offset(ctx, scene_object_id, origin, parallax);
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, origin, parallax);
     float rx = ctx.offset_x + (origin[0] + camera_offset.x) * ctx.render_scale - (rw * 0.5f);
     float ry = ctx.offset_y + (origin[1] + camera_offset.y) * ctx.render_scale - (rh * 0.5f);
 

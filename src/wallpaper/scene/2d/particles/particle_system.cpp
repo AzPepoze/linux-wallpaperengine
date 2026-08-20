@@ -1,16 +1,16 @@
-#include "particles.h"
+#include "particle_system.h"
 
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../core/config.h"
-#include "../../core/context.h"
-#include "../../core/engine_context.h"
-#include "../../core/logger.h"
-#include "../../core/utils.h"
-#include "../../libs/sokol/sokol_app.h"
-#include "../../render/render.h"
+#include "core/config.h"
+#include "core/context.h"
+#include "core/engine_context.h"
+#include "core/logger.h"
+#include "core/utils.h"
+#include "sokol_app.h"
+#include "render/render.h"
 
 #define TAG "PARTICLE"
 
@@ -41,7 +41,6 @@ ParticleSystem::ParticleSystem(cJSON* config, GfxImage tex, float sw, float sh)
     max_particles = cJSON_IsNumber(max_count) ? max_count->valueint : 100;
     particles.reserve(max_particles);
 
-    // Blending
     cJSON* passes = cJSON_GetObjectItemCaseSensitive(config, "passes");
     if (cJSON_IsArray(passes)) {
         cJSON* pass = cJSON_GetArrayItem(passes, 0);
@@ -105,7 +104,6 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const IAssetResolver
                         if (cJSON_IsNumber(rate)) ps->override_rate = (float)rate->valuedouble;
                     }
 
-                    // Load Children
                     cJSON* children_node = cJSON_GetObjectItemCaseSensitive(p_json, "children");
                     if (cJSON_IsArray(children_node)) {
                         cJSON* child_json;
@@ -115,13 +113,10 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* node, const IAssetResolver
                         }
                     }
 
-                    // Initial Warmup
                     float start_time = get_float(cJSON_GetObjectItemCaseSensitive(p_json, "starttime"));
                     if (start_time > 0) {
                         float step = 0.1f;
-                        for (float t = 0; t < start_time; t += step) {
-                            ps->update(step);
-                        }
+                        for (float t = 0; t < start_time; t += step) ps->update(step);
                     }
 
                     return ps;
@@ -373,7 +368,6 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
         }
     }
 
-    // Real-time Particle Tracking (draw boxes for each particle)
     float p_color[4] = {1, 0, 0, 1};
     for (auto& p : particles) {
         float rx = ctx.offset_x + (layer_origin[0] + px + p.position[0]) * ctx.render_scale;

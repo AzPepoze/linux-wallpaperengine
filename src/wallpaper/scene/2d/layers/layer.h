@@ -4,12 +4,13 @@
 #include <stdint.h>
 
 #include <string>
+#include <vector>
 
-#include "../../libs/cJSON.h"
-#include "../../libs/linmath.h"
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../core/interfaces.h"
-#include "../render/effect.h"
+#include "cJSON.h"
+#include "linmath.h"
+#include "sokol_gfx.h"
+#include "core/interfaces.h"
+#include "render/effect.h"
 
 class Layer : public ILayer {
    public:
@@ -33,7 +34,6 @@ class Layer : public ILayer {
         effects.clear();
     }
 
-    // Disable copy for now to satisfy cppcheck (since we manage resources in subclasses)
     Layer(const Layer&) = delete;
     Layer& operator=(const Layer&) = delete;
 
