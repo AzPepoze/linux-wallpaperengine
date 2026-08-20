@@ -210,8 +210,12 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         sg_range res_range = {.ptr = builtin.texture_resolutions, .size = sizeof(builtin_uniforms_t) - sizeof(mat4x4)};
         sg_apply_uniforms(1, &res_range);
 
-        sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
-        sg_apply_uniforms(2, &tint_range);
+        constexpr size_t kBuiltinRestSize = sizeof(builtin_uniforms_t) - sizeof(mat4x4);
+        alignas(16) uint8_t fragment_uniforms[kBuiltinRestSize + sizeof(float) * 4] = {};
+        memcpy(fragment_uniforms, builtin.texture_resolutions, kBuiltinRestSize);
+        memcpy(fragment_uniforms + kBuiltinRestSize, tint, sizeof(float) * 4);
+        sg_range fragment_range = {.ptr = fragment_uniforms, .size = sizeof(fragment_uniforms)};
+        sg_apply_uniforms(2, &fragment_range);
     } else {
         r->bind.views[0] = main_view;
         for (int i = 1; i < 12; i++) {
