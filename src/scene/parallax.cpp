@@ -25,6 +25,10 @@ void parallax_update(EngineContext& ctx, float dt, int viewport_width, int viewp
 
     ctx.parallax_pointer_x += (target_x - ctx.parallax_pointer_x) * response;
     ctx.parallax_pointer_y += (target_y - ctx.parallax_pointer_y) * response;
+
+    const parallax_position_t shader_position = parallax_shader_position(ctx);
+    ctx.parallax_smooth_x = (shader_position.x - 0.5f) * 2.0f;
+    ctx.parallax_smooth_y = (shader_position.y - 0.5f) * 2.0f;
 }
 
 parallax_offset_t parallax_layer_offset(const EngineContext& ctx, const float origin[3], const float depth[2]) {
