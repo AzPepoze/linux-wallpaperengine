@@ -196,7 +196,8 @@ void ImageLayer::draw(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
 
-    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, origin, parallax);
+    const parallax_offset_t camera_offset =
+        parallax_layer_offset(ctx, scene_object_id, origin, parallax);
 
     // Center image on its parallax-adjusted scene origin.
     float rx = ctx.offset_x + (origin[0] + camera_offset.x) * ctx.render_scale - (rw * 0.5f);
@@ -216,7 +217,8 @@ void ImageLayer::draw(EngineContext& ctx) {
 void ImageLayer::drawDebug(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
-    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, origin, parallax);
+    const parallax_offset_t camera_offset =
+        parallax_layer_offset(ctx, scene_object_id, origin, parallax);
     float rx = ctx.offset_x + (origin[0] + camera_offset.x) * ctx.render_scale - (rw * 0.5f);
     float ry = ctx.offset_y + (origin[1] + camera_offset.y) * ctx.render_scale - (rh * 0.5f);
 
