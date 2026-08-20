@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "wallpaper/scene/graph/scene_graph.h"
+#include "wallpaper/scene/tree/scene_tree.h"
 
 namespace {
 
@@ -43,10 +43,10 @@ parallax_offset_t parallax_layer_offset(const EngineContext& ctx, uint32_t scene
     float node_position[3] = {fallback_origin[0], fallback_origin[1], fallback_origin[2]};
     const float* depth = fallback_depth;
 
-    if (ctx.scene_graph) {
-        if (const SceneGraphNode* resolved = ctx.scene_graph->resolveParallaxNode(scene_object_id)) {
+    if (ctx.scene_tree) {
+        if (const SceneTreeNode* resolved = ctx.scene_tree->resolveParallaxNode(scene_object_id)) {
             depth = resolved->parallax_depth.data();
-            ctx.scene_graph->worldPosition(resolved->id, node_position);
+            ctx.scene_tree->worldPosition(resolved->id, node_position);
         }
     }
 

@@ -38,7 +38,7 @@ Wallpaper Engine formats
 Wallpaper Engine JSON and binary formats are parsed into typed documents first:
 
 ```text
-scene.json → SceneParser → SceneDocument → SceneRuntime → SceneGraph / typed layers → Renderer
+scene.json → SceneParser → SceneDocument → SceneRuntime → SceneTree / typed layers → Renderer
 ```
 
 `cJSON` must eventually stop at the format boundary. Runtime layers must not own raw Wallpaper Engine JSON.

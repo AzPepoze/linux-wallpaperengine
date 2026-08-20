@@ -8,7 +8,7 @@
 #include "core/utils.h"
 #include "render/render.h"
 #include "wallpaper/scene/2d/parallax.h"
-#include "wallpaper/scene/graph/scene_graph.h"
+#include "wallpaper/scene/tree/scene_tree.h"
 
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
@@ -192,14 +192,14 @@ void ImageLayer::draw(EngineContext& ctx) {
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
     float layer_rotation = rotation;
 
-    if (scene_object_id != 0 && ctx.scene_graph) {
-        if (const SceneGraphNode* node = ctx.scene_graph->find(scene_object_id)) {
+    if (scene_object_id != 0 && ctx.scene_tree) {
+        if (const SceneTreeNode* node = ctx.scene_tree->find(scene_object_id)) {
             layer_scale[0] = node->scale[0];
             layer_scale[1] = node->scale[1];
             layer_scale[2] = node->scale[2];
             layer_rotation = node->angles[2];
         }
-        ctx.scene_graph->worldPosition(scene_object_id, layer_origin);
+        ctx.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     float rw = size[0] * layer_scale[0] * ctx.render_scale;
@@ -225,13 +225,13 @@ void ImageLayer::drawDebug(EngineContext& ctx) {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
 
-    if (scene_object_id != 0 && ctx.scene_graph) {
-        if (const SceneGraphNode* node = ctx.scene_graph->find(scene_object_id)) {
+    if (scene_object_id != 0 && ctx.scene_tree) {
+        if (const SceneTreeNode* node = ctx.scene_tree->find(scene_object_id)) {
             layer_scale[0] = node->scale[0];
             layer_scale[1] = node->scale[1];
             layer_scale[2] = node->scale[2];
         }
-        ctx.scene_graph->worldPosition(scene_object_id, layer_origin);
+        ctx.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     float rw = size[0] * layer_scale[0] * ctx.render_scale;

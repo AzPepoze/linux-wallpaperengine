@@ -4,7 +4,7 @@
 #include "core/engine_context.h"
 #include "core/utils.h"
 #include "wallpaper/scene/2d/parallax.h"
-#include "wallpaper/scene/graph/scene_graph.h"
+#include "wallpaper/scene/tree/scene_tree.h"
 
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
 
@@ -34,8 +34,8 @@ void ParticleLayer::draw(EngineContext& ctx) {
     if (!ps) return;
 
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
-    if (scene_object_id != 0 && ctx.scene_graph) {
-        ctx.scene_graph->worldPosition(scene_object_id, layer_origin);
+    if (scene_object_id != 0 && ctx.scene_tree) {
+        ctx.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
@@ -68,8 +68,8 @@ void ParticleLayer::drawDebug(EngineContext& ctx) {
     if (!ps) return;
 
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
-    if (scene_object_id != 0 && ctx.scene_graph) {
-        ctx.scene_graph->worldPosition(scene_object_id, layer_origin);
+    if (scene_object_id != 0 && ctx.scene_tree) {
+        ctx.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);

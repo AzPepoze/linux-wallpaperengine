@@ -1,4 +1,4 @@
-#include "scene_graph.h"
+#include "scene_tree.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -8,7 +8,7 @@
 
 namespace {
 
-void localTransform(const SceneGraphNode& node, mat4x4 out) {
+void localTransform(const SceneTreeNode& node, mat4x4 out) {
     // Wallpaper Engine scene-node local transform order: T * Rz * Ry * Rx * S.
     mat4x4_identity(out);
     mat4x4_translate_in_place(out, node.origin[0], node.origin[1], node.origin[2]);
@@ -20,16 +20,16 @@ void localTransform(const SceneGraphNode& node, mat4x4 out) {
 
 }  // namespace
 
-void SceneGraph::clear() {
+void SceneTree::clear() {
     nodes_.clear();
 }
 
-void SceneGraph::addNode(const SceneGraphNode& node) {
+void SceneTree::addNode(const SceneTreeNode& node) {
     if (node.id == 0) return;
     nodes_[node.id] = node;
 }
 
-void SceneGraph::rebuildHierarchy() {
+void SceneTree::rebuildHierarchy() {
     for (auto& [id, node] : nodes_) {
         (void)id;
         node.children.clear();
@@ -47,23 +47,23 @@ void SceneGraph::rebuildHierarchy() {
     }
 }
 
-const SceneGraphNode* SceneGraph::find(uint32_t id) const {
+const SceneTreeNode* SceneTree::find(uint32_t id) const {
     if (id == 0) return nullptr;
     const auto it = nodes_.find(id);
     return it == nodes_.end() ? nullptr : &it->second;
 }
 
-const SceneGraphNode* SceneGraph::resolveParallaxNode(uint32_t id) const {
-    const SceneGraphNode* node = find(id);
+const SceneTreeNode* SceneTree::resolveParallaxNode(uint32_t id) const {
+    const SceneTreeNode* node = find(id);
     if (!node) return nullptr;
 
-    const SceneGraphNode* resolved = node;
+    const SceneTreeNode* resolved = node;
     uint32_t parent_id = node->parent_id;
     std::unordered_set<uint32_t> visited;
     visited.insert(node->id);
 
     while (parent_id != 0 && visited.insert(parent_id).second) {
-        const SceneGraphNode* candidate = find(parent_id);
+        const SceneTreeNode* candidate = find(parent_id);
         if (!candidate || !candidate->propagate_to_children) break;
         resolved = candidate;
         parent_id = candidate->parent_id;
@@ -72,22 +72,22 @@ const SceneGraphNode* SceneGraph::resolveParallaxNode(uint32_t id) const {
     return resolved;
 }
 
-bool SceneGraph::localTransform(uint32_t id, mat4x4 out) const {
-    const SceneGraphNode* node = find(id);
+bool SceneTree::localTransform(uint32_t id, mat4x4 out) const {
+    const SceneTreeNode* node = find(id);
     if (!node || !out) return false;
     ::localTransform(*node, out);
     return true;
 }
 
-bool SceneGraph::worldTransform(uint32_t id, mat4x4 out) const {
-    const SceneGraphNode* node = find(id);
+bool SceneTree::worldTransform(uint32_t id, mat4x4 out) const {
+    const SceneTreeNode* node = find(id);
     if (!node || !out) return false;
 
-    std::vector<const SceneGraphNode*> chain;
+    std::vector<const SceneTreeNode*> chain;
     chain.reserve(8);
     std::unordered_set<uint32_t> visited;
 
-    const SceneGraphNode* current = node;
+    const SceneTreeNode* current = node;
     while (current && visited.insert(current->id).second) {
         chain.push_back(current);
         if (current->parent_id == 0) break;
@@ -108,7 +108,7 @@ bool SceneGraph::worldTransform(uint32_t id, mat4x4 out) const {
     return true;
 }
 
-bool SceneGraph::worldPosition(uint32_t id, float out[3]) const {
+bool SceneTree::worldPosition(uint32_t id, float out[3]) const {
     mat4x4 world;
     if (!worldTransform(id, world)) return false;
 
