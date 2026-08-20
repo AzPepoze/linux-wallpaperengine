@@ -65,7 +65,8 @@ void PassTextures::applyInstanceOverrides(cJSON* instance_config, const std::str
 }
 
 bool PassTextures::resolveDepth(const char* source_tex_path, const std::string& shader_name, EngineContext& ctx) {
-    if (!source_tex_path) return false;
+    if (depth_attempted || !source_tex_path) return false;
+    depth_attempted = true;
 
     if (textures.empty() || textures[0].id == SG_INVALID_ID) {
         std::string depth_path;

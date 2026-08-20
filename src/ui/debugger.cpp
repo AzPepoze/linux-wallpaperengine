@@ -54,8 +54,7 @@ void Debugger::drawHierarchyPanel(EngineContext& ctx, float width, float height)
     if (g_log_debug_ui_layout) {
         const ImVec2 pos = ImGui::GetWindowPos();
         const ImVec2 size = ImGui::GetWindowSize();
-        LOG_TAG_D("DEBUG_UI",
-                  "HierarchyPanel: visible=%d requested=(0.0,0.0 %.1fx%.1f) actual=(%.1f,%.1f %.1fx%.1f)",
+        LOG_TAG_D("DEBUG_UI", "HierarchyPanel: visible=%d requested=(0.0,0.0 %.1fx%.1f) actual=(%.1f,%.1f %.1fx%.1f)",
                   visible ? 1 : 0, width, height, pos.x, pos.y, size.x, size.y);
     }
 
@@ -140,8 +139,7 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
     if (g_log_debug_ui_layout) {
         const ImVec2 pos = ImGui::GetWindowPos();
         const ImVec2 size = ImGui::GetWindowSize();
-        LOG_TAG_D("DEBUG_UI",
-                  "InspectorPanel: visible=%d requested=(%.1f,0.0 %.1fx%.1f) actual=(%.1f,%.1f %.1fx%.1f)",
+        LOG_TAG_D("DEBUG_UI", "InspectorPanel: visible=%d requested=(%.1f,0.0 %.1fx%.1f) actual=(%.1f,%.1f %.1fx%.1f)",
                   visible ? 1 : 0, x_pos, current_width, height, pos.x, pos.y, size.x, size.y);
     }
 
@@ -215,7 +213,8 @@ void Debugger::draw(EngineContext& ctx) {
     const int surface_height = sapp_height();
     const float dpi_scale = sapp_dpi_scale();
 
-    if (surface_width != g_last_surface_width || surface_height != g_last_surface_height || dpi_scale != g_last_dpi_scale) {
+    if (surface_width != g_last_surface_width || surface_height != g_last_surface_height ||
+        dpi_scale != g_last_dpi_scale) {
         g_log_debug_ui_layout = true;
         g_last_surface_width = surface_width;
         g_last_surface_height = surface_height;
@@ -272,10 +271,12 @@ void Debugger::draw(EngineContext& ctx) {
         const ImDrawData* draw_data = ImGui::GetDrawData();
         if (draw_data) {
             LOG_TAG_D("DEBUG_UI",
-                      "Draw data: valid=%d cmd_lists=%d vertices=%d indices=%d display_pos=(%.1f,%.1f) display_size=(%.1f,%.1f) framebuffer_scale=(%.3f,%.3f)",
+                      "Draw data: valid=%d cmd_lists=%d vertices=%d indices=%d display_pos=(%.1f,%.1f) "
+                      "display_size=(%.1f,%.1f) framebuffer_scale=(%.3f,%.3f)",
                       draw_data->Valid ? 1 : 0, draw_data->CmdListsCount, draw_data->TotalVtxCount,
-                      draw_data->TotalIdxCount, draw_data->DisplayPos.x, draw_data->DisplayPos.y, draw_data->DisplaySize.x,
-                      draw_data->DisplaySize.y, draw_data->FramebufferScale.x, draw_data->FramebufferScale.y);
+                      draw_data->TotalIdxCount, draw_data->DisplayPos.x, draw_data->DisplayPos.y,
+                      draw_data->DisplaySize.x, draw_data->DisplaySize.y, draw_data->FramebufferScale.x,
+                      draw_data->FramebufferScale.y);
         } else {
             LOG_TAG_W("DEBUG_UI", "Draw data is null after simgui_render()");
         }

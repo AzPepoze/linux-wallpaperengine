@@ -16,6 +16,7 @@ class PassTextures {
     std::vector<GfxView> cached_views;
     std::vector<std::string> texture_paths;
     std::vector<bool> texture_masks;
+    bool depth_attempted = false;
 
     void loadFromConfig(cJSON* base_config, const std::string& shader_name, EngineContext& ctx);
     void applyInstanceOverrides(cJSON* instance_config, const std::string& shader_name, EngineContext& ctx);

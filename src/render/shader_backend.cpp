@@ -1,13 +1,14 @@
 #include "shader_backend.h"
 
+#include <slang-com-ptr.h>
+#include <slang.h>
+
 #include <atomic>
 #include <cstring>
 #include <string>
 #include <vector>
 
 #include "../core/logger.h"
-#include <slang-com-ptr.h>
-#include <slang.h>
 
 namespace {
 
@@ -278,7 +279,8 @@ void log_slang_diagnostics(const char* source_name, slang::IBlob* diagnostics) {
     core_log.error("Slang diagnostics for %s: %s", source_name, text.c_str());
 }
 
-bool compile_spirv(SlangStage stage, const std::string& source, const char* source_name, std::vector<uint32_t>& output) {
+bool compile_spirv(SlangStage stage, const std::string& source, const char* source_name,
+                   std::vector<uint32_t>& output) {
     SlangCompilerContext& context = slang_context();
     if (!context.initialize()) return false;
 
@@ -286,8 +288,8 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
     const std::string module_name = "lwe_runtime_shader_" + std::to_string(module_id);
 
     Slang::ComPtr<slang::IBlob> diagnostics;
-    slang::IModule* module = context.session->loadModuleFromSourceString(
-        module_name.c_str(), source_name, source.c_str(), diagnostics.writeRef());
+    slang::IModule* module = context.session->loadModuleFromSourceString(module_name.c_str(), source_name,
+                                                                         source.c_str(), diagnostics.writeRef());
     if (!module) {
         log_slang_diagnostics(source_name, diagnostics.get());
         core_log.error("Slang failed to load GLSL module for %s", source_name);
@@ -307,7 +309,7 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
     Slang::ComPtr<slang::IComponentType> composed_program;
     diagnostics.setNull();
     if (context.session->createCompositeComponentType(components, 2, composed_program.writeRef(),
-                                                       diagnostics.writeRef()) != SLANG_OK ||
+                                                      diagnostics.writeRef()) != SLANG_OK ||
         !composed_program) {
         log_slang_diagnostics(source_name, diagnostics.get());
         core_log.error("Slang failed to compose shader program for %s", source_name);
