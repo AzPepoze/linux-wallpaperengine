@@ -1,5 +1,8 @@
 #include "effect.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -12,92 +15,261 @@
 #include "render/shader/shader_processor.h"
 #include "sokol_app.h"
 
+namespace {
+void mergeJsonObject(cJSON*& target, cJSON* source) {
+    if (!cJSON_IsObject(source)) return;
+    if (!target) target = cJSON_CreateObject();
+
+    cJSON* item;
+    cJSON_ArrayForEach(item, source) {
+        if (!item->string) continue;
+        cJSON_DeleteItemFromObjectCaseSensitive(target, item->string);
+        cJSON_AddItemToObject(target, item->string, cJSON_Duplicate(item, 1));
+    }
+}
+
+bool jsonToFloats(cJSON* node, std::vector<float>& out) {
+    if (!node) return false;
+
+    if (cJSON_IsNumber(node)) {
+        out.push_back((float)node->valuedouble);
+        return true;
+    }
+    if (cJSON_IsBool(node)) {
+        out.push_back(cJSON_IsTrue(node) ? 1.0f : 0.0f);
+        return true;
+    }
+    if (cJSON_IsString(node) && node->valuestring) {
+        std::string text = node->valuestring;
+        std::replace(text.begin(), text.end(), ',', ' ');
+        std::istringstream stream(text);
+        float value = 0.0f;
+        bool parsed = false;
+        while (stream >> value) {
+            out.push_back(value);
+            parsed = true;
+        }
+        return parsed;
+    }
+    if (cJSON_IsArray(node)) {
+        bool parsed = false;
+        cJSON* item;
+        cJSON_ArrayForEach(item, node) { parsed = jsonToFloats(item, out) || parsed; }
+        return parsed;
+    }
+    if (cJSON_IsObject(node)) {
+        // Wallpaper Engine wraps animated/user-bound values in objects while
+        // preserving the authored fallback in `value`.
+        return jsonToFloats(cJSON_GetObjectItemCaseSensitive(node, "value"), out);
+    }
+    return false;
+}
+
+bool jsonToInt(cJSON* node, int& value) {
+    if (!node) return false;
+    if (cJSON_IsNumber(node)) {
+        value = node->valueint;
+        return true;
+    }
+    if (cJSON_IsBool(node)) {
+        value = cJSON_IsTrue(node) ? 1 : 0;
+        return true;
+    }
+    if (cJSON_IsString(node) && node->valuestring) {
+        char* end = nullptr;
+        long parsed = strtol(node->valuestring, &end, 10);
+        if (end && end != node->valuestring) {
+            value = (int)parsed;
+            return true;
+        }
+        return false;
+    }
+    if (cJSON_IsArray(node) && cJSON_GetArraySize(node) > 0) {
+        return jsonToInt(cJSON_GetArrayItem(node, 0), value);
+    }
+    if (cJSON_IsObject(node)) {
+        return jsonToInt(cJSON_GetObjectItemCaseSensitive(node, "value"), value);
+    }
+    return false;
+}
+
+void readCombos(cJSON* config, std::map<std::string, int>& combos) {
+    if (!config) return;
+    cJSON* combo_node = cJSON_GetObjectItemCaseSensitive(config, "combos");
+    if (!cJSON_IsObject(combo_node)) return;
+
+    cJSON* item;
+    cJSON_ArrayForEach(item, combo_node) {
+        if (!item->string) continue;
+        int value = 0;
+        if (jsonToInt(item, value)) combos[item->string] = value;
+    }
+}
+
+std::string normalizeUniformName(const std::string& name) {
+    std::string normalized;
+    size_t start = 0;
+    if (name.size() > 2 && (name[0] == 'g' || name[0] == 'G') && name[1] == '_') start = 2;
+    for (size_t i = start; i < name.size(); ++i) {
+        unsigned char c = (unsigned char)name[i];
+        if (std::isalnum(c)) normalized.push_back((char)std::tolower(c));
+    }
+    return normalized;
+}
+
+std::vector<std::string> extractUniformNames(const std::string& source) {
+    std::vector<std::string> result;
+    size_t search = 0;
+    while ((search = source.find("uniform", search)) != std::string::npos) {
+        if (search > 0) {
+            unsigned char before = (unsigned char)source[search - 1];
+            if (std::isalnum(before) || before == '_') {
+                search += 7;
+                continue;
+            }
+        }
+
+        const size_t semicolon = source.find(';', search + 7);
+        if (semicolon == std::string::npos) break;
+        std::string declaration = source.substr(search + 7, semicolon - search - 7);
+        const size_t comment = declaration.find("//");
+        if (comment != std::string::npos) declaration.erase(comment);
+
+        std::istringstream stream(declaration);
+        std::vector<std::string> tokens;
+        std::string token;
+        while (stream >> token) tokens.push_back(token);
+        if (tokens.size() >= 2) {
+            std::string name = tokens.back();
+            const size_t array = name.find('[');
+            if (array != std::string::npos) name.erase(array);
+            const size_t assign = name.find('=');
+            if (assign != std::string::npos) name.erase(assign);
+            if (!name.empty()) result.push_back(name);
+        }
+        search = semicolon + 1;
+    }
+    return result;
+}
+
+std::string resolveUniformName(const std::string& authored, const std::vector<std::string>& shader_uniforms) {
+    std::string preferred = authored;
+    auto mapped = Config::kUniformNameMap.find(authored);
+    if (mapped != Config::kUniformNameMap.end()) preferred = mapped->second;
+
+    for (const auto& candidate : shader_uniforms) {
+        if (candidate == preferred) return candidate;
+    }
+
+    const std::string wanted = normalizeUniformName(preferred);
+    for (const auto& candidate : shader_uniforms) {
+        if (normalizeUniformName(candidate) == wanted) return candidate;
+    }
+
+    // Most WE constant keys omit the g_ prefix and use lowercase spelling.
+    // Keep the old fallback for custom shaders where declaration discovery
+    // cannot identify a matching name.
+    if (preferred.find("g_") != 0 && !preferred.empty()) {
+        std::string fallback = "g_";
+        fallback += (char)std::toupper((unsigned char)preferred[0]);
+        fallback += preferred.substr(1);
+        return fallback;
+    }
+    return preferred;
+}
+
+void setComboDefine(std::string& combo_defines, const std::string& requested_name, int value) {
+    auto replace_define = [&](const std::string& name) {
+        const std::string prefix = "#define " + name + " ";
+        const size_t pos = combo_defines.find(prefix);
+        if (pos == std::string::npos) return false;
+        size_t end = combo_defines.find('\n', pos);
+        if (end == std::string::npos) end = combo_defines.size();
+        combo_defines.replace(pos, end - pos, prefix + std::to_string(value));
+        return true;
+    };
+
+    if (replace_define(requested_name)) return;
+
+    std::string upper = requested_name;
+    std::transform(upper.begin(), upper.end(), upper.begin(),
+                   [](unsigned char c) { return (char)std::toupper(c); });
+    if (replace_define(upper)) return;
+
+    // Custom effects may provide a combo that is consumed by #if without a
+    // Wallpaper Engine metadata comment. Defining it is harmless and preserves
+    // the authored material/pass semantics.
+    combo_defines += "#define " + requested_name + " " + std::to_string(value) + "\n";
+}
+}  // namespace
+
 ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx) {
     cJSON* base_config = config;
-    char* material_json_str = nullptr;
+    cJSON* owned_base_config = nullptr;
 
-    // If config has a material reference, load that instead
+    // Effect passes frequently point at a Wallpaper Engine material. Resolve
+    // the first material pass, then layer effect-pass and instance overrides on
+    // top of it just like the native runtime does.
     cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(config, "material");
-    if (cJSON_IsString(mat_ref)) {
+    if (cJSON_IsString(mat_ref) && mat_ref->valuestring) {
         char abs_mat[1024];
         if (ctx.asset_mgr.resolvePath(mat_ref->valuestring, abs_mat, sizeof(abs_mat))) {
-            material_json_str = read_file_to_string(abs_mat);
+            char* material_json_str = read_file_to_string(abs_mat);
             if (material_json_str) {
                 cJSON* mat_json = cJSON_Parse(material_json_str);
+                free(material_json_str);
                 if (mat_json) {
                     cJSON* passes = cJSON_GetObjectItemCaseSensitive(mat_json, "passes");
                     if (cJSON_IsArray(passes) && cJSON_GetArraySize(passes) > 0) {
-                        base_config = cJSON_Duplicate(cJSON_GetArrayItem(passes, 0), 1);
-                        cJSON_Delete(mat_json);
+                        owned_base_config = cJSON_Duplicate(cJSON_GetArrayItem(passes, 0), 1);
                     } else {
-                        base_config = mat_json;
+                        owned_base_config = cJSON_Duplicate(mat_json, 1);
                     }
+                    cJSON_Delete(mat_json);
+                    if (owned_base_config) base_config = owned_base_config;
                 }
             }
         }
     }
 
-    constant_values = cJSON_Duplicate(cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"), 1);
     cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(base_config, "shader");
-    if (cJSON_IsString(shader_node)) {
-        shader_name = shader_node->valuestring;
+    if (cJSON_IsString(shader_node) && shader_node->valuestring) shader_name = shader_node->valuestring;
+
+    // A pass can override fields supplied by its material.
+    if (base_config != config) {
+        cJSON* pass_shader = cJSON_GetObjectItemCaseSensitive(config, "shader");
+        if (cJSON_IsString(pass_shader) && pass_shader->valuestring) shader_name = pass_shader->valuestring;
     }
 
+    mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"));
+    readCombos(base_config, combos);
     pass_textures.loadFromConfig(base_config, shader_name, ctx);
 
-    if (material_json_str) {
-        cJSON_Delete(base_config);
-        free(material_json_str);
+    if (base_config != config) {
+        mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"));
+        readCombos(config, combos);
+        pass_textures.applyInstanceOverrides(config, shader_name, ctx);
     }
 
     if (instance_config) {
         pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
+        mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"));
+        readCombos(instance_config, combos);
 
-        cJSON* inst_const = cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues");
-        if (cJSON_IsObject(inst_const)) {
-            if (!constant_values)
-                constant_values = cJSON_Duplicate(inst_const, 1);
-            else {
-                cJSON* item;
-                cJSON_ArrayForEach(item, inst_const) {
-                    cJSON* existing = cJSON_GetObjectItemCaseSensitive(constant_values, item->string);
-                    if (existing) {
-                        cJSON_DeleteItemFromObjectCaseSensitive(constant_values, item->string);
-                    }
-                    cJSON_AddItemToObject(constant_values, item->string, cJSON_Duplicate(item, 1));
-                }
-            }
-        }
+        cJSON* pass_enabled = cJSON_GetObjectItemCaseSensitive(instance_config, "enabled");
+        if (cJSON_IsBool(pass_enabled)) enabled = cJSON_IsTrue(pass_enabled);
     }
 
     if (constant_values) {
         cJSON* item;
         cJSON_ArrayForEach(item, constant_values) {
-            std::vector<float> vals;
-            if (cJSON_IsNumber(item)) {
-                vals.push_back((float)item->valuedouble);
-            } else if (cJSON_IsString(item)) {
-                float f1, f2, f3, f4;
-                int count = sscanf(item->valuestring, "%f %f %f %f", &f1, &f2, &f3, &f4);
-                if (count >= 1) vals.push_back(f1);
-                if (count >= 2) vals.push_back(f2);
-                if (count >= 3) vals.push_back(f3);
-                if (count >= 4) vals.push_back(f4);
-            }
-            if (!vals.empty()) {
-                std::string name = item->string;
-                if (Config::kUniformNameMap.count(name)) {
-                    name = Config::kUniformNameMap.at(name);
-                } else if (name.find("g_") != 0) {
-                    std::string mapped = "g_";
-                    mapped += (char)toupper(name[0]);
-                    mapped += name.substr(1);
-                    name = mapped;
-                }
-                uniforms[name] = vals;
-            }
+            if (!item->string) continue;
+            std::vector<float> values;
+            if (jsonToFloats(item, values) && !values.empty()) uniforms[item->string] = std::move(values);
         }
     }
+
+    if (owned_base_config) cJSON_Delete(owned_base_config);
 }
 
 ShaderPass::~ShaderPass() {
@@ -105,7 +277,10 @@ ShaderPass::~ShaderPass() {
 }
 
 void ShaderPass::init(EngineContext& ctx) {
-    if (shader_name.empty()) return;
+    if (shader_name.empty()) {
+        effect_log.warn("Skipping effect pass with no shader");
+        return;
+    }
 
     char vert_path[256], frag_path[256];
     if (shader_name.find("shaders/") == 0) {
@@ -141,60 +316,56 @@ void ShaderPass::init(EngineContext& ctx) {
     }
 
     if (!vs_src || !fs_src) {
+        effect_log.warn("ShaderPass %s: missing vertex or fragment shader source", shader_name.c_str());
         if (vs_src) free(vs_src);
         if (fs_src) free(fs_src);
         return;
     }
 
+    std::string raw_vs = vs_src;
+    std::string raw_fs = fs_src;
     std::string combo_defines = ShaderSourceProcessor::extractCombos(fs_src);
-    auto set_combo_define = [&combo_defines](const std::string& name, int value) {
-        const std::string prefix = "#define " + name + " ";
-        const std::string replacement = prefix + std::to_string(value);
-        const size_t pos = combo_defines.find(prefix);
-        if (pos == std::string::npos) {
-            combo_defines += replacement + "\n";
-            return;
-        }
-        size_t end = combo_defines.find('\n', pos);
-        if (end == std::string::npos) end = combo_defines.size();
-        combo_defines.replace(pos, end - pos, replacement);
-    };
 
-    if (constant_values) {
-        cJSON* item;
-        cJSON_ArrayForEach(item, constant_values) {
-            if (cJSON_IsNumber(item)) {
-                std::string name = item->string;
-                for (auto& c : name) c = toupper(c);
-                set_combo_define(name, (int)item->valuedouble);
-            }
-        }
-    }
+    for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
 
     const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
     const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
 
+    // These two effects have well-known optional texture combos. Keep their
+    // compatibility fallback, while every other effect is driven entirely by
+    // material/pass combo data.
     if (is_depth_parallax) {
-        // depthparallax: g_Texture1=depth, g_Texture2=optional mask.
-        set_combo_define("MASK", 0);
+        setComboDefine(combo_defines, "MASK", 0);
         if (pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID) {
-            set_combo_define("MASK", 1);
+            setComboDefine(combo_defines, "MASK", 1);
         }
     } else if (is_waterwaves) {
-        // waterwaves: g_Texture1=optional mask, g_Texture2=optional time-offset texture.
-        set_combo_define("MASK", 0);
-        set_combo_define("TIMEOFFSET", 0);
+        setComboDefine(combo_defines, "MASK", 0);
+        setComboDefine(combo_defines, "TIMEOFFSET", 0);
         if (!pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID) {
-            set_combo_define("MASK", 1);
+            setComboDefine(combo_defines, "MASK", 1);
         }
         if (pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID) {
-            set_combo_define("TIMEOFFSET", 1);
+            setComboDefine(combo_defines, "TIMEOFFSET", 1);
         }
     }
 
+    // Resolve lowercase JSON keys such as `animationspeed` against the actual
+    // shader declaration (for example g_AnimationSpeed) before building Sokol
+    // uniform metadata.
+    std::vector<std::string> shader_uniforms = extractUniformNames(raw_vs);
+    std::vector<std::string> fragment_uniforms = extractUniformNames(raw_fs);
+    shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
+
+    std::map<std::string, std::vector<float>> resolved_uniforms;
+    for (const auto& [name, values] : uniforms) {
+        resolved_uniforms[resolveUniformName(name, shader_uniforms)] = values;
+    }
+    uniforms = std::move(resolved_uniforms);
+
     std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
-    std::string processed_vs = ShaderSourceProcessor::processShaderSource(vs_src, true);
-    std::string processed_fs = ShaderSourceProcessor::processShaderSource(fs_src, false);
+    std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, true);
+    std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, false);
 
     if (is_depth_parallax) {
         // Wallpaper Engine opacity masks are painted in display/gamma space. The runtime effect expects the mask
@@ -223,12 +394,17 @@ void ShaderPass::init(EngineContext& ctx) {
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
 
-    compiled = ShaderCompiler::compile(shader_name, full_vs, full_fs, uniforms, pass_textures.textures.size());
+    compiled = ShaderCompiler::compile(shader_name, full_vs, full_fs, uniforms, (int)pass_textures.textures.size());
 
     free(vs_src);
     free(fs_src);
 
     pass_textures.buildCachedViews();
+
+    if (compiled.pipeline.id == SG_INVALID_ID) {
+        effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped", shader_name.c_str());
+        return;
+    }
 
     // Log only effect-specific fallbacks. Extra texture meanings differ between effects.
     if (is_depth_parallax) {
@@ -247,14 +423,16 @@ void ShaderPass::init(EngineContext& ctx) {
 }
 
 void ShaderPass::apply(EngineContext& ctx) {
+    (void)ctx;
     if (!enabled || compiled.pipeline.id == SG_INVALID_ID) return;
 }
 
 void ShaderPass::applyUniforms() {
     int u_idx = 3;
     for (auto const& [name, vals] : uniforms) {
+        (void)name;
         if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
-        float data[4] = {0, 0, 0, 0};
+        alignas(16) float data[4] = {0, 0, 0, 0};
         for (int i = 0; i < (int)vals.size() && i < 4; i++) data[i] = vals[i];
         sg_range range = SG_RANGE(data);
         sg_apply_uniforms(u_idx, &range);
@@ -294,9 +472,7 @@ Effect::Effect(cJSON* config, EngineContext& ctx) {
     cJSON* passes_node = cJSON_GetObjectItemCaseSensitive(config, "passes");
     if (cJSON_IsArray(passes_node)) {
         cJSON* pass_json;
-        cJSON_ArrayForEach(pass_json, passes_node) {
-            passes.push_back(new ShaderPass(pass_json, nullptr, ctx));
-        }
+        cJSON_ArrayForEach(pass_json, passes_node) { passes.push_back(new ShaderPass(pass_json, nullptr, ctx)); }
     }
 }
 
@@ -306,35 +482,37 @@ Effect::~Effect() {
 }
 
 Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext& ctx) {
-    const bool is_depth_parallax = strstr(rel_path, "depthparallax") != nullptr;
-    const bool is_waterwaves = strstr(rel_path, "waterwaves") != nullptr;
-    if (!is_depth_parallax && !is_waterwaves) {
-        effect_log.warn("Ignoring unsupported effect: %s", rel_path);
-        return nullptr;
-    }
+    if (!rel_path || !rel_path[0]) return nullptr;
 
     char abs_path[1024];
-    if (!ctx.asset_mgr.resolvePath(rel_path, abs_path, sizeof(abs_path))) return nullptr;
+    if (!ctx.asset_mgr.resolvePath(rel_path, abs_path, sizeof(abs_path))) {
+        effect_log.warn("Effect definition not found: %s", rel_path);
+        return nullptr;
+    }
 
     char* json_str = read_file_to_string(abs_path);
     if (!json_str) return nullptr;
 
     cJSON* config = cJSON_Parse(json_str);
     free(json_str);
-    if (!config) return nullptr;
+    if (!config) {
+        effect_log.warn("Failed to parse effect definition: %s", rel_path);
+        return nullptr;
+    }
 
     Effect* effect = new Effect(config, ctx);
     effect->file_path = rel_path;
 
+    // Instance pass data overrides the matching pass from the effect definition.
     cJSON* inst_passes = cJSON_GetObjectItemCaseSensitive(instance_config, "passes");
-    if (cJSON_IsArray(inst_passes)) {
+    cJSON* config_passes = cJSON_GetObjectItemCaseSensitive(config, "passes");
+    if (cJSON_IsArray(inst_passes) && cJSON_IsArray(config_passes)) {
         for (int i = 0; i < cJSON_GetArraySize(inst_passes); i++) {
-            if (i < (int)effect->passes.size()) {
-                cJSON* pass_config = cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(config, "passes"), i);
-                cJSON* inst_pass_config = cJSON_GetArrayItem(inst_passes, i);
-                delete effect->passes[i];
-                effect->passes[i] = new ShaderPass(pass_config, inst_pass_config, ctx);
-            }
+            if (i >= (int)effect->passes.size() || i >= cJSON_GetArraySize(config_passes)) break;
+            cJSON* pass_config = cJSON_GetArrayItem(config_passes, i);
+            cJSON* inst_pass_config = cJSON_GetArrayItem(inst_passes, i);
+            delete effect->passes[i];
+            effect->passes[i] = new ShaderPass(pass_config, inst_pass_config, ctx);
         }
     }
 
@@ -347,20 +525,23 @@ Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext
     }
 
     effect->init(ctx);
-
     cJSON_Delete(config);
+
+    if (effect->passes.empty()) {
+        effect_log.warn("Effect %s has no render passes", rel_path);
+    } else {
+        effect_log.info("Loaded generic Wallpaper Engine effect: %s (%zu pass%s)", rel_path, effect->passes.size(),
+                        effect->passes.size() == 1 ? "" : "es");
+    }
     return effect;
 }
 
 Effect* Effect::loadFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx) {
     cJSON* inst_json = nullptr;
-    if (!doc.instance_config_json.empty()) {
-        inst_json = cJSON_Parse(doc.instance_config_json.c_str());
-    }
+    if (!doc.instance_config_json.empty()) inst_json = cJSON_Parse(doc.instance_config_json.c_str());
+
     Effect* eff = load(doc.file.c_str(), inst_json, ctx);
-    if (eff) {
-        eff->visible = doc.visible;
-    }
+    if (eff) eff->visible = doc.visible;
     if (inst_json) cJSON_Delete(inst_json);
     return eff;
 }
