@@ -13,7 +13,6 @@ add_requires("cmake::slang", {
 target("linux-wallpaperengine")
     set_kind("binary")
     add_packages("imgui", "slang_shader")
-    add_defines("LWE_SOKOL_VULKAN")
     
     -- Source files
     add_files("src/main.cpp")
