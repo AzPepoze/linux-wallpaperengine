@@ -6,15 +6,10 @@
 #include <vector>
 
 #include "../core/logger.h"
-
-#ifdef LWE_SOKOL_VULKAN
 #include <slang-com-ptr.h>
 #include <slang.h>
-#endif
 
 namespace {
-
-#ifdef LWE_SOKOL_VULKAN
 
 const char* uniform_type_to_glsl(sg_uniform_type type) {
     switch (type) {
@@ -256,13 +251,14 @@ struct SlangCompilerContext {
 
         slang::TargetDesc target_desc = {};
         target_desc.format = SLANG_SPIRV;
-        target_desc.profile = global_session->findProfile("spirv_1_3");
+        target_desc.profile = global_session->findProfile("glsl_450");
 
         slang::SessionDesc session_desc = {};
         session_desc.targetCount = 1;
         session_desc.targets = &target_desc;
+        session_desc.allowGLSLSyntax = true;
         if (global_session->createSession(session_desc, session.writeRef()) != SLANG_OK || !session) {
-            core_log.error("Failed to initialize Slang SPIR-V session");
+            core_log.error("Failed to initialize Slang GLSL-to-SPIR-V session");
             return false;
         }
         return true;
@@ -345,8 +341,6 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
     return true;
 }
 
-#endif  // LWE_SOKOL_VULKAN
-
 }  // namespace
 
 sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_source,
@@ -354,7 +348,6 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
     if (!desc) return {SG_INVALID_ID};
     if (label) desc->label = label;
 
-#ifdef LWE_SOKOL_VULKAN
     if (!prepare_vulkan_bindings(desc)) return {SG_INVALID_ID};
 
     const std::string vulkan_vs = make_vulkan_source(*desc, vertex_source, SG_SHADERSTAGE_VERTEX);
@@ -377,9 +370,4 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
     desc->fragment_func.entry = "main";
 
     return sg_make_shader(desc);
-#else
-    desc->vertex_func.source = vertex_source.c_str();
-    desc->fragment_func.source = fragment_source.c_str();
-    return sg_make_shader(desc);
-#endif
 }
