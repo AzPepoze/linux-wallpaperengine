@@ -196,8 +196,9 @@ void ImageLayer::draw(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
 
-    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
-    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
+    const float camera_amount = ctx.camera_parallax_enabled ? ctx.camera_parallax_amount : 0.0f;
+    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale * camera_amount;
+    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale * camera_amount;
 
     // Center image on its origin
     float rx = ctx.offset_x + (origin[0] + px) * ctx.render_scale - (rw * 0.5f);
@@ -217,8 +218,9 @@ void ImageLayer::draw(EngineContext& ctx) {
 void ImageLayer::drawDebug(EngineContext& ctx) {
     float rw = size[0] * scale[0] * ctx.render_scale;
     float rh = size[1] * scale[1] * ctx.render_scale;
-    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
-    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
+    const float camera_amount = ctx.camera_parallax_enabled ? ctx.camera_parallax_amount : 0.0f;
+    float px = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale * camera_amount;
+    float py = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale * camera_amount;
     float rx = ctx.offset_x + (origin[0] + px) * ctx.render_scale - (rw * 0.5f);
     float ry = ctx.offset_y + (origin[1] + py) * ctx.render_scale - (rh * 0.5f);
 
