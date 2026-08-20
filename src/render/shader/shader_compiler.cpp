@@ -1,14 +1,185 @@
 #include "shader_compiler.h"
 
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include "core/config.h"
 #include "core/logger.h"
 #include "render/render.h"  // For builtin_uniforms_t
 #include "shader_backend.h"
 
+namespace {
+enum class CustomUniformType {
+    Unknown,
+    Float,
+    Vec2,
+    Vec3,
+    Vec4,
+    Int,
+    IVec2,
+    IVec3,
+    IVec4,
+    Bool,
+};
+
+struct CustomUniformDecl {
+    std::string name;
+    CustomUniformType type = CustomUniformType::Unknown;
+};
+
+bool isTokenChar(char c) { return std::isalnum((unsigned char)c) || c == '_'; }
+
+CustomUniformType parseUniformType(const std::string& declaration) {
+    std::istringstream stream(declaration);
+    std::string token;
+    while (stream >> token) {
+        if (token == "float") return CustomUniformType::Float;
+        if (token == "vec2" || token == "float2") return CustomUniformType::Vec2;
+        if (token == "vec3" || token == "float3") return CustomUniformType::Vec3;
+        if (token == "vec4" || token == "float4") return CustomUniformType::Vec4;
+        if (token == "int") return CustomUniformType::Int;
+        if (token == "ivec2" || token == "int2") return CustomUniformType::IVec2;
+        if (token == "ivec3" || token == "int3") return CustomUniformType::IVec3;
+        if (token == "ivec4" || token == "int4") return CustomUniformType::IVec4;
+        if (token == "bool") return CustomUniformType::Bool;
+    }
+    return CustomUniformType::Unknown;
+}
+
+bool findUniformDeclaration(const std::string& source, const std::string& name, size_t from, size_t& start, size_t& end,
+                            CustomUniformType& type) {
+    size_t name_pos = from;
+    while ((name_pos = source.find(name, name_pos)) != std::string::npos) {
+        const bool left_ok = name_pos == 0 || !isTokenChar(source[name_pos - 1]);
+        const size_t name_end = name_pos + name.size();
+        const bool right_ok = name_end >= source.size() || !isTokenChar(source[name_end]);
+        if (!left_ok || !right_ok) {
+            name_pos = name_end;
+            continue;
+        }
+
+        const size_t line_start_raw = source.rfind('\n', name_pos);
+        const size_t line_start = line_start_raw == std::string::npos ? 0 : line_start_raw + 1;
+        const size_t semicolon = source.find(';', name_end);
+        const size_t line_end = source.find('\n', name_end);
+        if (semicolon == std::string::npos || (line_end != std::string::npos && semicolon > line_end)) {
+            name_pos = name_end;
+            continue;
+        }
+
+        const size_t uniform_pos = source.find("uniform", line_start);
+        if (uniform_pos == std::string::npos || uniform_pos > name_pos || uniform_pos > semicolon) {
+            name_pos = name_end;
+            continue;
+        }
+
+        const std::string declaration = source.substr(uniform_pos, semicolon - uniform_pos + 1);
+        const CustomUniformType detected = parseUniformType(declaration);
+        if (detected == CustomUniformType::Unknown) {
+            name_pos = name_end;
+            continue;
+        }
+
+        start = uniform_pos;
+        end = semicolon + 1;
+        type = detected;
+        return true;
+    }
+    return false;
+}
+
+bool hasUniformDeclaration(const std::string& source, const std::string& name, CustomUniformType& type) {
+    size_t start = 0, end = 0;
+    return findUniformDeclaration(source, name, 0, start, end, type);
+}
+
+std::string packedExpression(const std::string& packed_name, CustomUniformType type) {
+    switch (type) {
+        case CustomUniformType::Float:
+            return "(" + packed_name + ".x)";
+        case CustomUniformType::Vec2:
+            return "(" + packed_name + ".xy)";
+        case CustomUniformType::Vec3:
+            return "(" + packed_name + ".xyz)";
+        case CustomUniformType::Vec4:
+            return "(" + packed_name + ")";
+        case CustomUniformType::Int:
+            return "int(" + packed_name + ".x)";
+        case CustomUniformType::IVec2:
+            return "ivec2(" + packed_name + ".xy)";
+        case CustomUniformType::IVec3:
+            return "ivec3(" + packed_name + ".xyz)";
+        case CustomUniformType::IVec4:
+            return "ivec4(" + packed_name + ")";
+        case CustomUniformType::Bool:
+            return "(" + packed_name + ".x != 0.0)";
+        default:
+            return "(" + packed_name + ")";
+    }
+}
+
+void rewriteUniformDeclaration(std::string& source, const std::string& name, const std::string& packed_name,
+                               CustomUniformType type) {
+    size_t search = 0;
+    bool emitted_alias = false;
+    while (true) {
+        size_t start = 0, end = 0;
+        CustomUniformType ignored = CustomUniformType::Unknown;
+        if (!findUniformDeclaration(source, name, search, start, end, ignored)) break;
+
+        std::string replacement;
+        if (!emitted_alias) {
+            replacement = "#define " + name + " " + packedExpression(packed_name, type);
+            emitted_alias = true;
+        }
+        source.replace(start, end - start, replacement);
+        search = start + replacement.size();
+    }
+}
+
+void appendPackedBlocks(const std::vector<CustomUniformDecl>& declarations, sg_shader_stage stage, std::string& source,
+                        sg_shader_desc& shd_desc, CompiledShader& result, int& next_slot,
+                        std::string packed_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS]) {
+    size_t declaration_index = 0;
+    while (declaration_index < declarations.size() && next_slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS) {
+        const int slot = next_slot++;
+        const size_t remaining = declarations.size() - declaration_index;
+        const int member_count = (int)std::min(remaining, (size_t)SG_MAX_UNIFORMBLOCK_MEMBERS);
+
+        shd_desc.uniform_blocks[slot].stage = stage;
+        shd_desc.uniform_blocks[slot].size = member_count * 16;
+
+        CompiledUniformBlock metadata;
+        metadata.slot = slot;
+        metadata.uniform_names.reserve(member_count);
+
+        for (int member = 0; member < member_count; ++member) {
+            const CustomUniformDecl& decl = declarations[declaration_index + member];
+            packed_names[slot][member] = "_lwe_custom_" + std::to_string(slot) + "_" + std::to_string(member);
+            shd_desc.uniform_blocks[slot].glsl_uniforms[member].glsl_name = packed_names[slot][member].c_str();
+            shd_desc.uniform_blocks[slot].glsl_uniforms[member].type = SG_UNIFORMTYPE_FLOAT4;
+            rewriteUniformDeclaration(source, decl.name, packed_names[slot][member], decl.type);
+            metadata.uniform_names.push_back(decl.name);
+        }
+
+        result.custom_uniform_blocks.push_back(std::move(metadata));
+        declaration_index += member_count;
+    }
+
+    if (declaration_index < declarations.size()) {
+        effect_log.warn("Custom uniform block capacity exceeded: %zu uniform(s) were not bound",
+                        declarations.size() - declaration_index);
+    }
+}
+}  // namespace
+
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
                                        const std::string& fragSource,
                                        const std::map<std::string, std::vector<float>>& uniforms, int textureCount) {
     CompiledShader result;
+    std::string compiled_vert_source = vertSource;
+    std::string compiled_frag_source = fragSource;
 
     sg_shader_desc shd_desc = {};
     shd_desc.attrs[0].glsl_name = "a_Position";
@@ -79,52 +250,24 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[2].glsl_uniforms[12].glsl_name = "tint";
     shd_desc.uniform_blocks[2].glsl_uniforms[12].type = SG_UNIFORMTYPE_FLOAT4;
 
-    // Custom uniforms (up to 8 slots total in Sokol)
-    int u_idx = 3;
-    for (auto const& [name, vals] : uniforms) {
-        if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
-
-        sg_uniform_type type = SG_UNIFORMTYPE_FLOAT4;
-        if (vertSource.find("uniform float " + name) != std::string::npos ||
-            fragSource.find("uniform float " + name) != std::string::npos) {
-            type = SG_UNIFORMTYPE_FLOAT;
-        } else if (vertSource.find("uniform vec2 " + name) != std::string::npos ||
-                   fragSource.find("uniform vec2 " + name) != std::string::npos) {
-            type = SG_UNIFORMTYPE_FLOAT2;
-        } else if (vertSource.find("uniform vec3 " + name) != std::string::npos ||
-                   fragSource.find("uniform vec3 " + name) != std::string::npos) {
-            type = SG_UNIFORMTYPE_FLOAT3;
-        }
-
-        bool in_vs = vertSource.find(name) != std::string::npos;
-        bool in_fs = fragSource.find(name) != std::string::npos;
-
-        if (in_vs)
-            shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_VERTEX;
-        else
-            shd_desc.uniform_blocks[u_idx].stage = SG_SHADERSTAGE_FRAGMENT;
-
-        shd_desc.uniform_blocks[u_idx].size = 16;  // Sokol requires multiple of 16
-        shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].glsl_name = name.c_str();
-        shd_desc.uniform_blocks[u_idx].glsl_uniforms[0].type = type;
-
-        // Add padding to match 16-byte block size
-        if (type == SG_UNIFORMTYPE_FLOAT) {
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].glsl_name = "dummy_pad_0";
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT;
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[2].glsl_name = "dummy_pad_1";
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT;
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[3].glsl_name = "dummy_pad_2";
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT;
-        } else if (type == SG_UNIFORMTYPE_FLOAT2) {
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].glsl_name = "dummy_pad_0";
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT2;
-        } else if (type == SG_UNIFORMTYPE_FLOAT3) {
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].glsl_name = "dummy_pad_0";
-            shd_desc.uniform_blocks[u_idx].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT;
-        }
-        u_idx++;
+    // Pack authored effect uniforms into vec4-backed uniform blocks. This avoids
+    // consuming one Sokol bind slot per value (stock effects routinely have more
+    // than five constants) while keeping a predictable 16-byte ABI per uniform.
+    std::vector<CustomUniformDecl> vertex_uniforms;
+    std::vector<CustomUniformDecl> fragment_uniforms;
+    for (const auto& [name, values] : uniforms) {
+        (void)values;
+        CustomUniformType type = CustomUniformType::Unknown;
+        if (hasUniformDeclaration(compiled_vert_source, name, type)) vertex_uniforms.push_back({name, type});
+        if (hasUniformDeclaration(compiled_frag_source, name, type)) fragment_uniforms.push_back({name, type});
     }
+
+    std::string packed_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
+    int next_uniform_slot = 3;
+    appendPackedBlocks(vertex_uniforms, SG_SHADERSTAGE_VERTEX, compiled_vert_source, shd_desc, result,
+                       next_uniform_slot, packed_names);
+    appendPackedBlocks(fragment_uniforms, SG_SHADERSTAGE_FRAGMENT, compiled_frag_source, shd_desc, result,
+                       next_uniform_slot, packed_names);
 
     static const char* kTextureNames[] = {"g_Texture0", "g_Texture1", "g_Texture2",  "g_Texture3",
                                           "g_Texture4", "g_Texture5", "g_Texture6",  "g_Texture7",
@@ -150,7 +293,8 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         shd_desc.texture_sampler_pairs[slot].sampler_slot = 0;  // Use same sampler
     }
 
-    result.shader = create_backend_shader(&shd_desc, vertSource, fragSource, shader_name.c_str());
+    result.shader =
+        create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
 
     if (result.shader.id == SG_INVALID_ID) {
         effect_log.error("Failed to create shader for %s", shader_name.c_str());
@@ -162,9 +306,10 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.index_type = SG_INDEXTYPE_UINT16;
-    pip_desc.colors[0].blend.enabled = true;
-    pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
-    pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    // Effect passes render into a freshly-cleared ping-pong target and should
+    // write their shader output directly. Layer blending happens when the final
+    // image is composed into the scene, not between image-effect passes.
+    pip_desc.colors[0].blend.enabled = false;
     pip_desc.cull_mode = SG_CULLMODE_NONE;
     pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
     pip_desc.depth.write_enabled = false;
