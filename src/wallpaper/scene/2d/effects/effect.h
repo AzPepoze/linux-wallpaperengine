@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/gfx_resource.h"
+#include "effect_geometry.h"
 #include "pass_textures.h"
 #include "render/render.h"
 #include "render/shader/shader_compiler.h"
@@ -27,6 +28,7 @@ class ShaderPass {
     bool enabled = true;
     bool show_files = false;
     bool is_fullscreen_quad = false;
+    bool geometry_classified = false;
     std::string render_target;
     float render_scale = 1.0f;
     std::map<int, std::string> render_texture_bindings;
@@ -59,7 +61,12 @@ class ShaderPass {
         }
     }
 
-    render_effect_pass_t getRenderPass() const {
+    render_effect_pass_t getRenderPass() {
+        if (!geometry_classified) {
+            is_fullscreen_quad = effectShaderUsesClipSpaceGeometry(stored_vs_source, shader_name.c_str());
+            geometry_classified = true;
+        }
+
         render_effect_pass_t r = {};
         r.enabled = enabled;
         r.pipeline = compiled.pipeline;
@@ -69,7 +76,8 @@ class ShaderPass {
         r.override_views = nullptr;
         r.num_override_views = 0;
         r.apply_custom_uniforms = [](void* ud) { static_cast<ShaderPass*>(ud)->applyCompiledUniforms(); };
-        r.user_data = const_cast<ShaderPass*>(this);
+        r.user_data = this;
+        r.is_fullscreen_quad = is_fullscreen_quad;
         return r;
     }
 
