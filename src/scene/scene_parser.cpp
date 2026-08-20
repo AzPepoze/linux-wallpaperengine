@@ -1,7 +1,5 @@
 #include "scene_parser.h"
 
-#include <string.h>
-
 #include "../core/logger.h"
 #include "../formats/wallpaper_engine/scene/scene_parser.h"
 #include "2d/image_layer.h"
@@ -26,22 +24,21 @@ ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) 
     ctx.scene_w = out.design_width;
     ctx.scene_h = out.design_height;
 
-    // Preserve every transform/parallax node, including non-rendering
-    // containers. A real SceneGraph replaces this compatibility vector in the
-    // next migration stage.
+    out.scene_graph = new SceneGraph();
     for (const auto& object : document.objects) {
         if (!object.node.valid) continue;
 
-        scene_parallax_node_t node;
+        SceneGraphNode node;
         node.id = object.node.id;
         node.parent_id = object.node.parent_id;
-        memcpy(node.origin, object.node.origin.data(), sizeof(node.origin));
-        memcpy(node.scale, object.node.scale.data(), sizeof(node.scale));
-        memcpy(node.angles, object.node.angles.data(), sizeof(node.angles));
-        memcpy(node.depth, object.node.parallax_depth.data(), sizeof(node.depth));
+        node.origin = object.node.origin;
+        node.scale = object.node.scale;
+        node.angles = object.node.angles;
+        node.parallax_depth = object.node.parallax_depth;
         node.propagate_to_children = object.node.propagate_to_children;
-        out.parallax_nodes.push_back(node);
+        out.scene_graph->addNode(node);
     }
+    out.scene_graph->rebuildHierarchy();
 
     // Transitional adapter: legacy layer factories still consume cJSON. The
     // Wallpaper Engine parser has already finished; the source payload keeps
@@ -56,7 +53,7 @@ ParsedScene SceneParser::parse(const char* scene_json_path, EngineContext& ctx) 
         cJSON_Delete(object_json);
     }
 
-    LOG_I("Parsed %zu scene transform/parallax nodes", out.parallax_nodes.size());
+    LOG_I("Built scene graph with %zu nodes", out.scene_graph->size());
     return out;
 }
 

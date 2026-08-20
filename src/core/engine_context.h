@@ -15,19 +15,7 @@ typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;
 
 class Layer;
-
-// Minimal scene-node metadata required to reproduce Wallpaper Engine's normal
-// camera-parallax transform. Keep this independent from renderable Layer types
-// because non-rendering containers can own/propagate parallax to their children.
-struct scene_parallax_node_t {
-    uint32_t id = 0;
-    uint32_t parent_id = 0;
-    float origin[3] = {0.0f, 0.0f, 0.0f};
-    float scale[3] = {1.0f, 1.0f, 1.0f};
-    float angles[3] = {0.0f, 0.0f, 0.0f};
-    float depth[2] = {0.0f, 0.0f};
-    bool propagate_to_children = true;
-};
+class SceneGraph;
 
 struct profiler_stats_t {
     double frame_ms = 0.0;
@@ -54,7 +42,7 @@ struct EngineContext {
     profiler_stats_t profiler = {};
 
     std::vector<Layer*> layers;
-    std::vector<scene_parallax_node_t> parallax_nodes;
+    SceneGraph* scene_graph = nullptr;
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;
