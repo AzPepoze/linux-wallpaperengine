@@ -1,31 +1,19 @@
 add_rules("mode.debug", "mode.release")
 
-option("vulkan")
-    set_default(false)
-    set_showmenu(true)
-    set_description("Build with the experimental Sokol Vulkan backend")
-option_end()
-
 add_requires("imgui")
-if has_config("vulkan") then
-    add_requires("cmake::slang", {
-        alias = "slang_shader",
-        system = true,
-        configs = {
-            search_mode = "config",
-            link_libraries = {"slang::slang"}
-        }
-    })
-end
+add_requires("cmake::slang", {
+    alias = "slang_shader",
+    system = true,
+    configs = {
+        search_mode = "config",
+        link_libraries = {"slang::slang"}
+    }
+})
 
 target("linux-wallpaperengine")
     set_kind("binary")
-    add_packages("imgui")
-
-    if has_config("vulkan") then
-        add_packages("slang_shader")
-        add_defines("LWE_SOKOL_VULKAN")
-    end
+    add_packages("imgui", "slang_shader")
+    add_defines("LWE_SOKOL_VULKAN")
     
     -- Source files
     add_files("src/main.cpp")
@@ -39,11 +27,7 @@ target("linux-wallpaperengine")
     add_includedirs("src")
 
     -- System libraries
-    if has_config("vulkan") then
-        add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
-    else
-        add_syslinks("GL", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
-    end
+    add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
 
     -- Optimization for release
     if is_mode("release") then
