@@ -25,6 +25,7 @@ typedef struct {
     size_t num_override_views;
     void (*apply_custom_uniforms)(void* user_data);
     void* user_data;
+    bool is_fullscreen_quad;
 } render_effect_pass_t;
 
 typedef struct {
@@ -37,6 +38,7 @@ struct renderer_t {
     GfxPipeline pip_add;
     GfxPipeline pip_lines;
     GfxBuffer vertex_buffer;
+    GfxBuffer fullscreen_vertex_buffer;
     GfxBuffer index_buffer;
     sg_bindings bind = {};
     GfxSampler smp;
@@ -61,7 +63,7 @@ typedef struct {
     float time;
     float padding;
     vec2 screen_res;
-    vec2 padding2;
+    vec2 texel_size;
     mat4x4 effect_texture_projection;
     mat4x4 effect_texture_projection_inverse;
     vec2 pointer_position;

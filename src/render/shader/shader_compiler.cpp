@@ -207,7 +207,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
                                    "g_Time",
                                    "g_Padding1",
                                    "g_Screen",
-                                   "g_Padding2",
+                                   "g_TexelSize",
                                    "g_EffectTextureProjectionMatrix",
                                    "g_EffectTextureProjectionMatrixInverse",
                                    "g_PointerPosition",

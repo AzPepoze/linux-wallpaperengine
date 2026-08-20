@@ -319,6 +319,10 @@ void ShaderPass::init(EngineContext& ctx) {
     const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
     const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
 
+    bool has_mvp = raw_vs.find("g_ModelViewProjectionMatrix") != std::string::npos;
+    int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
+    is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
+
     std::vector<std::string> shader_uniforms = extractUniformNames(raw_vs);
     std::vector<std::string> fragment_uniforms = extractUniformNames(raw_fs);
     shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
@@ -335,10 +339,13 @@ void ShaderPass::init(EngineContext& ctx) {
     combo_defines = ShaderSourceProcessor::extractCombos(processed_fs.c_str());
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
     if (is_depth_parallax) {
-        setComboDefine(combo_defines, "MASK", pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
+        setComboDefine(combo_defines, "MASK",
+                       pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
     } else if (is_waterwaves) {
-        setComboDefine(combo_defines, "MASK", !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
-        setComboDefine(combo_defines, "TIMEOFFSET", pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
+        setComboDefine(combo_defines, "MASK",
+                       !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
+        setComboDefine(combo_defines, "TIMEOFFSET",
+                       pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
     }
 
     if (is_depth_parallax) {
