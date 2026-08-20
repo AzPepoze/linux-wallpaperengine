@@ -53,6 +53,10 @@ struct EngineContext {
     bool mouse_position_valid = false;
     float parallax_pointer_x = 0.5f;
     float parallax_pointer_y = 0.5f;
+    // Centered shader-space offset. renderer_draw_sprite converts this to
+    // g_ParallaxPosition by applying *0.5 + 0.5.
+    float parallax_smooth_x = 0.0f;
+    float parallax_smooth_y = 0.0f;
     bool camera_parallax_enabled = false;
     float camera_parallax_amount = 0.0f;
     float camera_parallax_delay = 0.1f;
