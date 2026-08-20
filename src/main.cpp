@@ -1,4 +1,5 @@
 #define SOKOL_VULKAN
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +20,6 @@
 #include "core/logger.h"
 #include "core/utils.h"
 #include "imgui.h"
-#include "scene/parallax.h"
 #include "scene/scene_parser.h"
 #include "scene/scene_renderer.h"
 #include "ui/debugger.h"
@@ -95,7 +95,21 @@ static void frame(void) {
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
 
-    parallax_update(ctx, dt, sapp_width(), sapp_height());
+    float target_px = 0.0f;
+    float target_py = 0.0f;
+    if (ctx.camera_parallax_enabled && sapp_width() > 0 && sapp_height() > 0) {
+        const float mouse_x = (ctx.mouse_x / (float)sapp_width() - 0.5f) * 2.0f;
+        const float mouse_y = (ctx.mouse_y / (float)sapp_height() - 0.5f) * 2.0f;
+        target_px = mouse_x * ctx.camera_parallax_mouse_influence;
+        target_py = mouse_y * ctx.camera_parallax_mouse_influence;
+    }
+
+    float smoothing = 1.0f;
+    if (ctx.camera_parallax_delay > 0.0f) {
+        smoothing = 1.0f - expf(-dt / ctx.camera_parallax_delay);
+    }
+    ctx.parallax_smooth_x += (target_px - ctx.parallax_smooth_x) * smoothing;
+    ctx.parallax_smooth_y += (target_py - ctx.parallax_smooth_y) * smoothing;
 
     scene_engine->update(dt);
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
