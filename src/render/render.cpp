@@ -58,7 +58,7 @@ void renderer_init(renderer_t* r, float w, float h) {
     bv_desc.texture.image = r->black_pixel;
     r->black_view = sg_make_view(&bv_desc);
 
-    pixel = 0x808080FF;  // 50% gray = neutral depth
+    pixel = 0x808080FF;  // Retained as a general-purpose neutral gray fallback/debug texture.
     r->gray_pixel = sg_make_image(&img_desc);
 
     sg_view_desc gv_desc = {};
@@ -169,6 +169,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
         }
 
+        const bool is_depth_parallax = pass->shader_name.find("depthparallax") != std::string::npos;
         const bool is_waterwaves = pass->shader_name.find("waterwaves") != std::string::npos;
 
         // Slot 1+ (Extra Textures from pass->pass_textures.cached_views)
@@ -179,8 +180,14 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
                 pass->pass_textures.cached_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->pass_textures.cached_views[i];
             } else if (i == 0) {
-                // g_Texture1 is depth for depthparallax, but a mask for waterwaves.
-                r->bind.views[slot] = is_waterwaves ? (sg_view)r->white_view : (sg_view)r->gray_view;
+                // WPE metadata declares util/black for missing depthparallax depth and a full mask for waterwaves.
+                if (is_waterwaves) {
+                    r->bind.views[slot] = r->white_view;
+                } else if (is_depth_parallax) {
+                    r->bind.views[slot] = r->black_view;
+                } else {
+                    r->bind.views[slot] = r->black_view;
+                }
             } else if (i == 1) {
                 r->bind.views[slot] = r->white_view;  // Default to full mask for g_Texture2
             } else {
