@@ -20,8 +20,9 @@ class ShaderPass {
     std::string shader_name;
     CompiledShader compiled;
     PassTextures pass_textures;
-    cJSON* constant_values;
+    cJSON* constant_values = nullptr;
     std::map<std::string, std::vector<float>> uniforms;
+    std::map<std::string, int> combos;
     std::map<int, std::string> texture_labels;
     bool enabled = true;
     bool show_files = false;
@@ -69,6 +70,9 @@ class Effect {
 
     Effect(cJSON* config, EngineContext& ctx);
     ~Effect();
+
+    Effect(const Effect&) = delete;
+    Effect& operator=(const Effect&) = delete;
 
     static Effect* load(const char* rel_path, cJSON* instance_config, EngineContext& ctx);
     static Effect* loadFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx);
