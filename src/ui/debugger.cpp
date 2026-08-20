@@ -8,10 +8,10 @@
 #include "../../libs/sokol/sokol_log.h"
 #include "../core/context.h"
 #include "../core/logger.h"
-#include "../render/effect.h"
-#include "../scene/layer.h"
 #include "imgui.h"
 #include "inspector/layer_inspector.h"
+#include "wallpaper/scene/2d/effects/effect.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 
 namespace {
 bool g_log_debug_ui_layout = true;
@@ -74,9 +74,7 @@ void Debugger::drawHierarchyPanel(EngineContext& ctx, float width, float height)
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.5f, 0.1f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.3f, 0.0f, 1.0f));
         }
-        if (ImGui::Button("Isolate", ImVec2(80, 0))) {
-            ctx.test_mode = !ctx.test_mode;
-        }
+        if (ImGui::Button("Isolate", ImVec2(80, 0))) ctx.test_mode = !ctx.test_mode;
         if (is_test) ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show ONLY the selected layer and its effects");
 
@@ -86,38 +84,27 @@ void Debugger::drawHierarchyPanel(EngineContext& ctx, float width, float height)
             Layer* layer = ctx.layers[i];
             ImGui::PushID(i);
 
-            // Visibility Toggle
-            if (ImGui::Button(layer->visible ? "V" : " ", ImVec2(25, 0))) {
-                layer->visible = !layer->visible;
-            }
+            if (ImGui::Button(layer->visible ? "V" : " ", ImVec2(25, 0))) layer->visible = !layer->visible;
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Visibility");
 
             ImGui::SameLine();
-
-            // Solo Toggle
             if (layer->solo) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
             }
-            if (ImGui::Button("S", ImVec2(25, 0))) {
-                layer->solo = !layer->solo;
-            }
+            if (ImGui::Button("S", ImVec2(25, 0))) layer->solo = !layer->solo;
             if (layer->solo) ImGui::PopStyleColor(3);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo Layer (Ctrl+Click layer name also works)");
 
             ImGui::SameLine();
-
             char label[160];
             snprintf(label, sizeof(label), "%02d: %s", i, layer->name.c_str());
             if (ImGui::Selectable(label, ctx.selected_object == i)) {
                 ctx.selected_object = i;
-                if (ImGui::GetIO().KeyCtrl) {
-                    layer->solo = !layer->solo;
-                }
+                if (ImGui::GetIO().KeyCtrl) layer->solo = !layer->solo;
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Select layer. Ctrl+Click to toggle Solo.");
-
             ImGui::PopID();
         }
         ImGui::EndChild();
@@ -153,9 +140,7 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
             ImGui::Separator();
             const char* modes[] = {"Cover", "Fit"};
             int current_mode = (int)ctx.scaling_mode;
-            if (ImGui::Combo("Scaling Mode", &current_mode, modes, 2)) {
-                ctx.scaling_mode = (scaling_mode_t)current_mode;
-            }
+            if (ImGui::Combo("Scaling Mode", &current_mode, modes, 2)) ctx.scaling_mode = (scaling_mode_t)current_mode;
             ImGui::Text("Resolution: %.0fx%.0f", ctx.scene_w, ctx.scene_h);
             ImGui::Text("Render Scale: %.3f", ctx.render_scale);
             ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
@@ -171,9 +156,7 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
                 ImGui::Text("Debug UI: %.3f ms", ctx.profiler.ui_ms);
                 ImGui::Text("Draw Calls: %u", ctx.profiler.draw_calls);
                 ImGui::Text("Frame: %llu", (unsigned long long)ctx.profiler.frame_index);
-                if (ImGui::Button("Reset Peak")) {
-                    ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
-                }
+                if (ImGui::Button("Reset Peak")) ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
                 ImGui::TreePop();
             }
 
@@ -182,7 +165,6 @@ void Debugger::drawInspectorPanel(EngineContext& ctx, float width, float height)
                 for (int i = 0; i < (int)ctx.layers.size(); i++) {
                     Layer* layer = ctx.layers[i];
                     if (layer->effects.empty()) continue;
-
                     ImGui::PushID(i);
                     if (ImGui::TreeNode(layer->name.c_str())) {
                         for (int j = 0; j < (int)layer->effects.size(); j++) {
@@ -239,11 +221,9 @@ void Debugger::draw(EngineContext& ctx) {
     if (ctx.show_ui) {
         float panel_width = 300.0f;
         float screen_height = (float)surface_height;
-
         drawHierarchyPanel(ctx, panel_width, screen_height);
         drawInspectorPanel(ctx, panel_width, screen_height);
 
-        // Draw debug bounds for selected layer
         if (ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
             ctx.layers[ctx.selected_object]->drawDebug(ctx);
         }
