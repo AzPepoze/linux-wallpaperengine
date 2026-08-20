@@ -14,12 +14,13 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.attrs[0].glsl_name = "a_Position";
     shd_desc.attrs[1].glsl_name = "a_TexCoord";
 
-    // Slot 0: Built-in Uniforms (WPE style)
+    // Slot 0: MVP used by vertex shaders.
     shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
     shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrix";
     shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
 
+    // Slot 1: shared Wallpaper Engine built-ins for the vertex stage.
     shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);  // -mvp
     shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
@@ -47,11 +48,36 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[1].glsl_uniforms[11].glsl_name = "g_EffectTextureProjectionMatrixInverse";
     shd_desc.uniform_blocks[1].glsl_uniforms[11].type = SG_UNIFORMTYPE_MAT4;
 
-    // Slot 2: Fragment Tint
+    // Slot 2: the same built-ins for fragment shaders plus tint. Sokol uniform blocks are
+    // stage-specific, so effects such as waterwaves need their own fragment-visible binding.
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.uniform_blocks[2].size = sizeof(float) * 4;
-    shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "tint";
+    shd_desc.uniform_blocks[2].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4) + sizeof(float) * 4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[0].glsl_name = "g_Texture0Resolution";
     shd_desc.uniform_blocks[2].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[1].glsl_name = "g_Texture1Resolution";
+    shd_desc.uniform_blocks[2].glsl_uniforms[1].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[2].glsl_name = "g_Texture2Resolution";
+    shd_desc.uniform_blocks[2].glsl_uniforms[2].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[3].glsl_name = "g_Texture3Resolution";
+    shd_desc.uniform_blocks[2].glsl_uniforms[3].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[4].glsl_name = "g_Texture4Resolution";
+    shd_desc.uniform_blocks[2].glsl_uniforms[4].type = SG_UNIFORMTYPE_FLOAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[5].glsl_name = "g_ParallaxPosition";
+    shd_desc.uniform_blocks[2].glsl_uniforms[5].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[2].glsl_uniforms[6].glsl_name = "g_Time";
+    shd_desc.uniform_blocks[2].glsl_uniforms[6].type = SG_UNIFORMTYPE_FLOAT;
+    shd_desc.uniform_blocks[2].glsl_uniforms[7].glsl_name = "g_Padding1";
+    shd_desc.uniform_blocks[2].glsl_uniforms[7].type = SG_UNIFORMTYPE_FLOAT;
+    shd_desc.uniform_blocks[2].glsl_uniforms[8].glsl_name = "g_Screen";
+    shd_desc.uniform_blocks[2].glsl_uniforms[8].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[2].glsl_uniforms[9].glsl_name = "g_Padding2";
+    shd_desc.uniform_blocks[2].glsl_uniforms[9].type = SG_UNIFORMTYPE_FLOAT2;
+    shd_desc.uniform_blocks[2].glsl_uniforms[10].glsl_name = "g_EffectTextureProjectionMatrix";
+    shd_desc.uniform_blocks[2].glsl_uniforms[10].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[11].glsl_name = "g_EffectTextureProjectionMatrixInverse";
+    shd_desc.uniform_blocks[2].glsl_uniforms[11].type = SG_UNIFORMTYPE_MAT4;
+    shd_desc.uniform_blocks[2].glsl_uniforms[12].glsl_name = "tint";
+    shd_desc.uniform_blocks[2].glsl_uniforms[12].type = SG_UNIFORMTYPE_FLOAT4;
 
     // Custom uniforms (up to 8 slots total in Sokol)
     int u_idx = 3;
