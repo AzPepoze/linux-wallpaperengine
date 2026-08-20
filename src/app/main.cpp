@@ -70,7 +70,7 @@ static void init(void) {
 
         ParsedScene parsed = SceneParser::parse(scene_path, ctx);
         ctx.layers = std::move(parsed.layers);
-        ctx.parallax_nodes = std::move(parsed.parallax_nodes);
+        ctx.scene_graph = parsed.scene_graph;
         ctx.scene_w = parsed.design_width;
         ctx.scene_h = parsed.design_height;
         ctx.camera_parallax_enabled = parsed.camera_parallax_enabled;
@@ -84,7 +84,7 @@ static void init(void) {
         }
         scene_engine->updateViewport();
     }
-    LOG_I("Linux Wallpaper Engine (C Port) Initialized");
+    LOG_I("Linux Wallpaper Engine Initialized");
 }
 
 static void frame(void) {
@@ -132,8 +132,6 @@ static void frame(void) {
 }
 
 static void event(const sapp_event* e) {
-    // Camera parallax is engine input, not UI input. Record pointer motion even
-    // when Dear ImGui captures/consumes the same event.
     if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
         ctx.mouse_x = e->mouse_x;
         ctx.mouse_y = e->mouse_y;
@@ -152,7 +150,8 @@ static void cleanup(void) {
         delete scene_engine;
         scene_engine = nullptr;
     }
-    ctx.parallax_nodes.clear();
+    delete ctx.scene_graph;
+    ctx.scene_graph = nullptr;
     simgui_shutdown();
     sargs_shutdown();
     sg_shutdown();
