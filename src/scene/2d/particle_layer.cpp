@@ -59,5 +59,13 @@ void ParticleLayer::draw(EngineContext& ctx) {
 }
 
 void ParticleLayer::drawDebug(EngineContext& ctx) {
-    if (ps) ps->drawDebugBounds(ctx);
+    if (!ps) return;
+
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, parallax);
+    ps->layer_origin[0] = origin[0] + camera_offset.x;
+    ps->layer_origin[1] = origin[1] + camera_offset.y;
+    ps->layer_origin[2] = origin[2];
+    ps->parallax[0] = 0.0f;
+    ps->parallax[1] = 0.0f;
+    ps->drawDebugBounds(ctx);
 }
