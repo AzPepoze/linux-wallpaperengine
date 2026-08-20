@@ -80,7 +80,11 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
         }
     }
 
-    LOG_W("Failed to resolve texture: %s", name);
+    if (image_index == 0) {
+        LOG_W("Failed to resolve texture: %s", name);
+    } else {
+        LOG_D("Optional texture not found or index not present: %s (index %d)", name, image_index);
+    }
     return {};
 }
 

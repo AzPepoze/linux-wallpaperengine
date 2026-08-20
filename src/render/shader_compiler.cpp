@@ -100,8 +100,8 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         u_idx++;
     }
 
-    static const char* kTextureNames[] = {"g_Texture0", "g_Texture1", "g_Texture2", "g_Texture3",
-                                          "g_Texture4", "g_Texture5", "g_Texture6", "g_Texture7",
+    static const char* kTextureNames[] = {"g_Texture0", "g_Texture1", "g_Texture2",  "g_Texture3",
+                                          "g_Texture4", "g_Texture5", "g_Texture6",  "g_Texture7",
                                           "g_Texture8", "g_Texture9", "g_Texture10", "g_Texture11"};
 
     // Samplers
