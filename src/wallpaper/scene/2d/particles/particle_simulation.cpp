@@ -62,6 +62,17 @@ void ParticleSystem::update(float dt) {
             size *= particle.osc_size_min + wave * (particle.osc_size_max - particle.osc_size_min);
         }
         particle.size = size;
+
+        if (spritesheet_frames > 1 && config.animation_mode != "randomframe" && particle.max_life > 0.0f) {
+            const float lifetime_pos = fmaxf(0.0f, fminf(1.0f, age / particle.max_life));
+            float frame = lifetime_pos * (float)spritesheet_frames * config.sequence_multiplier;
+            if (config.animation_mode == "once") {
+                frame = fminf(frame, (float)(spritesheet_frames - 1));
+            } else {
+                frame = fmodf(frame, (float)spritesheet_frames);
+            }
+            particle.frame = frame;
+        }
     }
     for (ParticleSystem* child : children) child->update(dt);
 }
