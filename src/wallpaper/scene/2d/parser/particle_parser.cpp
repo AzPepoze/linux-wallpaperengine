@@ -18,3 +18,10 @@ float ParticleParser::readFloat(const cJSON* node) {
     if (cJSON_IsNumber(node)) return (float)node->valuedouble;
     return cJSON_IsString(node) && node->valuestring ? (float)atof(node->valuestring) : 0.0f;
 }
+
+ParticleObjectConfig ParticleParser::parseObject(const wallpaper_engine::SceneObjectDocument& document) {
+    ParticleObjectConfig config;
+    config.name = document.name.empty() ? "Particle" : document.name;
+    config.particle_path = document.particle.particle;
+    return config;
+}

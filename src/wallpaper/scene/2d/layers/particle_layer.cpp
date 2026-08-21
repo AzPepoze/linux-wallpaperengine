@@ -4,6 +4,7 @@
 #include "core/engine_context.h"
 #include "core/utils.h"
 #include "wallpaper/scene/2d/parallax.h"
+#include "wallpaper/scene/2d/parser/particle_parser.h"
 #include "wallpaper/scene/tree/scene_tree.h"
 
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
@@ -13,11 +14,12 @@ ParticleLayer::~ParticleLayer() {
 }
 
 ParticleLayer* ParticleLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
-    if (doc.particle.particle.empty()) return nullptr;
+    const ParticleObjectConfig config = ParticleParser::parseObject(doc);
+    if (config.particle_path.empty()) return nullptr;
     ParticleSystem* ps =
-        ParticleSystem::createFromPath(doc.particle.particle.c_str(), ctx.asset_mgr, ctx.scene_w, ctx.scene_h);
+        ParticleSystem::createFromPath(config.particle_path.c_str(), ctx.asset_mgr, ctx.scene_w, ctx.scene_h);
     if (ps) {
-        ParticleLayer* layer = new ParticleLayer(doc.name.empty() ? "Particle" : doc.name.c_str(), ps);
+        ParticleLayer* layer = new ParticleLayer(config.name.c_str(), ps);
         layer->initFromDocument(doc, ctx);
         layer->path = ps->config_path;
         return layer;
