@@ -8,6 +8,7 @@
 #include "../core/engine_context.h"
 #include "../core/logger.h"
 #include "shader/shader_backend.h"
+#include "shader/shader_compiler.h"
 #include "sokol_glue.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
@@ -124,6 +125,12 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.colors[0].blend.enabled = true;
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    // Scene composition must keep an opaque accumulated target opaque.  With
+    // the backend defaults, a translucent solid/opacity layer replaced the
+    // target alpha with its mask alpha; presenting that target then multiplied
+    // the already-composited scene by the mask a second time.
+    pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+    pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     r->pip_alpha = sg_make_pipeline(&pip_desc);
 
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
@@ -134,6 +141,104 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.primitive_type = SG_PRIMITIVETYPE_LINES;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     r->pip_lines = sg_make_pipeline(&pip_desc);
+
+    const std::string composite_vertex =
+        "#version 330\n"
+        "uniform mat4 g_ModelViewProjectionMatrix; layout(location=0) in vec2 a_Position; "
+        "layout(location=1) in vec2 a_TexCoord; out vec2 v_TexCoord; out vec2 v_SceneUV; "
+        "void main(){ gl_Position=g_ModelViewProjectionMatrix*vec4(a_Position,0,1); "
+        "v_TexCoord=a_TexCoord; v_SceneUV=vec2(gl_Position.x*0.5+0.5,0.5-gl_Position.y*0.5); }\n";
+    for (int mode = 1; mode <= 30; ++mode) {
+        std::string fragment =
+            "#version 330\nprecision mediump float; uniform sampler2D g_Texture0; uniform sampler2D g_Texture1; "
+            "uniform vec4 tint; in vec2 v_TexCoord; in vec2 v_SceneUV; out vec4 frag_color; "
+            "vec3 rgb2hsl(vec3 c){float lo=min(min(c.r,c.g),c.b),hi=max(max(c.r,c.g),c.b),d=hi-lo,l=(hi+lo)*.5;"
+            "if(d==0.)return vec3(0.,0.,l);float s=l<.5?d/(hi+lo):d/(2.-hi-lo),h;"
+            "if(hi==c.r)h=(c.g-c.b)/d+(c.g<c.b?6.:0.);else if(hi==c.g)h=(c.b-c.r)/d+2.;"
+            "else h=(c.r-c.g)/d+4.;return vec3(h/6.,s,l);}"
+            "float hue2rgb(float p,float q,float h){h=fract(h);if(6.*h<1.)return p+(q-p)*6.*h;"
+            "if(2.*h<1.)return q;if(3.*h<2.)return p+(q-p)*(2./3.-h)*6.;return p;}"
+            "vec3 hsl2rgb(vec3 hsl){if(hsl.y==0.)return vec3(hsl.z);float q=hsl.z<.5?hsl.z*(1.+hsl.y):"
+            "hsl.z+hsl.y-hsl.z*hsl.y,p=2.*hsl.z-q;return vec3(hue2rgb(p,q,hsl.x+1./3.),hue2rgb(p,q,hsl.x),"
+            "hue2rgb(p,q,hsl.x-1./3.));}"
+            "vec3 blend(vec3 b,vec3 s,float o){";
+        // Wallpaper Engine's image blend modes are shader operations, not framebuffer blend states.
+        if (mode == 2)
+            fragment += "return mix(b,b*s,o);";  // Multiply
+        else if (mode == 11)
+            fragment += "return mix(b,mix(2.0*b*s,1.0-2.0*(1.0-b)*(1.0-s),step(0.5,b)),o);";  // Overlay
+        else if (mode == 1)
+            fragment += "return mix(b,min(b,s),o);";
+        else if (mode == 3)
+            fragment += "return mix(b,max(1.0-(1.0-b)/max(s,vec3(.001)),0.0),o);";
+        else if (mode == 4)
+            fragment += "return mix(b,max(b+s-1.0,0.0),o);";
+        else if (mode == 5)
+            fragment += "return min(b,s);";
+        else if (mode == 6)
+            fragment += "return mix(b,max(b,s),o);";
+        else if (mode == 7)
+            fragment += "return mix(b,1.0-(1.0-b)*(1.0-s),o);";
+        else if (mode == 8)
+            fragment += "return mix(b,min(b/max(1.0-s,vec3(.001)),1.0),o);";
+        else if (mode == 9)
+            fragment += "return mix(b,min(b+s,1.0),o);";
+        else if (mode == 10)
+            fragment += "return max(b,s);";
+        else if (mode == 12)
+            fragment += "return mix(b,mix(2.0*b*s+b*b*(1.0-2.0*s),sqrt(b)*(2.0*s-1.0)+2.0*b*(1.0-s),step(.5,s)),o);";
+        else if (mode == 13)
+            fragment += "return mix(b,mix(2.0*b*s,1.0-2.0*(1.0-b)*(1.0-s),step(.5,s)),o);";
+        else if (mode == 14)
+            fragment +=
+                "return "
+                "mix(b,mix(max(1.0-(1.0-b)/max(2.0*s,vec3(.001)),0.0),min(b/"
+                "max(2.0*(s-.5),vec3(.001)),1.0),step(.5,s)),o);";
+        else if (mode == 15)
+            fragment += "return mix(b,mix(max(b+2.0*s-1.0,0.0),min(b+2.0*(s-.5),1.0),step(.5,s)),o);";
+        else if (mode == 16)
+            fragment += "return mix(b,mix(min(b,2.0*s),max(b,2.0*(s-.5)),step(.5,s)),o);";
+        else if (mode == 17)
+            fragment +=
+                "return "
+                "mix(b,step(.5,mix(max(1.0-(1.0-b)/max(2.0*s,vec3(.001)),0.0),min(b/"
+                "max(2.0*(s-.5),vec3(.001)),1.0),step(.5,s))),o);";
+        else if (mode == 18)
+            fragment += "return mix(b,abs(b-s),o);";
+        else if (mode == 19)
+            fragment += "return mix(b,b+s-2.0*b*s,o);";
+        else if (mode == 20)
+            fragment += "return mix(b,max(b+s-1.0,0.0),o);";
+        else if (mode == 21)
+            fragment += "return mix(b,min(b*b/max(1.0-s,vec3(.001)),1.0),o);";
+        else if (mode == 22)
+            fragment += "return mix(b,min(s*s/max(1.0-b,vec3(.001)),1.0),o);";
+        else if (mode == 23)
+            fragment += "return mix(b,min(b,s)-max(b,s)+1.0,o);";
+        else if (mode == 24)
+            fragment += "return mix(b,(b+s)*.5,o);";
+        else if (mode == 25)
+            fragment += "return mix(b,1.0-abs(1.0-b-s),o);";
+        else if (mode == 26)
+            fragment += "vec3 bh=rgb2hsl(b),sh=rgb2hsl(s);return mix(b,hsl2rgb(vec3(sh.x,bh.y,bh.z)),o);";
+        else if (mode == 27)
+            fragment += "vec3 bh=rgb2hsl(b),sh=rgb2hsl(s);return mix(b,hsl2rgb(vec3(bh.x,sh.y,bh.z)),o);";
+        else if (mode == 28)
+            fragment += "vec3 bh=rgb2hsl(b),sh=rgb2hsl(s);return mix(b,hsl2rgb(vec3(sh.x,sh.y,bh.z)),o);";
+        else if (mode == 29)
+            fragment += "vec3 bh=rgb2hsl(b),sh=rgb2hsl(s);return mix(b,hsl2rgb(vec3(bh.x,bh.y,sh.z)),o);";
+        else if (mode == 30)
+            fragment += "return mix(b,vec3(max(max(b.r,b.g),b.b))*s,o);";
+        else
+            fragment += "return mix(b,s,o);";
+        fragment +=
+            "} void main(){vec4 source=texture(g_Texture0,v_TexCoord)*tint; "
+            "vec4 background=texture(g_Texture1,v_SceneUV); "
+            "frag_color=vec4(blend(background.rgb,source.rgb,source.a),1.0);}";
+        CompiledShader shader =
+            ShaderCompiler::compile("image-composite-" + std::to_string(mode), composite_vertex, fragment, {}, 1);
+        r->pip_image_composite[mode] = std::move(shader.pipeline);
+    }
 }
 
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
@@ -278,4 +383,25 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     for (int i = 0; i < 12; i++) {
         r->bind.views[i] = (sg_view){SG_INVALID_ID};
     }
+}
+
+void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
+                                   sg_view scene_view, float x, float y, float width, float height, float rotation,
+                                   float tint[4], int blend_mode) {
+    if (blend_mode == 31) {
+        renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, true, nullptr);
+        return;
+    }
+    if (blend_mode < 1 || blend_mode > 30 || r->pip_image_composite[blend_mode].id == SG_INVALID_ID) {
+        renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
+        return;
+    }
+    sg_view background[] = {scene_view};
+    render_effect_pass_t composite = {};
+    composite.enabled = true;
+    composite.pipeline = r->pip_image_composite[blend_mode];
+    composite.shader_name = "image-composite";
+    composite.override_views = background;
+    composite.num_override_views = 1;
+    renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, &composite);
 }

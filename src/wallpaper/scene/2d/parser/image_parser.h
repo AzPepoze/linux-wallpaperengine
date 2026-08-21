@@ -10,6 +10,8 @@ struct ImageObjectConfig {
     std::string asset_path;
     float width = 0.0f;
     float height = 0.0f;
+    std::array<float, 3> color = {1.0f, 1.0f, 1.0f};
+    float alpha = 1.0f;
     bool is_model = false;
 };
 

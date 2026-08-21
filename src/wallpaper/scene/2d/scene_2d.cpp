@@ -2,9 +2,14 @@
 
 #include "render/render.h"
 #include "sokol_app.h"
+#include "wallpaper/scene/2d/layers/image_layer.h"
 #include "wallpaper/scene/2d/layers/layer.h"
 #include "wallpaper/scene/2d/layers/particle_layer.h"
 #include "wallpaper/scene/tree/scene_tree.h"
+
+#if DEBUG_BUILD
+#include "render/diagnostics/render_diagnostics.h"
+#endif
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
@@ -36,6 +41,8 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
         if ((any_solo && !layer->solo) || (!any_solo && !layer->visible)) continue;
         const auto* particle = dynamic_cast<const ParticleLayer*>(layer);
         if (particle && particle->requiresSceneColor()) return true;
+        const auto* image = dynamic_cast<const ImageLayer*>(layer);
+        if (image && image->requiresSceneColor()) return true;
     }
     return false;
 }
@@ -128,6 +135,56 @@ void Scene2DRuntime::drawOffscreen() {
     sg_begin_pass(&clear_pass);
     sg_end_pass();
 
+    int layer_index = 0;
+    auto capture_layer_result = [&](Layer* layer) {
+#if DEBUG_BUILD
+        RenderDiagnostics& diagnostics = RenderDiagnostics::instance();
+        if (!diagnostics.is_capturing_frame) return;
+
+        sg_image_desc image_desc = {};
+        image_desc.usage.color_attachment = true;
+        image_desc.width = width;
+        image_desc.height = height;
+        image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+        sg_image snapshot = sg_make_image(&image_desc);
+        if (snapshot.id == SG_INVALID_ID) return;
+        sg_view_desc source_view_desc = {};
+        source_view_desc.texture.image = snapshot;
+        sg_view snapshot_texture = sg_make_view(&source_view_desc);
+        sg_view_desc attachment_view_desc = {};
+        attachment_view_desc.color_attachment.image = snapshot;
+        sg_view snapshot_attachment = sg_make_view(&attachment_view_desc);
+        if (snapshot_texture.id == SG_INVALID_ID || snapshot_attachment.id == SG_INVALID_ID) {
+            if (snapshot_texture.id != SG_INVALID_ID) sg_destroy_view(snapshot_texture);
+            if (snapshot_attachment.id != SG_INVALID_ID) sg_destroy_view(snapshot_attachment);
+            sg_destroy_image(snapshot);
+            return;
+        }
+
+        sg_pass snapshot_pass = {};
+        snapshot_pass.action.colors[0].load_action = SG_LOADACTION_DONTCARE;
+        snapshot_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+        snapshot_pass.attachments.colors[0] = snapshot_attachment;
+        sg_begin_pass(&snapshot_pass);
+        float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current].image, scene_targets[current].texture_view,
+                             0.0f, 0.0f, (float)width, (float)height, 0.0f, white, false, nullptr);
+        sg_end_pass();
+
+        char stage_name[320];
+        if (const auto* image = dynamic_cast<const ImageLayer*>(layer)) {
+            snprintf(stage_name, sizeof(stage_name), "after-%02d-id-%u-%s-alpha-%.3f-blend-%d", layer_index++,
+                     image->scene_object_id, layer->name.c_str(), image->tint[3], image->color_blend_mode);
+        } else {
+            snprintf(stage_name, sizeof(stage_name), "after-%02d-id-%u-%s", layer_index++, layer->scene_object_id,
+                     layer->name.c_str());
+        }
+        diagnostics.recordSceneStage(stage_name, snapshot, snapshot_texture, snapshot_attachment);
+#else
+        (void)layer;
+#endif
+    };
+
     auto draw_layer = [&](Layer* layer) {
         auto* particle = dynamic_cast<ParticleLayer*>(layer);
         if (particle && particle->requiresSceneColor()) {
@@ -146,6 +203,26 @@ void Scene2DRuntime::drawOffscreen() {
             particle->draw(ctx);
             sg_end_pass();
             current = next;
+            capture_layer_result(layer);
+            return;
+        }
+
+        auto* image = dynamic_cast<ImageLayer*>(layer);
+        if (image && image->requiresSceneColor()) {
+            const int next = 1 - current;
+            sg_pass composite_pass = {};
+            composite_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+            composite_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+            composite_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
+            composite_pass.attachments.colors[0] = scene_targets[next].attachment_view;
+            sg_begin_pass(&composite_pass);
+            float white[4] = {1, 1, 1, 1};
+            renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current].image, scene_targets[current].texture_view,
+                                 0, 0, (float)width, (float)height, 0, white, false, nullptr);
+            image->drawComposite(ctx, scene_targets[current].texture_view);
+            sg_end_pass();
+            current = next;
+            capture_layer_result(layer);
             return;
         }
 
@@ -156,6 +233,7 @@ void Scene2DRuntime::drawOffscreen() {
         sg_begin_pass(&layer_pass);
         layer->draw(ctx);
         sg_end_pass();
+        capture_layer_result(layer);
     };
 
     if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {

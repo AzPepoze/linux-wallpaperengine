@@ -198,6 +198,40 @@ SceneObjectDocument parseObject(const cJSON* object) {
     }
 
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.image.size.data(), 2);
+    parseVec(cJSON_GetObjectItemCaseSensitive(object, "color"), doc.image.color.data(), 3);
+    const cJSON* alpha = cJSON_GetObjectItemCaseSensitive(object, "alpha");
+    if (cJSON_IsNumber(alpha)) {
+        doc.image.alpha = (float)alpha->valuedouble;
+    } else if (cJSON_IsObject(alpha)) {
+        // Animated properties retain their authoring-time fallback in `value`.
+        // The animation program is separate from static image color semantics.
+        parseFloat(cJSON_GetObjectItemCaseSensitive(alpha, "value"), doc.image.alpha);
+        const cJSON* animation = cJSON_GetObjectItemCaseSensitive(alpha, "animation");
+        if (cJSON_IsObject(animation)) {
+            const cJSON* keys = cJSON_GetObjectItemCaseSensitive(animation, "c0");
+            if (cJSON_IsArray(keys)) {
+                const cJSON* key = nullptr;
+                cJSON_ArrayForEach(key, keys) {
+                    ImageObjectDocument::AlphaKey parsed;
+                    if (!parseFloat(cJSON_GetObjectItemCaseSensitive(key, "frame"), parsed.frame) ||
+                        !parseFloat(cJSON_GetObjectItemCaseSensitive(key, "value"), parsed.value))
+                        continue;
+                    doc.image.alpha_keys.push_back(parsed);
+                }
+            }
+            const cJSON* options = cJSON_GetObjectItemCaseSensitive(animation, "options");
+            if (cJSON_IsObject(options)) {
+                parseFloat(cJSON_GetObjectItemCaseSensitive(options, "fps"), doc.image.alpha_fps);
+                parseFloat(cJSON_GetObjectItemCaseSensitive(options, "length"), doc.image.alpha_length);
+                const cJSON* mode = cJSON_GetObjectItemCaseSensitive(options, "mode");
+                if (cJSON_IsString(mode) && mode->valuestring) doc.image.alpha_mode = mode->valuestring;
+            }
+        }
+    }
+    const cJSON* color_blend_mode = cJSON_GetObjectItemCaseSensitive(object, "colorBlendMode");
+    if (cJSON_IsNumber(color_blend_mode)) doc.image.color_blend_mode = (int)color_blend_mode->valuedouble;
+    doc.image.solid = parseBool(cJSON_GetObjectItemCaseSensitive(object, "solid"), false);
+    doc.image.copy_background = parseBool(cJSON_GetObjectItemCaseSensitive(object, "copybackground"), false);
 
     const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
     if (cJSON_IsString(particle) && particle->valuestring) {

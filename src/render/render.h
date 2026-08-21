@@ -38,6 +38,7 @@ struct renderer_t {
     GfxPipeline pip_alpha;
     GfxPipeline pip_add;
     GfxPipeline pip_lines;
+    GfxPipeline pip_image_composite[31];
     GfxBuffer vertex_buffer;
     GfxBuffer fullscreen_vertex_buffer;
     GfxBuffer index_buffer;
@@ -101,6 +102,9 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
                                   int index_count, sg_image main_image, sg_view main_view,
                                   const render_effect_pass_t* pass, const builtin_uniforms_t& builtins,
                                   const particle_builtin_uniforms_t& particle_builtins);
+void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
+                                   sg_view scene_view, float x, float y, float width, float height, float rotation,
+                                   float tint[4], int blend_mode);
 #else
 void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);
