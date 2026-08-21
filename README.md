@@ -8,6 +8,7 @@ Linux renderer for Wallpaper Engine projects.
 - GCC or Clang with C++ support
 - Vulkan development libraries and a working Vulkan GPU driver
 - [Slang](https://github.com/shader-slang/slang)
+- A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
 - X11 development libraries (`libX11`, `libXcursor`, `libXi`)
 
 On Arch / CachyOS:

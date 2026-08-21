@@ -355,13 +355,18 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
                                    sg_view scene_view, float x, float y, float width, float height, float rotation,
                                    float tint[4], int blend_mode) {
+    if (blend_mode == 0) {
+        renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
+        return;
+    }
+
     if (blend_mode == 31) {
         renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, true, nullptr);
         return;
     }
 
     if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) {
-        renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
+        LOG_TAG_E("RENDER", "Unsupported Wallpaper Engine blend mode %d", blend_mode);
         return;
     }
 
