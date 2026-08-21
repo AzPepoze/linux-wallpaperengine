@@ -48,6 +48,8 @@ struct ParticleOperatorConfig {
 
 struct ParticleSystemConfig {
     std::string material_path;
+    std::string animation_mode = "sequence";
+    float sequence_multiplier = 1.0f;
     int max_particles = 100;
     bool additive = false;
     float start_time = 0.0f;
