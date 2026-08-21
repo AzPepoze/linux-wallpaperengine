@@ -84,6 +84,17 @@ void DiagnosticConfig::parseFromArgs() {
         force_output_texture_slot = std::atoi(getArg("diagnostic-output-texture"));
     }
 
+    if (checkArg("diagnostic-capture-effect")) {
+        capture_effect_index = std::atoi(getArg("diagnostic-capture-effect"));
+    }
+    if (checkArg("diagnostic-capture-pass")) {
+        capture_pass_index = std::atoi(getArg("diagnostic-capture-pass"));
+        capture_pass_images = true;
+    }
+    if (checkArg("diagnostic-capture-passes")) {
+        capture_pass_images = true;
+    }
+
     if (checkArg("diagnostic-ab")) {
         enable_ab = true;
     }

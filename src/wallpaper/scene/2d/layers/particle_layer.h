@@ -18,6 +18,8 @@ class ParticleLayer : public Layer {
     void update(float dt, EngineContext& ctx) override;
     void draw(EngineContext& ctx) override;
     void drawDebug(EngineContext& ctx) override;
+    bool requiresSceneColor() const;
+    void setSceneColorView(sg_view view);
 };
 
 #endif  // PARTICLE_LAYER_H

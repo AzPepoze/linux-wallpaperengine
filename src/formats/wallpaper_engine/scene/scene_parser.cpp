@@ -44,6 +44,23 @@ bool parseVec(const cJSON* raw, float* out, int count) {
     return false;
 }
 
+bool parseFloat(const cJSON* raw, float& out) {
+    const cJSON* node = propertyValue(raw);
+    if (cJSON_IsNumber(node)) {
+        out = (float)node->valuedouble;
+        return true;
+    }
+    if (cJSON_IsString(node) && node->valuestring) {
+        char* end = nullptr;
+        const float value = strtof(node->valuestring, &end);
+        if (end != node->valuestring) {
+            out = value;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool parseBool(const cJSON* raw, bool fallback = false) {
     const cJSON* node = propertyValue(raw);
     if (cJSON_IsBool(node)) return cJSON_IsTrue(node);
@@ -152,9 +169,24 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
         out.camera_parallax_mouse_influence = (float)mouse_influence->valuedouble;
     }
 
+    const cJSON* camera_shake = cJSON_GetObjectItemCaseSensitive(general, "camerashake");
+    if (cJSON_IsBool(camera_shake)) {
+        out.camera_shake_enabled = cJSON_IsTrue(camera_shake);
+    } else if (cJSON_IsObject(camera_shake)) {
+        const cJSON* value = cJSON_GetObjectItemCaseSensitive(camera_shake, "value");
+        if (cJSON_IsBool(value)) out.camera_shake_enabled = cJSON_IsTrue(value);
+    }
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeamplitude"), out.camera_shake_amplitude);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakespeed"), out.camera_shake_speed);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeroughness"), out.camera_shake_roughness);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"), out.perspective_override_fov);
+
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
           out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount, out.camera_parallax_delay,
           out.camera_parallax_mouse_influence);
+    LOG_I("Camera Shake: %s, amplitude=%.3f, speed=%.3f, roughness=%.3f",
+          out.camera_shake_enabled ? "enabled" : "disabled", out.camera_shake_amplitude, out.camera_shake_speed,
+          out.camera_shake_roughness);
 }
 
 SceneObjectDocument parseObject(const cJSON* object) {
@@ -180,10 +212,60 @@ SceneObjectDocument parseObject(const cJSON* object) {
     }
 
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.image.size.data(), 2);
+    parseVec(cJSON_GetObjectItemCaseSensitive(object, "color"), doc.image.color.data(), 3);
+    const cJSON* alpha = cJSON_GetObjectItemCaseSensitive(object, "alpha");
+    if (cJSON_IsNumber(alpha)) {
+        doc.image.alpha = (float)alpha->valuedouble;
+    } else if (cJSON_IsObject(alpha)) {
+        // Animated properties retain their authoring-time fallback in `value`.
+        // The animation program is separate from static image color semantics.
+        parseFloat(cJSON_GetObjectItemCaseSensitive(alpha, "value"), doc.image.alpha);
+        const cJSON* animation = cJSON_GetObjectItemCaseSensitive(alpha, "animation");
+        if (cJSON_IsObject(animation)) {
+            const cJSON* keys = cJSON_GetObjectItemCaseSensitive(animation, "c0");
+            if (cJSON_IsArray(keys)) {
+                const cJSON* key = nullptr;
+                cJSON_ArrayForEach(key, keys) {
+                    ImageObjectDocument::AlphaKey parsed;
+                    if (!parseFloat(cJSON_GetObjectItemCaseSensitive(key, "frame"), parsed.frame) ||
+                        !parseFloat(cJSON_GetObjectItemCaseSensitive(key, "value"), parsed.value))
+                        continue;
+                    doc.image.alpha_keys.push_back(parsed);
+                }
+            }
+            const cJSON* options = cJSON_GetObjectItemCaseSensitive(animation, "options");
+            if (cJSON_IsObject(options)) {
+                parseFloat(cJSON_GetObjectItemCaseSensitive(options, "fps"), doc.image.alpha_fps);
+                parseFloat(cJSON_GetObjectItemCaseSensitive(options, "length"), doc.image.alpha_length);
+                const cJSON* mode = cJSON_GetObjectItemCaseSensitive(options, "mode");
+                if (cJSON_IsString(mode) && mode->valuestring) doc.image.alpha_mode = mode->valuestring;
+            }
+        }
+    }
+    const cJSON* color_blend_mode = cJSON_GetObjectItemCaseSensitive(object, "colorBlendMode");
+    if (cJSON_IsNumber(color_blend_mode)) doc.image.color_blend_mode = (int)color_blend_mode->valuedouble;
+    doc.image.solid = parseBool(cJSON_GetObjectItemCaseSensitive(object, "solid"), false);
+    doc.image.copy_background = parseBool(cJSON_GetObjectItemCaseSensitive(object, "copybackground"), false);
 
     const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
     if (cJSON_IsString(particle) && particle->valuestring) {
         doc.particle.particle = particle->valuestring;
+    }
+
+    const cJSON* instance_override = cJSON_GetObjectItemCaseSensitive(object, "instanceoverride");
+    if (cJSON_IsObject(instance_override)) {
+        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "alpha"), doc.particle.override_alpha);
+        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "rate"), doc.particle.override_rate);
+
+        const cJSON* color = cJSON_GetObjectItemCaseSensitive(instance_override, "color");
+        const cJSON* colorn = cJSON_GetObjectItemCaseSensitive(instance_override, "colorn");
+        if (parseVec(color, doc.particle.override_color.data(), 3)) {
+            doc.particle.has_override_color = true;
+            doc.particle.override_color_is_legacy = true;
+        } else if (parseVec(colorn, doc.particle.override_color.data(), 3)) {
+            doc.particle.has_override_color = true;
+            doc.particle.override_color_is_legacy = false;
+        }
     }
 
     const cJSON* effects = cJSON_GetObjectItemCaseSensitive(object, "effects");

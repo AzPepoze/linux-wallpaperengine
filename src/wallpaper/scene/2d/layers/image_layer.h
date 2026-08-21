@@ -13,6 +13,9 @@ class ImageLayer : public Layer {
    public:
     GfxImage img;
     GfxView cached_view;
+    bool solid_layer = false;
+    bool copy_background = false;
+    int color_blend_mode = 0;
 
     ImageLayer(const char* name, GfxImage img);
     virtual ~ImageLayer();
@@ -22,6 +25,8 @@ class ImageLayer : public Layer {
     void update(float dt, EngineContext& ctx) override;
     void draw(EngineContext& ctx) override;
     void drawDebug(EngineContext& ctx) override;
+    bool requiresSceneColor() const;
+    void drawComposite(EngineContext& ctx, sg_view scene_view);
 
    private:
     struct EffectTarget {
@@ -45,6 +50,7 @@ class ImageLayer : public Layer {
     sg_image effect_output_image = {SG_INVALID_ID};
     sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, EffectTarget> named_effect_targets;
+    wallpaper_engine::ImageObjectDocument alpha_document;
 };
 
 #endif  // IMAGE_LAYER_H

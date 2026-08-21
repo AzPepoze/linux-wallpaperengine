@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "core/build_config.h"
 #include "core/context.h"
@@ -11,6 +12,7 @@
 #include "core/logger.h"
 #include "core/utils.h"
 #include "render/render.h"
+#include "wallpaper/scene/2d/alpha_curve.h"
 #include "wallpaper/scene/2d/parallax.h"
 #include "wallpaper/scene/2d/parser/image_parser.h"
 #include "wallpaper/scene/tree/scene_tree.h"
@@ -290,6 +292,13 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
     layer->initFromDocument(doc, ctx);
     layer->size[0] = config.width;
     layer->size[1] = config.height;
+    layer->tint[0] = config.color[0];
+    layer->tint[1] = config.color[1];
+    layer->tint[2] = config.color[2];
+    layer->tint[3] = config.alpha;
+    layer->copy_background = doc.image.copy_background;
+    layer->color_blend_mode = doc.image.color_blend_mode;
+    layer->alpha_document = doc.image;
 
     if (!config.asset_path.empty()) {
         if (config.is_model || config.asset_path.find(".json") != std::string::npos)
@@ -323,11 +332,30 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     free(json_str);
     if (!mdl_json) return;
     cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(mdl_json, "material");
-    if (cJSON_IsString(mat_ref)) loadMaterial(mat_ref->valuestring, ctx);
+    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer"))) {
+        solid_layer = true;
+        const int width = std::max(1, (int)std::lround(size[0]));
+        const int height = std::max(1, (int)std::lround(size[1]));
+        std::vector<uint32_t> pixels((size_t)width * (size_t)height, 0xFFFFFFFFu);
+        sg_image_desc image_desc = {};
+        image_desc.width = width;
+        image_desc.height = height;
+        image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+        image_desc.data.mip_levels[0] = {pixels.data(), pixels.size() * sizeof(uint32_t)};
+        img = sg_make_image(&image_desc);
+        updateCachedView();
+    } else if (cJSON_IsString(mat_ref)) {
+        loadMaterial(mat_ref->valuestring, ctx);
+    }
     cJSON_Delete(mdl_json);
 }
 
 void ImageLayer::update(float dt, EngineContext& ctx) {
     (void)dt;
+    tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
     renderEffectChain(ctx);
+}
+
+bool ImageLayer::requiresSceneColor() const {
+    return copy_background || color_blend_mode != 0;
 }

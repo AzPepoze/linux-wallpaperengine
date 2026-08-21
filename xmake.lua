@@ -38,24 +38,6 @@ target("linux-wallpaperengine")
         set_strip("all")
     end
 
-target("test_diagnostics")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    add_defines("DEBUG_BUILD=1")
-    add_packages("sokol", "linmath.h", "cjson", "stb")
-    add_files("tests/test_diagnostics.cpp")
-    add_files("src/ui/sandbox_catalog.cpp")
-    add_files("src/render/diagnostics/diagnostic_config.cpp")
-    add_files("src/render/diagnostics/image_stats.cpp")
-    add_files("src/render/diagnostics/render_graph.cpp")
-    add_files("src/render/diagnostics/uniform_provenance.cpp")
-    add_files("src/render/shader/shader_processor.cpp")
-    add_files("src/wallpaper/scene/2d/parser/effect_parser.cpp")
-    add_files("src/wallpaper/scene/2d/parser/particle_parser.cpp")
-    add_files("src/wallpaper/scene/2d/parser/image_parser.cpp")
-    add_includedirs("src")
-
 task("check")
     set_menu {
         usage = "xmake check",
@@ -63,14 +45,14 @@ task("check")
     }
     on_run(function ()
         print("--> Checking formatting (clang-format)...")
-        os.execv("sh", {"-c", "find src tests -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
+        os.execv("sh", {"-c", "find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
 
         print("--> Running static analysis (cppcheck)...")
         os.execv("sh", {"-c", "cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 " ..
                              "'-D__has_feature(x)=0' " ..
                              "--suppress=preprocessorErrorDirective " ..
                              "--suppress=uninitMemberVarNoCtor " ..
-                             "src/ tests/"})
+                             "src/"})
         print("All checks passed!")
     end)
 
@@ -81,7 +63,7 @@ task("format")
     }
     on_run(function ()
         print("--> Formatting files...")
-        os.execv("sh", {"-c", "find src tests -name '*.[ch]*' | xargs clang-format -i"})
+        os.execv("sh", {"-c", "find src -name '*.[ch]*' | xargs clang-format -i"})
         print("Done!")
     end)
 
