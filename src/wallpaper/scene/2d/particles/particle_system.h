@@ -64,6 +64,8 @@ class ParticleSystem {
     vec2 parallax = {0, 0};
     bool is_additive = false;
     bool has_refract = false;
+    bool is_trail = false;
+    bool use_perspective = false;
 
     int spritesheet_cols = 0;
     int spritesheet_rows = 0;
@@ -74,6 +76,9 @@ class ParticleSystem {
 
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
+    vec3 override_color = {1.0f, 1.0f, 1.0f};
+    bool has_override_color = false;
+    bool override_color_is_legacy = false;
 
     ParticleSystem(ParticleSystemConfig config, float sw, float h);
     ~ParticleSystem();
@@ -82,7 +87,9 @@ class ParticleSystem {
 
     static ParticleSystem* createFromJSON(cJSON* node, EngineContext& ctx, float sw, float sh);
     static ParticleSystem* createFromPath(const char* particle_path, EngineContext& ctx, float sw, float sh,
-                                          float override_alpha = 1.0f, float override_rate = 1.0f);
+                                          float override_alpha = 1.0f, float override_rate = 1.0f,
+                                          const float* override_color = nullptr,
+                                          bool override_color_is_legacy = false);
 
     void update(float dt);
     void draw(EngineContext& ctx);
