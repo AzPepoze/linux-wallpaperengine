@@ -59,7 +59,6 @@ void ParticleSystem::draw(EngineContext& ctx) {
             }
 
             const uint32_t base = (uint32_t)vertices.size();
-            const float half_size = particle.size * 0.5f;
             auto add_vertex = [&](float u, float v) {
                 ParticleVertex vertex = {};
                 vertex.position[0] = particle.position[0];
@@ -68,7 +67,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.texcoord[0] = u;
                 vertex.texcoord[1] = v;
                 vertex.texcoord[2] = particle.rotation;
-                vertex.texcoord[3] = half_size;
+                vertex.texcoord[3] = particle.size;
                 vertex.color[0] = particle.color[0];
                 vertex.color[1] = particle.color[1];
                 vertex.color[2] = particle.color[2];
