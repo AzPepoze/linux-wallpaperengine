@@ -78,6 +78,8 @@ class ShaderPass {
         r.apply_custom_uniforms = [](void* ud) { static_cast<ShaderPass*>(ud)->applyCompiledUniforms(); };
         r.user_data = this;
         r.is_fullscreen_quad = is_fullscreen_quad;
+        const auto repeat = combos.find("REPEAT");
+        r.repeat_effect_input = repeat != combos.end() && repeat->second != 0;
         return r;
     }
 
