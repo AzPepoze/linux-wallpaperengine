@@ -26,6 +26,7 @@ typedef struct {
     void (*apply_custom_uniforms)(void* user_data);
     void* user_data;
     bool is_fullscreen_quad;
+    bool repeat_effect_input;
 } render_effect_pass_t;
 
 typedef struct {
@@ -41,7 +42,8 @@ struct renderer_t {
     GfxBuffer fullscreen_vertex_buffer;
     GfxBuffer index_buffer;
     sg_bindings bind = {};
-    GfxSampler smp;
+    GfxSampler smp_repeat;
+    GfxSampler smp_clamp;
     GfxImage white_pixel;
     GfxView white_view;
     GfxImage black_pixel;
