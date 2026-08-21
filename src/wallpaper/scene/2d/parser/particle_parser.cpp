@@ -7,6 +7,11 @@
 void ParticleParser::readVec3(const cJSON* node, vec3 out) {
     if (cJSON_IsString(node) && node->valuestring) {
         sscanf(node->valuestring, "%f %f %f", &out[0], &out[1], &out[2]);
+    } else if (cJSON_IsArray(node) && cJSON_GetArraySize(node) >= 3) {
+        for (int i = 0; i < 3; ++i) {
+            const cJSON* value = cJSON_GetArrayItem(node, i);
+            out[i] = cJSON_IsNumber(value) ? (float)value->valuedouble : 0.0f;
+        }
     } else if (cJSON_IsNumber(node)) {
         out[0] = out[1] = out[2] = (float)node->valuedouble;
     } else {
@@ -24,6 +29,11 @@ ParticleObjectConfig ParticleParser::parseObject(const wallpaper_engine::SceneOb
     ParticleObjectConfig config;
     config.name = document.name.empty() ? "Particle" : document.name;
     config.particle_path = document.particle.particle;
+    config.override_alpha = document.particle.override_alpha;
+    config.override_rate = document.particle.override_rate;
+    config.has_override_color = document.particle.has_override_color;
+    config.override_color_is_legacy = document.particle.override_color_is_legacy;
+    for (int i = 0; i < 3; ++i) config.override_color[i] = document.particle.override_color[i];
     return config;
 }
 
@@ -37,8 +47,20 @@ ParticleObjectConfig ParticleParser::parseObject(const cJSON* document) {
     if (cJSON_IsObject(overrides)) {
         const cJSON* alpha = cJSON_GetObjectItemCaseSensitive(overrides, "alpha");
         const cJSON* rate = cJSON_GetObjectItemCaseSensitive(overrides, "rate");
-        if (cJSON_IsNumber(alpha)) config.override_alpha = readFloat(alpha);
-        if (cJSON_IsNumber(rate)) config.override_rate = readFloat(rate);
+        if (alpha) config.override_alpha = readFloat(alpha);
+        if (rate) config.override_rate = readFloat(rate);
+
+        const cJSON* color = cJSON_GetObjectItemCaseSensitive(overrides, "color");
+        const cJSON* colorn = cJSON_GetObjectItemCaseSensitive(overrides, "colorn");
+        if (color) {
+            readVec3(color, config.override_color);
+            config.has_override_color = true;
+            config.override_color_is_legacy = true;
+        } else if (colorn) {
+            readVec3(colorn, config.override_color);
+            config.has_override_color = true;
+            config.override_color_is_legacy = false;
+        }
     }
     return config;
 }
@@ -58,6 +80,18 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
 
     const cJSON* max_count = cJSON_GetObjectItemCaseSensitive(document, "maxcount");
     if (cJSON_IsNumber(max_count)) config.max_particles = max_count->valueint;
+    const cJSON* flags = cJSON_GetObjectItemCaseSensitive(document, "flags");
+    if (cJSON_IsNumber(flags)) config.flags = flags->valueint;
+
+    const cJSON* renderers = cJSON_GetObjectItemCaseSensitive(document, "renderer");
+    if (!cJSON_IsArray(renderers)) renderers = cJSON_GetObjectItemCaseSensitive(document, "renderers");
+    const cJSON* renderer = cJSON_IsArray(renderers) ? cJSON_GetArrayItem(renderers, 0) : nullptr;
+    if (cJSON_IsObject(renderer)) {
+        const cJSON* type = cJSON_GetObjectItemCaseSensitive(renderer, "name");
+        if (cJSON_IsString(type) && type->valuestring) config.renderer.type = type->valuestring;
+        config.renderer.length = readFloat(cJSON_GetObjectItemCaseSensitive(renderer, "length"));
+        config.renderer.max_length = readFloat(cJSON_GetObjectItemCaseSensitive(renderer, "maxlength"));
+    }
 
     // Legacy particle files sometimes carry a pass directly. Keep this fallback,
     // but the referenced material is the authoritative source for rendering state.
