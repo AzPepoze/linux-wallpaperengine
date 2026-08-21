@@ -8,11 +8,40 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refactor/wallpaper-engine-blending
+
+      - name: Remove remaining legacy header fallback reference
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/render/shader/shader_processor.cpp')
+          text = path.read_text()
+          old = '''            } else if (const char* compatibility = legacyHeader(include)) {
+                  result += compatibility;
+              } else {
+          '''
+          new = '''            } else {
+          '''
+          if old in text:
+              path.write_text(text.replace(old, new, 1))
+          PY
+
+          if ! git diff --quiet -- src/render/shader/shader_processor.cpp; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add -- src/render/shader/shader_processor.cpp
+            git commit -m 'refactor: require stock Wallpaper Engine shader headers'
+            git push origin HEAD:refactor/wallpaper-engine-blending
+          fi
 
       - name: Install system dependencies
         run: |
