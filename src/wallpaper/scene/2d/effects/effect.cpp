@@ -101,8 +101,13 @@ void ShaderPass::init(EngineContext& ctx) {
     int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
     is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
 
-    std::vector<ShaderUniformConfig> shader_uniforms = EffectParser::extractShaderUniforms(raw_vs);
-    std::vector<ShaderUniformConfig> fragment_uniforms = EffectParser::extractShaderUniforms(raw_fs);
+    std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
+    std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, abs_vert, ctx.asset_mgr, true);
+    std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, abs_frag, ctx.asset_mgr, false);
+
+    // Shared includes can declare material uniforms, so inspect the expanded sources.
+    std::vector<ShaderUniformConfig> shader_uniforms = EffectParser::extractShaderUniforms(processed_vs);
+    std::vector<ShaderUniformConfig> fragment_uniforms = EffectParser::extractShaderUniforms(processed_fs);
     shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
 
     std::map<std::string, std::vector<float>> resolved_uniforms;
@@ -132,11 +137,14 @@ void ShaderPass::init(EngineContext& ctx) {
                              name.c_str(), resolved_name.c_str(), value_text.str().c_str());
         }
     }
+
+    // Shader metadata supplies defaults for material constants that are omitted.
+    for (const ShaderUniformConfig& uniform : shader_uniforms) {
+        if (uniform.has_default && resolved_uniforms.count(uniform.name) == 0)
+            resolved_uniforms[uniform.name] = uniform.default_values;
+    }
     uniforms = std::move(resolved_uniforms);
 
-    std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
-    std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, abs_vert, ctx.asset_mgr, true);
-    std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, abs_frag, ctx.asset_mgr, false);
     combo_defines = ShaderSourceProcessor::extractCombos(processed_fs.c_str());
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
     if (is_depth_parallax) {
@@ -267,6 +275,8 @@ void ShaderPass::init(EngineContext& ctx) {
         step_inst.values = inst_val;
         entry.resolution.push_back(step_inst);
 
+        entry.resolution[0].applied = meta.has_default && !found_base && !found_pass && !found_inst;
+
         auto final_it = uniforms.find(meta.name);
         if (final_it != uniforms.end()) {
             entry.final_value = final_it->second;
@@ -280,16 +290,11 @@ void ShaderPass::init(EngineContext& ctx) {
                 entry.final_source = ProvenanceSource::MaterialConstant;
                 entry.resolution[1].applied = true;
             } else {
-                entry.final_source = ProvenanceSource::RuntimeBuiltin;
+                entry.final_source = meta.has_default ? ProvenanceSource::ShaderMetadataDefault
+                                                      : ProvenanceSource::RuntimeBuiltin;
             }
         } else {
-            if (meta.has_default) {
-                entry.final_source = ProvenanceSource::ShaderMetadataDefault;
-                entry.final_value = meta.default_values;
-                entry.resolution[0].note = "metadata default exists but not bound by runtime";
-            } else {
-                entry.final_source = ProvenanceSource::Unresolved;
-            }
+            entry.final_source = ProvenanceSource::Unresolved;
         }
 
         prov.uniforms[meta.name] = entry;
