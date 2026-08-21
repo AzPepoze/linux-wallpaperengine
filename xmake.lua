@@ -51,6 +51,7 @@ target("test_diagnostics")
     add_files("src/render/diagnostics/render_graph.cpp")
     add_files("src/render/diagnostics/uniform_provenance.cpp")
     add_files("src/render/shader/shader_processor.cpp")
+    add_files("src/wallpaper/scene/2d/effects/effect_configuration.cpp")
     add_includedirs("src")
 
 task("check")

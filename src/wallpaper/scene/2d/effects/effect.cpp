@@ -12,6 +12,7 @@
 #include "core/engine_context.h"
 #include "core/logger.h"
 #include "core/utils.h"
+#include "effect_configuration.h"
 #include "formats/wallpaper_engine/scene/scene_document.h"
 #include "render/shader/shader_processor.h"
 #include "sokol_app.h"
@@ -21,96 +22,6 @@
 #endif
 
 namespace {
-void mergeJsonObject(cJSON*& target, cJSON* source) {
-    if (!cJSON_IsObject(source)) return;
-    if (!target) target = cJSON_CreateObject();
-
-    cJSON* item;
-    cJSON_ArrayForEach(item, source) {
-        if (!item->string) continue;
-        cJSON_DeleteItemFromObjectCaseSensitive(target, item->string);
-        cJSON_AddItemToObject(target, item->string, cJSON_Duplicate(item, 1));
-    }
-}
-
-bool jsonToFloats(cJSON* node, std::vector<float>& out) {
-    if (!node) return false;
-
-    if (cJSON_IsNumber(node)) {
-        out.push_back((float)node->valuedouble);
-        return true;
-    }
-    if (cJSON_IsBool(node)) {
-        out.push_back(cJSON_IsTrue(node) ? 1.0f : 0.0f);
-        return true;
-    }
-    if (cJSON_IsString(node) && node->valuestring) {
-        std::string text = node->valuestring;
-        std::replace(text.begin(), text.end(), ',', ' ');
-        std::istringstream stream(text);
-        float value = 0.0f;
-        bool parsed = false;
-        while (stream >> value) {
-            out.push_back(value);
-            parsed = true;
-        }
-        return parsed;
-    }
-    if (cJSON_IsArray(node)) {
-        bool parsed = false;
-        cJSON* item;
-        cJSON_ArrayForEach(item, node) {
-            parsed = jsonToFloats(item, out) || parsed;
-        }
-        return parsed;
-    }
-    if (cJSON_IsObject(node)) {
-        return jsonToFloats(cJSON_GetObjectItemCaseSensitive(node, "value"), out);
-    }
-    return false;
-}
-
-bool jsonToInt(cJSON* node, int& value) {
-    if (!node) return false;
-    if (cJSON_IsNumber(node)) {
-        value = node->valueint;
-        return true;
-    }
-    if (cJSON_IsBool(node)) {
-        value = cJSON_IsTrue(node) ? 1 : 0;
-        return true;
-    }
-    if (cJSON_IsString(node) && node->valuestring) {
-        char* end = nullptr;
-        long parsed = strtol(node->valuestring, &end, 10);
-        if (end && end != node->valuestring) {
-            value = (int)parsed;
-            return true;
-        }
-        return false;
-    }
-    if (cJSON_IsArray(node) && cJSON_GetArraySize(node) > 0) {
-        return jsonToInt(cJSON_GetArrayItem(node, 0), value);
-    }
-    if (cJSON_IsObject(node)) {
-        return jsonToInt(cJSON_GetObjectItemCaseSensitive(node, "value"), value);
-    }
-    return false;
-}
-
-void readCombos(cJSON* config, std::map<std::string, int>& combos) {
-    if (!config) return;
-    cJSON* combo_node = cJSON_GetObjectItemCaseSensitive(config, "combos");
-    if (!cJSON_IsObject(combo_node)) return;
-
-    cJSON* item;
-    cJSON_ArrayForEach(item, combo_node) {
-        if (!item->string) continue;
-        int value = 0;
-        if (jsonToInt(item, value)) combos[item->string] = value;
-    }
-}
-
 struct ShaderUniformMetadata {
     std::string name;
     std::string material;
@@ -185,7 +96,8 @@ std::vector<ShaderUniformMetadata> extractShaderUniforms(const std::string& sour
                             if (cJSON_IsString(type_node) && type_node->valuestring) type = type_node->valuestring;
                             cJSON* def_node = cJSON_GetObjectItemCaseSensitive(metadata, "default");
                             if (def_node) {
-                                if (jsonToFloats(def_node, default_values) && !default_values.empty()) {
+                                if (EffectConfiguration::readFloats(def_node, default_values) &&
+                                    !default_values.empty()) {
                                     has_default = true;
                                 }
                             }
@@ -309,50 +221,36 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(base_config, "shader");
     if (cJSON_IsString(shader_node) && shader_node->valuestring) shader_name = shader_node->valuestring;
 
-    auto extract_floats = [](cJSON* obj, std::map<std::string, std::vector<float>>& out) {
-        if (!obj) return;
-        cJSON* item;
-        cJSON_ArrayForEach(item, obj) {
-            if (!item->string) continue;
-            std::vector<float> values;
-            if (jsonToFloats(item, values) && !values.empty()) out[item->string] = std::move(values);
-        }
-    };
+    EffectConfiguration::readUniformValues(base_config, base_uniforms);
+    EffectConfiguration::readCombos(base_config, base_combos);
 
-    extract_floats(cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"), base_uniforms);
-    readCombos(base_config, base_combos);
-
-    mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"));
-    readCombos(base_config, combos);
+    EffectConfiguration::mergeObject(constant_values,
+                                     cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"));
+    EffectConfiguration::readCombos(base_config, combos);
     pass_textures.loadFromConfig(base_config, shader_name, ctx);
 
     if (base_config != config) {
-        extract_floats(cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"), pass_uniforms);
-        readCombos(config, pass_combos);
-        mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"));
-        readCombos(config, combos);
+        EffectConfiguration::readUniformValues(config, pass_uniforms);
+        EffectConfiguration::readCombos(config, pass_combos);
+        EffectConfiguration::mergeObject(constant_values,
+                                         cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"));
+        EffectConfiguration::readCombos(config, combos);
         pass_textures.applyInstanceOverrides(config, shader_name, ctx);
     }
 
     if (instance_config) {
-        extract_floats(cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"), inst_uniforms);
-        readCombos(instance_config, inst_combos);
+        EffectConfiguration::readUniformValues(instance_config, inst_uniforms);
+        EffectConfiguration::readCombos(instance_config, inst_combos);
         pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
-        mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"));
-        readCombos(instance_config, combos);
+        EffectConfiguration::mergeObject(constant_values,
+                                         cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"));
+        EffectConfiguration::readCombos(instance_config, combos);
 
         cJSON* pass_enabled = cJSON_GetObjectItemCaseSensitive(instance_config, "enabled");
         if (cJSON_IsBool(pass_enabled)) enabled = cJSON_IsTrue(pass_enabled);
     }
 
-    if (constant_values) {
-        cJSON* item;
-        cJSON_ArrayForEach(item, constant_values) {
-            if (!item->string) continue;
-            std::vector<float> values;
-            if (jsonToFloats(item, values) && !values.empty()) uniforms[item->string] = std::move(values);
-        }
-    }
+    EffectConfiguration::readValuesObject(constant_values, uniforms);
 
     if (owned_base_config) cJSON_Delete(owned_base_config);
 }

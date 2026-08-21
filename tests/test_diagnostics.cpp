@@ -15,6 +15,7 @@
 #include "render/shader/shader_processor.h"
 #include "sokol_args.h"
 #include "ui/sandbox_catalog.h"
+#include "wallpaper/scene/2d/effects/effect_configuration.h"
 
 static int g_test_passed = 0;
 static int g_test_failed = 0;
@@ -260,6 +261,26 @@ void test_shader_source_metadata() {
                 "Shader prefix should retain HLSL vector aliases");
 }
 
+void test_effect_configuration_precedence() {
+    cJSON* material = cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":1,\"g_Color\":[1,2]}}");
+    cJSON* pass = cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":2}}");
+    cJSON* instance = cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":3}}");
+    cJSON* merged = nullptr;
+    EffectConfiguration::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(material, "constantshadervalues"));
+    EffectConfiguration::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(pass, "constantshadervalues"));
+    EffectConfiguration::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(instance, "constantshadervalues"));
+    std::map<std::string, std::vector<float>> values;
+    EffectConfiguration::readValuesObject(merged, values);
+    TEST_ASSERT(values["g_Value"] == std::vector<float>({3.0f}),
+                "Instance constants should override pass and material constants");
+    TEST_ASSERT(values["g_Color"] == std::vector<float>({1.0f, 2.0f}),
+                "Non-overridden material constants should be retained");
+    cJSON_Delete(material);
+    cJSON_Delete(pass);
+    cJSON_Delete(instance);
+    cJSON_Delete(merged);
+}
+
 void test_sandbox_catalog() {
     namespace fs = std::filesystem;
 
@@ -297,6 +318,7 @@ int main(int argc, char* argv[]) {
 
     test_cli_parsing();
     test_shader_source_metadata();
+    test_effect_configuration_precedence();
     test_sandbox_catalog();
     test_uniform_provenance_json();
     test_image_stats();
