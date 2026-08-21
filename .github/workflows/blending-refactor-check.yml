@@ -22,7 +22,19 @@ jobs:
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
             mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
 
+      - name: Check render.cpp formatting
+        run: clang-format --dry-run --Werror src/render/render.cpp
+
+      - name: Check render.h formatting
+        if: always()
+        run: clang-format --dry-run --Werror src/render/render.h
+
+      - name: Check renderer resources formatting
+        if: always()
+        run: clang-format --dry-run --Werror src/render/renderer_resources.cpp
+
       - name: Install prebuilt Slang
+        if: success()
         env:
           SLANG_VERSION: '2026.14'
         run: |
@@ -41,9 +53,11 @@ jobs:
           "$SLANG_PREFIX/bin/slangc" -version
 
       - name: Set up xmake
+        if: success()
         uses: xmake-io/github-action-setup-xmake@v1
 
       - name: Verify Wallpaper Engine blending source
+        if: success()
         run: |
           grep -n 'common_blending.h' src/render/render.cpp
           grep -n 'ApplyBlending(BLENDMODE' src/render/render.cpp
@@ -51,10 +65,8 @@ jobs:
           ! grep -n 'vec3 rgb2hsl' src/render/render.cpp
           ! grep -n 'return mix(b,b\*s,o)' src/render/render.cpp
 
-      - name: Check formatting
-        run: find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror
-
       - name: Run static analysis
+        if: success()
         run: |
           cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 \
             '-D__has_feature(x)=0' \
@@ -63,10 +75,13 @@ jobs:
             src/
 
       - name: Configure
+        if: success()
         run: xmake f -y -m release
 
       - name: Build
+        if: success()
         run: xmake -v
 
       - name: Check software Vulkan
+        if: success()
         run: xvfb-run -a vulkaninfo --summary
