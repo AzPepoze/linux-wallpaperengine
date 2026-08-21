@@ -73,7 +73,9 @@ typedef struct {
 } builtin_uniforms_t;
 
 typedef struct {
+    mat4x4 model_matrix;
     mat4x4 model_matrix_inverse;
+    mat4x4 view_projection_matrix;
     vec4 orientation_up;
     vec4 orientation_right;
     vec4 orientation_forward;
