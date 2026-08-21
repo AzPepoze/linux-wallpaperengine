@@ -1,4 +1,4 @@
-#include "effect_configuration.h"
+#include "effect_parser.h"
 
 #include <algorithm>
 #include <cstdlib>

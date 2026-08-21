@@ -11,6 +11,7 @@
 #include "core/utils.h"
 #include "render/render.h"
 #include "sokol_app.h"
+#include "wallpaper/scene/2d/parser/particle_parser.h"
 
 #define TAG "PARTICLE"
 
@@ -18,21 +19,12 @@ static float rand_f() {
     return (float)rand() / (float)RAND_MAX;
 }
 
-static void parse_vec3(cJSON* node, vec3 out) {
-    if (cJSON_IsString(node)) {
-        sscanf(node->valuestring, "%f %f %f", &out[0], &out[1], &out[2]);
-    } else if (cJSON_IsNumber(node)) {
-        out[0] = out[1] = out[2] = (float)node->valuedouble;
-    } else {
-        out[0] = out[1] = out[2] = 0.0f;
-    }
+static void parse_vec3(const cJSON* node, vec3 out) {
+    ParticleParser::readVec3(node, out);
 }
 
-static float get_float(cJSON* node) {
-    if (!node) return 0.0f;
-    if (cJSON_IsNumber(node)) return (float)node->valuedouble;
-    if (cJSON_IsString(node)) return (float)atof(node->valuestring);
-    return 0.0f;
+static float get_float(const cJSON* node) {
+    return ParticleParser::readFloat(node);
 }
 
 ParticleSystem::ParticleSystem(cJSON* config, GfxImage tex, float sw, float sh)
@@ -108,7 +100,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, const 
         }
     }
 
-    float start_time = get_float(cJSON_GetObjectItemCaseSensitive(p_json, "starttime"));
+    float start_time = ParticleParser::readFloat(cJSON_GetObjectItemCaseSensitive(p_json, "starttime"));
     if (start_time > 0) {
         float step = 0.1f;
         for (float t = 0; t < start_time; t += step) ps->update(step);

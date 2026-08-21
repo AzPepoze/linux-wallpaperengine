@@ -12,10 +12,10 @@
 #include "core/engine_context.h"
 #include "core/logger.h"
 #include "core/utils.h"
-#include "effect_configuration.h"
 #include "formats/wallpaper_engine/scene/scene_document.h"
 #include "render/shader/shader_processor.h"
 #include "sokol_app.h"
+#include "wallpaper/scene/2d/parser/effect_parser.h"
 
 #if DEBUG_BUILD
 #include "render/diagnostics/render_diagnostics.h"
