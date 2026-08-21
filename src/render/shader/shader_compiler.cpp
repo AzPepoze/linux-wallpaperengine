@@ -66,9 +66,10 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].glsl_name = "tint";
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].type = SG_UNIFORMTYPE_FLOAT4;
 
+    std::string custom_uniform_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
     int next_uniform_slot = 3;
     configureCustomUniformBlocks(uniforms, compiled_vert_source, compiled_frag_source, shd_desc, result,
-                                 next_uniform_slot);
+                                 next_uniform_slot, custom_uniform_names);
 
     static const char* kTextureNames[] = {"g_Texture0", "g_Texture1", "g_Texture2",  "g_Texture3",
                                           "g_Texture4", "g_Texture5", "g_Texture6",  "g_Texture7",

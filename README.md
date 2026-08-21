@@ -31,8 +31,13 @@ The executable is generated in the `bin` directory.
 # Run a wallpaper project folder or standalone .pkg file.
 xmake run linux-wallpaperengine "/path/to/wallpaper"
 
-# Run the debug build.
-xmake run -d linux-wallpaperengine
+# Configure and run the release build.
+xmake f -m release
+xmake run linux-wallpaperengine
+
+# Configure and run the debug build.
+xmake f -m debug
+xmake run linux-wallpaperengine
 ```
 
 ## Development

@@ -3,6 +3,14 @@
 #if !DEBUG_BUILD
 #define SOKOL_NO_ENTRY
 #endif
+
+// Sokol enables VK_LAYER_KHRONOS_validation whenever NDEBUG is absent. Keep
+// the application's debug build independent of that optional system layer.
+#if DEBUG_BUILD && !defined(NDEBUG)
+#define NDEBUG
+#define LWE_RESTORE_NDEBUG
+#endif
+
 #define SOKOL_IMPL
 #define SOKOL_VULKAN
 #define SOKOL_LOG_IMPL
@@ -11,6 +19,11 @@
 #include "sokol_args.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
+
+#ifdef LWE_RESTORE_NDEBUG
+#undef NDEBUG
+#undef LWE_RESTORE_NDEBUG
+#endif
 
 #if DEBUG_BUILD
 #define SOKOL_IMGUI_IMPL

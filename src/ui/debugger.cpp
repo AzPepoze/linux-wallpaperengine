@@ -15,6 +15,7 @@
 #include "sokol_app.h"
 #include "sokol_log.h"
 #include "ui/inspector/layer_inspector.h"
+#include "ui/widgets/visibility_solo_controls.h"
 #include "util/sokol_imgui.h"
 #include "wallpaper/scene/2d/layers/layer.h"
 #include "wallpaper/scene/tree/scene_tree.h"
@@ -26,6 +27,7 @@ SandboxProjectLoader g_sandbox_loader = nullptr;
 int g_sandbox_tab = 0;
 int g_selected_effect = -1;
 int g_selected_material = -1;
+bool g_logs_open = false;
 std::string g_sandbox_status;
 
 int findLayerIndex(const EngineContext& ctx, uint32_t scene_object_id) {
@@ -33,17 +35,6 @@ int findLayerIndex(const EngineContext& ctx, uint32_t scene_object_id) {
         if (ctx.layers[index]->scene_object_id == scene_object_id) return index;
     }
     return -1;
-}
-
-void drawLayerActions(Layer& layer) {
-    if (ImGui::SmallButton(layer.visible ? "V" : " ")) layer.visible = !layer.visible;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle visibility");
-
-    ImGui::SameLine();
-    if (layer.solo) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.95f, 0.62f, 0.10f, 1.0f));
-    if (ImGui::SmallButton("S")) layer.solo = !layer.solo;
-    if (layer.solo) ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo layer");
 }
 
 void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
@@ -65,7 +56,8 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
 
     if (layer_index >= 0) {
         ImGui::SameLine();
-        drawLayerActions(*ctx.layers[layer_index]);
+        UiWidgets::drawVisibilitySoloControls(ctx.layers[layer_index]->visible, ctx.layers[layer_index]->solo,
+                                              "Toggle layer visibility", "Solo layer");
     }
 
     if (open && !is_leaf) {
@@ -101,7 +93,7 @@ void drawHierarchyPanel(EngineContext& ctx) {
         ImGui::PushID(index);
         if (ImGui::Selectable(layer->name.c_str(), ctx.selected_object == index)) ctx.selected_object = index;
         ImGui::SameLine();
-        drawLayerActions(*layer);
+        UiWidgets::drawVisibilitySoloControls(layer->visible, layer->solo, "Toggle layer visibility", "Solo layer");
         ImGui::PopID();
     }
 }
@@ -194,15 +186,54 @@ void Debugger::startSandbox(EngineContext& ctx, SandboxProjectLoader loader) {
 }
 
 void Debugger::drawSceneTab(EngineContext& ctx) {
-    const float left_width = std::min(360.0f, ImGui::GetContentRegionAvail().x * 0.40f);
-    ImGui::BeginChild("SceneTree", ImVec2(left_width, 0.0f), true);
+    const ImGuiTableFlags table_flags =
+        ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
+    constexpr float button_height = 32.0f;
+    const float panel_height = ImGui::GetContentRegionAvail().y - button_height - ImGui::GetStyle().ItemSpacing.y;
+    if (!ImGui::BeginTable("SceneLayout", 3, table_flags, ImVec2(0.0f, panel_height))) return;
+
+    ImGui::TableSetupColumn("Scene Tree", ImGuiTableColumnFlags_WidthStretch, 0.20f);
+    ImGui::TableSetupColumn("Preview", ImGuiTableColumnFlags_WidthStretch, 0.55f);
+    ImGui::TableSetupColumn("Inspector", ImGuiTableColumnFlags_WidthStretch, 0.25f);
+    ImGui::TableNextColumn();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.03f, 0.05f, 0.92f));
+    ImGui::BeginChild("SceneTree", ImVec2(0.0f, 0.0f), true);
     drawHierarchyPanel(ctx);
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 
-    ImGui::SameLine();
+    ImGui::TableNextColumn();
+    ImGui::Dummy(ImGui::GetContentRegionAvail());
+
+    ImGui::TableNextColumn();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.02f, 0.03f, 0.05f, 0.92f));
     ImGui::BeginChild("SceneInspector", ImVec2(0.0f, 0.0f), true);
-    drawInspectorPanel(ctx);
+    if (ImGui::BeginTabBar("RightPanelTabs")) {
+        if (ImGui::BeginTabItem("Inspector")) {
+            drawInspectorPanel(ctx);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Diagnostics")) {
+            drawDiagnosticsTab(ctx);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
     ImGui::EndChild();
+    ImGui::PopStyleColor();
+
+    ImGui::EndTable();
+
+    if (!g_logs_open) {
+        constexpr float button_width = 160.0f;
+        ImGui::SetCursorPos(ImVec2((ImGui::GetWindowSize().x - button_width) * 0.5f,
+                                   ImGui::GetWindowSize().y - button_height - ImGui::GetStyle().WindowPadding.y));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.30f, 0.58f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.42f, 0.75f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.22f, 0.45f, 1.0f));
+        if (ImGui::Button("Open Logs", ImVec2(button_width, button_height))) g_logs_open = true;
+        ImGui::PopStyleColor(3);
+    }
 
     if (ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
         ctx.layers[ctx.selected_object]->drawDebug(ctx);
@@ -267,25 +298,28 @@ void Debugger::draw(EngineContext& ctx) {
     } else if (ctx.show_ui) {
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2((float)sapp_width(), (float)sapp_height()), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.0f);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                                       ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
+                                       ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
+                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
         ImGui::Begin("DebugWorkspace", nullptr, flags);
-        if (ImGui::BeginTabBar("DebugTabs")) {
-            if (ImGui::BeginTabItem("Scene")) {
-                drawSceneTab(ctx);
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("Diagnostics")) {
-                drawDiagnosticsTab(ctx);
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("Logs")) {
-                drawLogsTab();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
+        drawSceneTab(ctx);
         ImGui::End();
+
+        if (g_logs_open) {
+            const float max_width = std::max(360.0f, (float)sapp_width() - 32.0f);
+            const float max_height = std::max(240.0f, (float)sapp_height() - 32.0f);
+            const ImVec2 log_window_size(std::min(720.0f, max_width), std::min(420.0f, max_height));
+            ImGui::SetNextWindowPos(ImVec2(((float)sapp_width() - log_window_size.x) * 0.5f,
+                                           ((float)sapp_height() - log_window_size.y) * 0.5f),
+                                    ImGuiCond_Appearing);
+            ImGui::SetNextWindowSize(log_window_size, ImGuiCond_Appearing);
+            ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 240.0f), ImVec2(max_width, max_height));
+            if (ImGui::Begin("Logs", &g_logs_open)) {
+                drawLogsTab();
+            }
+            ImGui::End();
+        }
     }
     simgui_render();
 }
