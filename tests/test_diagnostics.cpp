@@ -12,6 +12,7 @@
 #include "render/diagnostics/image_stats.h"
 #include "render/diagnostics/render_graph.h"
 #include "render/diagnostics/uniform_provenance.h"
+#include "render/shader/shader_processor.h"
 #include "sokol_args.h"
 #include "ui/sandbox_catalog.h"
 
@@ -243,6 +244,22 @@ void test_cli_parsing() {
     }
 }
 
+void test_shader_source_metadata() {
+    const char* source =
+        "// [COMBO] {\"combo\":\"MASK\",\"default\":1}\n"
+        "// [COMBO] {\"combo\":\"MASK\",\"default\":0}\n"
+        "uniform sampler2D g_Texture1; // {\"label\":\"ui_editor_properties_specular\"}\n"
+        "uniform sampler2D g_Texture2; // [ui_editor_properties_opacity_mask]\n";
+    const std::string combos = ShaderSourceProcessor::extractCombos(source);
+    TEST_ASSERT(combos == "#define MASK 1\n", "First combo declaration should define its default exactly once");
+
+    const auto labels = ShaderSourceProcessor::extractTextureLabels(source);
+    TEST_ASSERT(labels.at(1) == "Specular", "Known texture metadata should use its readable label");
+    TEST_ASSERT(labels.at(2) == "Opacity Mask", "Legacy texture metadata should be normalized");
+    TEST_ASSERT(ShaderSourceProcessor::buildShaderPrefix().find("#define float3 vec3") != std::string::npos,
+                "Shader prefix should retain HLSL vector aliases");
+}
+
 void test_sandbox_catalog() {
     namespace fs = std::filesystem;
 
@@ -279,6 +296,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Running diagnostic subsystem unit tests...\n";
 
     test_cli_parsing();
+    test_shader_source_metadata();
     test_sandbox_catalog();
     test_uniform_provenance_json();
     test_image_stats();

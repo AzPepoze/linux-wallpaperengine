@@ -1,8 +1,6 @@
 #include "shader_compiler.h"
 
 #include <algorithm>
-#include <cctype>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -10,173 +8,7 @@
 #include "core/logger.h"
 #include "render/render.h"  // For builtin_uniforms_t
 #include "shader_backend.h"
-
-namespace {
-enum class CustomUniformType {
-    Unknown,
-    Float,
-    Vec2,
-    Vec3,
-    Vec4,
-    Int,
-    IVec2,
-    IVec3,
-    IVec4,
-    Bool,
-};
-
-struct CustomUniformDecl {
-    std::string name;
-    CustomUniformType type = CustomUniformType::Unknown;
-};
-
-bool isTokenChar(char c) {
-    return std::isalnum((unsigned char)c) || c == '_';
-}
-
-CustomUniformType parseUniformType(const std::string& declaration) {
-    std::istringstream stream(declaration);
-    std::string token;
-    while (stream >> token) {
-        if (token == "float") return CustomUniformType::Float;
-        if (token == "vec2" || token == "float2") return CustomUniformType::Vec2;
-        if (token == "vec3" || token == "float3") return CustomUniformType::Vec3;
-        if (token == "vec4" || token == "float4") return CustomUniformType::Vec4;
-        if (token == "int") return CustomUniformType::Int;
-        if (token == "ivec2" || token == "int2") return CustomUniformType::IVec2;
-        if (token == "ivec3" || token == "int3") return CustomUniformType::IVec3;
-        if (token == "ivec4" || token == "int4") return CustomUniformType::IVec4;
-        if (token == "bool") return CustomUniformType::Bool;
-    }
-    return CustomUniformType::Unknown;
-}
-
-bool findUniformDeclaration(const std::string& source, const std::string& name, size_t from, size_t& start, size_t& end,
-                            CustomUniformType& type) {
-    size_t name_pos = from;
-    while ((name_pos = source.find(name, name_pos)) != std::string::npos) {
-        const bool left_ok = name_pos == 0 || !isTokenChar(source[name_pos - 1]);
-        const size_t name_end = name_pos + name.size();
-        const bool right_ok = name_end >= source.size() || !isTokenChar(source[name_end]);
-        if (!left_ok || !right_ok) {
-            name_pos = name_end;
-            continue;
-        }
-
-        const size_t line_start_raw = source.rfind('\n', name_pos);
-        const size_t line_start = line_start_raw == std::string::npos ? 0 : line_start_raw + 1;
-        const size_t semicolon = source.find(';', name_end);
-        const size_t line_end = source.find('\n', name_end);
-        if (semicolon == std::string::npos || (line_end != std::string::npos && semicolon > line_end)) {
-            name_pos = name_end;
-            continue;
-        }
-
-        const size_t uniform_pos = source.find("uniform", line_start);
-        if (uniform_pos == std::string::npos || uniform_pos > name_pos || uniform_pos > semicolon) {
-            name_pos = name_end;
-            continue;
-        }
-
-        const std::string declaration = source.substr(uniform_pos, semicolon - uniform_pos + 1);
-        const CustomUniformType detected = parseUniformType(declaration);
-        if (detected == CustomUniformType::Unknown) {
-            name_pos = name_end;
-            continue;
-        }
-
-        start = uniform_pos;
-        end = semicolon + 1;
-        type = detected;
-        return true;
-    }
-    return false;
-}
-
-bool hasUniformDeclaration(const std::string& source, const std::string& name, CustomUniformType& type) {
-    size_t start = 0, end = 0;
-    return findUniformDeclaration(source, name, 0, start, end, type);
-}
-
-std::string packedExpression(const std::string& packed_name, CustomUniformType type) {
-    switch (type) {
-        case CustomUniformType::Float:
-            return "(" + packed_name + ".x)";
-        case CustomUniformType::Vec2:
-            return "(" + packed_name + ".xy)";
-        case CustomUniformType::Vec3:
-            return "(" + packed_name + ".xyz)";
-        case CustomUniformType::Vec4:
-            return "(" + packed_name + ")";
-        case CustomUniformType::Int:
-            return "int(" + packed_name + ".x)";
-        case CustomUniformType::IVec2:
-            return "ivec2(" + packed_name + ".xy)";
-        case CustomUniformType::IVec3:
-            return "ivec3(" + packed_name + ".xyz)";
-        case CustomUniformType::IVec4:
-            return "ivec4(" + packed_name + ")";
-        case CustomUniformType::Bool:
-            return "(" + packed_name + ".x != 0.0)";
-        default:
-            return "(" + packed_name + ")";
-    }
-}
-
-void rewriteUniformDeclaration(std::string& source, const std::string& name, const std::string& packed_name,
-                               CustomUniformType type) {
-    size_t search = 0;
-    bool emitted_alias = false;
-    while (true) {
-        size_t start = 0, end = 0;
-        CustomUniformType ignored = CustomUniformType::Unknown;
-        if (!findUniformDeclaration(source, name, search, start, end, ignored)) break;
-
-        std::string replacement;
-        if (!emitted_alias) {
-            replacement = "#define " + name + " " + packedExpression(packed_name, type);
-            emitted_alias = true;
-        }
-        source.replace(start, end - start, replacement);
-        search = start + replacement.size();
-    }
-}
-
-void appendPackedBlocks(const std::vector<CustomUniformDecl>& declarations, sg_shader_stage stage, std::string& source,
-                        sg_shader_desc& shd_desc, CompiledShader& result, int& next_slot,
-                        std::string packed_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS]) {
-    size_t declaration_index = 0;
-    while (declaration_index < declarations.size() && next_slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS) {
-        const int slot = next_slot++;
-        const size_t remaining = declarations.size() - declaration_index;
-        const int member_count = (int)std::min(remaining, (size_t)SG_MAX_UNIFORMBLOCK_MEMBERS);
-
-        shd_desc.uniform_blocks[slot].stage = stage;
-        shd_desc.uniform_blocks[slot].size = member_count * 16;
-
-        CompiledUniformBlock metadata;
-        metadata.slot = slot;
-        metadata.uniform_names.reserve(member_count);
-
-        for (int member = 0; member < member_count; ++member) {
-            const CustomUniformDecl& decl = declarations[declaration_index + member];
-            packed_names[slot][member] = "_lwe_custom_" + std::to_string(slot) + "_" + std::to_string(member);
-            shd_desc.uniform_blocks[slot].glsl_uniforms[member].glsl_name = packed_names[slot][member].c_str();
-            shd_desc.uniform_blocks[slot].glsl_uniforms[member].type = SG_UNIFORMTYPE_FLOAT4;
-            rewriteUniformDeclaration(source, decl.name, packed_names[slot][member], decl.type);
-            metadata.uniform_names.push_back(decl.name);
-        }
-
-        result.custom_uniform_blocks.push_back(std::move(metadata));
-        declaration_index += member_count;
-    }
-
-    if (declaration_index < declarations.size()) {
-        effect_log.warn("Custom uniform block capacity exceeded: %zu uniform(s) were not bound",
-                        declarations.size() - declaration_index);
-    }
-}
-}  // namespace
+#include "shader_uniform_layout.h"
 
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
                                        const std::string& fragSource,
@@ -234,21 +66,9 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].glsl_name = "tint";
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].type = SG_UNIFORMTYPE_FLOAT4;
 
-    std::vector<CustomUniformDecl> vertex_uniforms;
-    std::vector<CustomUniformDecl> fragment_uniforms;
-    for (const auto& [name, values] : uniforms) {
-        (void)values;
-        CustomUniformType type = CustomUniformType::Unknown;
-        if (hasUniformDeclaration(compiled_vert_source, name, type)) vertex_uniforms.push_back({name, type});
-        if (hasUniformDeclaration(compiled_frag_source, name, type)) fragment_uniforms.push_back({name, type});
-    }
-
-    std::string packed_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
     int next_uniform_slot = 3;
-    appendPackedBlocks(vertex_uniforms, SG_SHADERSTAGE_VERTEX, compiled_vert_source, shd_desc, result,
-                       next_uniform_slot, packed_names);
-    appendPackedBlocks(fragment_uniforms, SG_SHADERSTAGE_FRAGMENT, compiled_frag_source, shd_desc, result,
-                       next_uniform_slot, packed_names);
+    configureCustomUniformBlocks(uniforms, compiled_vert_source, compiled_frag_source, shd_desc, result,
+                                 next_uniform_slot);
 
     static const char* kTextureNames[] = {"g_Texture0", "g_Texture1", "g_Texture2",  "g_Texture3",
                                           "g_Texture4", "g_Texture5", "g_Texture6",  "g_Texture7",
