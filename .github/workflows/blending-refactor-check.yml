@@ -22,6 +22,17 @@ jobs:
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
             mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
 
+      - name: Check formatting
+        run: find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror
+
+      - name: Run static analysis
+        run: |
+          cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 \
+            '-D__has_feature(x)=0' \
+            --suppress=preprocessorErrorDirective \
+            --suppress=uninitMemberVarNoCtor \
+            src/
+
       - name: Install prebuilt Slang
         env:
           SLANG_VERSION: '2026.14'
@@ -50,9 +61,6 @@ jobs:
           grep -n 'processShaderSource' src/render/render.cpp
           ! grep -n 'vec3 rgb2hsl' src/render/render.cpp
           ! grep -n 'return mix(b,b\*s,o)' src/render/render.cpp
-
-      - name: Static analysis and formatting
-        run: xmake check
 
       - name: Configure
         run: xmake f -y -m release
