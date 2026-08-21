@@ -9,10 +9,18 @@ struct EngineContext;
 
 using SandboxProjectLoader = bool (*)(const char* scene_path);
 
+struct SandboxPreviewRect {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
 class Debugger {
    public:
     static void init();
     static void startSandbox(EngineContext& ctx, SandboxProjectLoader loader);
+    static SandboxPreviewRect sandboxPreviewRect();
     static void draw(EngineContext& ctx);
 
    private:
