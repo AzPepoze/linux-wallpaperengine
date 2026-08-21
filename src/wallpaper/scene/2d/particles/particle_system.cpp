@@ -152,6 +152,11 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         if (particle_system->has_refract) {
             // generic particle refraction samples the scene snapshot through g_Texture3.
             pass->render_texture_bindings[3] = "_rt_FullFrameBuffer";
+
+            // Texture1 provides the refraction normal map.
+            if (!pass->pass_textures.textures.empty() &&
+                pass->pass_textures.textures[0].id != SG_INVALID_ID)
+                pass->combos["NORMALMAP"] = 1;
         }
 
         if (pass->pass_textures.texture0.id == SG_INVALID_ID) {
@@ -174,6 +179,10 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         // textures differently from RGBA textures. Preserve that semantic through
         // TEX0FORMAT so ConvertTexture0Format() can turn R8 into an alpha mask, etc.
         pass->combos["TEX0FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.texture0);
+        if (!pass->pass_textures.textures.empty()) {
+            // The normal decoder uses Texture1's independently authored format.
+            pass->combos["TEX1FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.textures[0]);
+        }
 
         pass->init(ctx);
         if (pass->compiled.shader.id != SG_INVALID_ID && pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite) {
