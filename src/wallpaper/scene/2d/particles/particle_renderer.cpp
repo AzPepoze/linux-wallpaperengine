@@ -67,7 +67,9 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.texcoord[0] = u;
                 vertex.texcoord[1] = v;
                 vertex.texcoord[2] = particle.rotation;
-                vertex.texcoord[3] = particle.size;
+                // Wallpaper Engine stores particle size as a diameter; the shader
+                // expands the quad around its centre using this half-extent.
+                vertex.texcoord[3] = particle.size * 0.5f;
                 vertex.color[0] = particle.color[0];
                 vertex.color[1] = particle.color[1];
                 vertex.color[2] = particle.color[2];
@@ -225,8 +227,8 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
                         (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
         const float y = ctx.offset_y +
                         (layer_origin[1] + parallax_y + particle.position[1] * layer_scale[1]) * ctx.render_scale;
-        const float width = particle.size * layer_scale[0] * ctx.render_scale;
-        const float height = particle.size * layer_scale[1] * ctx.render_scale;
+        const float width = particle.size * 0.5f * layer_scale[0] * ctx.render_scale;
+        const float height = particle.size * 0.5f * layer_scale[1] * ctx.render_scale;
         renderer_draw_rect(&ctx.renderer, x - width * 0.5f, y - height * 0.5f, width, height, color);
     }
     for (ParticleSystem* child : children) child->drawDebugBounds(ctx);
