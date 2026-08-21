@@ -114,7 +114,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
     for (int eff_idx = 0; eff_idx < (int)effects.size(); ++eff_idx) {
         auto effect = effects[eff_idx];
         if (!effect) continue;
-        if (any_effect_solo ? !effect->solo : !effect->visible) continue;
+        if (!effect->visible || (any_effect_solo && !effect->solo)) continue;
         if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
 
         const sg_image effect_source_image = input_image;
