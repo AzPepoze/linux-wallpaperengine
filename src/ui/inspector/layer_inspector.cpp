@@ -106,7 +106,12 @@ static void showParticleMaterial(::ParticleSystem& ps) {
         if (!pass.render_texture_bindings.empty()) {
             ImGui::SeparatorText("Runtime texture bindings");
             for (const auto& binding : pass.render_texture_bindings) {
-                ImGui::Text("g_Texture%d <- %s", binding.first, binding.second.c_str());
+                if (binding.second == "_rt_FullFrameBuffer" && ps.sceneColorView().id != SG_INVALID_ID) {
+                    showParticleTextureSlot(binding.first, "Scene Color / Refraction", ps.sceneColorView(), std::string(),
+                                            (int)ps.scene_w, (int)ps.scene_h);
+                } else {
+                    ImGui::Text("g_Texture%d <- %s", binding.first, binding.second.c_str());
+                }
             }
         }
         ImGui::TreePop();
