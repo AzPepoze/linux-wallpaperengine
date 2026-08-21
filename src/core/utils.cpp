@@ -86,7 +86,10 @@ bool detect_engine_path(char* out_path, size_t max_len) {
             return true;
         }
     }
-    LOG_W("Wallpaper Engine assets folder not found!");
+
+    LOG_E("Wallpaper Engine assets folder not found!");
+    if (out_path && max_len > 0) out_path[0] = '\0';
+    return false;
 }
 
 void detect_default_wallpaper(char* out_path, size_t max_len) {
