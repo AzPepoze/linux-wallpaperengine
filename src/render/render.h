@@ -39,6 +39,7 @@ struct renderer_t {
     GfxPipeline pip_add;
     GfxPipeline pip_lines;
     GfxPipeline pip_image_composite[31];
+    bool image_composite_attempted[31] = {};
     GfxBuffer vertex_buffer;
     GfxBuffer fullscreen_vertex_buffer;
     GfxBuffer index_buffer;
