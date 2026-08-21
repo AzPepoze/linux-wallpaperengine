@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 #include "core/engine_context.h"
 #include "core/logger.h"
@@ -30,9 +31,10 @@ bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& 
     const cJSON* passes = cJSON_GetObjectItemCaseSensitive(document, "passes");
     if (cJSON_IsArray(passes) && cJSON_GetArraySize(passes) > 0) pass = cJSON_GetArrayItem(passes, 0);
     const cJSON* blending = cJSON_GetObjectItemCaseSensitive(pass, "blending");
-    const bool additive = cJSON_IsString(blending) && blending->valuestring && strcmp(blending->valuestring, "additive") == 0;
+    const bool has_blending = cJSON_IsString(blending) && blending->valuestring;
+    const bool additive = has_blending && strcmp(blending->valuestring, "additive") == 0;
     cJSON_Delete(document);
-    return cJSON_IsString(blending) ? additive : fallback;
+    return has_blending ? additive : fallback;
 }
 
 void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const ParticleSystemConfig& config,
