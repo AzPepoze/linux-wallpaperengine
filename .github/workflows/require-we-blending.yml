@@ -5,17 +5,11 @@ on:
     branches:
       - refactor/wallpaper-engine-blending
 
-permissions:
-  contents: write
-
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: refactor/wallpaper-engine-blending
-          fetch-depth: 0
 
       - name: Install system dependencies
         run: |
@@ -23,181 +17,6 @@ jobs:
           sudo apt-get install -y \
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
             mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
-
-      - name: Enforce original Wallpaper Engine runtime data
-        run: |
-          git fetch origin main
-          git show origin/main:src/render/shader/shader_processor.cpp > src/render/shader/shader_processor.cpp
-          git show origin/main:src/wallpaper/scene/2d/particles/particle_renderer.cpp > src/wallpaper/scene/2d/particles/particle_renderer.cpp
-          git show origin/main:src/core/utils.cpp > src/core/utils.cpp
-          git show origin/main:src/core/utils.h > src/core/utils.h
-          git show origin/main:src/app/main.cpp > src/app/main.cpp
-          git show origin/main:README.md > README.md
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          # Stock shader headers must come from the Wallpaper Engine installation.
-          path = Path('src/render/shader/shader_processor.cpp')
-          text = path.read_text()
-          start = text.index('const char* legacyHeader(')
-          end = text.index('bool readInclude(', start)
-          text = text[:start] + text[end:]
-          text = text.replace(
-              '''            } else if (const char* compatibility = legacyHeader(include)) {
-                  result += compatibility;
-              } else {
-          ''',
-              '''            } else {
-          ''',
-              1,
-          )
-          path.write_text(text)
-
-          # Do not replace an unavailable/incompatible authored particle shader with our generic sprite pipeline.
-          path = Path('src/wallpaper/scene/2d/particles/particle_renderer.cpp')
-          text = path.read_text()
-          marker = '    } else if (material_ready) {\n        // Compatibility fallback for simple materials'
-          start = text.index(marker)
-          end = text.index('\n\n    for (ParticleSystem* child', start)
-          text = text[:start] + '    }' + text[end:]
-          path.write_text(text)
-
-          # Detecting the original Wallpaper Engine assets is a hard runtime requirement.
-          path = Path('src/core/utils.h')
-          text = path.read_text().replace(
-              'void detect_engine_path(char* out_path, size_t max_len);',
-              'bool detect_engine_path(char* out_path, size_t max_len);',
-              1,
-          )
-          path.write_text(text)
-
-          path = Path('src/core/utils.cpp')
-          text = path.read_text()
-          text = text.replace(
-              'void detect_engine_path(char* out_path, size_t max_len) {',
-              'bool detect_engine_path(char* out_path, size_t max_len) {',
-              1,
-          )
-          text = text.replace(
-              '''        LOG_I("Found Wallpaper Engine at: %s (from WALLPAPER_ENGINE_PATH)", out_path);
-                  return;
-          ''',
-              '''        LOG_I("Found Wallpaper Engine at: %s (from WALLPAPER_ENGINE_PATH)", out_path);
-                  return true;
-          ''',
-              1,
-          )
-          text = text.replace(
-              '''    for (const char* cfg : config_candidates) {
-                  if (try_config(cfg)) return;
-              }
-          ''',
-              '''    for (const char* cfg : config_candidates) {
-                  if (try_config(cfg)) return true;
-              }
-          ''',
-              1,
-          )
-          text = text.replace(
-              '''            LOG_I("Found Wallpaper Engine at: %s", out_path);
-                      return;
-          ''',
-              '''            LOG_I("Found Wallpaper Engine at: %s", out_path);
-                      return true;
-          ''',
-              1,
-          )
-          text = text.replace(
-              '''    LOG_W("Wallpaper Engine assets folder not found!");
-              }
-          ''',
-              '''    LOG_E("Wallpaper Engine assets folder not found!");
-                  if (out_path && max_len > 0) out_path[0] = '\\0';
-                  return false;
-              }
-          ''',
-              1,
-          )
-          path.write_text(text)
-
-          path = Path('src/app/main.cpp')
-          text = path.read_text().replace(
-              '''    detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path));
-          ''',
-              '''    if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
-                  LOG_E("A Wallpaper Engine installation with its original assets is required");
-                  exit(EXIT_FAILURE);
-              }
-          ''',
-              1,
-          )
-          path.write_text(text)
-
-          # Mode 0 and 31 are real renderer modes; unknown values are not silently treated as Normal.
-          path = Path('src/render/render.cpp')
-          text = path.read_text()
-          old = '''    if (blend_mode == 31) {
-                  renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, true, nullptr);
-                  return;
-              }
-
-              if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) {
-                  renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
-                  return;
-              }
-          '''
-          new = '''    if (blend_mode == 0) {
-                  renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
-                  return;
-              }
-
-              if (blend_mode == 31) {
-                  renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, true, nullptr);
-                  return;
-              }
-
-              if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) {
-                  LOG_TAG_E("RENDER", "Unsupported Wallpaper Engine blend mode %d", blend_mode);
-                  return;
-              }
-          '''
-          if old not in text:
-              raise SystemExit('blend mode dispatch block not found')
-          text = text.replace(old, new, 1)
-          path.write_text(text)
-
-          path = Path('README.md')
-          text = path.read_text().replace(
-              '- [Slang](https://github.com/shader-slang/slang)\n',
-              '- [Slang](https://github.com/shader-slang/slang)\n'
-              '- A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)\n',
-              1,
-          )
-          path.write_text(text)
-          PY
-
-          if ! git diff --quiet -- \
-            README.md \
-            src/app/main.cpp \
-            src/core/utils.cpp \
-            src/core/utils.h \
-            src/render/render.cpp \
-            src/render/shader/shader_processor.cpp \
-            src/wallpaper/scene/2d/particles/particle_renderer.cpp; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add -- \
-              README.md \
-              src/app/main.cpp \
-              src/core/utils.cpp \
-              src/core/utils.h \
-              src/render/render.cpp \
-              src/render/shader/shader_processor.cpp \
-              src/wallpaper/scene/2d/particles/particle_renderer.cpp
-            git commit -m 'refactor: require original Wallpaper Engine runtime data'
-            git push origin HEAD:refactor/wallpaper-engine-blending
-          fi
 
       - name: Verify strict Wallpaper Engine data policy
         run: |
@@ -208,6 +27,7 @@ jobs:
           ! grep -n 'legacyHeader' src/render/shader/shader_processor.cpp
           ! grep -n 'Compatibility fallback for simple materials' src/wallpaper/scene/2d/particles/particle_renderer.cpp
           grep -n 'bool detect_engine_path' src/core/utils.h src/core/utils.cpp
+          grep -n 'return false;' src/core/utils.cpp
           grep -n 'exit(EXIT_FAILURE)' src/app/main.cpp
           grep -n 'original `assets/` data' README.md
           grep -n 'resolveTexture("materials/particle.tex"' src/wallpaper/scene/2d/particles/particle_system.cpp
