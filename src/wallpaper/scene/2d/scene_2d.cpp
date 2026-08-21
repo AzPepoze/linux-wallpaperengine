@@ -3,6 +3,7 @@
 #include "render/render.h"
 #include "sokol_app.h"
 #include "wallpaper/scene/2d/layers/layer.h"
+#include "wallpaper/scene/tree/scene_tree.h"
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
@@ -59,8 +60,16 @@ void Scene2DRuntime::updateViewport() {
     ctx.offset_y = (sh - ctx.scene_h * ctx.render_scale) * 0.5f;
 }
 
-void Scene2DRuntime::cleanup() {
+void Scene2DRuntime::clearScene() {
     for (auto layer : ctx.layers) delete layer;
     ctx.layers.clear();
+    delete ctx.scene_tree;
+    ctx.scene_tree = nullptr;
+    ctx.selected_object = -1;
+    ctx.test_mode = false;
+}
+
+void Scene2DRuntime::cleanup() {
+    clearScene();
     renderer_cleanup(&ctx.renderer);
 }

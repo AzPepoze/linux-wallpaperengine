@@ -1,7 +1,7 @@
 #ifndef GFX_RESOURCE_H
 #define GFX_RESOURCE_H
 
-#include "../../libs/sokol/sokol_gfx.h"
+#include "sokol_gfx.h"
 
 // RAII wrappers for Sokol GPU resources.
 // Move-only, automatically destroy on scope exit.

@@ -5,13 +5,14 @@
 
 #include <vector>
 
-#include "../../libs/sokol/sokol_gfx.h"
 #include "../assets/asset_manager.h"
 #include "../render/render.h"
+#include "sokol_gfx.h"
 #include "wallpaper_api.h"
 
 typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;
+enum class RuntimeMode { Wallpaper, Sandbox };
 
 class Layer;
 class SceneTree;
@@ -33,6 +34,7 @@ struct EngineContext {
     char engine_path[512] = {};
     char asset_root[512] = {};
     bool is_pkg = false;
+    RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
 
     scene_type_t scene_type = SCENE_TYPE_2D;
     renderer_t renderer = {};

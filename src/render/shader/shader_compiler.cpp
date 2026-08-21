@@ -295,6 +295,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     return result;
 }
 
+#if DEBUG_BUILD
 std::string ShaderCompiler::applyDebugMode(const std::string& fsSource, int debug_view_mode) {
     if (debug_view_mode == 0) return fsSource;
 
@@ -415,3 +416,4 @@ std::string ShaderCompiler::applyDebugStep(const std::string& shader_name, const
     }
     return full_fs;
 }
+#endif

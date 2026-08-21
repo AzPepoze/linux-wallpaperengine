@@ -6,15 +6,19 @@
 #include <fstream>
 #include <sstream>
 
+#include "core/build_config.h"
 #include "core/config.h"
 #include "core/context.h"
 #include "core/engine_context.h"
 #include "core/logger.h"
 #include "core/utils.h"
 #include "formats/wallpaper_engine/scene/scene_document.h"
-#include "render/diagnostics/render_diagnostics.h"
 #include "render/shader/shader_processor.h"
 #include "sokol_app.h"
+
+#if DEBUG_BUILD
+#include "render/diagnostics/render_diagnostics.h"
+#endif
 
 namespace {
 void mergeJsonObject(cJSON*& target, cJSON* source) {
@@ -488,8 +492,10 @@ void ShaderPass::init(EngineContext& ctx) {
     stored_vs_source = full_vs;
     stored_fs_source = full_fs;
 
+#if DEBUG_BUILD
     full_fs = ShaderCompiler::applyDebugMode(full_fs, debug_view_mode);
     full_fs = ShaderCompiler::applyDebugStep(shader_name, full_fs, debug_step);
+#endif
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
 
@@ -507,6 +513,7 @@ void ShaderPass::init(EngineContext& ctx) {
 
     pass_textures.buildCachedViews();
 
+#if DEBUG_BUILD
     PassUniformProvenance prov;
     prov.effect_file = effect_file;
     prov.pass_index = pass_index;
@@ -668,6 +675,7 @@ void ShaderPass::init(EngineContext& ctx) {
 
     RenderDiagnostics::instance().registerShaderDump(dump);
     RenderDiagnostics::instance().registerUniformProvenance(prov);
+#endif
 
     if (compiled.pipeline.id == SG_INVALID_ID) {
         effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped",
@@ -730,11 +738,13 @@ bool ShaderPass::resolveDepth(const char* source_tex_path, EngineContext& ctx) {
     return resolved;
 }
 
+#if DEBUG_BUILD
 void ShaderPass::rebuildWithDebugMode(int mode, EngineContext& ctx) {
     debug_view_mode = mode;
     compiled = {};
     init(ctx);
 }
+#endif
 
 Effect::Effect(cJSON* config, EngineContext& ctx) {
     std::map<std::string, float> target_scales;

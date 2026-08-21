@@ -3,9 +3,9 @@
 
 #include <string>
 
-#include "../../libs/sokol/sokol_gfx.h"
 #include "../core/gfx_resource.h"
 #include "../core/interfaces.h"
+#include "sokol_gfx.h"
 
 class AssetManager : public IAssetResolver {
    public:

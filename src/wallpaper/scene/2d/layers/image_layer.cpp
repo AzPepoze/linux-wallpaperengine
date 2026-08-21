@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/build_config.h"
 #include "core/context.h"
 #include "core/engine_context.h"
 #include "core/logger.h"
@@ -79,8 +80,10 @@ bool ImageLayer::ensureEffectTargets() {
     return true;
 }
 
+#if DEBUG_BUILD
 #include "render/backend/gpu_debug_labels.h"
 #include "render/diagnostics/render_diagnostics.h"
+#endif
 
 void ImageLayer::renderEffectChain(EngineContext& ctx) {
     effect_output_image = {SG_INVALID_ID};
@@ -89,7 +92,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
     if (cached_view.id == SG_INVALID_ID) updateCachedView();
     if (cached_view.id == SG_INVALID_ID || !ensureEffectTargets()) return;
 
+#if DEBUG_BUILD
     RenderDiagnostics& diag = RenderDiagnostics::instance();
+#endif
 
     bool any_effect_solo = false;
     for (auto effect : effects) {
@@ -105,7 +110,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
     bool rendered_any = false;
     int draw_order = 0;
 
+#if DEBUG_BUILD
     diag.onSourceImage(0, input_image, effect_target_width, effect_target_height);
+#endif
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
@@ -115,7 +122,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
         auto effect = effects[eff_idx];
         if (!effect) continue;
         if (!effect->visible || (any_effect_solo && !effect->solo)) continue;
+#if DEBUG_BUILD
         if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
+#endif
 
         const sg_image effect_source_image = input_image;
         const sg_view effect_source_view = input_view;
@@ -157,6 +166,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 named_target = &target;
             }
 
+#if DEBUG_BUILD
             if (diag.isPassDisabled(pass_idx)) {
                 if (named_target) {
                     // Copy-through input to named target so downstream passes don't sample uninitialized buffer
@@ -173,6 +183,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 }
                 continue;
             }
+#endif
 
             sg_pass offscreen_pass = {};
             offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -231,6 +242,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
 
             sg_image out_img = named_target ? named_target->image : effect_images[write_index];
 
+#if DEBUG_BUILD
             if (diag.config.enabled) {
                 PassTraceEntry trace;
                 trace.frame_number = ctx.profiler.frame_index;
@@ -292,6 +304,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                 gpu_set_image_debug_label(out_img, (pass->shader_name + " Target").c_str());
                 diag.recordPass(trace, out_img);
             }
+#endif
 
             if (named_target) {
                 input_image = named_target->image;
@@ -305,9 +318,11 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
             effect_output_view = input_view;
             rendered_any = true;
 
+#if DEBUG_BUILD
             if (diag.shouldStopAfterPass(pass_idx)) {
                 break;
             }
+#endif
         }
     }
 
@@ -316,7 +331,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
         effect_output_image = {SG_INVALID_ID};
         effect_output_view = {SG_INVALID_ID};
     } else {
+#if DEBUG_BUILD
         diag.onLayerFinalImage(0, effect_output_image, effect_target_width, effect_target_height);
+#endif
     }
 }
 
