@@ -1,0 +1,82 @@
+name: Require Wallpaper Engine blending
+
+on:
+  push:
+    branches:
+      - refactor/wallpaper-engine-blending
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/wallpaper-engine-blending
+
+      - name: Remove blend shader fallback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/render/render.cpp')
+          text = path.read_text()
+
+          old = '''    // If the include resolver leaves the directive untouched, the installed Wallpaper Engine
+              // assets do not provide the authoritative blending header. Keep the layer renderable by
+              // falling back to normal alpha composition instead of compiling a guessed implementation.
+              if (processed_fragment.find("#include \\\"common_blending.h\\\"") != std::string::npos) {
+                  LOG_TAG_W("RENDER", "Wallpaper Engine common_blending.h not found; blend mode %d will use normal alpha",
+                            blend_mode);
+                  return {};
+              }
+          '''
+          new = '''    // Wallpaper Engine shader data is a runtime requirement. Do not substitute an
+              // approximate or normal-alpha implementation when its authoritative header is unavailable.
+              if (processed_fragment.find("#include \\\"common_blending.h\\\"") != std::string::npos) {
+                  LOG_TAG_E("RENDER", "Required Wallpaper Engine common_blending.h was not found for blend mode %d",
+                            blend_mode);
+                  return {};
+              }
+          '''
+          if old not in text:
+              raise SystemExit('missing common_blending fallback block')
+          text = text.replace(old, new, 1)
+
+          old = '''    if (shader.pipeline.id == SG_INVALID_ID) {
+                  LOG_TAG_W("RENDER", "Wallpaper Engine blend mode %d failed to compile; using normal alpha", blend_mode);
+                  return {};
+              }
+          '''
+          new = '''    if (shader.pipeline.id == SG_INVALID_ID) {
+                  LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", blend_mode);
+                  return {};
+              }
+          '''
+          if old not in text:
+              raise SystemExit('missing compile fallback block')
+          text = text.replace(old, new, 1)
+
+          old = '''    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) {
+                  renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
+                  return;
+              }
+          '''
+          new = '''    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
+          '''
+          if old not in text:
+              raise SystemExit('missing draw fallback block')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+          clang-format -i src/render/render.cpp || true
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- src/render/render.cpp
+          git commit -m 'refactor: require Wallpaper Engine blending data'
+          git push origin HEAD:refactor/wallpaper-engine-blending
