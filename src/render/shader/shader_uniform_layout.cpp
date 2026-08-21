@@ -135,7 +135,8 @@ void appendBlocks(const std::vector<UniformDecl>& declarations, sg_shader_stage 
 
 void configureCustomUniformBlocks(const std::map<std::string, std::vector<float>>& uniforms, std::string& vertex_source,
                                   std::string& fragment_source, sg_shader_desc& shader_desc, CompiledShader& result,
-                                  int& next_uniform_slot) {
+                                  int& next_uniform_slot,
+                                  std::string names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS]) {
     std::vector<UniformDecl> vertex_uniforms;
     std::vector<UniformDecl> fragment_uniforms;
     for (const auto& [name, values] : uniforms) {
@@ -145,7 +146,6 @@ void configureCustomUniformBlocks(const std::map<std::string, std::vector<float>
         if (findUniform(vertex_source, name, 0, start, end, type)) vertex_uniforms.push_back({name, type});
         if (findUniform(fragment_source, name, 0, start, end, type)) fragment_uniforms.push_back({name, type});
     }
-    std::string names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
     appendBlocks(vertex_uniforms, SG_SHADERSTAGE_VERTEX, vertex_source, shader_desc, result, next_uniform_slot, names);
     appendBlocks(fragment_uniforms, SG_SHADERSTAGE_FRAGMENT, fragment_source, shader_desc, result, next_uniform_slot,
                  names);

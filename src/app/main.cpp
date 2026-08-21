@@ -203,8 +203,11 @@ static void event(const sapp_event* e) {
     }
 
 #if DEBUG_BUILD
+    if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) {
+        ctx.show_ui = !ctx.show_ui;
+        return;
+    }
     if (simgui_handle_event(e)) return;
-    if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) ctx.show_ui = !ctx.show_ui;
 #endif
 }
 

@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
+#include "ui/widgets/visibility_solo_controls.h"
 #include "util/sokol_imgui.h"
 #include "wallpaper/scene/2d/effects/effect.h"
 
@@ -191,25 +192,8 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
 void showEffect(EngineContext& ctx, ::Effect& effect, int id) {
     ImGui::PushID(id);
 
-    // Visibility Toggle
-    if (ImGui::Button(effect.visible ? "V" : " ", ImVec2(25, 0))) {
-        effect.visible = !effect.visible;
-    }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Effect Visibility");
-
-    ImGui::SameLine();
-
-    // Solo Toggle
-    if (effect.solo) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
-    }
-    if (ImGui::Button("S", ImVec2(25, 0))) {
-        effect.solo = !effect.solo;
-    }
-    if (effect.solo) ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo Effect (Ctrl+Click effect name also works)");
+    UiWidgets::drawVisibilitySoloControls(effect.visible, effect.solo, "Toggle Effect Visibility",
+                                          "Solo Effect (Ctrl+Click effect name also works)");
 
     ImGui::SameLine();
 
