@@ -21,6 +21,12 @@ void renderer_init(renderer_t* r, float w, float h) {
     r->vertex_buffer = sg_make_buffer(&v_desc);
     r->bind.vertex_buffers[0] = r->vertex_buffer;
 
+    vertex_t fullscreen_vertices[] = {
+        {-1.0f, 1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 0.0f}, {1.0f, -1.0f, 1.0f, 1.0f}, {-1.0f, -1.0f, 0.0f, 1.0f}};
+    sg_buffer_desc fsv_desc = {};
+    fsv_desc.data = SG_RANGE(fullscreen_vertices);
+    r->fullscreen_vertex_buffer = sg_make_buffer(&fsv_desc);
+
     uint16_t indices[] = {0, 1, 2, 0, 2, 3};
     sg_buffer_desc i_desc = {};
     i_desc.usage.index_buffer = true;
@@ -33,9 +39,12 @@ void renderer_init(renderer_t* r, float w, float h) {
     s_desc.mag_filter = SG_FILTER_LINEAR;
     s_desc.wrap_u = SG_WRAP_REPEAT;
     s_desc.wrap_v = SG_WRAP_REPEAT;
-    r->smp = sg_make_sampler(&s_desc);
+    r->smp_repeat = sg_make_sampler(&s_desc);
+    s_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    s_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    r->smp_clamp = sg_make_sampler(&s_desc);
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
-        r->bind.samplers[i] = r->smp;
+        r->bind.samplers[i] = r->smp_repeat;
     }
 
     uint32_t pixel = 0xFFFFFFFF;
@@ -142,17 +151,30 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
     mat4x4_mul(mvp, proj, model);
 
+    for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; ++i) r->bind.samplers[i] = r->smp_repeat;
+
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
+        r->bind.vertex_buffers[0] = pass->is_fullscreen_quad ? r->fullscreen_vertex_buffer : r->vertex_buffer;
+        r->bind.samplers[0] = pass->repeat_effect_input ? r->smp_repeat : r->smp_clamp;
 
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));
+        mat4x4_invert(builtin.mvp_inverse, mvp);
         builtin.parallax_pos[0] = ctx.parallax_smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = ctx.parallax_smooth_y * 0.5f + 0.5f;
         builtin.time = ctx.time;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
+        builtin.texel_size[0] = r->view_width > 0.0f ? 1.0f / r->view_width : 0.0f;
+        builtin.texel_size[1] = r->view_height > 0.0f ? 1.0f / r->view_height : 0.0f;
+        builtin.pointer_position[0] = 0.5f;
+        builtin.pointer_position[1] = 0.5f;
+        if (ctx.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
+            builtin.pointer_position[0] = std::max(0.0f, std::min(1.0f, ctx.mouse_x / r->view_width));
+            builtin.pointer_position[1] = std::max(0.0f, std::min(1.0f, ctx.mouse_y / r->view_height));
+        }
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
 
@@ -175,7 +197,11 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         for (int i = 0; i < 11; i++) {
             int slot = i + 1;  // Shift by 1 because Slot 0 is the main view
 
-            if (pass->extra_views && i < (int)pass->num_extra_views && pass->extra_views[i].id != SG_INVALID_ID) {
+            if (pass->override_views && i < (int)pass->num_override_views &&
+                pass->override_views[i].id != SG_INVALID_ID) {
+                r->bind.views[slot] = pass->override_views[i];
+            } else if (pass->extra_views && i < (int)pass->num_extra_views &&
+                       pass->extra_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->extra_views[i];
             } else if (i == 0) {
                 // WPE metadata declares util/black for missing depthparallax depth and a full mask for waterwaves.
@@ -190,6 +216,14 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
                 r->bind.views[slot] = r->white_view;  // Default to full mask for g_Texture2
             } else {
                 r->bind.views[slot] = r->black_view;
+            }
+
+            if (slot < SG_MAX_SAMPLER_BINDSLOTS) {
+                sg_image sampled_image = sg_query_view_image(r->bind.views[slot]);
+                if (sampled_image.id != SG_INVALID_ID) {
+                    sg_image_desc sampled_desc = sg_query_image_desc(sampled_image);
+                    if (sampled_desc.usage.color_attachment) r->bind.samplers[slot] = r->smp_clamp;
+                }
             }
 
             // Resolution indices for extra textures (Slot 1..4)
@@ -290,14 +324,15 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
 }
 
 void renderer_cleanup(renderer_t* r) {
-    // RAII wrappers auto-destroy pipelines, images, views, buffers, and sampler.
+    // RAII wrappers auto-destroy pipelines, images, views, buffers, and samplers.
     // Just reset IDs to trigger cleanup.
     r->pip_alpha = {};
     r->pip_add = {};
     r->pip_lines = {};
     r->vertex_buffer = {};
     r->index_buffer = {};
-    r->smp = {};
+    r->smp_repeat = {};
+    r->smp_clamp = {};
     r->white_pixel = {};
     r->white_view = {};
     r->black_pixel = {};

@@ -21,3 +21,14 @@
 
 #include "../../../../libs/sokol/sokol_log.h"
 #include "../../../../libs/sokol/sokol_time.h"
+
+#undef SOKOL_IMPL
+#undef SOKOL_GFX_IMPL
+#undef SOKOL_APP_IMPL
+#undef SOKOL_LOG_IMPL
+#undef SOKOL_ARGS_IMPL
+#undef SOKOL_IMGUI_IMPL
+#undef SOKOL_GLUE_IMPL
+#undef SOKOL_TIME_IMPL
+
+#include "sokol_backend_ext.inl"

@@ -5,6 +5,8 @@
 
 #include <atomic>
 #include <cstring>
+#include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -154,6 +156,70 @@ std::string strip_version(std::string source) {
     return source;
 }
 
+bool parse_varying_line(const std::string& line, const char* direction, std::string& name) {
+    std::string source = line;
+    const size_t comment = source.find("//");
+    if (comment != std::string::npos) source.erase(comment);
+
+    std::istringstream stream(source);
+    std::string first;
+    if (!(stream >> first)) return false;
+    if (first == "flat" || first == "smooth" || first == "noperspective") {
+        if (!(stream >> first)) return false;
+    }
+    if (first != direction) return false;
+
+    std::string type;
+    if (!(stream >> type >> name)) return false;
+    const size_t terminator = name.find_first_of(";[");
+    if (terminator != std::string::npos) name.erase(terminator);
+    return !name.empty();
+}
+
+void collect_varyings(const std::string& source, const char* direction, std::map<std::string, int>& locations,
+                      int& next_location) {
+    std::istringstream lines(source);
+    std::string line;
+    while (std::getline(lines, line)) {
+        std::string name;
+        if (!parse_varying_line(line, direction, name) || locations.count(name)) continue;
+        locations[name] = next_location++;
+    }
+}
+
+std::string apply_varying_locations(const std::string& source, const char* direction,
+                                    const std::map<std::string, int>& locations) {
+    std::istringstream lines(source);
+    std::string result;
+    std::string line;
+    while (std::getline(lines, line)) {
+        std::string name;
+        if (parse_varying_line(line, direction, name)) {
+            const auto location = locations.find(name);
+            if (location != locations.end() && line.find("layout(") == std::string::npos) {
+                const size_t first = line.find_first_not_of(" \t");
+                const size_t insert_at = first == std::string::npos ? 0 : first;
+                line.insert(insert_at, "layout(location = " + std::to_string(location->second) + ") ");
+            }
+        }
+        result += line;
+        result += '\n';
+    }
+    return result;
+}
+
+void assign_matching_varying_locations(std::string& vertex_source, std::string& fragment_source) {
+    // Vulkan links stage interfaces by location. GLSL source usually relies on
+    // matching names, but Slang assigns locations independently per stage.
+    // Give every interface varying a shared explicit location before compiling.
+    std::map<std::string, int> locations;
+    int next_location = 0;
+    collect_varyings(vertex_source, "out", locations, next_location);
+    collect_varyings(fragment_source, "in", locations, next_location);
+    vertex_source = apply_varying_locations(vertex_source, "out", locations);
+    fragment_source = apply_varying_locations(fragment_source, "in", locations);
+}
+
 bool prepare_vulkan_bindings(sg_shader_desc* desc) {
     for (int slot = 0; slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS; ++slot) {
         if (desc->uniform_blocks[slot].stage != SG_SHADERSTAGE_NONE) {
@@ -221,6 +287,26 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
 
         if (!has_member) {
             core_log.error("Vulkan uniform block %d has no GLSL member metadata", slot);
+        }
+    }
+
+    std::string dummy_uses;
+    for (int slot = 0; slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS; ++slot) {
+        const sg_shader_uniform_block& block = desc.uniform_blocks[slot];
+        if (block.stage != stage) continue;
+        const char* first_member = block.glsl_uniforms[0].glsl_name;
+        if (first_member && first_member[0]) {
+            dummy_uses += "    (void)" + std::string(first_member) + ";\n";
+        }
+    }
+    if (!dummy_uses.empty()) {
+        declarations += "void _lwe_retain_uniforms() {\n" + dummy_uses + "}\n";
+        size_t main_pos = source.find("main()");
+        if (main_pos != std::string::npos) {
+            size_t brace_pos = source.find('{', main_pos);
+            if (brace_pos != std::string::npos) {
+                source.insert(brace_pos + 1, "\n    _lwe_retain_uniforms();\n");
+            }
         }
     }
 
@@ -390,8 +476,12 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
 
     if (!prepare_vulkan_bindings(desc)) return {SG_INVALID_ID};
 
-    const std::string vulkan_vs = make_vulkan_source(*desc, vertex_source, SG_SHADERSTAGE_VERTEX);
-    const std::string vulkan_fs = make_vulkan_source(*desc, fragment_source, SG_SHADERSTAGE_FRAGMENT);
+    std::string linked_vertex_source = vertex_source;
+    std::string linked_fragment_source = fragment_source;
+    assign_matching_varying_locations(linked_vertex_source, linked_fragment_source);
+
+    const std::string vulkan_vs = make_vulkan_source(*desc, linked_vertex_source, SG_SHADERSTAGE_VERTEX);
+    const std::string vulkan_fs = make_vulkan_source(*desc, linked_fragment_source, SG_SHADERSTAGE_FRAGMENT);
 
     std::vector<uint32_t> vertex_spirv;
     std::vector<uint32_t> fragment_spirv;
