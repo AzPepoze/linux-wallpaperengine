@@ -1,4 +1,4 @@
-name: Require Wallpaper Engine blending
+name: Require Wallpaper Engine runtime data
 
 on:
   push:
@@ -9,74 +9,122 @@ permissions:
   contents: write
 
 jobs:
-  patch:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: refactor/wallpaper-engine-blending
 
-      - name: Remove blend shader fallback
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
+            mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
+
+      - name: Remove runtime substitutes for Wallpaper Engine data
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/render/render.cpp')
-          text = path.read_text()
+          shader_path = Path('src/render/shader/shader_processor.cpp')
+          shader = shader_path.read_text()
+          if 'const char* legacyHeader(' in shader:
+              start = shader.index('const char* legacyHeader(')
+              end = shader.index('bool readInclude(', start)
+              shader = shader[:start] + shader[end:]
+          shader = shader.replace(
+              '''            } else if (const char* compatibility = legacyHeader(include)) {
+                  result += compatibility;
+              } else {
+          ''',
+              '''            } else {
+          ''',
+          )
+          shader_path.write_text(shader)
 
-          old = '''    // If the include resolver leaves the directive untouched, the installed Wallpaper Engine
-              // assets do not provide the authoritative blending header. Keep the layer renderable by
-              // falling back to normal alpha composition instead of compiling a guessed implementation.
-              if (processed_fragment.find("#include \\\"common_blending.h\\\"") != std::string::npos) {
-                  LOG_TAG_W("RENDER", "Wallpaper Engine common_blending.h not found; blend mode %d will use normal alpha",
-                            blend_mode);
-                  return {};
-              }
-          '''
-          new = '''    // Wallpaper Engine shader data is a runtime requirement. Do not substitute an
-              // approximate or normal-alpha implementation when its authoritative header is unavailable.
-              if (processed_fragment.find("#include \\\"common_blending.h\\\"") != std::string::npos) {
-                  LOG_TAG_E("RENDER", "Required Wallpaper Engine common_blending.h was not found for blend mode %d",
-                            blend_mode);
-                  return {};
-              }
-          '''
-          if old not in text:
-              raise SystemExit('missing common_blending fallback block')
-          text = text.replace(old, new, 1)
-
-          old = '''    if (shader.pipeline.id == SG_INVALID_ID) {
-                  LOG_TAG_W("RENDER", "Wallpaper Engine blend mode %d failed to compile; using normal alpha", blend_mode);
-                  return {};
-              }
-          '''
-          new = '''    if (shader.pipeline.id == SG_INVALID_ID) {
-                  LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", blend_mode);
-                  return {};
-              }
-          '''
-          if old not in text:
-              raise SystemExit('missing compile fallback block')
-          text = text.replace(old, new, 1)
-
-          old = '''    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) {
-                  renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
-                  return;
-              }
-          '''
-          new = '''    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
-          '''
-          if old not in text:
-              raise SystemExit('missing draw fallback block')
-          text = text.replace(old, new, 1)
-
-          path.write_text(text)
+          particle_path = Path('src/wallpaper/scene/2d/particles/particle_renderer.cpp')
+          particle = particle_path.read_text()
+          marker = '    } else if (material_ready) {\n        // Compatibility fallback for simple materials'
+          if marker in particle:
+              start = particle.index(marker)
+              end = particle.index('\n\n    for (ParticleSystem* child', start)
+              particle = particle[:start] + '    }' + particle[end:]
+          particle_path.write_text(particle)
           PY
 
-          clang-format -i src/render/render.cpp || true
+          clang-format -i \
+            src/render/render.cpp \
+            src/render/shader/shader_processor.cpp \
+            src/wallpaper/scene/2d/particles/particle_renderer.cpp
 
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -- src/render/render.cpp
-          git commit -m 'refactor: require Wallpaper Engine blending data'
-          git push origin HEAD:refactor/wallpaper-engine-blending
+          if ! git diff --quiet -- \
+            src/render/shader/shader_processor.cpp \
+            src/wallpaper/scene/2d/particles/particle_renderer.cpp; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add -- \
+              src/render/shader/shader_processor.cpp \
+              src/wallpaper/scene/2d/particles/particle_renderer.cpp
+            git commit -m 'refactor: require Wallpaper Engine shader data'
+            git push origin HEAD:refactor/wallpaper-engine-blending
+          fi
+
+      - name: Verify no Wallpaper Engine shader-data substitutes remain
+        run: |
+          grep -n 'common_blending.h' src/render/render.cpp
+          grep -n 'ApplyBlending(BLENDMODE' src/render/render.cpp
+          ! grep -n 'using normal alpha' src/render/render.cpp
+          ! grep -n 'legacyHeader' src/render/shader/shader_processor.cpp
+          ! grep -n 'common_perspective.h.*return' src/render/shader/shader_processor.cpp
+          ! grep -n 'Compatibility fallback for simple materials' src/wallpaper/scene/2d/particles/particle_renderer.cpp
+          grep -n 'resolveTexture("materials/particle.tex"' src/wallpaper/scene/2d/particles/particle_system.cpp
+
+      - name: Check changed-source formatting
+        run: |
+          clang-format --dry-run --Werror \
+            src/render/render.cpp \
+            src/render/render.h \
+            src/render/renderer_resources.cpp \
+            src/render/shader/shader_processor.cpp \
+            src/wallpaper/scene/2d/particles/particle_renderer.cpp
+
+      - name: Run changed-source static analysis
+        run: |
+          cppcheck -j 4 --quiet --enable=warning --error-exitcode=1 \
+            '-D__has_feature(x)=0' \
+            --suppress=preprocessorErrorDirective \
+            --suppress=uninitMemberVarNoCtor \
+            src/render/render.cpp \
+            src/render/renderer_resources.cpp \
+            src/render/shader/shader_processor.cpp \
+            src/wallpaper/scene/2d/particles/particle_renderer.cpp
+
+      - name: Install prebuilt Slang
+        env:
+          SLANG_VERSION: '2026.14'
+        run: |
+          mkdir -p "$RUNNER_TEMP/slang"
+          curl -fL --retry 3 \
+            -o "$RUNNER_TEMP/slang.tar.gz" \
+            "https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-linux-x86_64-glibc-2.27.tar.gz"
+          tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C "$RUNNER_TEMP/slang"
+          SLANG_CONFIG="$(find "$RUNNER_TEMP/slang" -type f \( -name 'slangConfig.cmake' -o -name 'SlangConfig.cmake' \) -print -quit)"
+          test -n "$SLANG_CONFIG"
+          SLANG_PREFIX="$(realpath "$(dirname "$SLANG_CONFIG")/../../..")"
+          echo "CMAKE_PREFIX_PATH=$SLANG_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$SLANG_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          "$SLANG_PREFIX/bin/slangc" -version
+
+      - name: Set up xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+
+      - name: Configure
+        run: xmake f -y -m release
+
+      - name: Build
+        run: xmake -v
+
+      - name: Check software Vulkan
+        run: xvfb-run -a vulkaninfo --summary
