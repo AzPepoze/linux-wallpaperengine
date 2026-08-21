@@ -37,6 +37,27 @@ bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& 
     return has_blending ? additive : fallback;
 }
 
+int wallpaperTextureFormatForImage(sg_image image) {
+    if (image.id == SG_INVALID_ID) return 0;
+
+    const sg_image_desc desc = sg_query_image_desc(image);
+    switch (desc.pixel_format) {
+        case SG_PIXELFORMAT_R8:
+            return 9;
+        case SG_PIXELFORMAT_RG8:
+            return 8;
+        case SG_PIXELFORMAT_BC1_RGBA:
+            return 4;
+        case SG_PIXELFORMAT_BC2_RGBA:
+            return 5;
+        case SG_PIXELFORMAT_BC3_RGBA:
+            return 6;
+        case SG_PIXELFORMAT_RGBA8:
+        default:
+            return 0;
+    }
+}
+
 void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const ParticleSystemConfig& config,
                       int& cols, int& rows, int& frames) {
     cols = (int)metadata.spritesheet_cols;
@@ -148,6 +169,11 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         inferSpriteSheet(metadata, particle_system->config, particle_system->spritesheet_cols,
                          particle_system->spritesheet_rows, particle_system->spritesheet_frames);
         if (particle_system->spritesheet_frames > 1) pass->combos["SPRITESHEET"] = 1;
+
+        // Wallpaper Engine's generic particle shader interprets single/dual-channel
+        // textures differently from RGBA textures. Preserve that semantic through
+        // TEX0FORMAT so ConvertTexture0Format() can turn R8 into an alpha mask, etc.
+        pass->combos["TEX0FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.texture0);
 
         pass->init(ctx);
         if (pass->compiled.shader.id != SG_INVALID_ID && pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite) {
