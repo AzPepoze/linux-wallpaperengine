@@ -150,6 +150,16 @@ static void frame(void) {
     RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
     const uint64_t update_start = stm_now();
 #endif
+#if DEBUG_BUILD
+    if (ctx.runtime_mode == RuntimeMode::Sandbox) {
+        const SandboxPreviewRect preview_rect = Debugger::sandboxPreviewRect();
+        if (preview_rect.width > 0 && preview_rect.height > 0) {
+            scene_engine->setOutputViewport(preview_rect.x, preview_rect.y, preview_rect.width, preview_rect.height);
+        }
+    } else {
+        scene_engine->resetOutputViewport();
+    }
+#endif
     scene_engine->updateViewport();
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;

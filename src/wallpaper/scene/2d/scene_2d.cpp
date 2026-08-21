@@ -18,31 +18,41 @@ void Scene2DRuntime::update(float dt) {
 }
 
 void Scene2DRuntime::draw() {
+    const bool has_output_viewport = output_width > 0 && output_height > 0;
+    if (has_output_viewport) {
+        sg_apply_viewport(output_x, output_y, output_width, output_height, true);
+        sg_apply_scissor_rect(output_x, output_y, output_width, output_height, true);
+    }
+
     if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
         ctx.layers[ctx.selected_object]->draw(ctx);
-        return;
-    }
+    } else {
+        bool any_solo = false;
+        for (auto layer : ctx.layers) {
+            if (layer->solo) {
+                any_solo = true;
+                break;
+            }
+        }
 
-    bool any_solo = false;
-    for (auto layer : ctx.layers) {
-        if (layer->solo) {
-            any_solo = true;
-            break;
+        for (auto layer : ctx.layers) {
+            if (any_solo) {
+                if (layer->solo) layer->draw(ctx);
+            } else if (layer->visible) {
+                layer->draw(ctx);
+            }
         }
     }
 
-    for (auto layer : ctx.layers) {
-        if (any_solo) {
-            if (layer->solo) layer->draw(ctx);
-        } else if (layer->visible) {
-            layer->draw(ctx);
-        }
+    if (has_output_viewport) {
+        sg_apply_viewport(0, 0, sapp_width(), sapp_height(), true);
+        sg_apply_scissor_rect(0, 0, sapp_width(), sapp_height(), true);
     }
 }
 
 void Scene2DRuntime::updateViewport() {
-    float sw = (float)sapp_width();
-    float sh = (float)sapp_height();
+    float sw = output_width > 0 ? (float)output_width : (float)sapp_width();
+    float sh = output_height > 0 ? (float)output_height : (float)sapp_height();
     renderer_update_viewport(&ctx.renderer, sw, sh);
 
     if (ctx.scene_w == 0 || ctx.scene_h == 0) return;
@@ -58,6 +68,20 @@ void Scene2DRuntime::updateViewport() {
 
     ctx.offset_x = (sw - ctx.scene_w * ctx.render_scale) * 0.5f;
     ctx.offset_y = (sh - ctx.scene_h * ctx.render_scale) * 0.5f;
+}
+
+void Scene2DRuntime::setOutputViewport(int x, int y, int width, int height) {
+    output_x = x;
+    output_y = y;
+    output_width = width;
+    output_height = height;
+}
+
+void Scene2DRuntime::resetOutputViewport() {
+    output_x = 0;
+    output_y = 0;
+    output_width = 0;
+    output_height = 0;
 }
 
 void Scene2DRuntime::clearScene() {

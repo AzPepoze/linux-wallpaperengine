@@ -29,6 +29,7 @@ int g_selected_effect = -1;
 int g_selected_material = -1;
 bool g_logs_open = false;
 std::string g_sandbox_status;
+SandboxPreviewRect g_sandbox_preview_rect;
 
 int findLayerIndex(const EngineContext& ctx, uint32_t scene_object_id) {
     for (int index = 0; index < (int)ctx.layers.size(); ++index) {
@@ -185,6 +186,10 @@ void Debugger::startSandbox(EngineContext& ctx, SandboxProjectLoader loader) {
     selectFirstPreview(ctx);
 }
 
+SandboxPreviewRect Debugger::sandboxPreviewRect() {
+    return g_sandbox_preview_rect;
+}
+
 void Debugger::drawSceneTab(EngineContext& ctx) {
     const ImGuiTableFlags table_flags =
         ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
@@ -275,13 +280,21 @@ void Debugger::drawSandbox(EngineContext& ctx) {
     ImGui::EndChild();
 
     ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::BeginChild("SandboxPreview", ImVec2(0.0f, 0.0f), true);
+    const ImVec2 preview_position = ImGui::GetWindowPos();
+    const ImVec2 preview_size = ImGui::GetWindowSize();
+    const float dpi_scale = sapp_dpi_scale();
+    g_sandbox_preview_rect = {
+        static_cast<int>(preview_position.x * dpi_scale), static_cast<int>(preview_position.y * dpi_scale),
+        static_cast<int>(preview_size.x * dpi_scale), static_cast<int>(preview_size.y * dpi_scale)};
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "RENDERED PREVIEW");
     ImGui::Separator();
     ImGui::TextWrapped("The selected Wallpaper Engine preview project is rendered in this fixed preview area.");
     if (!g_sandbox_status.empty()) ImGui::TextWrapped("%s", g_sandbox_status.c_str());
     ImGui::TextDisabled("Engine: %s", ctx.engine_path);
     ImGui::EndChild();
+    ImGui::PopStyleColor();
     ImGui::End();
 }
 
