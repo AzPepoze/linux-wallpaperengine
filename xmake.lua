@@ -85,9 +85,9 @@ task("format")
         print("Done!")
     end)
 
-task("dev")
+task("sandbox")
     set_menu {
-        usage = "xmake dev",
+        usage = "xmake sandbox",
         description = "Validate, build the debug binary, and launch the effect sandbox"
     }
     on_run(function ()
@@ -98,5 +98,5 @@ task("dev")
         print("--> Building debug sandbox...")
         os.exec("xmake build linux-wallpaperengine")
         print("--> Launching sandbox...")
-        os.execv("bin/debug/linux-wallpaperengine", {"--sandbox"})
+        os.exec("bin/debug/linux-wallpaperengine --sandbox")
     end)
