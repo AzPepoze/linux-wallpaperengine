@@ -57,5 +57,5 @@ xmake check
 xmake format
 
 # Validate, build, and open the debug effect sandbox.
-xmake dev
+xmake sandbox
 ```

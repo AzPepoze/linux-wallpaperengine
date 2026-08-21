@@ -232,7 +232,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     sargs_setup(&a_desc);
 
 #if DEBUG_BUILD
-    if (sargs_exists("sandbox")) ctx.runtime_mode = RuntimeMode::Sandbox;
+    if (sargs_exists("sandbox") || sargs_exists("--sandbox")) ctx.runtime_mode = RuntimeMode::Sandbox;
 #endif
 
     if (ctx.runtime_mode != RuntimeMode::Sandbox && sargs_exists("pkg")) {
