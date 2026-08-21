@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "core/gfx_resource.h"
-#include "core/interfaces.h"
 #include "linmath.h"
 #include "sokol_gfx.h"
 #include "wallpaper/scene/2d/parser/particle_parser.h"
@@ -25,6 +24,7 @@ struct Particle {
     float initial_size = 1.0f;
     float spawn_time = 0.0f;
     float random_seed = 0.0f;
+    float frame = -1.0f;
 
     float drag = 0.0f;
     vec3 gravity = {0, 0, 0};
@@ -44,13 +44,13 @@ struct Particle {
 };
 
 class EngineContext;
+class ShaderPass;
 
 class ParticleSystem {
    public:
     std::string name;
     ParticleSystemConfig config;
-    GfxImage texture;
-    GfxView cached_view;
+    ShaderPass* material_pass = nullptr;
     std::vector<Particle> particles;
     std::vector<ParticleSystem*> children;
 
@@ -59,29 +59,46 @@ class ParticleSystem {
     float global_time = 0.0f;
     float scene_w, scene_h;
     vec3 layer_origin = {0, 0, 0};
+    vec3 layer_scale = {1, 1, 1};
+    float layer_rotation = 0.0f;
     vec2 parallax = {0, 0};
     bool is_additive = false;
+    bool has_refract = false;
+
+    int spritesheet_cols = 0;
+    int spritesheet_rows = 0;
+    int spritesheet_frames = 0;
+    float spritesheet_duration = 0.0f;
+    int texture_width = 0;
+    int texture_height = 0;
 
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
 
-    ParticleSystem(ParticleSystemConfig config, GfxImage tex, float sw, float h);
+    ParticleSystem(ParticleSystemConfig config, float sw, float h);
     ~ParticleSystem();
 
-    static ParticleSystem* createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh);
-    static ParticleSystem* createFromPath(const char* particle_path, const IAssetResolver& assets, float sw, float sh,
+    static ParticleSystem* createFromJSON(cJSON* node, EngineContext& ctx, float sw, float sh);
+    static ParticleSystem* createFromPath(const char* particle_path, EngineContext& ctx, float sw, float sh,
                                           float override_alpha = 1.0f, float override_rate = 1.0f);
 
     void update(float dt);
     void draw(EngineContext& ctx);
     void drawDebugBounds(EngineContext& ctx);
+    bool requiresSceneColor() const;
+    void setSceneColorView(sg_view view);
 
     bool show_bounds = false;
     std::string config_path;
     std::string texture_path;
 
    private:
+    GfxBuffer particle_vertex_buffer;
+    GfxBuffer particle_index_buffer;
+    sg_view scene_color_view = {SG_INVALID_ID};
+
     void spawnParticle();
+    void initParticleBuffers();
 };
 
 #endif  // PARTICLE_SYSTEM_H
