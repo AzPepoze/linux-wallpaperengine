@@ -168,6 +168,7 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     if (cJSON_IsNumber(mouse_influence)) {
         out.camera_parallax_mouse_influence = (float)mouse_influence->valuedouble;
     }
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"), out.perspective_override_fov);
 
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
           out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount, out.camera_parallax_delay,

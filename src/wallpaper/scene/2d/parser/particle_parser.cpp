@@ -125,6 +125,15 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         readVec3(cJSON_GetObjectItemCaseSensitive(initializer, "max"), initializer_config.maximum);
         initializer_config.minimum_scalar = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "min"));
         initializer_config.maximum_scalar = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "max"));
+        initializer_config.turbulence_offset = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "offset"));
+        const cJSON* turbulence_scale = cJSON_GetObjectItemCaseSensitive(initializer, "scale");
+        if (turbulence_scale) initializer_config.turbulence_scale = readFloat(turbulence_scale);
+        const cJSON* speed_min = cJSON_GetObjectItemCaseSensitive(initializer, "speedmin");
+        const cJSON* speed_max = cJSON_GetObjectItemCaseSensitive(initializer, "speedmax");
+        if (speed_min) initializer_config.turbulence_speed_min = readFloat(speed_min);
+        if (speed_max) initializer_config.turbulence_speed_max = readFloat(speed_max);
+        const cJSON* forward = cJSON_GetObjectItemCaseSensitive(initializer, "forward");
+        if (forward) readVec3(forward, initializer_config.turbulence_forward);
         config.initializers.push_back(initializer_config);
     }
 

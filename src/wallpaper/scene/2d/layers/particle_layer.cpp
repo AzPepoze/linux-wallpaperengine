@@ -16,7 +16,9 @@ ParticleLayer::~ParticleLayer() {
 ParticleLayer* ParticleLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
     const ParticleObjectConfig config = ParticleParser::parseObject(doc);
     if (config.particle_path.empty()) return nullptr;
-    ParticleSystem* ps = ParticleSystem::createFromPath(config.particle_path.c_str(), ctx, ctx.scene_w, ctx.scene_h);
+    ParticleSystem* ps = ParticleSystem::createFromPath(
+        config.particle_path.c_str(), ctx, ctx.scene_w, ctx.scene_h, config.override_alpha, config.override_rate,
+        config.has_override_color ? config.override_color : nullptr, config.override_color_is_legacy);
     if (ps) {
         ParticleLayer* layer = new ParticleLayer(config.name.c_str(), ps);
         layer->initFromDocument(doc, ctx);
@@ -100,6 +102,10 @@ void ParticleLayer::drawDebug(EngineContext& ctx) {
     ps->layer_rotation = layer_rotation;
     ps->parallax[0] = 0.0f;
     ps->parallax[1] = 0.0f;
+    // Selection debugging defaults to both overlays. CLI diagnostics can choose
+    // either independently without depending on the ImGui selection state.
+    ps->show_bounds = ctx.particle_debug_bounds || !ctx.particle_debug_velocity;
+    ps->show_velocity = ctx.particle_debug_velocity || !ctx.particle_debug_bounds;
     ps->drawDebugBounds(ctx);
 }
 

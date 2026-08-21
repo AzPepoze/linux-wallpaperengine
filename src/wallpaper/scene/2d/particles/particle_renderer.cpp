@@ -29,6 +29,30 @@ void fillVec4(vec4 value, float x, float y, float z, float w = 0.0f) {
     value[3] = w;
 }
 
+void makePerspectiveCamera(mat4x4 projection, mat4x4 view, float scene_width, float scene_height,
+                           float fov_override_degrees, float& camera_distance) {
+    const float safe_height = std::max(scene_height, 1.0f);
+    const float safe_width = std::max(scene_width, 1.0f);
+    const float near_plane = 1.0f;
+    const float far_plane = 100000.0f;
+    camera_distance = 1000.0f;
+    if (fov_override_degrees > 0.0f && fov_override_degrees < 179.0f) {
+        camera_distance = safe_height / (2.0f * tanf(fov_override_degrees * (float)M_PI / 360.0f));
+    }
+    const float focal_length = camera_distance / (safe_height * 0.5f);
+
+    mat4x4_identity(projection);
+    projection[0][0] = focal_length * safe_height / safe_width;
+    projection[1][1] = focal_length;
+    projection[2][2] = -(far_plane + near_plane) / (far_plane - near_plane);
+    projection[2][3] = -1.0f;
+    projection[3][2] = -(2.0f * far_plane * near_plane) / (far_plane - near_plane);
+    projection[3][3] = 0.0f;
+
+    mat4x4_identity(view);
+    mat4x4_translate_in_place(view, -safe_width * 0.5f, -safe_height * 0.5f, -camera_distance);
+}
+
 }  // namespace
 
 void ParticleSystem::draw(EngineContext& ctx) {
@@ -74,8 +98,13 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.color[1] = particle.color[1];
                 vertex.color[2] = particle.color[2];
                 vertex.color[3] = particle.alpha;
-                vertex.texcoord_c1[0] = particle.velocity[0];
-                vertex.texcoord_c1[1] = particle.velocity[1];
+                float velocity_x = particle.velocity[0];
+                float velocity_y = particle.velocity[1];
+                // ComputeParticleTrailTangents normalizes the cross product.
+                // Avoid feeding it a zero vector for incomplete/static presets.
+                if (is_trail && velocity_x * velocity_x + velocity_y * velocity_y < 1e-8f) velocity_y = 0.001f;
+                vertex.texcoord_c1[0] = velocity_x;
+                vertex.texcoord_c1[1] = velocity_y;
                 vertex.texcoord_c1[2] = particle.velocity[2];
                 vertex.texcoord_c1[3] = lifetime;
                 vertex.texcoord_c2[0] = 0.0f;
@@ -104,16 +133,35 @@ void ParticleSystem::draw(EngineContext& ctx) {
             const float parallax_x = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
             const float parallax_y = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
 
-            mat4x4 projection, model, mvp;
-            mat4x4_ortho(projection, 0.0f, ctx.renderer.view_width, ctx.renderer.view_height, 0.0f, -1.0f, 1.0f);
+            mat4x4 projection, view, view_projection, model, mvp;
             mat4x4_identity(model);
-            mat4x4_translate_in_place(model, ctx.offset_x + (layer_origin[0] + parallax_x) * ctx.render_scale,
-                                      ctx.offset_y + (layer_origin[1] + parallax_y) * ctx.render_scale,
-                                      layer_origin[2] * ctx.render_scale);
-            mat4x4_rotate_Z(model, model, layer_rotation * (float)(M_PI / 180.0));
-            mat4x4_scale_aniso(model, model, ctx.render_scale * layer_scale[0], ctx.render_scale * layer_scale[1],
-                               layer_scale[2]);
-            mat4x4_mul(mvp, projection, model);
+            float camera_distance = 1000.0f;
+            if (use_perspective) {
+                // Particle coordinates are Wallpaper Engine world coordinates (Y-up).
+                // The focal length makes the z=0 reference plane match the scene extent.
+                makePerspectiveCamera(projection, view, scene_w, scene_h, ctx.perspective_override_fov,
+                                      camera_distance);
+                mat4x4_translate_in_place(model, layer_origin[0] + parallax_x, layer_origin[1] + parallax_y,
+                                          layer_origin[2]);
+                mat4x4_rotate_Z(model, model, layer_rotation * (float)(M_PI / 180.0));
+                mat4x4_scale_aniso(model, model, layer_scale[0], layer_scale[1], layer_scale[2]);
+                mat4x4_mul(view_projection, projection, view);
+            } else {
+                mat4x4_ortho(projection, 0.0f, ctx.renderer.view_width, ctx.renderer.view_height, 0.0f, -1.0f,
+                             1.0f);
+                mat4x4_identity(view_projection);
+                // Convert Wallpaper Engine's Y-up particle space exactly once at
+                // the particle-to-screen boundary. Image layers remain untouched.
+                mat4x4_translate_in_place(
+                    model, ctx.offset_x + (layer_origin[0] + parallax_x) * ctx.render_scale,
+                    ctx.offset_y + (scene_h - layer_origin[1] - parallax_y) * ctx.render_scale,
+                    layer_origin[2] * ctx.render_scale);
+                mat4x4_rotate_Z(model, model, -layer_rotation * (float)(M_PI / 180.0));
+                mat4x4_scale_aniso(model, model, ctx.render_scale * layer_scale[0],
+                                   -ctx.render_scale * layer_scale[1], layer_scale[2]);
+                mat4x4_dup(view_projection, projection);
+            }
+            mat4x4_mul(mvp, view_projection, model);
 
             builtin_uniforms_t builtins = {};
             memcpy(builtins.mvp, mvp, sizeof(mat4x4));
@@ -137,13 +185,14 @@ void ParticleSystem::draw(EngineContext& ctx) {
             particle_builtin_uniforms_t particle_builtins = {};
             memcpy(particle_builtins.model_matrix, model, sizeof(mat4x4));
             mat4x4_invert(particle_builtins.model_matrix_inverse, model);
-            memcpy(particle_builtins.view_projection_matrix, projection, sizeof(mat4x4));
+            memcpy(particle_builtins.view_projection_matrix, view_projection, sizeof(mat4x4));
             fillVec4(particle_builtins.orientation_up, 0.0f, 1.0f, 0.0f);
             fillVec4(particle_builtins.orientation_right, 1.0f, 0.0f, 0.0f);
             fillVec4(particle_builtins.orientation_forward, 0.0f, 0.0f, 1.0f);
             fillVec4(particle_builtins.view_up, 0.0f, 1.0f, 0.0f);
             fillVec4(particle_builtins.view_right, 1.0f, 0.0f, 0.0f);
-            fillVec4(particle_builtins.eye_position, 0.0f, 0.0f, 1000.0f);
+            fillVec4(particle_builtins.eye_position, scene_w * 0.5f, scene_h * 0.5f,
+                     use_perspective ? camera_distance : 0.0f);
 
             const float frame_width = spritesheet_cols > 0 ? 1.0f / (float)spritesheet_cols : 0.0f;
             const float frame_height = spritesheet_rows > 0 ? 1.0f / (float)spritesheet_rows : 0.0f;
@@ -151,7 +200,12 @@ void ParticleSystem::draw(EngineContext& ctx) {
             if (frame_width > 0.0f && frame_height > 0.0f && texture_width > 0 && texture_height > 0) {
                 texture_ratio = ((float)texture_height * frame_height) / ((float)texture_width * frame_width);
             }
-            fillVec4(particle_builtins.render_var0, 0.0f, 0.0f, 0.0f, 0.0f);
+            if (is_trail) {
+                fillVec4(particle_builtins.render_var0, config.renderer.length, config.renderer.max_length, 0.0f,
+                         (float)std::max(0, max_particles - 1));
+            } else {
+                fillVec4(particle_builtins.render_var0, 0.0f, 0.0f, 0.0f, 0.0f);
+            }
             fillVec4(particle_builtins.render_var1, frame_width, frame_height, (float)spritesheet_frames, texture_ratio);
 
             render_effect_pass_t render_pass = pass->getRenderPass();
@@ -174,11 +228,12 @@ void ParticleSystem::draw(EngineContext& ctx) {
             const float x = ctx.offset_x +
                             (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
             const float y = ctx.offset_y +
-                            (layer_origin[1] + parallax_y + particle.position[1] * layer_scale[1]) * ctx.render_scale;
+                            (scene_h - layer_origin[1] - parallax_y - particle.position[1] * layer_scale[1]) *
+                                ctx.render_scale;
             const float width = particle.size * layer_scale[0] * ctx.render_scale;
             const float height = particle.size * layer_scale[1] * ctx.render_scale;
             renderer_draw_sprite(ctx, &ctx.renderer, pass->pass_textures.texture0, pass->pass_textures.texture0_view,
-                                 x - width * 0.5f, y - height * 0.5f, width, height, particle.rotation, tint,
+                                 x - width * 0.5f, y - height * 0.5f, width, height, -particle.rotation, tint,
                                  is_additive, nullptr);
         }
     }
@@ -200,36 +255,60 @@ void ParticleSystem::draw(EngineContext& ctx) {
 void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
     const float parallax_x = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
     const float parallax_y = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
-    for (const ParticleEmitterConfig& emitter : config.emitters) {
-        float color[4] = {1.0f, 1.0f, 0.0f, 1.0f};
-        if (emitter.type == "boxrandom") {
-            const float x = ctx.offset_x +
-                            (layer_origin[0] + parallax_x + emitter.origin[0] - emitter.distance_max[0]) *
-                                ctx.render_scale;
-            const float y = ctx.offset_y +
-                            (layer_origin[1] + parallax_y + emitter.origin[1] - emitter.distance_max[1]) *
-                                ctx.render_scale;
-            renderer_draw_rect(&ctx.renderer, x, y, emitter.distance_max[0] * 2.0f * ctx.render_scale,
-                               emitter.distance_max[1] * 2.0f * ctx.render_scale, color);
-        } else if (emitter.type == "sphererandom") {
-            const float distance = emitter.distance_max[0];
-            const float x =
-                ctx.offset_x + (layer_origin[0] + parallax_x + emitter.origin[0] - distance) * ctx.render_scale;
-            const float y =
-                ctx.offset_y + (layer_origin[1] + parallax_y + emitter.origin[1] - distance) * ctx.render_scale;
-            renderer_draw_rect(&ctx.renderer, x, y, distance * 2.0f * ctx.render_scale,
-                               distance * 2.0f * ctx.render_scale, color);
+    if (show_bounds) {
+        for (const ParticleEmitterConfig& emitter : config.emitters) {
+            float color[4] = {1.0f, 1.0f, 0.0f, 1.0f};
+            if (emitter.type == "boxrandom") {
+                const float x = ctx.offset_x +
+                                (layer_origin[0] + parallax_x + emitter.origin[0] - emitter.distance_max[0]) *
+                                    ctx.render_scale;
+                const float y =
+                    ctx.offset_y +
+                    (scene_h - layer_origin[1] - parallax_y - emitter.origin[1] - emitter.distance_max[1]) *
+                        ctx.render_scale;
+                renderer_draw_rect(&ctx.renderer, x, y, emitter.distance_max[0] * 2.0f * ctx.render_scale,
+                                   emitter.distance_max[1] * 2.0f * ctx.render_scale, color);
+            } else if (emitter.type == "sphererandom") {
+                const float distance = emitter.distance_max[0];
+                const float x = ctx.offset_x +
+                                (layer_origin[0] + parallax_x + emitter.origin[0] - distance) * ctx.render_scale;
+                const float y = ctx.offset_y +
+                                (scene_h - layer_origin[1] - parallax_y - emitter.origin[1] - distance) *
+                                    ctx.render_scale;
+                renderer_draw_rect(&ctx.renderer, x, y, distance * 2.0f * ctx.render_scale,
+                                   distance * 2.0f * ctx.render_scale, color);
+            }
         }
     }
-    float color[4] = {1, 0, 0, 1};
+    float point_color[4] = {1, 0, 0, 1};
+    float velocity_color[4] = {0, 1, 1, 1};
     for (const Particle& particle : particles) {
         const float x = ctx.offset_x +
                         (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
         const float y = ctx.offset_y +
-                        (layer_origin[1] + parallax_y + particle.position[1] * layer_scale[1]) * ctx.render_scale;
-        const float width = particle.size * 0.5f * layer_scale[0] * ctx.render_scale;
-        const float height = particle.size * 0.5f * layer_scale[1] * ctx.render_scale;
-        renderer_draw_rect(&ctx.renderer, x - width * 0.5f, y - height * 0.5f, width, height, color);
+                        (scene_h - layer_origin[1] - parallax_y - particle.position[1] * layer_scale[1]) *
+                            ctx.render_scale;
+        if (show_bounds) {
+            const float width = particle.size * 0.5f * layer_scale[0] * ctx.render_scale;
+            const float height = particle.size * 0.5f * layer_scale[1] * ctx.render_scale;
+            renderer_draw_rect(&ctx.renderer, x - width * 0.5f, y - height * 0.5f, width, height, point_color);
+        }
+        if (show_velocity) {
+            const float velocity_scale = ctx.particle_debug_velocity_scale * ctx.render_scale;
+            const float end_x = x + particle.velocity[0] * layer_scale[0] * velocity_scale;
+            const float end_y = y - particle.velocity[1] * layer_scale[1] * velocity_scale;
+            renderer_draw_line(&ctx.renderer, x, y, end_x, end_y, velocity_color);
+
+            const float angle = atan2f(end_y - y, end_x - x);
+            constexpr float arrow_length = 8.0f;
+            constexpr float arrow_angle = 0.55f;
+            renderer_draw_line(&ctx.renderer, end_x, end_y,
+                               end_x - cosf(angle - arrow_angle) * arrow_length,
+                               end_y - sinf(angle - arrow_angle) * arrow_length, velocity_color);
+            renderer_draw_line(&ctx.renderer, end_x, end_y,
+                               end_x - cosf(angle + arrow_angle) * arrow_length,
+                               end_y - sinf(angle + arrow_angle) * arrow_length, velocity_color);
+        }
     }
     for (ParticleSystem* child : children) child->drawDebugBounds(ctx);
 }

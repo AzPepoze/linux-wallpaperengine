@@ -118,7 +118,8 @@ void ParticleSystem::initParticleBuffers() {
 }
 
 ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, EngineContext& ctx, float scene_width,
-                                               float scene_height, float override_alpha, float override_rate) {
+                                               float scene_height, float override_alpha, float override_rate,
+                                               const float* override_color, bool override_color_is_legacy) {
     if (!particle_path || !particle_path[0]) return nullptr;
     char absolute_path[1024];
     if (!ctx.asset_mgr.resolvePath(particle_path, absolute_path, sizeof(absolute_path))) return nullptr;
@@ -135,6 +136,15 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
     particle_system->config_path = absolute_path;
     particle_system->override_alpha = override_alpha;
     particle_system->override_rate = override_rate;
+    particle_system->override_color_is_legacy = override_color_is_legacy;
+    if (override_color) {
+        particle_system->has_override_color = true;
+        for (int component = 0; component < 3; ++component)
+            particle_system->override_color[component] = override_color[component];
+    }
+    particle_system->is_trail = particle_system->config.renderer.type == "spritetrail" ||
+                                particle_system->config.renderer.type == "trail";
+    particle_system->use_perspective = (particle_system->config.flags & 4) != 0;
     particle_system->is_additive =
         materialUsesAdditiveBlend(particle_system->config.material_path, ctx, particle_system->config.additive);
 
@@ -147,6 +157,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         ShaderPass* pass = particle_system->material_pass;
         pass->effect_file = particle_system->config.material_path;
         pass->combos["THICKFORMAT"] = 1;
+        if (particle_system->is_trail) pass->combos["TRAILRENDERER"] = 1;
 
         particle_system->has_refract = pass->combos.count("REFRACT") && pass->combos.at("REFRACT") != 0;
         if (particle_system->has_refract) {
@@ -173,7 +184,13 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         particle_system->spritesheet_duration = metadata.spritesheet_duration;
         inferSpriteSheet(metadata, particle_system->config, particle_system->spritesheet_cols,
                          particle_system->spritesheet_rows, particle_system->spritesheet_frames);
-        if (particle_system->spritesheet_frames > 1) pass->combos["SPRITESHEET"] = 1;
+        if (particle_system->spritesheet_frames > 1) {
+            pass->combos["SPRITESHEET"] = 1;
+            // Particle flag bit 2 disables interpolation between sequence frames.
+            if (particle_system->config.animation_mode == "sequence" &&
+                (particle_system->config.flags & 2) == 0)
+                pass->combos["SPRITESHEETBLEND"] = 1;
+        }
 
         // Wallpaper Engine's generic particle shader interprets single/dual-channel
         // textures differently from RGBA textures. Preserve that semantic through
@@ -203,7 +220,9 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
 
     for (const ParticleObjectConfig& child : particle_system->config.children) {
         ParticleSystem* child_system = createFromPath(child.particle_path.c_str(), ctx, scene_width, scene_height,
-                                                      child.override_alpha, child.override_rate);
+                                                      child.override_alpha, child.override_rate,
+                                                      child.has_override_color ? child.override_color : nullptr,
+                                                      child.override_color_is_legacy);
         if (child_system) particle_system->children.push_back(child_system);
     }
     for (float time = 0.0f; time < particle_system->config.start_time; time += 0.1f) particle_system->update(0.1f);
@@ -214,7 +233,8 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* document, EngineContext& c
                                                float scene_height) {
     const ParticleObjectConfig config = ParticleParser::parseObject(document);
     return createFromPath(config.particle_path.c_str(), ctx, scene_width, scene_height, config.override_alpha,
-                          config.override_rate);
+                          config.override_rate, config.has_override_color ? config.override_color : nullptr,
+                          config.override_color_is_legacy);
 }
 
 bool ParticleSystem::requiresSceneColor() const {

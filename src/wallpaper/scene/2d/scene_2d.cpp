@@ -186,6 +186,14 @@ void Scene2DRuntime::draw() {
     }
 }
 
+void Scene2DRuntime::drawParticleDiagnostics() {
+    if (!ctx.particle_debug_bounds && !ctx.particle_debug_velocity) return;
+    for (Layer* layer : ctx.layers) {
+        if (!layer->visible) continue;
+        if (auto* particle = dynamic_cast<ParticleLayer*>(layer)) particle->drawDebug(ctx);
+    }
+}
+
 void Scene2DRuntime::present() {
     if (scene_output_index < 0 || scene_output_index > 1) return;
     SceneTarget& target = scene_targets[scene_output_index];

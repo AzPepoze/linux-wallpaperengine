@@ -69,6 +69,7 @@ struct SceneDocument {
     float camera_parallax_amount = 0.0f;
     float camera_parallax_delay = 0.1f;
     float camera_parallax_mouse_influence = 0.0f;
+    float perspective_override_fov = 0.0f;
 
     std::vector<SceneObjectDocument> objects;
 };
