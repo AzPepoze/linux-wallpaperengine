@@ -81,32 +81,6 @@ void normalizeHlslVectorToScalarInitializers(std::string& source) {
     source.swap(normalized);
 }
 
-const char* legacyHeader(const std::string& include) {
-    if (include == "common.h") {
-        return "#define M_PI 3.14159265358979323846\n"
-               "#define M_PI_2 1.57079632679\n"
-               "#define M_2PI 6.28318530718\n"
-               "vec2 rotateVec2(vec2 v, float a) {\n"
-               "    float s = sin(a);\n"
-               "    float c = cos(a);\n"
-               "    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);\n"
-               "}\n";
-    }
-    if (include == "common_perspective.h") {
-        return "mat3 squareToQuad(vec2 p0, vec2 p1, vec2 p2, vec2 p3) {\n"
-               "    float dx1 = p1.x - p2.x, dy1 = p1.y - p2.y;\n"
-               "    float dx2 = p3.x - p2.x, dy2 = p3.y - p2.y;\n"
-               "    float sx = p0.x - p1.x + p2.x - p3.x, sy = p0.y - p1.y + p2.y - p3.y;\n"
-               "    float g = (sx * dy2 - dx2 * sy) / (dx1 * dy2 - dx2 * dy1);\n"
-               "    float h = (dx1 * sy - sx * dy1) / (dx1 * dy2 - dx2 * dy1);\n"
-               "    return mat3(p1.x - p0.x + g * p1.x, p1.y - p0.y + g * p1.y, g, p3.x - p0.x + h * p3.x, p3.y - p0.y "
-               "+ "
-               "h * p3.y, h, p0.x, p0.y, 1.0);\n"
-               "}\n";
-    }
-    return nullptr;
-}
-
 bool readInclude(const std::string& include, const std::string& sourcePath, const IAssetResolver& assets,
                  std::string& resolvedPath, std::string& contents) {
     char path[1024] = {};
