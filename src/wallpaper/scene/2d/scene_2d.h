@@ -11,6 +11,7 @@ class Scene2DRuntime {
     void update(float dt);
     void draw();
     void updateViewport();
+    void clearScene();
     void cleanup();
 
    private:

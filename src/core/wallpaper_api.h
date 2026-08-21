@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "../../libs/linmath.h"
+#include "linmath.h"
 
 // Basic Vector Types (Mapped to discovered JSON strings)
 typedef vec2 vec2_t;

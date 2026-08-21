@@ -2,29 +2,30 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <vector>
 
 #define SOKOL_ARGS_IMPL
-#include "sokol_args.h"
-
 #include "render/diagnostics/diagnostic_config.h"
 #include "render/diagnostics/image_stats.h"
 #include "render/diagnostics/render_graph.h"
 #include "render/diagnostics/uniform_provenance.h"
+#include "sokol_args.h"
+#include "ui/sandbox_catalog.h"
 
 static int g_test_passed = 0;
 static int g_test_failed = 0;
 
-#define TEST_ASSERT(cond, msg)                                                   \
-    do {                                                                         \
-        if (!(cond)) {                                                           \
-            std::cerr << "FAIL: " << msg << " (" << __FILE__ << ":" << __LINE__ \
-                      << ")" << std::endl;                                       \
-            g_test_failed++;                                                     \
-        } else {                                                                 \
-            g_test_passed++;                                                     \
-        }                                                                        \
+#define TEST_ASSERT(cond, msg)                                                                       \
+    do {                                                                                             \
+        if (!(cond)) {                                                                               \
+            std::cerr << "FAIL: " << msg << " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl; \
+            g_test_failed++;                                                                         \
+        } else {                                                                                     \
+            g_test_passed++;                                                                         \
+        }                                                                                            \
     } while (0)
 
 void test_uniform_provenance_json() {
@@ -189,10 +190,9 @@ void test_render_graph_validation() {
 void test_cli_parsing() {
     // 1. Test equals-separated
     {
-        const char* fake_argv[] = {
-            "linux_wallpaperengine", "--diagnose-effects", "--diagnostic-frame=42",
-            "--diagnostic-output=/tmp/test_diag", "--diagnostic-time=5.5", "--diagnostic-pass=1"
-        };
+        const char* fake_argv[] = {"linux_wallpaperengine", "--diagnose-effects",
+                                   "--diagnostic-frame=42", "--diagnostic-output=/tmp/test_diag",
+                                   "--diagnostic-time=5.5", "--diagnostic-pass=1"};
         sargs_desc desc = {};
         desc.argc = 6;
         desc.argv = (char**)fake_argv;
@@ -213,11 +213,16 @@ void test_cli_parsing() {
 
     // 2. Test space-separated
     {
-        const char* fake_argv[] = {
-            "linux_wallpaperengine", "--diagnose-effects", "--diagnostic-frame", "99",
-            "--diagnostic-output", "/tmp/test_diag_space", "--diagnostic-time", "12.3",
-            "--diagnostic-stop-after-pass", "3"
-        };
+        const char* fake_argv[] = {"linux_wallpaperengine",
+                                   "--diagnose-effects",
+                                   "--diagnostic-frame",
+                                   "99",
+                                   "--diagnostic-output",
+                                   "/tmp/test_diag_space",
+                                   "--diagnostic-time",
+                                   "12.3",
+                                   "--diagnostic-stop-after-pass",
+                                   "3"};
         sargs_desc desc = {};
         desc.argc = sizeof(fake_argv) / sizeof(fake_argv[0]);
         desc.argv = (char**)fake_argv;
@@ -238,12 +243,43 @@ void test_cli_parsing() {
     }
 }
 
+void test_sandbox_catalog() {
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "linux-wallpaperengine-sandbox-catalog-test";
+    std::error_code error;
+    fs::remove_all(root, error);
+    fs::create_directories(root / "assets/effects/opacity/preview", error);
+    fs::create_directories(root / "assets/effects/opacity/materials/effects", error);
+    fs::create_directories(root / "assets/effects/no-preview/materials", error);
+    std::ofstream(root / "assets/effects/opacity/preview/scene.json") << "{}";
+    std::ofstream(root / "assets/effects/opacity/materials/effects/opacity.json") << "{}";
+    std::ofstream(root / "assets/effects/no-preview/materials/no-preview.json") << "{}";
+
+    SandboxCatalog catalog;
+    catalog.scan(root.string());
+
+    TEST_ASSERT(catalog.effects().size() == 2, "Sandbox should list effects with and without preview projects");
+    TEST_ASSERT(catalog.effects()[0].name == "no-preview", "Effect entries should have a stable alphabetical order");
+    TEST_ASSERT(!catalog.effects()[0].available, "Effects without preview/scene.json must be unavailable");
+    TEST_ASSERT(catalog.effects()[1].name == "opacity" && catalog.effects()[1].available,
+                "Effects with preview/scene.json must be available");
+    TEST_ASSERT(catalog.materials().size() == 2, "Sandbox should include installed material definitions");
+    TEST_ASSERT(!catalog.materials()[0].available,
+                "Materials whose effect has no preview project must stay visible but unavailable");
+    TEST_ASSERT(catalog.materials()[1].available,
+                "Materials should use the containing effect's supplied preview project");
+
+    fs::remove_all(root, error);
+}
+
 int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
     std::cout << "Running diagnostic subsystem unit tests...\n";
 
     test_cli_parsing();
+    test_sandbox_catalog();
     test_uniform_provenance_json();
     test_image_stats();
     test_render_graph_validation();

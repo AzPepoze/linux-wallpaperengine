@@ -1,9 +1,9 @@
 #include "effect_inspector.h"
 
-#include "../../libs/sokol/sokol_app.h"
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../../libs/sokol/sokol_imgui.h"
 #include "imgui.h"
+#include "sokol_app.h"
+#include "sokol_gfx.h"
+#include "util/sokol_imgui.h"
 #include "wallpaper/scene/2d/effects/effect.h"
 
 namespace Inspector {

@@ -1,10 +1,15 @@
 add_rules("mode.debug", "mode.release")
+set_languages("cxx17")
 
-add_requires("imgui")
+-- Track the upstream heads. Run `xmake require --upgrade` when you want to
+-- refresh the cached dependency revisions.
+add_requires("sokol master")
+add_requires("linmath.h master")
 add_requires("vulkan-headers")
 add_requires("lz4")
 add_requires("cjson")
 add_requires("stb")
+add_requires("imgui", {optional = true})
 add_requires("cmake::slang", {
     alias = "slang_shader",
     system = true,
@@ -16,68 +21,52 @@ add_requires("cmake::slang", {
 
 target("linux-wallpaperengine")
     set_kind("binary")
-    add_packages("imgui", "slang_shader", "vulkan-headers", "lz4", "cjson", "stb")
-    
-    -- Source files
-    add_files("src/**/*.cpp")
-
-    -- Include directories
-    add_includedirs("libs")
-    add_includedirs("libs/sokol")
+    set_targetdir("bin/$(mode)")
+    add_packages("sokol", "linmath.h", "slang_shader", "vulkan-headers", "lz4", "cjson", "stb")
     add_includedirs("src")
-
-    -- System libraries
     add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
 
-    -- Optimization for release
-    if is_mode("release") then
+    if is_mode("debug") then
+        add_files("src/**.cpp")
+        add_defines("DEBUG_BUILD=1")
+        add_packages("imgui")
+    else
+        add_files("src/**.cpp|ui/**.cpp|render/diagnostics/**.cpp")
+        add_defines("DEBUG_BUILD=0")
         set_symbols("hidden")
         set_optimize("fastest")
         set_strip("all")
     end
 
-    -- After build, copy to bin/ for compatibility with your previous workflow
-    after_build(function (target)
-        os.mkdir("bin")
-        os.cp(target:targetfile(), "bin/linux_wallpaperengine")
-    end)
-
 target("test_diagnostics")
     set_kind("binary")
     set_default(false)
-    add_packages("cjson", "stb")
+    set_targetdir("bin/$(mode)")
+    add_defines("DEBUG_BUILD=1")
+    add_packages("sokol", "linmath.h", "cjson", "stb")
     add_files("tests/test_diagnostics.cpp")
+    add_files("src/ui/sandbox_catalog.cpp")
     add_files("src/render/diagnostics/diagnostic_config.cpp")
     add_files("src/render/diagnostics/image_stats.cpp")
     add_files("src/render/diagnostics/render_graph.cpp")
     add_files("src/render/diagnostics/uniform_provenance.cpp")
-    add_includedirs("libs")
-    add_includedirs("libs/sokol")
     add_includedirs("src")
 
 task("check")
     set_menu {
         usage = "xmake check",
-        description = "Format code and run fast static analysis"
+        description = "Validate formatting and run fast static analysis"
     }
     on_run(function ()
-        -- 1. Format code first
-        print("--> Formatting files...")
-        os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format -i"})
-
-        -- 2. Check Formatting (Fast)
         print("--> Checking formatting (clang-format)...")
-        os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
-        
-        -- 3. Fast Static Analysis
+        os.execv("sh", {"-c", "find src tests -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
+
         print("--> Running static analysis (cppcheck)...")
-        -- We suppress libs/ and provide some common defines to avoid false positives or syntax errors in 3rd party headers
         os.execv("sh", {"-c", "cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 " ..
                              "'-D__has_feature(x)=0' " ..
                              "--suppress=preprocessorErrorDirective " ..
-                             "--suppress=*:libs/* " ..
-                             "src/"})
-        
+                             "--suppress=uninitMemberVarNoCtor " ..
+                             "src/ tests/"})
         print("All checks passed!")
     end)
 
@@ -88,59 +77,22 @@ task("format")
     }
     on_run(function ()
         print("--> Formatting files...")
-        os.execv("sh", {"-c", "find src/ -name '*.[ch]*' | xargs clang-format -i"})
+        os.execv("sh", {"-c", "find src tests -name '*.[ch]*' | xargs clang-format -i"})
         print("Done!")
     end)
 
 task("dev")
     set_menu {
-        usage = "xmake dev [wallpaper_path]",
-        description = "Run formatting check, static analysis, build and run the wallpaper",
-        options = {
-            {nil, "pkg", "v", nil, "Specify the wallpaper path"}
-        }
+        usage = "xmake dev",
+        description = "Validate, build the debug binary, and launch the effect sandbox"
     }
     on_run(function ()
-        import("core.base.option")
-
-        -- 1. Run Check
-        print("--> Running checks...")
+        print("--> Configuring debug build...")
+        os.exec("xmake f -m debug")
+        print("--> Running validation...")
         os.exec("xmake check")
-
-        -- 2. Build
-        print("--> Building...")
-        os.exec("xmake")
-
-        -- 3. Run
-        local path = option.get("pkg")
-        if not path then
-            local args = option.get("arguments")
-            if args and #args > 0 then
-                path = args[1]
-            end
-        end
-        
-        -- Resolve from environment variable
-        if not path or path == "" then
-            path = os.getenv("DEFAULT_WALLPAPER_PATH") or os.getenv("WALLPAPER_PATH")
-        end
-
-        -- Resolve from config.json
-        if not path or path == "" then
-            if os.isfile("config.json") then
-                import("core.base.json")
-                local cfg = try { function() return json.loadfile("config.json") end }
-                if cfg and (cfg.default_wallpaper or cfg.wallpaper_path) then
-                    path = cfg.default_wallpaper or cfg.wallpaper_path
-                end
-            end
-        end
-
-        if path and path ~= "" then
-            print("--> Running with: " .. path)
-            os.execv("xmake", {"run", "linux-wallpaperengine", path})
-        else
-            print("--> Running without wallpaper argument (configure 'default_wallpaper' in config.json or pass path)")
-            os.execv("xmake", {"run", "linux-wallpaperengine"})
-        end
+        print("--> Building debug sandbox...")
+        os.exec("xmake build linux-wallpaperengine")
+        print("--> Launching sandbox...")
+        os.execv("bin/debug/linux_wallpaperengine", {"--sandbox"})
     end)

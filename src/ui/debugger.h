@@ -1,25 +1,27 @@
 #ifndef DEBUGGER_H
 #define DEBUGGER_H
 
-#include "../../libs/sokol/sokol_gfx.h"
-#include "../core/gfx_resource.h"
+#include "core/build_config.h"
+
+#if DEBUG_BUILD
 
 struct EngineContext;
+
+using SandboxProjectLoader = bool (*)(const char* scene_path);
 
 class Debugger {
    public:
     static void init();
+    static void startSandbox(EngineContext& ctx, SandboxProjectLoader loader);
     static void draw(EngineContext& ctx);
 
-    static void setPreviewTexture(sg_image img, float aspect);
-
-    static GfxImage preview_texture;
-    static GfxView preview_view;
-    static float preview_aspect;
-
    private:
-    static void drawHierarchyPanel(EngineContext& ctx, float width, float height);
-    static void drawInspectorPanel(EngineContext& ctx, float width, float height);
+    static void drawSceneTab(EngineContext& ctx);
+    static void drawDiagnosticsTab(EngineContext& ctx);
+    static void drawLogsTab();
+    static void drawSandbox(EngineContext& ctx);
 };
+
+#endif  // DEBUG_BUILD
 
 #endif  // DEBUGGER_H

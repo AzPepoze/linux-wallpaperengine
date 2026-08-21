@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../../../../libs/linmath.h"
+#include "linmath.h"
 
 namespace {
 
@@ -51,6 +51,16 @@ const SceneTreeNode* SceneTree::find(uint32_t id) const {
     if (id == 0) return nullptr;
     const auto it = nodes_.find(id);
     return it == nodes_.end() ? nullptr : &it->second;
+}
+
+std::vector<uint32_t> SceneTree::rootIds() const {
+    std::vector<uint32_t> roots;
+    roots.reserve(nodes_.size());
+    for (const auto& [id, node] : nodes_) {
+        if (node.parent_id == 0 || nodes_.find(node.parent_id) == nodes_.end()) roots.push_back(id);
+    }
+    std::sort(roots.begin(), roots.end());
+    return roots;
 }
 
 const SceneTreeNode* SceneTree::resolveParallaxNode(uint32_t id) const {

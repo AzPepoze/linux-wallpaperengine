@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "core/build_config.h"
 #include "core/gfx_resource.h"
 #include "effect_geometry.h"
 #include "pass_textures.h"
@@ -49,7 +50,9 @@ class ShaderPass {
     void init(EngineContext& ctx);
     void apply(EngineContext& ctx);
     void applyUniforms();
+#if DEBUG_BUILD
     void rebuildWithDebugMode(int mode, EngineContext& ctx);
+#endif
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
@@ -93,8 +96,10 @@ class ShaderPass {
         return r;
     }
 
+#if DEBUG_BUILD
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
+#endif
 
    private:
     std::string stored_vs_source;

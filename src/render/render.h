@@ -4,9 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../libs/linmath.h"
-#include "../../libs/sokol/sokol_gfx.h"
 #include "../core/gfx_resource.h"
+#include "linmath.h"
+#include "sokol_gfx.h"
 
 #ifdef __cplusplus
 struct EngineContext;

@@ -4,11 +4,11 @@
 
 #include <string>
 
-#include "../../libs/sokol/sokol_glue.h"
 #include "../core/context.h"
 #include "../core/engine_context.h"
 #include "../core/logger.h"
 #include "shader/shader_backend.h"
+#include "sokol_glue.h"
 
 void renderer_init(renderer_t* r, float w, float h) {
     r->view_width = w;

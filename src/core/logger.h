@@ -7,6 +7,13 @@ typedef enum { LOG_LEVEL_DEBUG, LOG_LEVEL_INFO, LOG_LEVEL_WARN, LOG_LEVEL_ERROR 
 
 #ifdef __cplusplus
 #include <string>
+#include <vector>
+
+struct RuntimeLogEntry {
+    log_level_t level = LOG_LEVEL_INFO;
+    std::string tag;
+    std::string message;
+};
 
 class Logger {
    public:
@@ -25,6 +32,9 @@ class Logger {
 // Global core logger
 extern Logger core_log;
 extern Logger effect_log;
+
+std::vector<RuntimeLogEntry> logger_recent_entries();
+void logger_clear_recent_entries();
 #endif
 
 #ifdef __cplusplus

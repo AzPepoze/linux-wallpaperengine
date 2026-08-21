@@ -5,7 +5,22 @@
 #include <string.h>
 #include <time.h>
 
+#include <mutex>
+#include <vector>
+
 static log_level_t min_level = LOG_LEVEL_DEBUG;
+
+namespace {
+constexpr size_t kRecentLogLimit = 300;
+std::mutex recent_logs_mutex;
+std::vector<RuntimeLogEntry> recent_logs;
+
+void addRecentLog(log_level_t level, const char* tag, const char* message) {
+    std::lock_guard<std::mutex> lock(recent_logs_mutex);
+    if (recent_logs.size() == kRecentLogLimit) recent_logs.erase(recent_logs.begin());
+    recent_logs.push_back({level, tag ? tag : "", message ? message : ""});
+}
+}  // namespace
 
 // Initialize global core logger
 Logger core_log("CORE");
@@ -27,6 +42,13 @@ static uint32_t hash_string(const char* str) {
 static void print_log(log_level_t level, const char* tag, const char* fmt, va_list args) {
     if (level < min_level) return;
 
+    char message[2048] = {};
+    va_list format_args;
+    va_copy(format_args, args);
+    vsnprintf(message, sizeof(message), fmt, format_args);
+    va_end(format_args);
+    addRecentLog(level, tag, message);
+
     time_t now = time(NULL);
     struct tm* t = localtime(&now);
     char time_str[32];
@@ -43,6 +65,16 @@ static void print_log(log_level_t level, const char* tag, const char* fmt, va_li
     printf("%s [%s%s%s] [%s%s%s] ", time_str, level_colors[level], level_strs[level], reset, tag_color, tag, reset);
     vprintf(fmt, args);
     printf("\n");
+}
+
+std::vector<RuntimeLogEntry> logger_recent_entries() {
+    std::lock_guard<std::mutex> lock(recent_logs_mutex);
+    return recent_logs;
+}
+
+void logger_clear_recent_entries() {
+    std::lock_guard<std::mutex> lock(recent_logs_mutex);
+    recent_logs.clear();
 }
 
 void log_msg(log_level_t level, const char* tag, const char* fmt, ...) {

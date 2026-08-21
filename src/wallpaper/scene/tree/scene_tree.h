@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <array>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -12,6 +13,7 @@
 struct SceneTreeNode {
     uint32_t id = 0;
     uint32_t parent_id = 0;
+    std::string name;
     std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};
     std::array<float, 3> angles = {0.0f, 0.0f, 0.0f};
@@ -27,6 +29,7 @@ class SceneTree {
     void rebuildHierarchy();
 
     const SceneTreeNode* find(uint32_t id) const;
+    std::vector<uint32_t> rootIds() const;
     const SceneTreeNode* resolveParallaxNode(uint32_t id) const;
     bool localTransform(uint32_t id, mat4x4 out) const;
     bool worldTransform(uint32_t id, mat4x4 out) const;
