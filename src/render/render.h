@@ -72,15 +72,33 @@ typedef struct {
     vec2 padding3;
 } builtin_uniforms_t;
 
+typedef struct {
+    mat4x4 model_matrix_inverse;
+    vec4 orientation_up;
+    vec4 orientation_right;
+    vec4 orientation_forward;
+    vec4 view_up;
+    vec4 view_right;
+    vec4 eye_position;
+    vec4 render_var0;
+    vec4 render_var1;
+} particle_builtin_uniforms_t;
+
 #ifdef __cplusplus
 static_assert(offsetof(builtin_uniforms_t, pointer_position) % 16 == 0,
               "g_PointerPosition must start at a std140 16-byte slot");
 static_assert(sizeof(builtin_uniforms_t) % 16 == 0, "built-in uniform block must preserve std140 tail alignment");
+static_assert(sizeof(particle_builtin_uniforms_t) % 16 == 0,
+              "particle built-in uniform block must preserve std140 alignment");
 #endif
 
 #ifdef __cplusplus
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);
+void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
+                                  int index_count, sg_image main_image, sg_view main_view,
+                                  const render_effect_pass_t* pass, const builtin_uniforms_t& builtins,
+                                  const particle_builtin_uniforms_t& particle_builtins);
 #else
 void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);
