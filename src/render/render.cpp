@@ -51,12 +51,10 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
     std::string processed_fragment = ShaderSourceProcessor::processShaderSource(
         fragment_source, "shaders/linux-wallpaperengine/image_composite.frag", ctx.asset_mgr, false);
 
-    // If the include resolver leaves the directive untouched, the installed Wallpaper Engine
-    // assets do not provide the authoritative blending header. Keep the layer renderable by
-    // falling back to normal alpha composition instead of compiling a guessed implementation.
+    // Wallpaper Engine shader data is a runtime requirement. Do not substitute an
+    // approximate or normal-alpha implementation when its authoritative header is unavailable.
     if (processed_fragment.find("#include \"common_blending.h\"") != std::string::npos) {
-        LOG_TAG_W("RENDER", "Wallpaper Engine common_blending.h not found; blend mode %d will use normal alpha",
-                  blend_mode);
+        LOG_TAG_E("RENDER", "Required Wallpaper Engine common_blending.h was not found for blend mode %d", blend_mode);
         return {};
     }
 
@@ -66,7 +64,7 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
         ShaderCompiler::compile("image-composite-" + std::to_string(blend_mode), prefix + processed_vertex,
                                 prefix + blend_define + processed_fragment, {}, 1);
     if (shader.pipeline.id == SG_INVALID_ID) {
-        LOG_TAG_W("RENDER", "Wallpaper Engine blend mode %d failed to compile; using normal alpha", blend_mode);
+        LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", blend_mode);
         return {};
     }
     return std::move(shader.pipeline);
@@ -372,10 +370,7 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
         r->pip_image_composite[blend_mode] = compileWallpaperBlendPipeline(ctx, blend_mode);
     }
 
-    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) {
-        renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, nullptr);
-        return;
-    }
+    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
 
     sg_view background[] = {scene_view};
     render_effect_pass_t composite = {};
