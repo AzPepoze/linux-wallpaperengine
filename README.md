@@ -31,6 +31,32 @@ sudo pacman -S xmake vulkan-icd-loader shader-slang libx11 libxcursor libxi
 
 Build outputs are written to `bin/<mode>/`.
 
+## Effect Diagnostic Suite
+
+Capture layer snapshots, intermediate effect pass textures, shader dumps, and uniform provenance:
+
+```bash
+# Capture full render graph and intermediate pass outputs at frame 30
+./bin/debug/linux-wallpaperengine --diagnose-effects --diagnostic-output=/tmp/diagnostics --diagnostic-frame=30 "/path/to/wallpaper"
+
+# Isolate a specific effect or freeze deterministic time
+./bin/debug/linux-wallpaperengine --diagnose-effects --diagnostic-effect=0 --diagnostic-time=2.0 "/path/to/wallpaper"
+```
+
+| Flag | Description |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `--diagnose-effects` / `-d`        | Enable the effect diagnostic and snapshot capture subsystem                      |
+| `--diagnostic-output=<dir>`        | Directory where diagnostic JSON bundles, shaders, and pass PNGs are written       |
+| `--diagnostic-frame=<N>`           | Target frame index on which to perform readback capture (default: `120`)          |
+| `--diagnostic-time=<sec>`          | Freeze rendering at a deterministic timestamp                                     |
+| `--diagnostic-effect=<index/path>` | Isolate diagnostic capture to a specific effect index or path                     |
+| `--diagnostic-pass=<index>`        | Isolate diagnostic capture to a specific effect pass index                        |
+| `--diagnostic-stop-after-pass=<N>` | Stop pipeline execution after the specified pass                                  |
+| `--diagnostic-disable-pass=<N>`    | Bypass a specific pass in the effect chain                                        |
+| `--diagnostic-output-texture=<N>`  | Force intermediate texture output from slot N                                     |
+| `--diagnostic-ab`                  | Enable A/B test comparison mode                                                   |
+
+
 # Feature support
 
 Runtime compatibility with Wallpaper Engine wallpapers.
