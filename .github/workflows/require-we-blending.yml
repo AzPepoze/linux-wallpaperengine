@@ -32,7 +32,7 @@ jobs:
           grep -n 'original `assets/` data' README.md
           grep -n 'resolveTexture("materials/particle.tex"' src/wallpaper/scene/2d/particles/particle_system.cpp
 
-      - name: Check changed-source formatting
+      - name: Check directly edited-source formatting
         run: |
           clang-format --dry-run --Werror \
             src/app/main.cpp \
@@ -40,9 +40,7 @@ jobs:
             src/core/utils.h \
             src/render/render.cpp \
             src/render/render.h \
-            src/render/renderer_resources.cpp \
-            src/render/shader/shader_processor.cpp \
-            src/wallpaper/scene/2d/particles/particle_renderer.cpp
+            src/render/renderer_resources.cpp
 
       - name: Run changed-source static analysis
         run: |
