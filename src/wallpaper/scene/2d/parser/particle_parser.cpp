@@ -47,8 +47,20 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
     ParticleSystemConfig config;
     const cJSON* material = cJSON_GetObjectItemCaseSensitive(document, "material");
     if (cJSON_IsString(material) && material->valuestring) config.material_path = material->valuestring;
+
+    const cJSON* animation_mode = cJSON_GetObjectItemCaseSensitive(document, "animationmode");
+    if (cJSON_IsString(animation_mode) && animation_mode->valuestring) config.animation_mode = animation_mode->valuestring;
+    const cJSON* sequence_multiplier = cJSON_GetObjectItemCaseSensitive(document, "sequencemultiplier");
+    if (sequence_multiplier) {
+        config.sequence_multiplier = readFloat(sequence_multiplier);
+        if (config.sequence_multiplier <= 0.0f) config.sequence_multiplier = 1.0f;
+    }
+
     const cJSON* max_count = cJSON_GetObjectItemCaseSensitive(document, "maxcount");
     if (cJSON_IsNumber(max_count)) config.max_particles = max_count->valueint;
+
+    // Legacy particle files sometimes carry a pass directly. Keep this fallback,
+    // but the referenced material is the authoritative source for rendering state.
     const cJSON* passes = cJSON_GetObjectItemCaseSensitive(document, "passes");
     const cJSON* pass = cJSON_IsArray(passes) ? cJSON_GetArrayItem(passes, 0) : nullptr;
     const cJSON* blending = cJSON_GetObjectItemCaseSensitive(pass, "blending");
