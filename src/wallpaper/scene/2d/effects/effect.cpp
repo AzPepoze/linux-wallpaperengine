@@ -409,6 +409,7 @@ void ShaderPass::init(EngineContext& ctx) {
 
     const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
     const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
+    const bool has_mask_texture_combo = raw_fs.find("\"combo\":\"MASK\"") != std::string::npos;
 
     bool has_mvp = raw_vs.find("g_ModelViewProjectionMatrix") != std::string::npos;
     int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
@@ -460,6 +461,12 @@ void ShaderPass::init(EngineContext& ctx) {
                        !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
         setComboDefine(combo_defines, "TIMEOFFSET",
                        pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
+    } else if (has_mask_texture_combo) {
+        // Some effects declare MASK on the g_Texture1 metadata instead of using
+        // a standalone [COMBO] annotation. Respect that declaration so an
+        // unmasked fallback does not turn a selective effect into a full-frame one.
+        setComboDefine(combo_defines, "MASK",
+                       !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
     }
 
     if (is_depth_parallax) {
@@ -486,7 +493,14 @@ void ShaderPass::init(EngineContext& ctx) {
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
 
-    compiled = ShaderCompiler::compile(shader_name, full_vs, full_fs, uniforms, (int)pass_textures.textures.size());
+    int texture_count = (int)pass_textures.textures.size();
+    for (const auto& [slot, binding] : render_texture_bindings) {
+        (void)binding;
+        // Runtime render targets are bound by ImageLayer rather than listed in
+        // a material's texture array. They still need shader sampler slots.
+        if (slot > 0) texture_count = std::max(texture_count, slot);
+    }
+    compiled = ShaderCompiler::compile(shader_name, full_vs, full_fs, uniforms, texture_count);
 
     free(vs_src);
     free(fs_src);
