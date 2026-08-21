@@ -8,17 +8,12 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: refactor/wallpaper-engine-blending
 
       - name: Install system dependencies
         run: |
@@ -26,21 +21,6 @@ jobs:
           sudo apt-get install -y \
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
             mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
-
-      - name: Format blending refactor
-        if: github.event_name == 'push'
-        run: |
-          clang-format -i src/render/render.cpp
-          if ! git diff --quiet -- src/render/render.cpp; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add -- src/render/render.cpp
-            git commit -m 'style: format blending refactor'
-            git push origin HEAD:refactor/wallpaper-engine-blending
-          fi
-
-      - name: Check formatting
-        run: find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror
 
       - name: Install prebuilt Slang
         env:
@@ -71,13 +51,8 @@ jobs:
           ! grep -n 'vec3 rgb2hsl' src/render/render.cpp
           ! grep -n 'return mix(b,b\*s,o)' src/render/render.cpp
 
-      - name: Run static analysis
-        run: |
-          cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 \
-            '-D__has_feature(x)=0' \
-            --suppress=preprocessorErrorDirective \
-            --suppress=uninitMemberVarNoCtor \
-            src/
+      - name: Static analysis and formatting
+        run: xmake check
 
       - name: Configure
         run: xmake f -y -m release
