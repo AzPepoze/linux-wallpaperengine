@@ -79,12 +79,17 @@ bool ImageLayer::ensureEffectTargets() {
     return true;
 }
 
+#include "render/backend/gpu_debug_labels.h"
+#include "render/diagnostics/render_diagnostics.h"
+
 void ImageLayer::renderEffectChain(EngineContext& ctx) {
     effect_output_image = {SG_INVALID_ID};
     effect_output_view = {SG_INVALID_ID};
     if (effects.empty() || img.id == SG_INVALID_ID) return;
     if (cached_view.id == SG_INVALID_ID) updateCachedView();
     if (cached_view.id == SG_INVALID_ID || !ensureEffectTargets()) return;
+
+    RenderDiagnostics& diag = RenderDiagnostics::instance();
 
     bool any_effect_solo = false;
     for (auto effect : effects) {
@@ -98,19 +103,25 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
     sg_view input_view = cached_view;
     int write_index = 0;
     bool rendered_any = false;
+    int draw_order = 0;
+
+    diag.onSourceImage(0, input_image, effect_target_width, effect_target_height);
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
     renderer_update_viewport(&ctx.renderer, (float)effect_target_width, (float)effect_target_height);
 
-    for (auto effect : effects) {
+    for (int eff_idx = 0; eff_idx < (int)effects.size(); ++eff_idx) {
+        auto effect = effects[eff_idx];
         if (!effect) continue;
         if (any_effect_solo ? !effect->solo : !effect->visible) continue;
+        if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
 
         const sg_image effect_source_image = input_image;
         const sg_view effect_source_view = input_view;
 
-        for (auto pass : effect->passes) {
+        for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
+            auto pass = effect->passes[pass_idx];
             if (!pass || !pass->enabled || pass->compiled.pipeline.id == SG_INVALID_ID) continue;
 
             if (pass->shader_name.find("depthparallax") != std::string::npos && !path.empty() &&
@@ -144,6 +155,23 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
                     target.height = target_height;
                 }
                 named_target = &target;
+            }
+
+            if (diag.isPassDisabled(pass_idx)) {
+                if (named_target) {
+                    // Copy-through input to named target so downstream passes don't sample uninitialized buffer
+                    sg_pass copy_pass = {};
+                    copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+                    copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+                    copy_pass.attachments.colors[0] = named_target->attachment_view;
+                    sg_begin_pass(&copy_pass);
+                    renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+                    float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+                    renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
+                                         (float)target_height, 0.0f, full_white, false, nullptr);
+                    sg_end_pass();
+                }
+                continue;
             }
 
             sg_pass offscreen_pass = {};
@@ -202,22 +230,67 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
             sg_end_pass();
 
             sg_image out_img = named_target ? named_target->image : effect_images[write_index];
-            static int s_trace_count = 0;
-            if (s_trace_count < 25) {
-                sg_image_desc in_d = sg_query_image_desc(shader_input_image);
-                sg_image_desc out_d = sg_query_image_desc(out_img);
-                std::string bind_summary;
-                for (const auto& [b_slot, b_src] : pass->render_texture_bindings) {
-                    if (!bind_summary.empty()) bind_summary += ", ";
-                    bind_summary += "slot" + std::to_string(b_slot) + "<-" + b_src;
+
+            if (diag.config.enabled) {
+                PassTraceEntry trace;
+                trace.frame_number = ctx.profiler.frame_index;
+                trace.effect_index = eff_idx;
+                trace.effect_file = effect->file_path;
+                trace.pass_index = pass_idx;
+                trace.shader_name = pass->shader_name;
+                trace.enabled = pass->enabled;
+                trace.visible = effect->visible;
+                trace.draw_order = draw_order++;
+                trace.render_target_name = pass->render_target;
+                trace.target_image_id = out_img.id;
+                trace.target_view_id =
+                    named_target ? named_target->attachment_view.id : effect_attachment_views[write_index].id;
+                trace.target_width = target_width;
+                trace.target_height = target_height;
+                trace.target_pixel_format = "RGBA8";
+                trace.render_scale = pass->render_scale;
+                trace.is_fullscreen_quad = pass->is_fullscreen_quad;
+
+                TextureBindingTrace in0;
+                in0.slot = 0;
+                in0.image_id = shader_input_image.id;
+                in0.view_id = shader_input_view.id;
+                sg_image_desc in0_d = sg_query_image_desc(shader_input_image);
+                in0.width = in0_d.width;
+                in0.height = in0_d.height;
+                in0.pixel_format = "RGBA8";
+                in0.is_render_target = in0_d.usage.color_attachment;
+                in0.semantic_source =
+                    pass->render_texture_bindings.count(0) ? pass->render_texture_bindings.at(0) : "previous";
+                trace.inputs.push_back(in0);
+
+                for (const auto& [slot, binding] : pass->render_texture_bindings) {
+                    if (slot == 0) continue;
+                    TextureBindingTrace in_b;
+                    in_b.slot = slot;
+                    in_b.semantic_source = binding;
+                    if (binding == "previous") {
+                        in_b.image_id = effect_source_image.id;
+                        in_b.view_id = effect_source_view.id;
+                        sg_image_desc d = sg_query_image_desc(effect_source_image);
+                        in_b.width = d.width;
+                        in_b.height = d.height;
+                        in_b.is_render_target = d.usage.color_attachment;
+                    } else {
+                        auto target_it = named_effect_targets.find(binding);
+                        if (target_it != named_effect_targets.end()) {
+                            in_b.image_id = target_it->second.image.id;
+                            in_b.view_id = target_it->second.texture_view.id;
+                            in_b.width = target_it->second.width;
+                            in_b.height = target_it->second.height;
+                            in_b.is_render_target = true;
+                        }
+                    }
+                    trace.inputs.push_back(in_b);
                 }
-                effect_log.info(
-                    "[EffectTrace] Effect: %s | Pass: %s | Target: %s (%dx%d, img=%u) | Input0: %dx%d (img=%u) | "
-                    "Binds: [%s]",
-                    effect->file_path.c_str(), pass->shader_name.c_str(),
-                    pass->render_target.empty() ? "(pingpong)" : pass->render_target.c_str(), out_d.width, out_d.height,
-                    out_img.id, in_d.width, in_d.height, shader_input_image.id, bind_summary.c_str());
-                s_trace_count++;
+
+                gpu_set_image_debug_label(out_img, (pass->shader_name + " Target").c_str());
+                diag.recordPass(trace, out_img);
             }
 
             if (named_target) {
@@ -231,6 +304,10 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
             effect_output_image = input_image;
             effect_output_view = input_view;
             rendered_any = true;
+
+            if (diag.shouldStopAfterPass(pass_idx)) {
+                break;
+            }
         }
     }
 
@@ -238,6 +315,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
     if (!rendered_any) {
         effect_output_image = {SG_INVALID_ID};
         effect_output_view = {SG_INVALID_ID};
+    } else {
+        diag.onLayerFinalImage(0, effect_output_image, effect_target_width, effect_target_height);
     }
 }
 
