@@ -33,6 +33,11 @@ struct ParticleInitializerConfig {
     vec3 maximum = {0, 0, 0};
     float minimum_scalar = 0.0f;
     float maximum_scalar = 0.0f;
+    float turbulence_offset = 0.0f;
+    float turbulence_scale = 1.0f;
+    float turbulence_speed_min = 100.0f;
+    float turbulence_speed_max = 250.0f;
+    vec3 turbulence_forward = {0.0f, 1.0f, 0.0f};
 };
 
 struct ParticleOperatorConfig {

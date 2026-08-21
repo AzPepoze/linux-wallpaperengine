@@ -69,6 +69,26 @@ void ParticleSystem::spawnParticle() {
         } else if (initializer.type == "angularvelocityrandom") {
             particle.angular_vel =
                 initializer.minimum[2] + randomFloat() * (initializer.maximum[2] - initializer.minimum[2]);
+        } else if (initializer.type == "turbulentvelocityrandom") {
+            // Wallpaper Engine seeds this initializer with curl noise. The
+            // compact runtime keeps its authored forward direction, random
+            // phase and speed, which importantly establishes a valid trail
+            // direction before the turbulence operator evolves it.
+            const float phase = initializer.turbulence_offset +
+                                (randomFloat() - 0.5f) * initializer.turbulence_scale;
+            const float speed = initializer.turbulence_speed_min +
+                                randomFloat() * (initializer.turbulence_speed_max - initializer.turbulence_speed_min);
+            const float forward_x = initializer.turbulence_forward[0];
+            const float forward_y = initializer.turbulence_forward[1];
+            particle.velocity[0] += (forward_x * cosf(phase) - forward_y * sinf(phase)) * speed;
+            particle.velocity[1] += (forward_x * sinf(phase) + forward_y * cosf(phase)) * speed;
+        }
+    }
+    if (has_override_color) {
+        for (int component = 0; component < 3; ++component) {
+            const float authored_color = override_color[component] / (override_color_is_legacy ? 255.0f : 1.0f);
+            // Wallpaper Engine converts UI particle colours to linear space at spawn.
+            particle.color[component] = authored_color * authored_color;
         }
     }
     particle.base_position[0] = particle.position[0];

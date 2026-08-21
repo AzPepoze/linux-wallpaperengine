@@ -63,12 +63,16 @@ struct EngineContext {
     float camera_parallax_amount = 0.0f;
     float camera_parallax_delay = 0.1f;
     float camera_parallax_mouse_influence = 0.0f;
+    float perspective_override_fov = 0.0f;
     float time = 0.0f;
 
     scaling_mode_t scaling_mode = SCALING_FIT;
     int selected_object = -1;
     bool show_ui = true;
     bool test_mode = false;
+    bool particle_debug_bounds = false;
+    bool particle_debug_velocity = false;
+    float particle_debug_velocity_scale = 0.05f;
 };
 
 #endif  // ENGINE_CONTEXT_H

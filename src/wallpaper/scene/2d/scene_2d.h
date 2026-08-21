@@ -11,6 +11,7 @@ class Scene2DRuntime {
     void init();
     void update(float dt);
     void draw();
+    void drawParticleDiagnostics();
     void present();
     bool requiresOffscreenComposition() const;
     void updateViewport();

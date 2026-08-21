@@ -29,7 +29,7 @@ struct Particle {
     float drag = 0.0f;
     vec3 gravity = {0, 0, 0};
     float fade_in = 0.0f;
-    float fade_out = 1.0f;
+    float fade_out = 0.0f;
 
     float osc_alpha_freq = 0.0f;
     float osc_alpha_min = 1.0f;
@@ -101,6 +101,7 @@ class ParticleSystem {
     }
 
     bool show_bounds = false;
+    bool show_velocity = false;
     std::string config_path;
     std::string texture_path;
 

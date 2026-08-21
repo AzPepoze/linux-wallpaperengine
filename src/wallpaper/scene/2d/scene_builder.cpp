@@ -48,6 +48,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
 
     ctx.scene_w = out.design_width;
     ctx.scene_h = out.design_height;
+    ctx.perspective_override_fov = document.perspective_override_fov;
 
     out.scene_tree = new SceneTree();
     for (const auto& object : document.objects) {
