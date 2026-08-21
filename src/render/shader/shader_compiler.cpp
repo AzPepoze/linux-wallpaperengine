@@ -254,23 +254,16 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
                                           "g_Texture4", "g_Texture5", "g_Texture6",  "g_Texture7",
                                           "g_Texture8", "g_Texture9", "g_Texture10", "g_Texture11"};
 
-    shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
-    shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-    shd_desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.texture_sampler_pairs[0].glsl_name = kTextureNames[0];
-    shd_desc.texture_sampler_pairs[0].view_slot = 0;
-    shd_desc.texture_sampler_pairs[0].sampler_slot = 0;
-
-    for (int i = 0; i < textureCount && i < 11; i++) {
-        const int slot = i + 1;
+    const int texture_slots = std::min(textureCount + 1, 12);
+    for (int slot = 0; slot < texture_slots; ++slot) {
         shd_desc.views[slot].texture.stage = SG_SHADERSTAGE_FRAGMENT;
         shd_desc.views[slot].texture.image_type = SG_IMAGETYPE_2D;
+        shd_desc.samplers[slot].stage = SG_SHADERSTAGE_FRAGMENT;
+        shd_desc.samplers[slot].sampler_type = SG_SAMPLERTYPE_FILTERING;
         shd_desc.texture_sampler_pairs[slot].stage = SG_SHADERSTAGE_FRAGMENT;
         shd_desc.texture_sampler_pairs[slot].glsl_name = kTextureNames[slot];
         shd_desc.texture_sampler_pairs[slot].view_slot = slot;
-        shd_desc.texture_sampler_pairs[slot].sampler_slot = 0;
+        shd_desc.texture_sampler_pairs[slot].sampler_slot = slot;
     }
 
     result.shader = create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
