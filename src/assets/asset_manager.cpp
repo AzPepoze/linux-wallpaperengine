@@ -15,6 +15,8 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
     switch (format) {
         case wallpaper_engine::PixelFormat::RGBA8:
             return SG_PIXELFORMAT_RGBA8;
+        case wallpaper_engine::PixelFormat::RG8:
+            return SG_PIXELFORMAT_RG8;
         case wallpaper_engine::PixelFormat::BC1:
             return SG_PIXELFORMAT_BC1_RGBA;
         case wallpaper_engine::PixelFormat::BC2:
