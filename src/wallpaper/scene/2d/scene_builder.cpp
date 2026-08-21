@@ -1,9 +1,32 @@
 #include "scene_builder.h"
 
+#include <string>
+
 #include "core/logger.h"
 #include "formats/wallpaper_engine/scene/scene_parser.h"
 #include "wallpaper/scene/2d/layers/image_layer.h"
 #include "wallpaper/scene/2d/layers/particle_layer.h"
+
+namespace {
+
+const char* runtimeClassName(wallpaper_engine::SceneObjectKind kind) {
+    switch (kind) {
+        case wallpaper_engine::SceneObjectKind::Image:
+            return "ImageLayer";
+        case wallpaper_engine::SceneObjectKind::Particle:
+            return "ParticleLayer";
+        default:
+            return "SceneTreeNode";
+    }
+}
+
+std::string sceneTreeDisplayName(const wallpaper_engine::SceneObjectDocument& object) {
+    const std::string object_name =
+        object.name.empty() ? "Node " + std::to_string(object.node.id) : object.name;
+    return "[" + std::string(runtimeClassName(object.kind)) + "] " + object_name;
+}
+
+}  // namespace
 
 ParsedScene SceneBuilder::load(const char* scene_json_path, EngineContext& ctx) {
     wallpaper_engine::SceneDocument document;
@@ -33,7 +56,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         SceneTreeNode node;
         node.id = object.node.id;
         node.parent_id = object.node.parent_id;
-        node.name = object.name;
+        node.name = sceneTreeDisplayName(object);
         node.origin = object.node.origin;
         node.scale = object.node.scale;
         node.angles = object.node.angles;
