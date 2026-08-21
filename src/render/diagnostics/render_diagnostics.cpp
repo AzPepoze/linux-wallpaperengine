@@ -15,10 +15,6 @@
 #include "render/backend/gpu_debug_labels.h"
 #include "render/backend/gpu_readback.h"
 
-#define STB_IMAGE_WRITE_STATIC
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb/stb_image_write.h>
-
 namespace {
 void ensureDir(const std::string& path) {
     size_t pos = 0;
@@ -358,25 +354,4 @@ void RenderDiagnostics::writeBundle(uint64_t frame_index, const EngineContext& c
     std::string manifest_path = config.output_dir + "/manifest.json";
     writeJsonToFile(manifest_path, manifest);
     cJSON_Delete(manifest);
-}
-
-void RenderDiagnostics::writeJsonToFile(const std::string& path, cJSON* json) {
-    if (!json) return;
-    char* rendered = cJSON_Print(json);
-    if (!rendered) return;
-    writeStringToFile(path, rendered);
-    free(rendered);
-}
-
-void RenderDiagnostics::writeStringToFile(const std::string& path, const std::string& content) {
-    std::ofstream out(path.c_str(), std::ios::out | std::ios::trunc);
-    if (out.is_open()) {
-        out << content;
-        out.close();
-    }
-}
-
-bool RenderDiagnostics::writePng(const std::string& path, int w, int h, const uint8_t* rgba) {
-    if (!rgba || w <= 0 || h <= 0) return false;
-    return stbi_write_png(path.c_str(), w, h, 4, rgba, w * 4) != 0;
 }

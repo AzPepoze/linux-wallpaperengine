@@ -22,7 +22,6 @@ class ShaderPass {
     std::string shader_name;
     CompiledShader compiled;
     PassTextures pass_textures;
-    cJSON* constant_values = nullptr;
     std::map<std::string, std::vector<float>> uniforms;
     std::map<std::string, int> combos;
     std::map<int, std::string> texture_labels;
@@ -45,7 +44,7 @@ class ShaderPass {
     std::map<std::string, int> inst_combos;
 
     ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx);
-    ~ShaderPass();
+    ~ShaderPass() = default;
 
     void init(EngineContext& ctx);
     void apply(EngineContext& ctx);
