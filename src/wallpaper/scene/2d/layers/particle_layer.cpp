@@ -55,11 +55,8 @@ void ParticleLayer::draw(EngineContext& ctx) {
     }
 
     for (auto eff : effects) {
-        if (any_eff_solo) {
-            if (eff->solo) eff->apply(ctx);
-        } else {
-            if (eff->visible) eff->apply(ctx);
-        }
+        if (!eff->visible || (any_eff_solo && !eff->solo)) continue;
+        eff->apply(ctx);
     }
     ps->draw(ctx);
 }
