@@ -44,6 +44,23 @@ bool parseVec(const cJSON* raw, float* out, int count) {
     return false;
 }
 
+bool parseFloat(const cJSON* raw, float& out) {
+    const cJSON* node = propertyValue(raw);
+    if (cJSON_IsNumber(node)) {
+        out = (float)node->valuedouble;
+        return true;
+    }
+    if (cJSON_IsString(node) && node->valuestring) {
+        char* end = nullptr;
+        const float value = strtof(node->valuestring, &end);
+        if (end != node->valuestring) {
+            out = value;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool parseBool(const cJSON* raw, bool fallback = false) {
     const cJSON* node = propertyValue(raw);
     if (cJSON_IsBool(node)) return cJSON_IsTrue(node);
@@ -184,6 +201,22 @@ SceneObjectDocument parseObject(const cJSON* object) {
     const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
     if (cJSON_IsString(particle) && particle->valuestring) {
         doc.particle.particle = particle->valuestring;
+    }
+
+    const cJSON* instance_override = cJSON_GetObjectItemCaseSensitive(object, "instanceoverride");
+    if (cJSON_IsObject(instance_override)) {
+        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "alpha"), doc.particle.override_alpha);
+        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "rate"), doc.particle.override_rate);
+
+        const cJSON* color = cJSON_GetObjectItemCaseSensitive(instance_override, "color");
+        const cJSON* colorn = cJSON_GetObjectItemCaseSensitive(instance_override, "colorn");
+        if (parseVec(color, doc.particle.override_color.data(), 3)) {
+            doc.particle.has_override_color = true;
+            doc.particle.override_color_is_legacy = true;
+        } else if (parseVec(colorn, doc.particle.override_color.data(), 3)) {
+            doc.particle.has_override_color = true;
+            doc.particle.override_color_is_legacy = false;
+        }
     }
 
     const cJSON* effects = cJSON_GetObjectItemCaseSensitive(object, "effects");
