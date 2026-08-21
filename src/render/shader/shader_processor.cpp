@@ -334,5 +334,7 @@ std::string ShaderSourceProcessor::buildShaderPrefix() {
            "#define lowp\n"
            "#define mediump\n"
            "#define highp\n"
+           "float dot(vec4 a, vec3 b) { return dot(a.xyz, b); }\n"
+           "float dot(vec3 a, vec4 b) { return dot(a, b.xyz); }\n"
            "uniform vec4 tint;\n";
 }
