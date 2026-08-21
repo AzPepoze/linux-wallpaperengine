@@ -77,6 +77,8 @@ class ParticleSystem {
 
     ParticleSystem(ParticleSystemConfig config, float sw, float h);
     ~ParticleSystem();
+    ParticleSystem(const ParticleSystem&) = delete;
+    ParticleSystem& operator=(const ParticleSystem&) = delete;
 
     static ParticleSystem* createFromJSON(cJSON* node, EngineContext& ctx, float sw, float sh);
     static ParticleSystem* createFromPath(const char* particle_path, EngineContext& ctx, float sw, float sh,
