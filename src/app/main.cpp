@@ -168,17 +168,22 @@ static void frame(void) {
     scene_engine->update(dt);
 #if DEBUG_BUILD
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
+    const uint64_t render_start = stm_now();
 #endif
+
+    const bool offscreen_composition = scene_engine->requiresOffscreenComposition();
+    if (offscreen_composition) scene_engine->draw();
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(&pass);
 
-#if DEBUG_BUILD
-    const uint64_t render_start = stm_now();
-#endif
-    scene_engine->draw();
+    if (offscreen_composition)
+        scene_engine->present();
+    else
+        scene_engine->draw();
+
 #if DEBUG_BUILD
     ctx.profiler.render_ms = stm_ms(stm_since(render_start));
 
