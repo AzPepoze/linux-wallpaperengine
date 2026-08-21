@@ -42,23 +42,23 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
     const bool is_selected = layer_index >= 0 && ctx.selected_object == layer_index;
     const bool is_leaf = node.children.empty();
     const std::string node_name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+    ImGuiTreeNodeFlags flags =
+        ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
     if (is_leaf) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     if (is_selected) flags |= ImGuiTreeNodeFlags_Selected;
 
     ImGui::PushID((int)node.id);
+    if (layer_index >= 0) {
+        UiWidgets::drawVisibilitySoloControls(ctx.layers[layer_index]->visible, ctx.layers[layer_index]->solo,
+                                              "Toggle layer visibility", "Solo layer");
+        ImGui::SameLine();
+    }
     const bool open = ImGui::TreeNodeEx(node_name.c_str(), flags);
     if (layer_index >= 0 && ImGui::IsItemClicked()) {
         ctx.selected_object = layer_index;
         if (ImGui::GetIO().KeyCtrl) ctx.layers[layer_index]->solo = !ctx.layers[layer_index]->solo;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scene node %u", node.id);
-
-    if (layer_index >= 0) {
-        ImGui::SameLine();
-        UiWidgets::drawVisibilitySoloControls(ctx.layers[layer_index]->visible, ctx.layers[layer_index]->solo,
-                                              "Toggle layer visibility", "Solo layer");
-    }
 
     if (open && !is_leaf) {
         for (uint32_t child_id : node.children) {
@@ -91,9 +91,9 @@ void drawHierarchyPanel(EngineContext& ctx) {
     for (int index = 0; index < (int)ctx.layers.size(); ++index) {
         Layer* layer = ctx.layers[index];
         ImGui::PushID(index);
-        if (ImGui::Selectable(layer->name.c_str(), ctx.selected_object == index)) ctx.selected_object = index;
-        ImGui::SameLine();
         UiWidgets::drawVisibilitySoloControls(layer->visible, layer->solo, "Toggle layer visibility", "Solo layer");
+        ImGui::SameLine();
+        if (ImGui::Selectable(layer->name.c_str(), ctx.selected_object == index)) ctx.selected_object = index;
         ImGui::PopID();
     }
 }
