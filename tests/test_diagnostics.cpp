@@ -263,16 +263,16 @@ void test_shader_source_metadata() {
                 "Shader prefix should retain HLSL vector aliases");
 }
 
-void test_effect_configuration_precedence() {
+void test_effect_parser_precedence() {
     cJSON* material = cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":1,\"g_Color\":[1,2]}}");
     cJSON* pass = cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":2}}");
     cJSON* instance = cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":3}}");
     cJSON* merged = nullptr;
-    EffectConfiguration::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(material, "constantshadervalues"));
-    EffectConfiguration::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(pass, "constantshadervalues"));
-    EffectConfiguration::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(instance, "constantshadervalues"));
+    EffectParser::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(material, "constantshadervalues"));
+    EffectParser::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(pass, "constantshadervalues"));
+    EffectParser::mergeObject(merged, cJSON_GetObjectItemCaseSensitive(instance, "constantshadervalues"));
     std::map<std::string, std::vector<float>> values;
-    EffectConfiguration::readValuesObject(merged, values);
+    EffectParser::readValuesObject(merged, values);
     TEST_ASSERT(values["g_Value"] == std::vector<float>({3.0f}),
                 "Instance constants should override pass and material constants");
     TEST_ASSERT(values["g_Color"] == std::vector<float>({1.0f, 2.0f}),
@@ -281,6 +281,36 @@ void test_effect_configuration_precedence() {
     cJSON_Delete(pass);
     cJSON_Delete(instance);
     cJSON_Delete(merged);
+}
+
+void test_effect_pass_config_and_uniform_resolution() {
+    cJSON* material = cJSON_Parse(
+        "{\"shader\":\"effects/example\",\"constantshadervalues\":{\"g_Value\":1},\"combos\":{\"MASK\":0}}");
+    cJSON* pass = cJSON_Parse(
+        "{\"material\":\"materials/example.json\",\"target\":\"blur\",\"bind\":[{\"index\":1,\"name\":\"previous\"}],"
+        "\"constantshadervalues\":{\"g_Value\":2},\"combos\":{\"MASK\":1}}");
+    cJSON* instance =
+        cJSON_Parse("{\"constantshadervalues\":{\"g_Value\":3},\"combos\":{\"MASK\":2},\"enabled\":false}");
+    const EffectPassConfig config = EffectParser::buildPassConfig(material, pass, instance, 4);
+    TEST_ASSERT(config.shader_path == "effects/example" && config.material_reference == "materials/example.json",
+                "Effect pass config should retain shader and material references");
+    TEST_ASSERT(config.uniform_values.at("g_Value") == std::vector<float>({3.0f}) && config.combos.at("MASK") == 2,
+                "Effect pass config should apply material, pass, and instance precedence");
+    TEST_ASSERT(config.render_target_name == "blur" && config.texture_bindings.at(1) == "previous" && !config.enabled &&
+                    config.pass_index == 4,
+                "Effect pass config should retain render routing and enabled state");
+
+    const auto uniforms = EffectParser::extractShaderUniforms(
+        "uniform float g_Value; // {\"material\":\"Value\",\"type\":\"float\",\"default\":2}\n"
+        "uniform sampler2D g_Texture0;\n");
+    std::string resolved_name;
+    TEST_ASSERT(uniforms.size() == 1 && uniforms[0].material_name == "Value" && uniforms[0].has_default,
+                "Effect parser should extract non-sampler uniform metadata");
+    TEST_ASSERT(EffectParser::resolveUniformName("Value", uniforms, resolved_name) && resolved_name == "g_Value",
+                "Effect parser should resolve authored material names to shader uniforms");
+    cJSON_Delete(material);
+    cJSON_Delete(pass);
+    cJSON_Delete(instance);
 }
 
 void test_particle_parser() {
@@ -295,6 +325,25 @@ void test_particle_parser() {
     TEST_ASSERT(std::abs(ParticleParser::readFloat(scalar_value) - 2.25f) < 0.001f,
                 "Particle parser should read numeric strings");
     cJSON_Delete(scalar_value);
+
+    cJSON* particle_document = cJSON_Parse(
+        "{\"material\":\"materials/spark.tex\",\"maxcount\":12,\"starttime\":1.5,"
+        "\"passes\":[{\"blending\":\"additive\"}],"
+        "\"emitter\":[{\"name\":\"boxrandom\",\"origin\":\"1 2 3\",\"distancemax\":\"4 5 6\",\"rate\":7}],"
+        "\"initializer\":[{\"name\":\"lifetimerandom\",\"min\":2,\"max\":4}],"
+        "\"operator\":[{\"name\":\"movement\",\"gravity\":\"0 -9 0\",\"drag\":0.3}],"
+        "\"children\":[{\"particle\":\"particles/child.json\",\"instanceoverride\":{\"alpha\":0.5,\"rate\":2}}]} ");
+    const ParticleSystemConfig config = ParticleParser::parse(particle_document);
+    TEST_ASSERT(config.material_path == "materials/spark.tex" && config.max_particles == 12 && config.additive &&
+                    std::abs(config.start_time - 1.5f) < 0.001f,
+                "Particle parser should retain system material, capacity, blending, and start time");
+    TEST_ASSERT(config.emitters.size() == 1 && config.emitters[0].distance_max[1] == 5.0f &&
+                    config.initializers[0].maximum_scalar == 4.0f && config.operators[0].gravity[1] == -9.0f,
+                "Particle parser should parse emitter, initializer, and operator values");
+    TEST_ASSERT(config.children.size() == 1 && config.children[0].particle_path == "particles/child.json" &&
+                    config.children[0].override_rate == 2.0f,
+                "Particle parser should retain child references and instance overrides");
+    cJSON_Delete(particle_document);
 }
 
 void test_image_parser() {
@@ -306,6 +355,11 @@ void test_image_parser() {
     TEST_ASSERT(config.name == "Model layer" && config.asset_path == "models/card.json" && config.is_model,
                 "Image parser should choose model assets when no image asset exists");
     TEST_ASSERT(config.width == 320.0f && config.height == 180.0f, "Image parser should retain document dimensions");
+
+    document.image.image = "images/card.tex";
+    const ImageObjectConfig image_config = ImageParser::parse(document);
+    TEST_ASSERT(!image_config.is_model && image_config.asset_path == "images/card.tex",
+                "Image parser should prefer an authored image asset over a model asset");
 }
 
 void test_sandbox_catalog() {
@@ -345,7 +399,8 @@ int main(int argc, char* argv[]) {
 
     test_cli_parsing();
     test_shader_source_metadata();
-    test_effect_configuration_precedence();
+    test_effect_parser_precedence();
+    test_effect_pass_config_and_uniform_resolution();
     test_particle_parser();
     test_image_parser();
     test_sandbox_catalog();

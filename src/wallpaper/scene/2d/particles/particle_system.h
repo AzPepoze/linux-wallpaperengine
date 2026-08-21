@@ -1,8 +1,6 @@
 #ifndef PARTICLE_SYSTEM_H
 #define PARTICLE_SYSTEM_H
 
-#include <cjson/cJSON.h>
-
 #include <string>
 #include <vector>
 
@@ -10,6 +8,7 @@
 #include "core/interfaces.h"
 #include "linmath.h"
 #include "sokol_gfx.h"
+#include "wallpaper/scene/2d/parser/particle_parser.h"
 
 struct Particle {
     vec3 position = {0, 0, 0};
@@ -49,7 +48,7 @@ class EngineContext;
 class ParticleSystem {
    public:
     std::string name;
-    cJSON* config;
+    ParticleSystemConfig config;
     GfxImage texture;
     GfxView cached_view;
     std::vector<Particle> particles;
@@ -66,7 +65,7 @@ class ParticleSystem {
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
 
-    ParticleSystem(cJSON* config, GfxImage tex, float sw, float h);
+    ParticleSystem(ParticleSystemConfig config, GfxImage tex, float sw, float h);
     ~ParticleSystem();
 
     static ParticleSystem* createFromJSON(cJSON* node, const IAssetResolver& assets, float sw, float sh);

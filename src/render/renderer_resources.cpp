@@ -15,3 +15,8 @@ void renderer_cleanup(renderer_t* r) {
     r->gray_pixel = {};
     r->gray_view = {};
 }
+
+void renderer_update_viewport(renderer_t* renderer, float width, float height) {
+    renderer->view_width = width;
+    renderer->view_height = height;
+}

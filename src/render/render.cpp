@@ -136,11 +136,6 @@ void renderer_init(renderer_t* r, float w, float h) {
     r->pip_lines = sg_make_pipeline(&pip_desc);
 }
 
-void renderer_update_viewport(renderer_t* r, float w, float h) {
-    r->view_width = w;
-    r->view_height = h;
-}
-
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass) {
     mat4x4 proj, model, mvp;

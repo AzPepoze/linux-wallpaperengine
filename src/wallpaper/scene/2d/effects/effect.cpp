@@ -1,7 +1,6 @@
 #include "effect.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -22,154 +21,6 @@
 #endif
 
 namespace {
-struct ShaderUniformMetadata {
-    std::string name;
-    std::string material;
-    std::string type = "float";
-    std::vector<float> default_values;
-    bool has_default = false;
-};
-
-std::string normalizeUniformName(const std::string& name) {
-    std::string normalized;
-    size_t start = 0;
-    if (name.size() > 2 && (name[0] == 'g' || name[0] == 'G' || name[0] == 'u' || name[0] == 'U') && name[1] == '_')
-        start = 2;
-    for (size_t i = start; i < name.size(); ++i) {
-        unsigned char c = (unsigned char)name[i];
-        if (std::isalnum(c)) normalized.push_back((char)std::tolower(c));
-    }
-    return normalized;
-}
-
-std::vector<ShaderUniformMetadata> extractShaderUniforms(const std::string& source) {
-    std::vector<ShaderUniformMetadata> result;
-    size_t search = 0;
-    while ((search = source.find("uniform", search)) != std::string::npos) {
-        if (search > 0) {
-            unsigned char before = (unsigned char)source[search - 1];
-            if (std::isalnum(before) || before == '_') {
-                search += 7;
-                continue;
-            }
-        }
-
-        const size_t semicolon = source.find(';', search + 7);
-        if (semicolon == std::string::npos) break;
-        const std::string declaration = source.substr(search + 7, semicolon - search - 7);
-
-        std::istringstream stream(declaration);
-        std::vector<std::string> tokens;
-        std::string token;
-        bool is_sampler = false;
-        while (stream >> token) {
-            if (token.find("sampler") != std::string::npos) is_sampler = true;
-            tokens.push_back(token);
-        }
-        if (!is_sampler && tokens.size() >= 2) {
-            std::string type = tokens[0];
-            std::string name = tokens.back();
-            const size_t array = name.find('[');
-            if (array != std::string::npos) name.erase(array);
-            const size_t assign = name.find('=');
-            if (assign != std::string::npos) name.erase(assign);
-
-            std::string material;
-            std::vector<float> default_values;
-            bool has_default = false;
-
-            const size_t line_end = source.find('\n', semicolon + 1);
-            const size_t comment = source.find("//", semicolon + 1);
-            if (comment != std::string::npos && (line_end == std::string::npos || comment < line_end)) {
-                const size_t json_start = source.find('{', comment + 2);
-                const size_t json_limit = line_end == std::string::npos ? source.size() : line_end;
-                if (json_start != std::string::npos && json_start < json_limit && json_limit > 0) {
-                    const size_t json_end = source.rfind('}', json_limit - 1);
-                    if (json_end != std::string::npos && json_end >= json_start) {
-                        const std::string metadata_text = source.substr(json_start, json_end - json_start + 1);
-                        cJSON* metadata = cJSON_Parse(metadata_text.c_str());
-                        if (metadata) {
-                            cJSON* material_node = cJSON_GetObjectItemCaseSensitive(metadata, "material");
-                            if (cJSON_IsString(material_node) && material_node->valuestring)
-                                material = material_node->valuestring;
-                            cJSON* type_node = cJSON_GetObjectItemCaseSensitive(metadata, "type");
-                            if (cJSON_IsString(type_node) && type_node->valuestring) type = type_node->valuestring;
-                            cJSON* def_node = cJSON_GetObjectItemCaseSensitive(metadata, "default");
-                            if (def_node) {
-                                if (EffectConfiguration::readFloats(def_node, default_values) &&
-                                    !default_values.empty()) {
-                                    has_default = true;
-                                }
-                            }
-                            cJSON_Delete(metadata);
-                        }
-                    }
-                }
-            }
-
-            if (!name.empty()) result.push_back({name, material, type, default_values, has_default});
-        }
-        search = semicolon + 1;
-    }
-    return result;
-}
-
-bool resolveUniformName(const std::string& authored, const std::vector<ShaderUniformMetadata>& shader_uniforms,
-                        std::string& resolved) {
-    std::string preferred = authored;
-    auto mapped = Config::kUniformNameMap.find(authored);
-    if (mapped != Config::kUniformNameMap.end()) preferred = mapped->second;
-
-    auto find_name = [&](const std::string& requested) {
-        for (const auto& candidate : shader_uniforms) {
-            if (candidate.name == requested) {
-                resolved = candidate.name;
-                return true;
-            }
-        }
-        return false;
-    };
-
-    if (find_name(preferred) || (preferred != authored && find_name(authored))) return true;
-
-    auto find_material = [&](const std::string& requested, bool normalized) {
-        std::string match;
-        const std::string wanted = normalized ? normalizeUniformName(requested) : requested;
-        for (const auto& candidate : shader_uniforms) {
-            if (candidate.material.empty()) continue;
-            const std::string material = normalized ? normalizeUniformName(candidate.material) : candidate.material;
-            if (material != wanted) continue;
-            if (!match.empty() && match != candidate.name) return false;
-            match = candidate.name;
-        }
-        if (match.empty()) return false;
-        resolved = match;
-        return true;
-    };
-
-    if (find_material(authored, false) || (preferred != authored && find_material(preferred, false))) return true;
-    if (find_material(authored, true) || (preferred != authored && find_material(preferred, true))) return true;
-
-    const std::string wanted = normalizeUniformName(preferred);
-    for (const auto& candidate : shader_uniforms) {
-        if (normalizeUniformName(candidate.name) == wanted) {
-            resolved = candidate.name;
-            return true;
-        }
-    }
-    if (preferred != authored) {
-        const std::string authored_wanted = normalizeUniformName(authored);
-        for (const auto& candidate : shader_uniforms) {
-            if (normalizeUniformName(candidate.name) == authored_wanted) {
-                resolved = candidate.name;
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 void setComboDefine(std::string& combo_defines, const std::string& requested_name, int value) {
     auto replace_define = [&](const std::string& name) {
         const std::string prefix = "#define " + name + " ";
@@ -191,73 +42,6 @@ void setComboDefine(std::string& combo_defines, const std::string& requested_nam
 }
 
 }  // namespace
-
-ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx) {
-    cJSON* base_config = config;
-    cJSON* owned_base_config = nullptr;
-
-    cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(config, "material");
-    if (cJSON_IsString(mat_ref) && mat_ref->valuestring) {
-        char abs_mat[1024];
-        if (ctx.asset_mgr.resolvePath(mat_ref->valuestring, abs_mat, sizeof(abs_mat))) {
-            char* material_json_str = read_file_to_string(abs_mat);
-            if (material_json_str) {
-                cJSON* mat_json = cJSON_Parse(material_json_str);
-                free(material_json_str);
-                if (mat_json) {
-                    cJSON* passes = cJSON_GetObjectItemCaseSensitive(mat_json, "passes");
-                    if (cJSON_IsArray(passes) && cJSON_GetArraySize(passes) > 0) {
-                        owned_base_config = cJSON_Duplicate(cJSON_GetArrayItem(passes, 0), 1);
-                    } else {
-                        owned_base_config = cJSON_Duplicate(mat_json, 1);
-                    }
-                    cJSON_Delete(mat_json);
-                    if (owned_base_config) base_config = owned_base_config;
-                }
-            }
-        }
-    }
-
-    cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(base_config, "shader");
-    if (cJSON_IsString(shader_node) && shader_node->valuestring) shader_name = shader_node->valuestring;
-
-    EffectConfiguration::readUniformValues(base_config, base_uniforms);
-    EffectConfiguration::readCombos(base_config, base_combos);
-
-    EffectConfiguration::mergeObject(constant_values,
-                                     cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"));
-    EffectConfiguration::readCombos(base_config, combos);
-    pass_textures.loadFromConfig(base_config, shader_name, ctx);
-
-    if (base_config != config) {
-        EffectConfiguration::readUniformValues(config, pass_uniforms);
-        EffectConfiguration::readCombos(config, pass_combos);
-        EffectConfiguration::mergeObject(constant_values,
-                                         cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"));
-        EffectConfiguration::readCombos(config, combos);
-        pass_textures.applyInstanceOverrides(config, shader_name, ctx);
-    }
-
-    if (instance_config) {
-        EffectConfiguration::readUniformValues(instance_config, inst_uniforms);
-        EffectConfiguration::readCombos(instance_config, inst_combos);
-        pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
-        EffectConfiguration::mergeObject(constant_values,
-                                         cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"));
-        EffectConfiguration::readCombos(instance_config, combos);
-
-        cJSON* pass_enabled = cJSON_GetObjectItemCaseSensitive(instance_config, "enabled");
-        if (cJSON_IsBool(pass_enabled)) enabled = cJSON_IsTrue(pass_enabled);
-    }
-
-    EffectConfiguration::readValuesObject(constant_values, uniforms);
-
-    if (owned_base_config) cJSON_Delete(owned_base_config);
-}
-
-ShaderPass::~ShaderPass() {
-    if (constant_values) cJSON_Delete(constant_values);
-}
 
 void ShaderPass::init(EngineContext& ctx) {
     if (shader_name.empty()) {
@@ -317,14 +101,14 @@ void ShaderPass::init(EngineContext& ctx) {
     int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
     is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
 
-    std::vector<ShaderUniformMetadata> shader_uniforms = extractShaderUniforms(raw_vs);
-    std::vector<ShaderUniformMetadata> fragment_uniforms = extractShaderUniforms(raw_fs);
+    std::vector<ShaderUniformConfig> shader_uniforms = EffectParser::extractShaderUniforms(raw_vs);
+    std::vector<ShaderUniformConfig> fragment_uniforms = EffectParser::extractShaderUniforms(raw_fs);
     shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
 
     std::map<std::string, std::vector<float>> resolved_uniforms;
     for (const auto& [name, values] : uniforms) {
         std::string resolved_name;
-        if (!resolveUniformName(name, shader_uniforms, resolved_name)) {
+        if (!EffectParser::resolveUniformName(name, shader_uniforms, resolved_name)) {
             effect_log.warn(
                 "ShaderPass %s: authored constant '%s' has no matching shader uniform; value will not be bound",
                 shader_name.c_str(), name.c_str());
@@ -420,7 +204,7 @@ void ShaderPass::init(EngineContext& ctx) {
     for (const auto& meta : shader_uniforms) {
         UniformProvenanceEntry entry;
         entry.shader_name = meta.name;
-        entry.authored_name = meta.material;
+        entry.authored_name = meta.material_name;
         entry.resolved_name = meta.name;
         entry.type = meta.type;
 
@@ -436,7 +220,7 @@ void ShaderPass::init(EngineContext& ctx) {
         std::vector<float> base_val;
         for (const auto& [b_name, b_val] : base_uniforms) {
             std::string res;
-            if (resolveUniformName(b_name, {meta}, res) && res == meta.name) {
+            if (EffectParser::resolveUniformName(b_name, {meta}, res) && res == meta.name) {
                 found_base = true;
                 base_val = b_val;
                 break;
@@ -453,7 +237,7 @@ void ShaderPass::init(EngineContext& ctx) {
         std::vector<float> pass_val;
         for (const auto& [p_name, p_val] : pass_uniforms) {
             std::string res;
-            if (resolveUniformName(p_name, {meta}, res) && res == meta.name) {
+            if (EffectParser::resolveUniformName(p_name, {meta}, res) && res == meta.name) {
                 found_pass = true;
                 pass_val = p_val;
                 break;
@@ -470,7 +254,7 @@ void ShaderPass::init(EngineContext& ctx) {
         std::vector<float> inst_val;
         for (const auto& [i_name, i_val] : inst_uniforms) {
             std::string res;
-            if (resolveUniformName(i_name, {meta}, res) && res == meta.name) {
+            if (EffectParser::resolveUniformName(i_name, {meta}, res) && res == meta.name) {
                 found_inst = true;
                 inst_val = i_val;
                 break;
@@ -595,54 +379,6 @@ void ShaderPass::init(EngineContext& ctx) {
         }
     }
 }
-
-void ShaderPass::apply(EngineContext& ctx) {
-    (void)ctx;
-    if (!enabled || compiled.pipeline.id == SG_INVALID_ID) return;
-}
-
-void ShaderPass::applyUniforms() {
-    int u_idx = 3;
-    for (auto const& [name, vals] : uniforms) {
-        (void)name;
-        if (u_idx >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
-        alignas(16) float data[4] = {0, 0, 0, 0};
-        for (int i = 0; i < (int)vals.size() && i < 4; i++) data[i] = vals[i];
-        sg_range range = SG_RANGE(data);
-        sg_apply_uniforms(u_idx, &range);
-        u_idx++;
-    }
-}
-
-bool ShaderPass::resolveDepth(const char* source_tex_path, EngineContext& ctx) {
-    const bool first_attempt = !pass_textures.depth_attempted;
-    const bool resolved = pass_textures.resolveDepth(source_tex_path, shader_name, ctx);
-
-    if (resolved || !first_attempt || shader_name.find("depthparallax") == std::string::npos) return resolved;
-
-    const bool has_depth = !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID;
-    const bool has_mask = pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID;
-    if (!has_depth && has_mask) {
-        auto center = uniforms.find("g_Center");
-        if (center != uniforms.end() && !center->second.empty()) {
-            center->second[0] = 0.0f;
-            effect_log.info(
-                "ShaderPass %s: depth map unavailable; disabling unmasked focal-plane shift while preserving masked "
-                "parallax",
-                shader_name.c_str());
-        }
-    }
-
-    return resolved;
-}
-
-#if DEBUG_BUILD
-void ShaderPass::rebuildWithDebugMode(int mode, EngineContext& ctx) {
-    debug_view_mode = mode;
-    compiled = {};
-    init(ctx);
-}
-#endif
 
 Effect::Effect(cJSON* config, EngineContext& ctx) {
     std::map<std::string, float> target_scales;
