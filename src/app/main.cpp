@@ -1,5 +1,6 @@
 #define SOKOL_VULKAN
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -40,6 +41,10 @@ static bool applyParsedScene(ParsedScene parsed) {
     ctx.camera_parallax_amount = parsed.camera_parallax_amount;
     ctx.camera_parallax_delay = parsed.camera_parallax_delay;
     ctx.camera_parallax_mouse_influence = parsed.camera_parallax_mouse_influence;
+    ctx.camera_shake_enabled = parsed.camera_shake_enabled;
+    ctx.camera_shake_amplitude = parsed.camera_shake_amplitude;
+    ctx.camera_shake_speed = parsed.camera_shake_speed;
+    ctx.camera_shake_roughness = parsed.camera_shake_roughness;
     if (parsed.has_clear_color) {
         ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
         ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1], parsed.clear_color[2],
@@ -108,6 +113,16 @@ static void init(void) {
     ctx.show_ui = DEBUG_BUILD;
     ctx.selected_object = -1;
     ctx.scaling_mode = sargs_exists("cover") ? SCALING_COVER : SCALING_FIT;
+    ctx.particle_debug_bounds = sargs_exists("particle-debug-bounds") || sargs_exists("particle-debug");
+    ctx.particle_debug_velocity = sargs_exists("particle-debug-velocity") || sargs_exists("particle-debug");
+    if (sargs_exists("particle-debug-velocity-scale")) {
+        const float value = (float)atof(sargs_value("particle-debug-velocity-scale"));
+        if (value > 0.0f) ctx.particle_debug_velocity_scale = value;
+    }
+    if (sargs_exists("particle-debug-max-particles")) {
+        const int value = atoi(sargs_value("particle-debug-max-particles"));
+        if (value > 0) ctx.particle_debug_max_particles = value;
+    }
 
     scene_engine = new Scene2DRuntime(ctx);
     scene_engine->init();
@@ -168,17 +183,24 @@ static void frame(void) {
     scene_engine->update(dt);
 #if DEBUG_BUILD
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
+    const uint64_t render_start = stm_now();
 #endif
+
+    const bool offscreen_composition = scene_engine->requiresOffscreenComposition();
+    if (offscreen_composition) scene_engine->draw();
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(&pass);
 
-#if DEBUG_BUILD
-    const uint64_t render_start = stm_now();
-#endif
-    scene_engine->draw();
+    if (offscreen_composition)
+        scene_engine->present();
+    else
+        scene_engine->draw();
+
+    scene_engine->drawParticleDiagnostics();
+
 #if DEBUG_BUILD
     ctx.profiler.render_ms = stm_ms(stm_since(render_start));
 

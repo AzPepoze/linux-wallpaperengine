@@ -1,31 +1,128 @@
 #include "particle_system.h"
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
+#include "core/engine_context.h"
 #include "core/logger.h"
 #include "core/utils.h"
+#include "formats/wallpaper_engine/texture/tex_decoder.h"
+#include "render/shader/shader_compiler.h"
+#include "wallpaper/scene/2d/effects/effect.h"
 #include "wallpaper/scene/2d/parser/particle_parser.h"
 
 #define TAG "PARTICLE"
 
-ParticleSystem::ParticleSystem(ParticleSystemConfig config, GfxImage texture, float scene_width, float scene_height)
-    : config(std::move(config)), texture(std::move(texture)), scene_w(scene_width), scene_h(scene_height) {
-    max_particles = this->config.max_particles;
+namespace {
+
+bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& ctx, bool fallback) {
+    char absolute_path[1024];
+    if (material_path.empty() || !ctx.asset_mgr.resolvePath(material_path.c_str(), absolute_path, sizeof(absolute_path)))
+        return fallback;
+
+    char* text = read_file_to_string(absolute_path);
+    if (!text) return fallback;
+    cJSON* document = cJSON_Parse(text);
+    free(text);
+    if (!document) return fallback;
+
+    const cJSON* pass = document;
+    const cJSON* passes = cJSON_GetObjectItemCaseSensitive(document, "passes");
+    if (cJSON_IsArray(passes) && cJSON_GetArraySize(passes) > 0) pass = cJSON_GetArrayItem(passes, 0);
+    const cJSON* blending = cJSON_GetObjectItemCaseSensitive(pass, "blending");
+    const bool has_blending = cJSON_IsString(blending) && blending->valuestring;
+    const bool additive = has_blending && strcmp(blending->valuestring, "additive") == 0;
+    cJSON_Delete(document);
+    return has_blending ? additive : fallback;
+}
+
+int wallpaperTextureFormatForImage(sg_image image) {
+    if (image.id == SG_INVALID_ID) return 0;
+
+    const sg_image_desc desc = sg_query_image_desc(image);
+    switch (desc.pixel_format) {
+        case SG_PIXELFORMAT_R8:
+            return 9;
+        case SG_PIXELFORMAT_RG8:
+            return 8;
+        case SG_PIXELFORMAT_BC1_RGBA:
+            return 4;
+        case SG_PIXELFORMAT_BC2_RGBA:
+            return 5;
+        case SG_PIXELFORMAT_BC3_RGBA:
+            return 6;
+        case SG_PIXELFORMAT_RGBA8:
+        default:
+            return 0;
+    }
+}
+
+void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const ParticleSystemConfig& config,
+                      int& cols, int& rows, int& frames) {
+    cols = (int)metadata.spritesheet_cols;
+    rows = (int)metadata.spritesheet_rows;
+    frames = (int)metadata.spritesheet_frames;
+    if (frames > 1 || metadata.width == 0 || metadata.height == 0) return;
+
+    // Some Workshop particle atlases are static TEX containers with no TEXS table.
+    // Only infer an atlas when it is an unambiguous strip of square frames.
+    if (config.animation_mode == "randomframe" || config.animation_mode == "sequence" || config.animation_mode == "once") {
+        if (metadata.width > metadata.height && metadata.width % metadata.height == 0) {
+            const uint32_t candidate = metadata.width / metadata.height;
+            if (candidate > 1) {
+                cols = (int)candidate;
+                rows = 1;
+                frames = (int)candidate;
+            }
+        } else if (metadata.height > metadata.width && metadata.height % metadata.width == 0) {
+            const uint32_t candidate = metadata.height / metadata.width;
+            if (candidate > 1) {
+                cols = 1;
+                rows = (int)candidate;
+                frames = (int)candidate;
+            }
+        }
+    }
+}
+
+}  // namespace
+
+ParticleSystem::ParticleSystem(ParticleSystemConfig config, float scene_width, float scene_height)
+    : config(std::move(config)), scene_w(scene_width), scene_h(scene_height) {
+    max_particles = std::max(0, this->config.max_particles);
     particles.reserve(max_particles);
     is_additive = this->config.additive;
     emitter_timers.resize(this->config.emitters.size(), 0.0f);
 }
 
 ParticleSystem::~ParticleSystem() {
+    delete material_pass;
     for (ParticleSystem* child : children) delete child;
 }
 
-ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, const IAssetResolver& assets,
-                                               float scene_width, float scene_height, float override_alpha,
-                                               float override_rate) {
+void ParticleSystem::initParticleBuffers() {
+    if (max_particles <= 0) return;
+
+    sg_buffer_desc vertex_desc = {};
+    vertex_desc.size = (size_t)max_particles * 4 * 17 * sizeof(float);
+    vertex_desc.usage.vertex_buffer = true;
+    vertex_desc.usage.stream_update = true;
+    particle_vertex_buffer = sg_make_buffer(&vertex_desc);
+
+    sg_buffer_desc index_desc = {};
+    index_desc.size = (size_t)max_particles * 6 * sizeof(uint32_t);
+    index_desc.usage.index_buffer = true;
+    index_desc.usage.stream_update = true;
+    particle_index_buffer = sg_make_buffer(&index_desc);
+}
+
+ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, EngineContext& ctx, float scene_width,
+                                               float scene_height, float override_alpha, float override_rate,
+                                               const float* override_color, bool override_color_is_legacy) {
     if (!particle_path || !particle_path[0]) return nullptr;
     char absolute_path[1024];
-    if (!assets.resolvePath(particle_path, absolute_path, sizeof(absolute_path))) return nullptr;
+    if (!ctx.asset_mgr.resolvePath(particle_path, absolute_path, sizeof(absolute_path))) return nullptr;
     char* document_text = read_file_to_string(absolute_path);
     if (!document_text) return nullptr;
     cJSON* document = cJSON_Parse(document_text);
@@ -33,32 +130,122 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, const 
     if (!document) return nullptr;
 
     ParticleSystemConfig config = ParticleParser::parse(document);
-    std::string texture_path;
-    GfxImage texture = assets.resolveTexture("materials/particle.tex", &texture_path);
-    if (!config.material_path.empty()) {
-        GfxImage material_texture = assets.resolveMaterialTexture(config.material_path.c_str(), &texture_path);
-        if (material_texture.id != SG_INVALID_ID) texture = std::move(material_texture);
-    }
     cJSON_Delete(document);
 
-    ParticleSystem* particle_system =
-        new ParticleSystem(std::move(config), std::move(texture), scene_width, scene_height);
+    ParticleSystem* particle_system = new ParticleSystem(std::move(config), scene_width, scene_height);
     particle_system->config_path = absolute_path;
-    particle_system->texture_path = texture_path;
     particle_system->override_alpha = override_alpha;
     particle_system->override_rate = override_rate;
+    particle_system->override_color_is_legacy = override_color_is_legacy;
+    if (override_color) {
+        particle_system->has_override_color = true;
+        for (int component = 0; component < 3; ++component)
+            particle_system->override_color[component] = override_color[component];
+    }
+    particle_system->is_trail = particle_system->config.renderer.type == "spritetrail" ||
+                                particle_system->config.renderer.type == "trail";
+    particle_system->use_perspective = (particle_system->config.flags & 4) != 0;
+    particle_system->is_additive =
+        materialUsesAdditiveBlend(particle_system->config.material_path, ctx, particle_system->config.additive);
+
+    if (!particle_system->config.material_path.empty()) {
+        cJSON* material_reference = cJSON_CreateObject();
+        cJSON_AddStringToObject(material_reference, "material", particle_system->config.material_path.c_str());
+        particle_system->material_pass = new ShaderPass(material_reference, nullptr, ctx);
+        cJSON_Delete(material_reference);
+
+        ShaderPass* pass = particle_system->material_pass;
+        pass->effect_file = particle_system->config.material_path;
+        pass->combos["THICKFORMAT"] = 1;
+        if (particle_system->is_trail) pass->combos["TRAILRENDERER"] = 1;
+
+        particle_system->has_refract = pass->combos.count("REFRACT") && pass->combos.at("REFRACT") != 0;
+        if (particle_system->has_refract) {
+            // generic particle refraction samples the scene snapshot through g_Texture3.
+            pass->render_texture_bindings[3] = "_rt_FullFrameBuffer";
+
+            // Texture1 provides the refraction normal map.
+            if (!pass->pass_textures.textures.empty() &&
+                pass->pass_textures.textures[0].id != SG_INVALID_ID)
+                pass->combos["NORMALMAP"] = 1;
+        }
+
+        if (pass->pass_textures.texture0.id == SG_INVALID_ID) {
+            std::string fallback_path;
+            pass->pass_textures.texture0 = ctx.asset_mgr.resolveTexture("materials/particle.tex", &fallback_path);
+            pass->pass_textures.texture0_path = fallback_path;
+        }
+        particle_system->texture_path = pass->pass_textures.texture0_path;
+
+        const wallpaper_engine::TextureMetadata metadata =
+            wallpaper_engine::inspectTextureMetadata(particle_system->texture_path.c_str());
+        particle_system->texture_width = (int)metadata.width;
+        particle_system->texture_height = (int)metadata.height;
+        particle_system->spritesheet_duration = metadata.spritesheet_duration;
+        inferSpriteSheet(metadata, particle_system->config, particle_system->spritesheet_cols,
+                         particle_system->spritesheet_rows, particle_system->spritesheet_frames);
+        if (particle_system->spritesheet_frames > 1) {
+            pass->combos["SPRITESHEET"] = 1;
+            // Particle flag bit 2 disables interpolation between sequence frames.
+            if (particle_system->config.animation_mode == "sequence" &&
+                (particle_system->config.flags & 2) == 0)
+                pass->combos["SPRITESHEETBLEND"] = 1;
+        }
+
+        // Wallpaper Engine's generic particle shader interprets single/dual-channel
+        // textures differently from RGBA textures. Preserve that semantic through
+        // TEX0FORMAT so ConvertTexture0Format() can turn R8 into an alpha mask, etc.
+        pass->combos["TEX0FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.texture0);
+        if (!pass->pass_textures.textures.empty()) {
+            // The normal decoder uses Texture1's independently authored format.
+            pass->combos["TEX1FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.textures[0]);
+        }
+
+        pass->init(ctx);
+        if (pass->compiled.shader.id != SG_INVALID_ID && pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+            const ShaderBlendMode blend =
+                particle_system->is_additive ? ShaderBlendMode::Additive : ShaderBlendMode::Alpha;
+            pass->compiled.pipeline = ShaderCompiler::makePipeline(pass->compiled.shader, pass->compiled.vertex_layout, blend);
+        }
+
+        if ((particle_system->texture_width <= 0 || particle_system->texture_height <= 0) &&
+            pass->pass_textures.texture0.id != SG_INVALID_ID) {
+            const sg_image_desc image_desc = sg_query_image_desc(pass->pass_textures.texture0);
+            particle_system->texture_width = image_desc.width;
+            particle_system->texture_height = image_desc.height;
+        }
+    }
+
+    particle_system->initParticleBuffers();
+
     for (const ParticleObjectConfig& child : particle_system->config.children) {
-        ParticleSystem* child_system = createFromPath(child.particle_path.c_str(), assets, scene_width, scene_height,
-                                                      child.override_alpha, child.override_rate);
+        ParticleSystem* child_system = createFromPath(child.particle_path.c_str(), ctx, scene_width, scene_height,
+                                                      child.override_alpha, child.override_rate,
+                                                      child.has_override_color ? child.override_color : nullptr,
+                                                      child.override_color_is_legacy);
         if (child_system) particle_system->children.push_back(child_system);
     }
     for (float time = 0.0f; time < particle_system->config.start_time; time += 0.1f) particle_system->update(0.1f);
     return particle_system;
 }
 
-ParticleSystem* ParticleSystem::createFromJSON(cJSON* document, const IAssetResolver& assets, float scene_width,
+ParticleSystem* ParticleSystem::createFromJSON(cJSON* document, EngineContext& ctx, float scene_width,
                                                float scene_height) {
     const ParticleObjectConfig config = ParticleParser::parseObject(document);
-    return createFromPath(config.particle_path.c_str(), assets, scene_width, scene_height, config.override_alpha,
-                          config.override_rate);
+    return createFromPath(config.particle_path.c_str(), ctx, scene_width, scene_height, config.override_alpha,
+                          config.override_rate, config.has_override_color ? config.override_color : nullptr,
+                          config.override_color_is_legacy);
+}
+
+bool ParticleSystem::requiresSceneColor() const {
+    if (has_refract) return true;
+    for (const ParticleSystem* child : children) {
+        if (child->requiresSceneColor()) return true;
+    }
+    return false;
+}
+
+void ParticleSystem::setSceneColorView(sg_view view) {
+    scene_color_view = view;
+    for (ParticleSystem* child : children) child->setSceneColorView(view);
 }

@@ -1,6 +1,0 @@
-*.png filter=lfs diff=lfs merge=lfs -text
-*.jpg filter=lfs diff=lfs merge=lfs -text
-*.jpeg filter=lfs diff=lfs merge=lfs -text
-*.tex filter=lfs diff=lfs merge=lfs -text
-*.pkg filter=lfs diff=lfs merge=lfs -text
-*.spv filter=lfs diff=lfs merge=lfs -text

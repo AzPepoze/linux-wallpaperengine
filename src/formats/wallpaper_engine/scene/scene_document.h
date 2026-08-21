@@ -34,13 +34,31 @@ struct EffectInstanceDocument {
 };
 
 struct ImageObjectDocument {
+    struct AlphaKey {
+        float frame = 0.0f;
+        float value = 1.0f;
+    };
     std::string image;
     std::string model;
     std::array<float, 2> size = {0.0f, 0.0f};
+    std::array<float, 3> color = {1.0f, 1.0f, 1.0f};
+    float alpha = 1.0f;
+    std::vector<AlphaKey> alpha_keys;
+    float alpha_fps = 30.0f;
+    float alpha_length = 0.0f;
+    std::string alpha_mode;
+    int color_blend_mode = 0;
+    bool solid = false;
+    bool copy_background = false;
 };
 
 struct ParticleObjectDocument {
     std::string particle;
+    float override_alpha = 1.0f;
+    float override_rate = 1.0f;
+    std::array<float, 3> override_color = {1.0f, 1.0f, 1.0f};
+    bool has_override_color = false;
+    bool override_color_is_legacy = false;
 };
 
 struct SceneObjectDocument {
@@ -64,6 +82,11 @@ struct SceneDocument {
     float camera_parallax_amount = 0.0f;
     float camera_parallax_delay = 0.1f;
     float camera_parallax_mouse_influence = 0.0f;
+    bool camera_shake_enabled = false;
+    float camera_shake_amplitude = 0.0f;
+    float camera_shake_speed = 0.0f;
+    float camera_shake_roughness = 0.0f;
+    float perspective_override_fov = 0.0f;
 
     std::vector<SceneObjectDocument> objects;
 };

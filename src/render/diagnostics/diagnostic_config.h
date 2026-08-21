@@ -19,6 +19,9 @@ struct DiagnosticConfig {
     int stop_after_pass_index = -1;
     int disable_pass_index = -1;
     int force_output_texture_slot = -1;
+    int capture_effect_index = -1;
+    int capture_pass_index = -1;
+    bool capture_pass_images = false;
 
     // A/B test flag (deferred / controlled)
     bool enable_ab = false;
