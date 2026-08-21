@@ -14,6 +14,9 @@ struct ParticleObjectConfig {
     std::string particle_path;
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
+    vec3 override_color = {1.0f, 1.0f, 1.0f};
+    bool has_override_color = false;
+    bool override_color_is_legacy = false;
 };
 
 struct ParticleEmitterConfig {
@@ -46,13 +49,21 @@ struct ParticleOperatorConfig {
     float speed_max = 0.0f;
 };
 
+struct ParticleRendererConfig {
+    std::string type = "sprite";
+    float length = 0.0f;
+    float max_length = 0.0f;
+};
+
 struct ParticleSystemConfig {
     std::string material_path;
     std::string animation_mode = "sequence";
     float sequence_multiplier = 1.0f;
     int max_particles = 100;
+    int flags = 0;
     bool additive = false;
     float start_time = 0.0f;
+    ParticleRendererConfig renderer;
     std::vector<ParticleEmitterConfig> emitters;
     std::vector<ParticleInitializerConfig> initializers;
     std::vector<ParticleOperatorConfig> operators;
