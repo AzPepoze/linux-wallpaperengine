@@ -39,12 +39,12 @@ char* read_file_to_string(const char* path) {
     return buf;
 }
 
-void detect_engine_path(char* out_path, size_t max_len) {
+bool detect_engine_path(char* out_path, size_t max_len) {
     const char* env_path = getenv("WALLPAPER_ENGINE_PATH");
     if (hasEngineAssets(env_path)) {
         copyPath(out_path, max_len, env_path);
         LOG_I("Found Wallpaper Engine at: %s (from WALLPAPER_ENGINE_PATH)", out_path);
-        return;
+        return true;
     }
 
     auto try_config = [&](const char* config_file) -> bool {
@@ -69,7 +69,7 @@ void detect_engine_path(char* out_path, size_t max_len) {
     const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
                                        "../../../../config.json"};
     for (const char* cfg : config_candidates) {
-        if (try_config(cfg)) return;
+        if (try_config(cfg)) return true;
     }
 
     const char* home = getenv("HOME");
@@ -83,7 +83,7 @@ void detect_engine_path(char* out_path, size_t max_len) {
         if (hasEngineAssets(full_path.c_str())) {
             copyPath(out_path, max_len, full_path.c_str());
             LOG_I("Found Wallpaper Engine at: %s", out_path);
-            return;
+            return true;
         }
     }
     LOG_W("Wallpaper Engine assets folder not found!");
