@@ -41,6 +41,10 @@ static bool applyParsedScene(ParsedScene parsed) {
     ctx.camera_parallax_amount = parsed.camera_parallax_amount;
     ctx.camera_parallax_delay = parsed.camera_parallax_delay;
     ctx.camera_parallax_mouse_influence = parsed.camera_parallax_mouse_influence;
+    ctx.camera_shake_enabled = parsed.camera_shake_enabled;
+    ctx.camera_shake_amplitude = parsed.camera_shake_amplitude;
+    ctx.camera_shake_speed = parsed.camera_shake_speed;
+    ctx.camera_shake_roughness = parsed.camera_shake_roughness;
     if (parsed.has_clear_color) {
         ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
         ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1], parsed.clear_color[2],
@@ -114,6 +118,10 @@ static void init(void) {
     if (sargs_exists("particle-debug-velocity-scale")) {
         const float value = (float)atof(sargs_value("particle-debug-velocity-scale"));
         if (value > 0.0f) ctx.particle_debug_velocity_scale = value;
+    }
+    if (sargs_exists("particle-debug-max-particles")) {
+        const int value = atoi(sargs_value("particle-debug-max-particles"));
+        if (value > 0) ctx.particle_debug_max_particles = value;
     }
 
     scene_engine = new Scene2DRuntime(ctx);

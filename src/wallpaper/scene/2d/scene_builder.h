@@ -19,6 +19,10 @@ struct ParsedScene {
     float camera_parallax_amount = 0.0f;
     float camera_parallax_delay = 0.1f;
     float camera_parallax_mouse_influence = 0.0f;
+    bool camera_shake_enabled = false;
+    float camera_shake_amplitude = 0.0f;
+    float camera_shake_speed = 0.0f;
+    float camera_shake_roughness = 0.0f;
     scene_type_t type = SCENE_TYPE_2D;
 };
 

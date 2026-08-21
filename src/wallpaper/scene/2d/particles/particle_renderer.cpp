@@ -282,7 +282,11 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
     }
     float point_color[4] = {1, 0, 0, 1};
     float velocity_color[4] = {0, 1, 1, 1};
-    for (const Particle& particle : particles) {
+    // A rain system can legally contain ten thousand particles. Keep the
+    // diagnostic useful without covering the debugger (or the entire scene).
+    const size_t draw_count = std::min(particles.size(), static_cast<size_t>(ctx.particle_debug_max_particles));
+    for (size_t particle_index = 0; particle_index < draw_count; ++particle_index) {
+        const Particle& particle = particles[particle_index];
         const float x = ctx.offset_x +
                         (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
         const float y = ctx.offset_y +

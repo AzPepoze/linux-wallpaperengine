@@ -102,10 +102,11 @@ void ParticleLayer::drawDebug(EngineContext& ctx) {
     ps->layer_rotation = layer_rotation;
     ps->parallax[0] = 0.0f;
     ps->parallax[1] = 0.0f;
-    // Selection debugging defaults to both overlays. CLI diagnostics can choose
-    // either independently without depending on the ImGui selection state.
-    ps->show_bounds = ctx.particle_debug_bounds || !ctx.particle_debug_velocity;
-    ps->show_velocity = ctx.particle_debug_velocity || !ctx.particle_debug_bounds;
+    // A selected layer gets a readable bounding box by default. The CLI flags
+    // explicitly select which overlays the global diagnostic pass draws.
+    const bool cli_diagnostics = ctx.particle_debug_bounds || ctx.particle_debug_velocity;
+    ps->show_bounds = cli_diagnostics ? ctx.particle_debug_bounds : true;
+    ps->show_velocity = cli_diagnostics ? ctx.particle_debug_velocity : false;
     ps->drawDebugBounds(ctx);
 }
 

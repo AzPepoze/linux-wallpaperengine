@@ -45,6 +45,10 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     out.camera_parallax_amount = document.camera_parallax_amount;
     out.camera_parallax_delay = document.camera_parallax_delay;
     out.camera_parallax_mouse_influence = document.camera_parallax_mouse_influence;
+    out.camera_shake_enabled = document.camera_shake_enabled;
+    out.camera_shake_amplitude = document.camera_shake_amplitude;
+    out.camera_shake_speed = document.camera_shake_speed;
+    out.camera_shake_roughness = document.camera_shake_roughness;
 
     ctx.scene_w = out.design_width;
     ctx.scene_h = out.design_height;

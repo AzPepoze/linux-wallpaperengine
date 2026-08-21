@@ -52,12 +52,16 @@ class RenderDiagnostics {
     void onSourceImage(int effect_index, sg_image img, int width, int height);
     void recordPass(PassTraceEntry trace, sg_image out_img);
     void onLayerFinalImage(int effect_index, sg_image img, int width, int height);
+    // Queue a GPU snapshot of an accumulated scene target.  The image is read
+    // only after sg_commit(), so it represents the frame being diagnosed.
+    void recordSceneStage(const std::string& stage_name, sg_image img, sg_view texture_view, sg_view attachment_view);
 
     // Pass isolation helpers
     bool isEffectIsolated(int effect_index, const std::string& effect_path) const;
     bool isPassDisabled(int pass_index) const;
     bool shouldStopAfterPass(int pass_index) const;
     int getForcedOutputSlot() const;
+    bool shouldCapturePassImage(int effect_index, int pass_index) const;
 
     const std::vector<ShaderDump>& getShaderDumps() const {
         return shader_dumps_;
@@ -90,6 +94,14 @@ class RenderDiagnostics {
     ImageStats previous_stats_;
 
     std::vector<std::string> generated_files_;
+    int scene_stage_index_ = 0;
+    struct SceneStageSnapshot {
+        std::string name;
+        sg_image image = {SG_INVALID_ID};
+        sg_view texture_view = {SG_INVALID_ID};
+        sg_view attachment_view = {SG_INVALID_ID};
+    };
+    std::vector<SceneStageSnapshot> scene_stage_snapshots_;
 
     void writeBundle(uint64_t frame_index, const EngineContext& ctx);
     void writeJsonToFile(const std::string& path, cJSON* json);

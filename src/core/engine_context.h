@@ -63,6 +63,13 @@ struct EngineContext {
     float camera_parallax_amount = 0.0f;
     float camera_parallax_delay = 0.1f;
     float camera_parallax_mouse_influence = 0.0f;
+    bool camera_shake_enabled = false;
+    float camera_shake_amplitude = 0.0f;
+    float camera_shake_speed = 0.0f;
+    float camera_shake_roughness = 0.0f;
+    // Scene-space camera translation, calculated once per frame.
+    float camera_shake_x = 0.0f;
+    float camera_shake_y = 0.0f;
     float perspective_override_fov = 0.0f;
     float time = 0.0f;
 
@@ -73,6 +80,7 @@ struct EngineContext {
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.05f;
+    int particle_debug_max_particles = 128;
 };
 
 #endif  // ENGINE_CONTEXT_H

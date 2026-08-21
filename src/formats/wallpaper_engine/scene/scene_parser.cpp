@@ -168,11 +168,25 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     if (cJSON_IsNumber(mouse_influence)) {
         out.camera_parallax_mouse_influence = (float)mouse_influence->valuedouble;
     }
+
+    const cJSON* camera_shake = cJSON_GetObjectItemCaseSensitive(general, "camerashake");
+    if (cJSON_IsBool(camera_shake)) {
+        out.camera_shake_enabled = cJSON_IsTrue(camera_shake);
+    } else if (cJSON_IsObject(camera_shake)) {
+        const cJSON* value = cJSON_GetObjectItemCaseSensitive(camera_shake, "value");
+        if (cJSON_IsBool(value)) out.camera_shake_enabled = cJSON_IsTrue(value);
+    }
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeamplitude"), out.camera_shake_amplitude);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakespeed"), out.camera_shake_speed);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeroughness"), out.camera_shake_roughness);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"), out.perspective_override_fov);
 
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
           out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount, out.camera_parallax_delay,
           out.camera_parallax_mouse_influence);
+    LOG_I("Camera Shake: %s, amplitude=%.3f, speed=%.3f, roughness=%.3f",
+          out.camera_shake_enabled ? "enabled" : "disabled", out.camera_shake_amplitude, out.camera_shake_speed,
+          out.camera_shake_roughness);
 }
 
 SceneObjectDocument parseObject(const cJSON* object) {
