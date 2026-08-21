@@ -12,6 +12,7 @@
 #include "core/logger.h"
 #include "core/utils.h"
 #include "formats/wallpaper_engine/scene/scene_document.h"
+#include "render/diagnostics/render_diagnostics.h"
 #include "render/shader/shader_processor.h"
 #include "sokol_app.h"
 
@@ -109,13 +110,15 @@ void readCombos(cJSON* config, std::map<std::string, int>& combos) {
 struct ShaderUniformMetadata {
     std::string name;
     std::string material;
+    std::string type = "float";
+    std::vector<float> default_values;
+    bool has_default = false;
 };
 
 std::string normalizeUniformName(const std::string& name) {
     std::string normalized;
     size_t start = 0;
-    if (name.size() > 2 && (name[0] == 'g' || name[0] == 'G' || name[0] == 'u' || name[0] == 'U') &&
-        name[1] == '_')
+    if (name.size() > 2 && (name[0] == 'g' || name[0] == 'G' || name[0] == 'u' || name[0] == 'U') && name[1] == '_')
         start = 2;
     for (size_t i = start; i < name.size(); ++i) {
         unsigned char c = (unsigned char)name[i];
@@ -149,6 +152,7 @@ std::vector<ShaderUniformMetadata> extractShaderUniforms(const std::string& sour
             tokens.push_back(token);
         }
         if (!is_sampler && tokens.size() >= 2) {
+            std::string type = tokens[0];
             std::string name = tokens.back();
             const size_t array = name.find('[');
             if (array != std::string::npos) name.erase(array);
@@ -156,6 +160,9 @@ std::vector<ShaderUniformMetadata> extractShaderUniforms(const std::string& sour
             if (assign != std::string::npos) name.erase(assign);
 
             std::string material;
+            std::vector<float> default_values;
+            bool has_default = false;
+
             const size_t line_end = source.find('\n', semicolon + 1);
             const size_t comment = source.find("//", semicolon + 1);
             if (comment != std::string::npos && (line_end == std::string::npos || comment < line_end)) {
@@ -170,13 +177,21 @@ std::vector<ShaderUniformMetadata> extractShaderUniforms(const std::string& sour
                             cJSON* material_node = cJSON_GetObjectItemCaseSensitive(metadata, "material");
                             if (cJSON_IsString(material_node) && material_node->valuestring)
                                 material = material_node->valuestring;
+                            cJSON* type_node = cJSON_GetObjectItemCaseSensitive(metadata, "type");
+                            if (cJSON_IsString(type_node) && type_node->valuestring) type = type_node->valuestring;
+                            cJSON* def_node = cJSON_GetObjectItemCaseSensitive(metadata, "default");
+                            if (def_node) {
+                                if (jsonToFloats(def_node, default_values) && !default_values.empty()) {
+                                    has_default = true;
+                                }
+                            }
                             cJSON_Delete(metadata);
                         }
                     }
                 }
             }
 
-            if (!name.empty()) result.push_back({name, material});
+            if (!name.empty()) result.push_back({name, material, type, default_values, has_default});
         }
         search = semicolon + 1;
     }
@@ -290,22 +305,34 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     cJSON* shader_node = cJSON_GetObjectItemCaseSensitive(base_config, "shader");
     if (cJSON_IsString(shader_node) && shader_node->valuestring) shader_name = shader_node->valuestring;
 
-    if (base_config != config) {
-        cJSON* pass_shader = cJSON_GetObjectItemCaseSensitive(config, "shader");
-        if (cJSON_IsString(pass_shader) && pass_shader->valuestring) shader_name = pass_shader->valuestring;
-    }
+    auto extract_floats = [](cJSON* obj, std::map<std::string, std::vector<float>>& out) {
+        if (!obj) return;
+        cJSON* item;
+        cJSON_ArrayForEach(item, obj) {
+            if (!item->string) continue;
+            std::vector<float> values;
+            if (jsonToFloats(item, values) && !values.empty()) out[item->string] = std::move(values);
+        }
+    };
+
+    extract_floats(cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"), base_uniforms);
+    readCombos(base_config, base_combos);
 
     mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(base_config, "constantshadervalues"));
     readCombos(base_config, combos);
     pass_textures.loadFromConfig(base_config, shader_name, ctx);
 
     if (base_config != config) {
+        extract_floats(cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"), pass_uniforms);
+        readCombos(config, pass_combos);
         mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues"));
         readCombos(config, combos);
         pass_textures.applyInstanceOverrides(config, shader_name, ctx);
     }
 
     if (instance_config) {
+        extract_floats(cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"), inst_uniforms);
+        readCombos(instance_config, inst_combos);
         pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
         mergeJsonObject(constant_values, cJSON_GetObjectItemCaseSensitive(instance_config, "constantshadervalues"));
         readCombos(instance_config, combos);
@@ -395,8 +422,9 @@ void ShaderPass::init(EngineContext& ctx) {
     for (const auto& [name, values] : uniforms) {
         std::string resolved_name;
         if (!resolveUniformName(name, shader_uniforms, resolved_name)) {
-            effect_log.warn("ShaderPass %s: authored constant '%s' has no matching shader uniform; value will not be bound",
-                            shader_name.c_str(), name.c_str());
+            effect_log.warn(
+                "ShaderPass %s: authored constant '%s' has no matching shader uniform; value will not be bound",
+                shader_name.c_str(), name.c_str());
             continue;
         }
 
@@ -464,6 +492,168 @@ void ShaderPass::init(EngineContext& ctx) {
     free(fs_src);
 
     pass_textures.buildCachedViews();
+
+    PassUniformProvenance prov;
+    prov.effect_file = effect_file;
+    prov.pass_index = pass_index;
+    prov.shader_name = shader_name;
+
+    for (const auto& meta : shader_uniforms) {
+        UniformProvenanceEntry entry;
+        entry.shader_name = meta.name;
+        entry.authored_name = meta.material;
+        entry.resolved_name = meta.name;
+        entry.type = meta.type;
+
+        UniformResolutionStep step_def;
+        step_def.source = ProvenanceSource::ShaderMetadataDefault;
+        step_def.source_name = "shader_metadata_default";
+        step_def.present = meta.has_default;
+        step_def.values = meta.default_values;
+        step_def.applied = false;
+        entry.resolution.push_back(step_def);
+
+        bool found_base = false;
+        std::vector<float> base_val;
+        for (const auto& [b_name, b_val] : base_uniforms) {
+            std::string res;
+            if (resolveUniformName(b_name, {meta}, res) && res == meta.name) {
+                found_base = true;
+                base_val = b_val;
+                break;
+            }
+        }
+        UniformResolutionStep step_base;
+        step_base.source = ProvenanceSource::MaterialConstant;
+        step_base.source_name = "material_constant";
+        step_base.present = found_base;
+        step_base.values = base_val;
+        entry.resolution.push_back(step_base);
+
+        bool found_pass = false;
+        std::vector<float> pass_val;
+        for (const auto& [p_name, p_val] : pass_uniforms) {
+            std::string res;
+            if (resolveUniformName(p_name, {meta}, res) && res == meta.name) {
+                found_pass = true;
+                pass_val = p_val;
+                break;
+            }
+        }
+        UniformResolutionStep step_pass;
+        step_pass.source = ProvenanceSource::EffectPassOverride;
+        step_pass.source_name = "effect_pass_override";
+        step_pass.present = found_pass;
+        step_pass.values = pass_val;
+        entry.resolution.push_back(step_pass);
+
+        bool found_inst = false;
+        std::vector<float> inst_val;
+        for (const auto& [i_name, i_val] : inst_uniforms) {
+            std::string res;
+            if (resolveUniformName(i_name, {meta}, res) && res == meta.name) {
+                found_inst = true;
+                inst_val = i_val;
+                break;
+            }
+        }
+        UniformResolutionStep step_inst;
+        step_inst.source = ProvenanceSource::InstanceOverride;
+        step_inst.source_name = "instance_override";
+        step_inst.present = found_inst;
+        step_inst.values = inst_val;
+        entry.resolution.push_back(step_inst);
+
+        auto final_it = uniforms.find(meta.name);
+        if (final_it != uniforms.end()) {
+            entry.final_value = final_it->second;
+            if (found_inst) {
+                entry.final_source = ProvenanceSource::InstanceOverride;
+                entry.resolution.back().applied = true;
+            } else if (found_pass) {
+                entry.final_source = ProvenanceSource::EffectPassOverride;
+                entry.resolution[2].applied = true;
+            } else if (found_base) {
+                entry.final_source = ProvenanceSource::MaterialConstant;
+                entry.resolution[1].applied = true;
+            } else {
+                entry.final_source = ProvenanceSource::RuntimeBuiltin;
+            }
+        } else {
+            if (meta.has_default) {
+                entry.final_source = ProvenanceSource::ShaderMetadataDefault;
+                entry.final_value = meta.default_values;
+                entry.resolution[0].note = "metadata default exists but not bound by runtime";
+            } else {
+                entry.final_source = ProvenanceSource::Unresolved;
+            }
+        }
+
+        prov.uniforms[meta.name] = entry;
+    }
+
+    for (const auto& [c_name, c_val] : combos) {
+        ComboProvenanceEntry c_entry;
+        c_entry.name = c_name;
+        c_entry.final_value = c_val;
+
+        if (base_combos.count(c_name)) {
+            ComboResolutionStep s;
+            s.source = ProvenanceSource::MaterialConstant;
+            s.source_name = "material_constant";
+            s.present = true;
+            s.value = base_combos.at(c_name);
+            c_entry.resolution.push_back(s);
+        }
+        if (pass_combos.count(c_name)) {
+            ComboResolutionStep s;
+            s.source = ProvenanceSource::EffectPassOverride;
+            s.source_name = "effect_pass_override";
+            s.present = true;
+            s.value = pass_combos.at(c_name);
+            c_entry.resolution.push_back(s);
+        }
+        if (inst_combos.count(c_name)) {
+            ComboResolutionStep s;
+            s.source = ProvenanceSource::InstanceOverride;
+            s.source_name = "instance_override";
+            s.present = true;
+            s.value = inst_combos.at(c_name);
+            c_entry.resolution.push_back(s);
+        }
+
+        if (inst_combos.count(c_name)) {
+            c_entry.final_source = ProvenanceSource::InstanceOverride;
+            if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
+        } else if (pass_combos.count(c_name)) {
+            c_entry.final_source = ProvenanceSource::EffectPassOverride;
+            if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
+        } else if (base_combos.count(c_name)) {
+            c_entry.final_source = ProvenanceSource::MaterialConstant;
+            if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
+        } else {
+            c_entry.final_source = ProvenanceSource::RuntimeInferred;
+        }
+
+        prov.combos[c_name] = c_entry;
+    }
+
+    ShaderDump dump;
+    dump.effect_index = effect_index;
+    dump.pass_index = pass_index;
+    dump.shader_name = shader_name;
+    dump.effect_file = effect_file;
+    dump.original_vs = raw_vs;
+    dump.original_fs = raw_fs;
+    dump.processed_vs = processed_vs;
+    dump.processed_fs = processed_fs;
+    dump.final_vs = full_vs;
+    dump.final_fs = full_fs;
+    dump.combos = combos;
+    dump.uniforms = uniforms;
+
+    RenderDiagnostics::instance().registerShaderDump(dump);
+    RenderDiagnostics::instance().registerUniformProvenance(prov);
 
     if (compiled.pipeline.id == SG_INVALID_ID) {
         effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped",
@@ -620,6 +810,11 @@ Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext
     else if (cJSON_IsObject(vis)) {
         cJSON* val = cJSON_GetObjectItemCaseSensitive(vis, "value");
         if (cJSON_IsBool(val)) effect->visible = cJSON_IsTrue(val);
+    }
+
+    for (size_t i = 0; i < effect->passes.size(); ++i) {
+        effect->passes[i]->pass_index = (int)i;
+        effect->passes[i]->effect_file = effect->file_path;
     }
 
     effect->init(ctx);

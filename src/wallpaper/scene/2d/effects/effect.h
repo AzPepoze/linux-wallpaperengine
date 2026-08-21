@@ -32,6 +32,16 @@ class ShaderPass {
     std::string render_target;
     float render_scale = 1.0f;
     std::map<int, std::string> render_texture_bindings;
+    int effect_index = 0;
+    int pass_index = 0;
+    std::string effect_file;
+
+    std::map<std::string, std::vector<float>> base_uniforms;
+    std::map<std::string, std::vector<float>> pass_uniforms;
+    std::map<std::string, std::vector<float>> inst_uniforms;
+    std::map<std::string, int> base_combos;
+    std::map<std::string, int> pass_combos;
+    std::map<std::string, int> inst_combos;
 
     ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx);
     ~ShaderPass();
