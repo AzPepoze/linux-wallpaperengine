@@ -36,6 +36,11 @@ void AssetManager::init(const char* ep, const char* wp) {
 }
 
 bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {
+    if (!rel_path || !out_abs_path || max_len <= 0) return false;
+    if (rel_path[0] == '/' && access(rel_path, F_OK) == 0) {
+        snprintf(out_abs_path, max_len, "%s", rel_path);
+        return true;
+    }
     snprintf(out_abs_path, max_len, "%s/%s", wallpaper_path.c_str(), rel_path);
     if (access(out_abs_path, F_OK) == 0) return true;
 
@@ -114,26 +119,27 @@ GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::str
 
     GfxImage img;
 
-    char mat_dir[512] = "";
-    const char* last_slash = strrchr(mat_rel_path, '/');
-    if (last_slash) {
-        size_t len = last_slash - mat_rel_path;
-        strncpy(mat_dir, mat_rel_path, len);
-        mat_dir[len] = '/';
-        mat_dir[len + 1] = '\0';
-    }
-
     cJSON* passes = cJSON_GetObjectItemCaseSensitive(mat_json, "passes");
     if (cJSON_IsArray(passes)) {
         cJSON* pass = cJSON_GetArrayItem(passes, 0);
         cJSON* textures = cJSON_GetObjectItemCaseSensitive(pass, "textures");
         if (cJSON_IsArray(textures)) {
             cJSON* tex_node = cJSON_GetArrayItem(textures, 0);
-            if (cJSON_IsString(tex_node)) {
-                char rel_tex[512];
-                snprintf(rel_tex, sizeof(rel_tex), "%s%s", mat_dir, tex_node->valuestring);
-                img = resolveTexture(rel_tex, out_path);
-                if (img.id == SG_INVALID_ID) img = resolveTexture(tex_node->valuestring, out_path);
+            if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {
+                const std::string texture_ref = tex_node->valuestring;
+                const bool material_rooted = texture_ref.rfind("materials/", 0) == 0 ||
+                                             texture_ref.rfind("assets/", 0) == 0 || texture_ref[0] == '/';
+                if (material_rooted) img = resolveTexture(texture_ref.c_str(), out_path);
+
+                if (img.id == SG_INVALID_ID) {
+                    const std::string material_path = abs_path;
+                    const size_t slash = material_path.rfind('/');
+                    if (slash != std::string::npos) {
+                        const std::string relative_to_material = material_path.substr(0, slash + 1) + texture_ref;
+                        img = resolveTexture(relative_to_material.c_str(), out_path);
+                    }
+                }
+                if (img.id == SG_INVALID_ID && !material_rooted) img = resolveTexture(texture_ref.c_str(), out_path);
             }
         }
     }

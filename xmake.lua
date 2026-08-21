@@ -42,6 +42,19 @@ target("linux-wallpaperengine")
         os.cp(target:targetfile(), "bin/linux_wallpaperengine")
     end)
 
+target("test_diagnostics")
+    set_kind("binary")
+    set_default(false)
+    add_packages("cjson", "stb")
+    add_files("tests/test_diagnostics.cpp")
+    add_files("src/render/diagnostics/diagnostic_config.cpp")
+    add_files("src/render/diagnostics/image_stats.cpp")
+    add_files("src/render/diagnostics/render_graph.cpp")
+    add_files("src/render/diagnostics/uniform_provenance.cpp")
+    add_includedirs("libs")
+    add_includedirs("libs/sokol")
+    add_includedirs("src")
+
 task("check")
     set_menu {
         usage = "xmake check",

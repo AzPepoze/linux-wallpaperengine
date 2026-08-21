@@ -8,9 +8,15 @@
 #include "core/gfx_resource.h"
 #include "sokol_gfx.h"
 
+struct CompiledUniformBlock {
+    int slot = -1;
+    std::vector<std::string> uniform_names;
+};
+
 struct CompiledShader {
     GfxShader shader;
     GfxPipeline pipeline;
+    std::vector<CompiledUniformBlock> custom_uniform_blocks;
 };
 
 class ShaderCompiler {

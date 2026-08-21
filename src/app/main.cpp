@@ -11,6 +11,7 @@
 #include "core/logger.h"
 #include "core/utils.h"
 #include "imgui.h"
+#include "render/diagnostics/render_diagnostics.h"
 #include "sokol_app.h"
 #include "sokol_args.h"
 #include "sokol_gfx.h"
@@ -29,10 +30,15 @@ static Scene2DRuntime* scene_engine = nullptr;
 static void init(void) {
     stm_setup();
     detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path));
+    RenderDiagnostics::instance().init();
 
     sg_desc s_desc = {};
     s_desc.environment = sglue_environment();
     s_desc.logger.func = slog_func;
+    s_desc.image_pool_size = 512;
+    s_desc.view_pool_size = 1024;
+    s_desc.shader_pool_size = 128;
+    s_desc.pipeline_pool_size = 256;
     sg_setup(&s_desc);
 
     Debugger::init();
@@ -90,6 +96,8 @@ static void frame(void) {
     const uint64_t frame_start = stm_now();
     ctx.renderer.draw_calls = 0;
 
+    RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
+
     const uint64_t update_start = stm_now();
     scene_engine->updateViewport();
     float dt = (float)sapp_frame_duration();
@@ -114,6 +122,8 @@ static void frame(void) {
 
     sg_end_pass();
     sg_commit();
+
+    RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);
 
     ctx.profiler.frame_ms = stm_ms(stm_since(frame_start));
     ctx.profiler.draw_calls = ctx.renderer.draw_calls;
@@ -155,6 +165,7 @@ extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
     sargs_desc a_desc = {};
     a_desc.argc = argc;
     a_desc.argv = argv;
+    a_desc.max_args = 64;
     sargs_setup(&a_desc);
 
     if (sargs_exists("pkg")) {

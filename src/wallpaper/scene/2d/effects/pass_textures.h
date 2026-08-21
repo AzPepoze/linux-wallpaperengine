@@ -13,6 +13,9 @@
 
 class PassTextures {
    public:
+    GfxImage texture0;
+    GfxView texture0_view;
+    std::string texture0_path;
     std::vector<GfxImage> textures;
     std::vector<GfxView> cached_views;
     std::vector<std::string> texture_paths;
