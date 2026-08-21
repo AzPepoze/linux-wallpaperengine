@@ -17,6 +17,13 @@ void ParticleSystem::spawnParticle() {
     particle.alpha = 1.0f;
     particle.initial_alpha = 1.0f;
     particle.color[0] = particle.color[1] = particle.color[2] = 1.0f;
+    if (spritesheet_frames > 1 && config.animation_mode == "randomframe") {
+        particle.frame = floorf(randomFloat() * (float)spritesheet_frames);
+        if (particle.frame >= spritesheet_frames) particle.frame = (float)(spritesheet_frames - 1);
+    } else if (spritesheet_frames > 1) {
+        particle.frame = 0.0f;
+    }
+
     for (const ParticleEmitterConfig& emitter : config.emitters) {
         if (emitter.type == "sphererandom") {
             const float distance =
@@ -57,7 +64,8 @@ void ParticleSystem::spawnParticle() {
                 initializer.minimum_scalar + randomFloat() * (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.initial_alpha = particle.alpha;
         } else if (initializer.type == "rotationrandom") {
-            particle.rotation = randomFloat() * 360.0f;
+            particle.rotation =
+                initializer.minimum[2] + randomFloat() * (initializer.maximum[2] - initializer.minimum[2]);
         } else if (initializer.type == "angularvelocityrandom") {
             particle.angular_vel =
                 initializer.minimum[2] + randomFloat() * (initializer.maximum[2] - initializer.minimum[2]);
