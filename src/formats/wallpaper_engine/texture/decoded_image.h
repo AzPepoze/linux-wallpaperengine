@@ -10,6 +10,7 @@ namespace wallpaper_engine {
 enum class PixelFormat {
     Unknown,
     RGBA8,
+    RG8,
     R8,
     BC1,
     BC2,
