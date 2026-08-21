@@ -89,6 +89,9 @@ class ParticleSystem {
     void drawDebugBounds(EngineContext& ctx);
     bool requiresSceneColor() const;
     void setSceneColorView(sg_view view);
+    sg_view sceneColorView() const {
+        return scene_color_view;
+    }
 
     bool show_bounds = false;
     std::string config_path;
