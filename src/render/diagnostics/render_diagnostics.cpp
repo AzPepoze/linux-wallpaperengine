@@ -60,6 +60,7 @@ void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {
         generated_files_.clear();
         has_source_image_ = false;
         has_previous_image_ = false;
+        scene_stage_index_ = 0;
 
         if (config.has_deterministic_time) {
             ctx.time = config.deterministic_time;
@@ -74,6 +75,28 @@ void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {
 void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     if (!config.enabled || !is_capturing_frame) return;
 
+    for (const SceneStageSnapshot& snapshot : scene_stage_snapshots_) {
+        if (snapshot.image.id == SG_INVALID_ID) continue;
+        GpuImageReadbackResult readback = gpu_readback_image_rgba8(snapshot.image);
+        if (readback.success && !readback.rgba_data.empty()) {
+            char frame_dir_buf[64];
+            snprintf(frame_dir_buf, sizeof(frame_dir_buf), "frame-%04llu", (unsigned long long)frame_index);
+            std::string stage_dir = config.output_dir + "/" + frame_dir_buf + "/scene-stages";
+            ensureDir(stage_dir);
+
+            char file_buf[256];
+            std::string clean_stage = sanitizeFilename(snapshot.name);
+            snprintf(file_buf, sizeof(file_buf), "%03d-%s.png", scene_stage_index_++, clean_stage.c_str());
+            std::string path = stage_dir + "/" + file_buf;
+            if (writePng(path, readback.width, readback.height, readback.rgba_data.data())) {
+                generated_files_.push_back(std::string(frame_dir_buf) + "/scene-stages/" + file_buf);
+            }
+        }
+        if (snapshot.texture_view.id != SG_INVALID_ID) sg_destroy_view(snapshot.texture_view);
+        if (snapshot.attachment_view.id != SG_INVALID_ID) sg_destroy_view(snapshot.attachment_view);
+        if (snapshot.image.id != SG_INVALID_ID) sg_destroy_image(snapshot.image);
+    }
+    scene_stage_snapshots_.clear();
     writeBundle(frame_index, ctx);
     config.capture_complete = true;
     is_capturing_frame = false;
@@ -121,7 +144,8 @@ void RenderDiagnostics::onSourceImage(int effect_index, sg_image img, int width,
 void RenderDiagnostics::recordPass(PassTraceEntry trace, sg_image out_img) {
     if (!config.enabled) return;
 
-    if (is_capturing_frame && out_img.id != SG_INVALID_ID) {
+    if (is_capturing_frame && shouldCapturePassImage(trace.effect_index, trace.pass_index) &&
+        out_img.id != SG_INVALID_ID) {
         GpuImageReadbackResult readback = gpu_readback_image_rgba8(out_img);
         if (readback.success && !readback.rgba_data.empty()) {
             trace.image_stats = ImageStats::compute(readback.rgba_data.data(), readback.width, readback.height);
@@ -215,6 +239,19 @@ bool RenderDiagnostics::shouldStopAfterPass(int pass_index) const {
 
 int RenderDiagnostics::getForcedOutputSlot() const {
     return config.force_output_texture_slot;
+}
+
+bool RenderDiagnostics::shouldCapturePassImage(int effect_index, int pass_index) const {
+    if (!config.capture_pass_images) return false;
+    if (config.capture_effect_index >= 0 && effect_index != config.capture_effect_index) return false;
+    if (config.capture_pass_index >= 0 && pass_index != config.capture_pass_index) return false;
+    return true;
+}
+
+void RenderDiagnostics::recordSceneStage(const std::string& stage_name, sg_image img, sg_view texture_view,
+                                         sg_view attachment_view) {
+    if (!is_capturing_frame || img.id == SG_INVALID_ID) return;
+    scene_stage_snapshots_.push_back({stage_name, img, texture_view, attachment_view});
 }
 
 void RenderDiagnostics::writeBundle(uint64_t frame_index, const EngineContext& ctx) {
