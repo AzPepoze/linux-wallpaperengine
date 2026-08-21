@@ -12,6 +12,7 @@
 #include "core/utils.h"
 #include "render/render.h"
 #include "wallpaper/scene/2d/parallax.h"
+#include "wallpaper/scene/2d/parser/image_parser.h"
 #include "wallpaper/scene/tree/scene_tree.h"
 
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
@@ -338,17 +339,17 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
 }
 
 ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
-    ImageLayer* layer = new ImageLayer(doc.name.empty() ? "Layer" : doc.name.c_str(), (sg_image){SG_INVALID_ID});
+    const ImageObjectConfig config = ImageParser::parse(doc);
+    ImageLayer* layer = new ImageLayer(config.name.c_str(), (sg_image){SG_INVALID_ID});
     layer->initFromDocument(doc, ctx);
-    layer->size[0] = doc.image.size[0];
-    layer->size[1] = doc.image.size[1];
+    layer->size[0] = config.width;
+    layer->size[1] = config.height;
 
-    const std::string& asset_path = !doc.image.image.empty() ? doc.image.image : doc.image.model;
-    if (!asset_path.empty()) {
-        if (asset_path.find(".json") != std::string::npos)
-            layer->loadModel(asset_path.c_str(), ctx);
+    if (!config.asset_path.empty()) {
+        if (config.is_model || config.asset_path.find(".json") != std::string::npos)
+            layer->loadModel(config.asset_path.c_str(), ctx);
         else
-            layer->img = ctx.asset_mgr.resolveTexture(asset_path.c_str(), &layer->path);
+            layer->img = ctx.asset_mgr.resolveTexture(config.asset_path.c_str(), &layer->path);
 
         if (layer->img.id != SG_INVALID_ID) {
             sg_image_desc desc = sg_query_image_desc(layer->img);

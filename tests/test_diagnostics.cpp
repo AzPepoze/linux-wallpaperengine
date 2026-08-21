@@ -16,6 +16,7 @@
 #include "sokol_args.h"
 #include "ui/sandbox_catalog.h"
 #include "wallpaper/scene/2d/parser/effect_parser.h"
+#include "wallpaper/scene/2d/parser/image_parser.h"
 #include "wallpaper/scene/2d/parser/particle_parser.h"
 
 static int g_test_passed = 0;
@@ -296,6 +297,17 @@ void test_particle_parser() {
     cJSON_Delete(scalar_value);
 }
 
+void test_image_parser() {
+    wallpaper_engine::SceneObjectDocument document;
+    document.name = "Model layer";
+    document.image.model = "models/card.json";
+    document.image.size = {320.0f, 180.0f};
+    const ImageObjectConfig config = ImageParser::parse(document);
+    TEST_ASSERT(config.name == "Model layer" && config.asset_path == "models/card.json" && config.is_model,
+                "Image parser should choose model assets when no image asset exists");
+    TEST_ASSERT(config.width == 320.0f && config.height == 180.0f, "Image parser should retain document dimensions");
+}
+
 void test_sandbox_catalog() {
     namespace fs = std::filesystem;
 
@@ -335,6 +347,7 @@ int main(int argc, char* argv[]) {
     test_shader_source_metadata();
     test_effect_configuration_precedence();
     test_particle_parser();
+    test_image_parser();
     test_sandbox_catalog();
     test_uniform_provenance_json();
     test_image_stats();
