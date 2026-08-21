@@ -6,9 +6,91 @@
 
 #include "core/config.h"
 #include "core/logger.h"
-#include "render/render.h"  // For builtin_uniforms_t
+#include "render/render.h"
 #include "shader_backend.h"
 #include "shader_uniform_layout.h"
+
+namespace {
+
+bool usesParticleSpriteLayout(const std::string& source) {
+    return source.find("a_TexCoordVec4") != std::string::npos &&
+           source.find("a_TexCoordVec4C1") != std::string::npos && source.find("a_TexCoordC2") != std::string::npos &&
+           source.find("a_Color") != std::string::npos;
+}
+
+void configureParticleBuiltins(sg_shader_desc& desc) {
+    constexpr int slot = 3;
+    desc.uniform_blocks[slot].stage = SG_SHADERSTAGE_VERTEX;
+    desc.uniform_blocks[slot].size = sizeof(particle_builtin_uniforms_t);
+
+    const char* names[] = {"g_ModelMatrix",
+                           "g_ModelMatrixInverse",
+                           "g_ViewProjectionMatrix",
+                           "g_OrientationUp",
+                           "g_OrientationRight",
+                           "g_OrientationForward",
+                           "g_ViewUp",
+                           "g_ViewRight",
+                           "g_EyePosition",
+                           "g_RenderVar0",
+                           "g_RenderVar1"};
+    const sg_uniform_type types[] = {SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,
+                                     SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3,
+                                     SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3,
+                                     SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4};
+    constexpr int count = sizeof(names) / sizeof(names[0]);
+    for (int index = 0; index < count; ++index) {
+        desc.uniform_blocks[slot].glsl_uniforms[index].glsl_name = names[index];
+        desc.uniform_blocks[slot].glsl_uniforms[index].type = types[index];
+    }
+}
+
+}  // namespace
+
+GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout layout, ShaderBlendMode blend_mode) {
+    if (shader.id == SG_INVALID_ID) return {};
+
+    sg_pipeline_desc pip_desc = {};
+    pip_desc.shader = shader;
+    pip_desc.cull_mode = SG_CULLMODE_NONE;
+    pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
+    pip_desc.depth.write_enabled = false;
+    pip_desc.stencil.enabled = false;
+
+    if (layout == ShaderVertexLayout::ParticleSprite) {
+        pip_desc.layout.buffers[0].stride = sizeof(float) * 17;
+        pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT3;
+        pip_desc.layout.attrs[0].offset = 0;
+        pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT4;
+        pip_desc.layout.attrs[1].offset = sizeof(float) * 3;
+        pip_desc.layout.attrs[2].format = SG_VERTEXFORMAT_FLOAT4;
+        pip_desc.layout.attrs[2].offset = sizeof(float) * 7;
+        pip_desc.layout.attrs[3].format = SG_VERTEXFORMAT_FLOAT4;
+        pip_desc.layout.attrs[3].offset = sizeof(float) * 11;
+        pip_desc.layout.attrs[4].format = SG_VERTEXFORMAT_FLOAT2;
+        pip_desc.layout.attrs[4].offset = sizeof(float) * 15;
+        pip_desc.index_type = SG_INDEXTYPE_UINT32;
+    } else {
+        pip_desc.layout.buffers[0].stride = sizeof(vertex_t);
+        pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
+        pip_desc.layout.attrs[0].offset = 0;
+        pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
+        pip_desc.layout.attrs[1].offset = sizeof(float) * 2;
+        pip_desc.index_type = SG_INDEXTYPE_UINT16;
+    }
+
+    if (blend_mode != ShaderBlendMode::Disabled) {
+        pip_desc.colors[0].blend.enabled = true;
+        pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+        pip_desc.colors[0].blend.dst_factor_rgb = blend_mode == ShaderBlendMode::Additive
+                                                       ? SG_BLENDFACTOR_ONE
+                                                       : SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+        pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+        pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    }
+
+    return sg_make_pipeline(&pip_desc);
+}
 
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
                                        const std::string& fragSource,
@@ -16,10 +98,20 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
+    result.vertex_layout =
+        usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite : ShaderVertexLayout::Sprite2D;
 
     sg_shader_desc shd_desc = {};
-    shd_desc.attrs[0].glsl_name = "a_Position";
-    shd_desc.attrs[1].glsl_name = "a_TexCoord";
+    if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+        shd_desc.attrs[0].glsl_name = "a_Position";
+        shd_desc.attrs[1].glsl_name = "a_TexCoordVec4";
+        shd_desc.attrs[2].glsl_name = "a_Color";
+        shd_desc.attrs[3].glsl_name = "a_TexCoordVec4C1";
+        shd_desc.attrs[4].glsl_name = "a_TexCoordC2";
+    } else {
+        shd_desc.attrs[0].glsl_name = "a_Position";
+        shd_desc.attrs[1].glsl_name = "a_TexCoord";
+    }
 
     shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
     shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
@@ -66,8 +158,13 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].glsl_name = "tint";
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].type = SG_UNIFORMTYPE_FLOAT4;
 
-    std::string custom_uniform_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
     int next_uniform_slot = 3;
+    if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+        configureParticleBuiltins(shd_desc);
+        next_uniform_slot = 4;
+    }
+
+    std::string custom_uniform_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
     configureCustomUniformBlocks(uniforms, compiled_vert_source, compiled_frag_source, shd_desc, result,
                                  next_uniform_slot, custom_uniform_names);
 
@@ -94,18 +191,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         return result;
     }
 
-    sg_pipeline_desc pip_desc = {};
-    pip_desc.shader = result.shader;
-    pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
-    pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
-    pip_desc.index_type = SG_INDEXTYPE_UINT16;
-    pip_desc.colors[0].blend.enabled = false;
-    pip_desc.cull_mode = SG_CULLMODE_NONE;
-    pip_desc.depth.compare = SG_COMPAREFUNC_ALWAYS;
-    pip_desc.depth.write_enabled = false;
-    pip_desc.stencil.enabled = false;
-
-    result.pipeline = sg_make_pipeline(&pip_desc);
+    result.pipeline = makePipeline(result.shader, result.vertex_layout, ShaderBlendMode::Disabled);
 
     if (result.pipeline.id == SG_INVALID_ID) {
         effect_log.error("Failed to create pipeline for %s", shader_name.c_str());
