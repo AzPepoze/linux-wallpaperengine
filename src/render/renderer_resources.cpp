@@ -4,7 +4,10 @@ void renderer_cleanup(renderer_t* r) {
     r->pip_alpha = {};
     r->pip_add = {};
     r->pip_lines = {};
-    for (auto& pipeline : r->pip_image_composite) pipeline = {};
+    for (int mode = 0; mode <= 30; ++mode) {
+        r->pip_image_composite[mode] = {};
+        r->image_composite_attempted[mode] = false;
+    }
     r->vertex_buffer = {};
     r->index_buffer = {};
     r->smp_repeat = {};
