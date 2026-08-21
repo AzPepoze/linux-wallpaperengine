@@ -15,7 +15,8 @@
 #include "render/shader/shader_processor.h"
 #include "sokol_args.h"
 #include "ui/sandbox_catalog.h"
-#include "wallpaper/scene/2d/effects/effect_configuration.h"
+#include "wallpaper/scene/2d/parser/effect_parser.h"
+#include "wallpaper/scene/2d/parser/particle_parser.h"
 
 static int g_test_passed = 0;
 static int g_test_failed = 0;
@@ -281,6 +282,20 @@ void test_effect_configuration_precedence() {
     cJSON_Delete(merged);
 }
 
+void test_particle_parser() {
+    cJSON* vector_value = cJSON_CreateString("1.5 2.5 3.5");
+    vec3 parsed = {};
+    ParticleParser::readVec3(vector_value, parsed);
+    TEST_ASSERT(parsed[0] == 1.5f && parsed[1] == 2.5f && parsed[2] == 3.5f,
+                "Particle parser should read string vec3 values");
+    cJSON_Delete(vector_value);
+
+    cJSON* scalar_value = cJSON_CreateString("2.25");
+    TEST_ASSERT(std::abs(ParticleParser::readFloat(scalar_value) - 2.25f) < 0.001f,
+                "Particle parser should read numeric strings");
+    cJSON_Delete(scalar_value);
+}
+
 void test_sandbox_catalog() {
     namespace fs = std::filesystem;
 
@@ -319,6 +334,7 @@ int main(int argc, char* argv[]) {
     test_cli_parsing();
     test_shader_source_metadata();
     test_effect_configuration_precedence();
+    test_particle_parser();
     test_sandbox_catalog();
     test_uniform_provenance_json();
     test_image_stats();

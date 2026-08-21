@@ -1,5 +1,5 @@
-#ifndef EFFECT_CONFIGURATION_H
-#define EFFECT_CONFIGURATION_H
+#ifndef EFFECT_PARSER_H
+#define EFFECT_PARSER_H
 
 #include <cjson/cJSON.h>
 
@@ -19,4 +19,4 @@ class EffectConfiguration {
     static void readUniformValues(const cJSON* config, std::map<std::string, std::vector<float>>& uniforms);
 };
 
-#endif  // EFFECT_CONFIGURATION_H
+#endif  // EFFECT_PARSER_H
