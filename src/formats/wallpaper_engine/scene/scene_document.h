@@ -41,6 +41,11 @@ struct ImageObjectDocument {
 
 struct ParticleObjectDocument {
     std::string particle;
+    float override_alpha = 1.0f;
+    float override_rate = 1.0f;
+    std::array<float, 3> override_color = {1.0f, 1.0f, 1.0f};
+    bool has_override_color = false;
+    bool override_color_is_legacy = false;
 };
 
 struct SceneObjectDocument {
