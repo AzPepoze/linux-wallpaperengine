@@ -4,6 +4,7 @@
 
 #include "effect_inspector.h"
 #include "imgui.h"
+#include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
 #include "wallpaper/scene/2d/effects/effect.h"
