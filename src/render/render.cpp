@@ -62,9 +62,9 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
 
     const std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
     const std::string blend_define = "#define BLENDMODE " + std::to_string(blend_mode) + "\n";
-    CompiledShader shader = ShaderCompiler::compile(
-        "image-composite-" + std::to_string(blend_mode), prefix + processed_vertex,
-        prefix + blend_define + processed_fragment, {}, 1);
+    CompiledShader shader =
+        ShaderCompiler::compile("image-composite-" + std::to_string(blend_mode), prefix + processed_vertex,
+                                prefix + blend_define + processed_fragment, {}, 1);
     if (shader.pipeline.id == SG_INVALID_ID) {
         LOG_TAG_W("RENDER", "Wallpaper Engine blend mode %d failed to compile; using normal alpha", blend_mode);
         return {};
