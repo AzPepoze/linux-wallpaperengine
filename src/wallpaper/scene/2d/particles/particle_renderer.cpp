@@ -147,18 +147,16 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 mat4x4_scale_aniso(model, model, layer_scale[0], layer_scale[1], layer_scale[2]);
                 mat4x4_mul(view_projection, projection, view);
             } else {
-                mat4x4_ortho(projection, 0.0f, ctx.renderer.view_width, ctx.renderer.view_height, 0.0f, -1.0f,
-                             1.0f);
+                mat4x4_ortho(projection, 0.0f, ctx.renderer.view_width, ctx.renderer.view_height, 0.0f, -1.0f, 1.0f);
                 mat4x4_identity(view_projection);
                 // Convert Wallpaper Engine's Y-up particle space exactly once at
                 // the particle-to-screen boundary. Image layers remain untouched.
-                mat4x4_translate_in_place(
-                    model, ctx.offset_x + (layer_origin[0] + parallax_x) * ctx.render_scale,
-                    ctx.offset_y + (scene_h - layer_origin[1] - parallax_y) * ctx.render_scale,
-                    layer_origin[2] * ctx.render_scale);
+                mat4x4_translate_in_place(model, ctx.offset_x + (layer_origin[0] + parallax_x) * ctx.render_scale,
+                                          ctx.offset_y + (scene_h - layer_origin[1] - parallax_y) * ctx.render_scale,
+                                          layer_origin[2] * ctx.render_scale);
                 mat4x4_rotate_Z(model, model, -layer_rotation * (float)(M_PI / 180.0));
-                mat4x4_scale_aniso(model, model, ctx.render_scale * layer_scale[0],
-                                   -ctx.render_scale * layer_scale[1], layer_scale[2]);
+                mat4x4_scale_aniso(model, model, ctx.render_scale * layer_scale[0], -ctx.render_scale * layer_scale[1],
+                                   layer_scale[2]);
                 mat4x4_dup(view_projection, projection);
             }
             mat4x4_mul(mvp, view_projection, model);
@@ -206,7 +204,8 @@ void ParticleSystem::draw(EngineContext& ctx) {
             } else {
                 fillVec4(particle_builtins.render_var0, 0.0f, 0.0f, 0.0f, 0.0f);
             }
-            fillVec4(particle_builtins.render_var1, frame_width, frame_height, (float)spritesheet_frames, texture_ratio);
+            fillVec4(particle_builtins.render_var1, frame_width, frame_height, (float)spritesheet_frames,
+                     texture_ratio);
 
             render_effect_pass_t render_pass = pass->getRenderPass();
             sg_view overrides[11] = {};
@@ -217,24 +216,6 @@ void ParticleSystem::draw(EngineContext& ctx) {
             renderer_draw_particle_batch(ctx, &ctx.renderer, particle_vertex_buffer, particle_index_buffer,
                                          (int)indices.size(), pass->pass_textures.texture0,
                                          pass->pass_textures.texture0_view, &render_pass, builtins, particle_builtins);
-        }
-    } else if (material_ready) {
-        // Compatibility fallback for simple materials whose authored shader cannot yet use
-        // the Wallpaper Engine particle vertex interface.
-        const float parallax_x = parallax[0] * ctx.parallax_smooth_x * Config::kParallaxScale;
-        const float parallax_y = parallax[1] * ctx.parallax_smooth_y * Config::kParallaxScale;
-        for (const Particle& particle : particles) {
-            float tint[4] = {particle.color[0], particle.color[1], particle.color[2], particle.alpha};
-            const float x = ctx.offset_x +
-                            (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
-            const float y = ctx.offset_y +
-                            (scene_h - layer_origin[1] - parallax_y - particle.position[1] * layer_scale[1]) *
-                                ctx.render_scale;
-            const float width = particle.size * layer_scale[0] * ctx.render_scale;
-            const float height = particle.size * layer_scale[1] * ctx.render_scale;
-            renderer_draw_sprite(ctx, &ctx.renderer, pass->pass_textures.texture0, pass->pass_textures.texture0_view,
-                                 x - width * 0.5f, y - height * 0.5f, width, height, -particle.rotation, tint,
-                                 is_additive, nullptr);
         }
     }
 
@@ -259,22 +240,20 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
         for (const ParticleEmitterConfig& emitter : config.emitters) {
             float color[4] = {1.0f, 1.0f, 0.0f, 1.0f};
             if (emitter.type == "boxrandom") {
-                const float x = ctx.offset_x +
-                                (layer_origin[0] + parallax_x + emitter.origin[0] - emitter.distance_max[0]) *
+                const float x =
+                    ctx.offset_x +
+                    (layer_origin[0] + parallax_x + emitter.origin[0] - emitter.distance_max[0]) * ctx.render_scale;
+                const float y = ctx.offset_y +
+                                (scene_h - layer_origin[1] - parallax_y - emitter.origin[1] - emitter.distance_max[1]) *
                                     ctx.render_scale;
-                const float y =
-                    ctx.offset_y +
-                    (scene_h - layer_origin[1] - parallax_y - emitter.origin[1] - emitter.distance_max[1]) *
-                        ctx.render_scale;
                 renderer_draw_rect(&ctx.renderer, x, y, emitter.distance_max[0] * 2.0f * ctx.render_scale,
                                    emitter.distance_max[1] * 2.0f * ctx.render_scale, color);
             } else if (emitter.type == "sphererandom") {
                 const float distance = emitter.distance_max[0];
-                const float x = ctx.offset_x +
-                                (layer_origin[0] + parallax_x + emitter.origin[0] - distance) * ctx.render_scale;
-                const float y = ctx.offset_y +
-                                (scene_h - layer_origin[1] - parallax_y - emitter.origin[1] - distance) *
-                                    ctx.render_scale;
+                const float x =
+                    ctx.offset_x + (layer_origin[0] + parallax_x + emitter.origin[0] - distance) * ctx.render_scale;
+                const float y = ctx.offset_y + (scene_h - layer_origin[1] - parallax_y - emitter.origin[1] - distance) *
+                                                   ctx.render_scale;
                 renderer_draw_rect(&ctx.renderer, x, y, distance * 2.0f * ctx.render_scale,
                                    distance * 2.0f * ctx.render_scale, color);
             }
@@ -287,11 +266,11 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
     const size_t draw_count = std::min(particles.size(), static_cast<size_t>(ctx.particle_debug_max_particles));
     for (size_t particle_index = 0; particle_index < draw_count; ++particle_index) {
         const Particle& particle = particles[particle_index];
-        const float x = ctx.offset_x +
-                        (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
-        const float y = ctx.offset_y +
-                        (scene_h - layer_origin[1] - parallax_y - particle.position[1] * layer_scale[1]) *
-                            ctx.render_scale;
+        const float x =
+            ctx.offset_x + (layer_origin[0] + parallax_x + particle.position[0] * layer_scale[0]) * ctx.render_scale;
+        const float y =
+            ctx.offset_y +
+            (scene_h - layer_origin[1] - parallax_y - particle.position[1] * layer_scale[1]) * ctx.render_scale;
         if (show_bounds) {
             const float width = particle.size * 0.5f * layer_scale[0] * ctx.render_scale;
             const float height = particle.size * 0.5f * layer_scale[1] * ctx.render_scale;
@@ -306,11 +285,9 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
             const float angle = atan2f(end_y - y, end_x - x);
             constexpr float arrow_length = 8.0f;
             constexpr float arrow_angle = 0.55f;
-            renderer_draw_line(&ctx.renderer, end_x, end_y,
-                               end_x - cosf(angle - arrow_angle) * arrow_length,
+            renderer_draw_line(&ctx.renderer, end_x, end_y, end_x - cosf(angle - arrow_angle) * arrow_length,
                                end_y - sinf(angle - arrow_angle) * arrow_length, velocity_color);
-            renderer_draw_line(&ctx.renderer, end_x, end_y,
-                               end_x - cosf(angle + arrow_angle) * arrow_length,
+            renderer_draw_line(&ctx.renderer, end_x, end_y, end_x - cosf(angle + arrow_angle) * arrow_length,
                                end_y - sinf(angle + arrow_angle) * arrow_length, velocity_color);
         }
     }
