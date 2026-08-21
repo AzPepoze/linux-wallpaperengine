@@ -24,10 +24,12 @@ jobs:
 
       - name: Install Slang
         run: |
-          git clone --depth 1 https://github.com/shader-slang/slang.git /tmp/slang
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/shader-slang/slang.git /tmp/slang
           cmake -S /tmp/slang -B /tmp/slang-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DSLANG_VERSION_FULL=0.0.0-verification \
             -DSLANG_ENABLE_SLANGD=OFF \
             -DSLANG_ENABLE_GFX=OFF \
             -DSLANG_ENABLE_TESTS=OFF \
