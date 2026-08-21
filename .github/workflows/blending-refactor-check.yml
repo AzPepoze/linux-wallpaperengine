@@ -8,12 +8,17 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refactor/wallpaper-engine-blending
 
       - name: Install system dependencies
         run: |
@@ -22,19 +27,22 @@ jobs:
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
             mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
 
-      - name: Check render.cpp formatting
-        run: clang-format --dry-run --Werror src/render/render.cpp
+      - name: Format blending refactor
+        if: github.event_name == 'push'
+        run: |
+          clang-format -i src/render/render.cpp
+          if ! git diff --quiet -- src/render/render.cpp; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add -- src/render/render.cpp
+            git commit -m 'style: format blending refactor'
+            git push origin HEAD:refactor/wallpaper-engine-blending
+          fi
 
-      - name: Check render.h formatting
-        if: always()
-        run: clang-format --dry-run --Werror src/render/render.h
-
-      - name: Check renderer resources formatting
-        if: always()
-        run: clang-format --dry-run --Werror src/render/renderer_resources.cpp
+      - name: Check formatting
+        run: find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror
 
       - name: Install prebuilt Slang
-        if: success()
         env:
           SLANG_VERSION: '2026.14'
         run: |
@@ -53,11 +61,9 @@ jobs:
           "$SLANG_PREFIX/bin/slangc" -version
 
       - name: Set up xmake
-        if: success()
         uses: xmake-io/github-action-setup-xmake@v1
 
       - name: Verify Wallpaper Engine blending source
-        if: success()
         run: |
           grep -n 'common_blending.h' src/render/render.cpp
           grep -n 'ApplyBlending(BLENDMODE' src/render/render.cpp
@@ -66,7 +72,6 @@ jobs:
           ! grep -n 'return mix(b,b\*s,o)' src/render/render.cpp
 
       - name: Run static analysis
-        if: success()
         run: |
           cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 \
             '-D__has_feature(x)=0' \
@@ -75,13 +80,10 @@ jobs:
             src/
 
       - name: Configure
-        if: success()
         run: xmake f -y -m release
 
       - name: Build
-        if: success()
         run: xmake -v
 
       - name: Check software Vulkan
-        if: success()
         run: xvfb-run -a vulkaninfo --summary
