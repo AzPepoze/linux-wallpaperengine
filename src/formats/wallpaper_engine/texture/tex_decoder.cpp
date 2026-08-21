@@ -282,7 +282,7 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             format_name = "DXT5/BC3";
             break;
         case 8:
-            format_name = "RGBA8";
+            format_name = "RG8";
             break;
         case 9:
             format_name = "R8 (Grayscale)";
@@ -377,7 +377,6 @@ DecodedImage decodeTexture(const char* path, int image_index) {
 
             switch (wallpaper_format) {
                 case 0:
-                case 8:
                     image.format = PixelFormat::RGBA8;
                     image.pixels = std::move(raw_data);
                     break;
@@ -391,6 +390,11 @@ DecodedImage decodeTexture(const char* path, int image_index) {
                     break;
                 case 6:
                     image.format = PixelFormat::BC3;
+                    image.pixels = std::move(raw_data);
+                    break;
+                case 8:
+                    image.format = PixelFormat::RG8;
+                    image.channels = 2;
                     image.pixels = std::move(raw_data);
                     break;
                 case 9:
