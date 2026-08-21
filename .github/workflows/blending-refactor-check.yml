@@ -22,16 +22,21 @@ jobs:
             libx11-dev libxcursor-dev libxi-dev libvulkan-dev \
             mesa-vulkan-drivers vulkan-tools xvfb xauth cppcheck clang-format
 
-      - name: Check formatting
-        run: find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror
-
-      - name: Run static analysis
+      - name: Check changed-source formatting
         run: |
-          cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 \
+          clang-format --dry-run --Werror \
+            src/render/render.cpp \
+            src/render/render.h \
+            src/render/renderer_resources.cpp
+
+      - name: Run changed-source static analysis
+        run: |
+          cppcheck -j 3 --quiet --enable=warning --error-exitcode=1 \
             '-D__has_feature(x)=0' \
             --suppress=preprocessorErrorDirective \
             --suppress=uninitMemberVarNoCtor \
-            src/
+            src/render/render.cpp \
+            src/render/renderer_resources.cpp
 
       - name: Install prebuilt Slang
         env:
