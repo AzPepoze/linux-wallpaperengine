@@ -29,6 +29,7 @@ class SceneTree {
     void rebuildHierarchy();
 
     const SceneTreeNode* find(uint32_t id) const;
+    SceneTreeNode* find(uint32_t id);
     std::vector<uint32_t> rootIds() const;
     const SceneTreeNode* resolveParallaxNode(uint32_t id) const;
     bool localTransform(uint32_t id, mat4x4 out) const;

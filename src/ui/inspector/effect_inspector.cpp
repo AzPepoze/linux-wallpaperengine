@@ -221,6 +221,35 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
             ImGui::PopID();
         }
     }
+
+    if (!pass.uniforms.empty() && ImGui::TreeNodeEx("Shader Uniforms", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (auto& [name, values] : pass.uniforms) {
+            if (values.empty()) continue;
+            ImGui::PushID(name.c_str());
+            if (values.size() == 1) {
+                ImGui::DragFloat(name.c_str(), &values[0], 0.01f);
+            } else if (values.size() == 2) {
+                ImGui::DragFloat2(name.c_str(), values.data(), 0.01f);
+            } else if (values.size() == 3) {
+                ImGui::DragFloat3(name.c_str(), values.data(), 0.01f);
+            } else if (values.size() >= 4) {
+                if (name.find("color") != std::string::npos || name.find("Color") != std::string::npos ||
+                    name.find("tint") != std::string::npos || name.find("Tint") != std::string::npos) {
+                    ImGui::ColorEdit4(name.c_str(), values.data());
+                } else {
+                    ImGui::DragFloat4(name.c_str(), values.data(), 0.01f);
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+
+    if (!pass.combos.empty() && ImGui::TreeNode("Shader Combos")) {
+        for (const auto& combo : pass.combos) ImGui::BulletText("%s = %d", combo.first.c_str(), combo.second);
+        ImGui::TreePop();
+    }
+
     ImGui::Unindent();
     ImGui::PopID();
 }
