@@ -23,7 +23,6 @@ class AssetManager : public IAssetResolver {
     GfxImage resolveTexture(const char* name, std::string* out_path = nullptr, int image_index = 0) const override;
     GfxImage resolveMaterialTexture(const char* mat_rel_path, std::string* out_path = nullptr) const override;
 
-   private:
     struct ActiveVideoTexture {
         std::string path;
         sg_image image = {};
@@ -31,6 +30,11 @@ class AssetManager : public IAssetResolver {
         float elapsed_seconds = 0.0f;
     };
 
+    const std::vector<ActiveVideoTexture>& getVideoTextures() const {
+        return video_textures;
+    }
+
+   private:
     std::string engine_path;
     std::string wallpaper_path;
     mutable std::vector<ActiveVideoTexture> video_textures;

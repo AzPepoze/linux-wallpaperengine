@@ -5,6 +5,11 @@
 #include <memory>
 #include <vector>
 
+#include "video_types.h"
+
+struct ImportedVideoSurface;
+struct AVFrame;
+
 namespace wallpaper_engine {
 
 class VideoTexture {
@@ -14,10 +19,19 @@ class VideoTexture {
     VideoTexture& operator=(const VideoTexture&) = delete;
 
     static std::unique_ptr<VideoTexture> open(const char* texture_path);
+    static std::unique_ptr<VideoTexture> openFile(const char* video_path);
+
     uint32_t width() const;
     uint32_t height() const;
     float frameDuration() const;
+    bool isZeroCopy() const;
+
     bool decodeNextFrame(std::vector<uint8_t>& rgba_pixels);
+    bool decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, AVFrame*& out_av_frame);
+
+    const ZeroCopyMetrics& getMetrics() const;
+    const PlaybackStats& getStats() const;
+    const PerformanceTiming& getTiming() const;
 
    private:
     VideoTexture() = default;

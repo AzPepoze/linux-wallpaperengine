@@ -9,6 +9,7 @@
 #include "core/build_config.h"
 #include "core/config.h"
 #include "core/context.h"
+#include "core/gpu_device_manager.h"
 #include "core/logger.h"
 #include "core/utils.h"
 #include "sokol_app.h"
@@ -93,6 +94,13 @@ static bool loadSandboxPreviewScene(const char* scene_path) {
 
 static void init(void) {
     stm_setup();
+    GpuDeviceManager::instance().init();
+    const auto& active_gpu = GpuDeviceManager::instance().getSelectedGpu();
+    LOG_I("[GPU] Active GPU [%u]: %s (%s, PCI: %s, DRM: %s, VA-API: %s)", active_gpu.index, active_gpu.name.c_str(),
+          active_gpu.device_type.c_str(), active_gpu.pci_bus_id.empty() ? "N/A" : active_gpu.pci_bus_id.c_str(),
+          active_gpu.drm_render_node.empty() ? "N/A" : active_gpu.drm_render_node.c_str(),
+          active_gpu.vaapi_supported ? "Supported" : "N/A");
+
     if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
         LOG_E("A Wallpaper Engine installation with its original assets is required");
         exit(EXIT_FAILURE);
@@ -279,6 +287,30 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     a_desc.argv = argv;
     a_desc.max_args = 64;
     sargs_setup(&a_desc);
+
+    GpuDeviceManager::instance().init();
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--gpu") == 0 || strcmp(argv[i], "-gpu") == 0) {
+            if (i + 1 < argc) GpuDeviceManager::instance().selectGpu(argv[i + 1]);
+        } else if (strncmp(argv[i], "--gpu=", 6) == 0) {
+            GpuDeviceManager::instance().selectGpu(argv[i] + 6);
+        }
+    }
+
+    if (sargs_exists("gpu") && sargs_value("gpu")) {
+        GpuDeviceManager::instance().selectGpu(sargs_value("gpu"));
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--list-gpus") == 0 || strcmp(argv[i], "-list-gpus") == 0) {
+            GpuDeviceManager::instance().printGpuList();
+            exit(0);
+        }
+    }
+    if (sargs_exists("list-gpus") || sargs_exists("--list-gpus")) {
+        GpuDeviceManager::instance().printGpuList();
+        exit(0);
+    }
 
 #if DEBUG_BUILD
     if (sargs_exists("sandbox") || sargs_exists("--sandbox")) ctx.runtime_mode = RuntimeMode::Sandbox;
