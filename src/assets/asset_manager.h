@@ -34,6 +34,9 @@ class AssetManager : public IAssetResolver {
         return video_textures;
     }
 
+    const ActiveVideoTexture* findVideoTexture(sg_image img) const;
+    const ActiveVideoTexture* findVideoTexture(const std::string& path) const;
+
    private:
     std::string engine_path;
     std::string wallpaper_path;

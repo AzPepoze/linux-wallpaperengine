@@ -216,8 +216,31 @@ uint32_t VideoTexture::height() const {
 float VideoTexture::frameDuration() const {
     return impl->frame_duration;
 }
+double VideoTexture::fps() const {
+    return impl->frame_duration > 0.0f ? (1.0 / (double)impl->frame_duration) : 30.0;
+}
 bool VideoTexture::isZeroCopy() const {
     return impl->is_hw_active;
+}
+const std::string& VideoTexture::codecName() const {
+    static const std::string kEmpty = "";
+    if (impl->is_hw_active) return impl->hw_decoder.get_codec_name();
+    if (impl->sw_codec && impl->sw_codec->codec && impl->sw_codec->codec->name) {
+        static std::string sw_name;
+        sw_name = impl->sw_codec->codec->name;
+        return sw_name;
+    }
+    return kEmpty;
+}
+const std::string& VideoTexture::containerName() const {
+    static const std::string kEmpty = "";
+    if (impl->is_hw_active) return impl->hw_decoder.get_container_name();
+    if (impl->sw_format && impl->sw_format->iformat && impl->sw_format->iformat->name) {
+        static std::string sw_cont;
+        sw_cont = impl->sw_format->iformat->name;
+        return sw_cont;
+    }
+    return kEmpty;
 }
 
 const ZeroCopyMetrics& VideoTexture::getMetrics() const {

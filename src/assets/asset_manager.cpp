@@ -45,6 +45,22 @@ void AssetManager::clearVideoTextures() {
     video_textures.clear();
 }
 
+const AssetManager::ActiveVideoTexture* AssetManager::findVideoTexture(sg_image img) const {
+    if (img.id == SG_INVALID_ID) return nullptr;
+    for (const auto& v : video_textures) {
+        if (v.image.id == img.id) return &v;
+    }
+    return nullptr;
+}
+
+const AssetManager::ActiveVideoTexture* AssetManager::findVideoTexture(const std::string& path) const {
+    if (path.empty()) return nullptr;
+    for (const auto& v : video_textures) {
+        if (v.path == path || (!path.empty() && v.path.find(path) != std::string::npos)) return &v;
+    }
+    return nullptr;
+}
+
 void AssetManager::updateVideoTextures(float elapsed_seconds) {
     for (ActiveVideoTexture& video : video_textures) {
         video.elapsed_seconds += elapsed_seconds;

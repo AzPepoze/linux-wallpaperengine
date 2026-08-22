@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "core/gpu_device_manager.h"
 #include "effect_inspector.h"
 #include "imgui.h"
 #include "render/diagnostics/render_diagnostics.h"
@@ -12,7 +13,9 @@
 #include "wallpaper/scene/2d/layers/image_layer.h"
 #include "wallpaper/scene/2d/layers/layer.h"
 #include "wallpaper/scene/2d/layers/particle_layer.h"
+#include "wallpaper/scene/2d/parallax.h"
 #include "wallpaper/scene/2d/particles/particle_system.h"
+#include "wallpaper/scene/tree/scene_tree.h"
 
 namespace Inspector {
 
@@ -316,6 +319,77 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         if (il->img.id != SG_INVALID_ID) {
             sg_image_desc desc = sg_query_image_desc(il->img);
             showParticleTextureSlot(0, "Base Albedo", il->cached_view, il->path, desc.width, desc.height);
+        }
+
+        float layer_scale[3] = {il->scale[0], il->scale[1], il->scale[2]};
+        float layer_origin[3] = {il->origin[0], il->origin[1], il->origin[2]};
+        float layer_rotation = il->rotation;
+        if (il->scene_object_id != 0 && ctx.scene_tree) {
+            if (const SceneTreeNode* node = ctx.scene_tree->find(il->scene_object_id)) {
+                layer_scale[0] = node->scale[0];
+                layer_scale[1] = node->scale[1];
+                layer_scale[2] = node->scale[2];
+                layer_rotation = node->angles[2];
+            }
+            ctx.scene_tree->worldPosition(il->scene_object_id, layer_origin);
+        }
+
+        const float rendered_w = il->size[0] * layer_scale[0] * ctx.render_scale;
+        const float rendered_h = il->size[1] * layer_scale[1] * ctx.render_scale;
+        const float scene_h =
+            ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+        const parallax_offset_t camera_offset =
+            parallax_layer_offset(ctx, il->scene_object_id, layer_origin, il->parallax);
+        const float rendered_x =
+            ctx.offset_x + (layer_origin[0] + camera_offset.x) * ctx.render_scale - rendered_w * 0.5f;
+        const float rendered_y =
+            ctx.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.render_scale - rendered_h * 0.5f;
+
+        if (ImGui::CollapsingHeader("Resolution & Viewport Bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
+            sg_image_desc src_desc = (il->img.id != SG_INVALID_ID) ? sg_query_image_desc(il->img) : sg_image_desc{};
+            ImGui::Text("Source Texture:   %d x %d px", src_desc.width, src_desc.height);
+            ImGui::Text("Layer Author Size: %.0f x %.0f px", il->size[0], il->size[1]);
+            ImGui::Text("Rendered Bounds:  [x: %.1f, y: %.1f, w: %.1f, h: %.1f]", rendered_x, rendered_y, rendered_w,
+                        rendered_h);
+            ImGui::Text("Viewport Window:  %.0f x %.0f px", ctx.renderer.view_width, ctx.renderer.view_height);
+            ImGui::Text("Design Canvas:    %.0f x %.0f px (Scale: %.3fx)", ctx.scene_w, ctx.scene_h, ctx.render_scale);
+            ImGui::Text("Screen Padding:   (Offset X: %.1f px, Offset Y: %.1f px)", ctx.offset_x, ctx.offset_y);
+        }
+
+        const auto* video = ctx.asset_mgr.findVideoTexture(il->img);
+        if (!video && !il->path.empty()) video = ctx.asset_mgr.findVideoTexture(il->path);
+        if (video && video->decoder) {
+            if (ImGui::CollapsingHeader("Video Stream & Hardware Acceleration", ImGuiTreeNodeFlags_DefaultOpen)) {
+                const auto& dec = *video->decoder;
+                const auto& m = dec.getMetrics();
+                const auto& s = dec.getStats();
+                const auto& t = dec.getTiming();
+                const auto& gpu = GpuDeviceManager::instance().getSelectedGpu();
+
+                ImGui::TextColored(
+                    ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Decode Mode:  %s",
+                    dec.isZeroCopy() ? "Zero-Copy VA-API (Hardware VRAM)" : "Software Fallback (FFmpeg)");
+                ImGui::Text("Codec / Format: %s (%s)", dec.codecName().empty() ? "h264" : dec.codecName().c_str(),
+                            dec.containerName().empty() ? "mp4" : dec.containerName().c_str());
+                ImGui::Text("Stream Native:  %u x %u @ %.2f FPS", dec.width(), dec.height(), dec.fps());
+                ImGui::Text("Surface / DRM:  NV12 (DRM_FORMAT_NV12) -> VK_FORMAT_G8_B8R8_2PLANE_420_UNORM");
+                ImGui::Text("Active GPU:     [%u] %s", gpu.index, gpu.name.empty() ? "Default" : gpu.name.c_str());
+                ImGui::Text("DRM Render:     %s", gpu.drm_render_node.empty() ? "N/A" : gpu.drm_render_node.c_str());
+
+                ImGui::Separator();
+                ImGui::Text("Decoded Frames: %llu (HW: %llu)", (unsigned long long)s.frames_decoded,
+                            (unsigned long long)m.vaapi_frames_decoded);
+                const uint64_t total_cache = m.import_cache_hits + m.import_cache_misses;
+                const double hit_rate =
+                    total_cache > 0 ? (100.0 * (double)m.import_cache_hits / (double)total_cache) : 100.0;
+                ImGui::Text("DMA-BUF Cache:  %llu Hits / %llu Misses (%.1f%% Hit Rate)",
+                            (unsigned long long)m.import_cache_hits, (unsigned long long)m.import_cache_misses,
+                            hit_rate);
+                ImGui::Text("CPU Copies:     %llu B (sws_scale: %llu)", (unsigned long long)m.cpu_rgba_bytes,
+                            (unsigned long long)m.sws_scale_calls);
+                ImGui::Text("Demux Latency:  %.3f ms | Decode Submit: %.3f ms", t.demux_cpu_ms, t.decode_submit_cpu_ms);
+                ImGui::Text("VA Sync Latency:%.3f ms | Sched Jitter:  %.3f ms", t.va_sync_cpu_ms, t.scheduler_cpu_ms);
+            }
         }
 
         ImGui::Separator();
