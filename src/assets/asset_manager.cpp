@@ -37,9 +37,13 @@ void AssetManager::init(const char* ep, const char* wp) {
     wallpaper_path = wp;
 }
 
-AssetManager::~AssetManager() { clearVideoTextures(); }
+AssetManager::~AssetManager() {
+    clearVideoTextures();
+}
 
-void AssetManager::clearVideoTextures() { video_textures.clear(); }
+void AssetManager::clearVideoTextures() {
+    video_textures.clear();
+}
 
 void AssetManager::updateVideoTextures(float elapsed_seconds) {
     for (ActiveVideoTexture& video : video_textures) {

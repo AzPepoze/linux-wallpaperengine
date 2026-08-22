@@ -417,8 +417,11 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
     static int logged_composite_frames = 0;
     if (logged_composite_frames < 10) {
         logged_composite_frames++;
-        LOG_TAG_I("RENDER", "renderer_draw_image_composite: blend=%d, img=%u, view=%u, scene_view=%u, rect=(%.1f, %.1f, %.1f, %.1f), tint=(%.2f, %.2f, %.2f, %.2f)",
-                  blend_mode, image.id, image_view.id, scene_view.id, x, y, width, height, tint[0], tint[1], tint[2], tint[3]);
+        LOG_TAG_I("RENDER",
+                  "renderer_draw_image_composite: blend=%d, img=%u, view=%u, scene_view=%u, rect=(%.1f, %.1f, %.1f, "
+                  "%.1f), tint=(%.2f, %.2f, %.2f, %.2f)",
+                  blend_mode, image.id, image_view.id, scene_view.id, x, y, width, height, tint[0], tint[1], tint[2],
+                  tint[3]);
     }
 
     sg_view background[] = {scene_view};

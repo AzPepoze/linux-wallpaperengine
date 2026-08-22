@@ -32,7 +32,8 @@ void ImageLayer::draw(EngineContext& ctx) {
         width = ctx.renderer.view_width;
         height = ctx.renderer.view_height;
     } else {
-        const float scene_h = ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+        const float scene_h =
+            ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
         width = size[0] * layer_scale[0] * ctx.render_scale;
         height = size[1] * layer_scale[1] * ctx.render_scale;
         const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
@@ -76,7 +77,8 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
         width = ctx.renderer.view_width;
         height = ctx.renderer.view_height;
     } else {
-        const float scene_h = ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+        const float scene_h =
+            ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
         width = size[0] * layer_scale[0] * ctx.render_scale;
         height = size[1] * layer_scale[1] * ctx.render_scale;
         const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);

@@ -41,11 +41,11 @@ class ImageLayer : public Layer {
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void updateCachedView();
     bool ensureEffectTargets(sg_image source_image = {SG_INVALID_ID});
+
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
 
    private:
-
     GfxImage effect_images[2];
     GfxView effect_texture_views[2];
     GfxView effect_attachment_views[2];

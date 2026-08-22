@@ -48,9 +48,12 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
     if (layer_index >= 0 && layer_index < (int)ctx.layers.size()) {
         const Layer* layer = ctx.layers[layer_index];
         if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
-            if (il->is_fullscreen) node_name += " [FS PostProcess]";
-            else if (il->solid_layer) node_name += " [Solid]";
-            else node_name += " [Image]";
+            if (il->is_fullscreen)
+                node_name += " [FS PostProcess]";
+            else if (il->solid_layer)
+                node_name += " [Solid]";
+            else
+                node_name += " [Image]";
 
             if (il->color_blend_mode != 0) {
                 node_name += " (Blend " + std::to_string(il->color_blend_mode) + ")";
