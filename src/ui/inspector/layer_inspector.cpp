@@ -190,6 +190,66 @@ static void showParticleSystem(::ParticleSystem& ps) {
     showSpriteSheetInfo(ps);
 }
 
+const char* blendModeName(int mode) {
+    switch (mode) {
+        case 0:
+            return "Normal (Alpha)";
+        case 1:
+        case 2:
+            return "Multiply";
+        case 3:
+            return "Color Burn";
+        case 4:
+            return "Linear Burn";
+        case 5:
+            return "Darker Color";
+        case 6:
+            return "Lighten";
+        case 7:
+            return "Screen";
+        case 8:
+            return "Color Dodge";
+        case 9:
+            return "Linear Dodge (Add)";
+        case 10:
+            return "Lighter Color";
+        case 11:
+            return "Overlay";
+        case 12:
+            return "Soft Light";
+        case 13:
+            return "Hard Light";
+        case 14:
+            return "Vivid Light";
+        case 15:
+            return "Linear Light";
+        case 16:
+            return "Pin Light";
+        case 17:
+            return "Hard Mix";
+        case 18:
+            return "Difference";
+        case 19:
+            return "Exclusion";
+        case 20:
+            return "Subtract";
+        case 21:
+            return "Divide";
+        case 22:
+            return "Hue";
+        case 23:
+            return "Saturation";
+        case 24:
+            return "Color";
+        case 25:
+            return "Luminosity";
+        case 31:
+            return "Additive";
+        default:
+            return "Custom / Unknown";
+    }
+}
+
 void showGlobalSettings(EngineContext& ctx) {
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "GLOBAL ENGINE SETTINGS");
     const char* modes[] = {"Cover", "Fit"};
@@ -281,6 +341,8 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         ImGui::Text("Type: %s",
                     il->is_fullscreen ? "Fullscreen Post-Process" : (il->solid_layer ? "Solid Layer" : "Image Layer"));
         if (!il->is_fullscreen) {
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Blend Mode: %d - %s", il->color_blend_mode,
+                               blendModeName(il->color_blend_mode));
             const char* blend_names[] = {
                 "0 - Normal (Alpha)", "1 - Multiply",   "2 - Multiply",    "3 - Color Burn",  "4 - Linear Burn",
                 "5 - Darker Color",   "6 - Lighten",    "7 - Screen",      "8 - Color Dodge", "9 - Linear Dodge (Add)",
@@ -290,11 +352,11 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
                 "25 - Luminosity"};
             int current_mode = il->color_blend_mode;
             if (current_mode >= 0 && current_mode < (int)IM_ARRAYSIZE(blend_names)) {
-                if (ImGui::Combo("Blend Mode", &current_mode, blend_names, IM_ARRAYSIZE(blend_names))) {
+                if (ImGui::Combo("Select Blend Mode", &current_mode, blend_names, IM_ARRAYSIZE(blend_names))) {
                     il->color_blend_mode = current_mode;
                 }
             } else {
-                ImGui::DragInt("Blend Mode", &il->color_blend_mode, 1, 0, 30);
+                ImGui::DragInt("Select Blend Mode", &il->color_blend_mode, 1, 0, 30);
             }
         }
         if (!il->path.empty()) ImGui::TextWrapped("Path: %s", il->path.c_str());
