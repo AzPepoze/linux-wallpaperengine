@@ -55,4 +55,7 @@
 #undef SOKOL_NO_ENTRY
 #endif
 
-#include "sokol_backend_ext.inl"
+#include "sokol_debug_labels.inl"
+#include "sokol_readback.inl"
+#include "sokol_ycbcr_pipeline.inl"
+#include "sokol_zero_copy_blit.inl"
