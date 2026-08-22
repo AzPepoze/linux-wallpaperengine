@@ -250,6 +250,29 @@ const char* blendModeName(int mode) {
     }
 }
 
+constexpr int kMaxAuthoredBlendModes = 26;
+
+bool showBlendModeSelector(const char* label, int& blend_mode) {
+    bool changed = false;
+    char current_label[64];
+    snprintf(current_label, sizeof(current_label), "%d - %s", blend_mode, blendModeName(blend_mode));
+
+    if (ImGui::BeginCombo(label, current_label)) {
+        for (int i = 0; i < kMaxAuthoredBlendModes; ++i) {
+            const bool is_selected = (blend_mode == i);
+            char item_name[64];
+            snprintf(item_name, sizeof(item_name), "%d - %s", i, blendModeName(i));
+            if (ImGui::Selectable(item_name, is_selected)) {
+                blend_mode = i;
+                changed = true;
+            }
+            if (is_selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
 void showGlobalSettings(EngineContext& ctx) {
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "GLOBAL ENGINE SETTINGS");
     const char* modes[] = {"Cover", "Fit"};
@@ -341,23 +364,7 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         ImGui::Text("Type: %s",
                     il->is_fullscreen ? "Fullscreen Post-Process" : (il->solid_layer ? "Solid Layer" : "Image Layer"));
         if (!il->is_fullscreen) {
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Blend Mode: %d - %s", il->color_blend_mode,
-                               blendModeName(il->color_blend_mode));
-            const char* blend_names[] = {
-                "0 - Normal (Alpha)", "1 - Multiply",   "2 - Multiply",    "3 - Color Burn",  "4 - Linear Burn",
-                "5 - Darker Color",   "6 - Lighten",    "7 - Screen",      "8 - Color Dodge", "9 - Linear Dodge (Add)",
-                "10 - Lighter Color", "11 - Overlay",   "12 - Soft Light", "13 - Hard Light", "14 - Vivid Light",
-                "15 - Linear Light",  "16 - Pin Light", "17 - Hard Mix",   "18 - Difference", "19 - Exclusion",
-                "20 - Subtract",      "21 - Divide",    "22 - Hue",        "23 - Saturation", "24 - Color",
-                "25 - Luminosity"};
-            int current_mode = il->color_blend_mode;
-            if (current_mode >= 0 && current_mode < (int)IM_ARRAYSIZE(blend_names)) {
-                if (ImGui::Combo("Select Blend Mode", &current_mode, blend_names, IM_ARRAYSIZE(blend_names))) {
-                    il->color_blend_mode = current_mode;
-                }
-            } else {
-                ImGui::DragInt("Select Blend Mode", &il->color_blend_mode, 1, 0, 30);
-            }
+            showBlendModeSelector("Blend Mode", il->color_blend_mode);
         }
         if (!il->path.empty()) ImGui::TextWrapped("Path: %s", il->path.c_str());
 
