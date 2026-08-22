@@ -27,6 +27,7 @@ struct TextureBindingTrace {
 
 struct PassTraceEntry {
     uint64_t frame_number = 0;
+    std::string layer_name;
     int effect_index = 0;
     std::string effect_file;
     int pass_index = 0;
