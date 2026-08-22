@@ -71,6 +71,8 @@ typedef struct {
     mat4x4 effect_texture_projection_inverse;
     vec2 pointer_position;
     vec2 padding3;
+    vec4 light_ambient_color;
+    vec4 light_skylight_color;
 } builtin_uniforms_t;
 
 typedef struct {
