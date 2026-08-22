@@ -353,6 +353,14 @@ void RenderDiagnostics::init(bool enabled) {
     }
 }
 
+void RenderDiagnostics::triggerCapture(uint64_t current_frame) {
+    config.enabled = true;
+    config.target_frame = current_frame + 1;
+    config.capture_complete = false;
+    is_capturing_frame = false;
+    effect_log.info("Manual diagnostic capture triggered for frame: %llu", (unsigned long long)config.target_frame);
+}
+
 void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {
     if (!config.enabled || config.capture_complete) return;
 
