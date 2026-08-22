@@ -36,22 +36,26 @@ ParsedScene SceneBuilder::load(const char* scene_json_path, EngineContext& ctx) 
 ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocument& document, EngineContext& ctx) {
     ParsedScene out;
 
+    out.camera = document.camera;
+    out.general = document.general;
     out.design_width = document.design_width;
     out.design_height = document.design_height;
-    out.has_clear_color = document.has_clear_color;
-    for (int i = 0; i < 4; ++i) out.clear_color[i] = document.clear_color[i];
-    out.camera_parallax_enabled = document.camera_parallax_enabled;
-    out.camera_parallax_amount = document.camera_parallax_amount;
-    out.camera_parallax_delay = document.camera_parallax_delay;
-    out.camera_parallax_mouse_influence = document.camera_parallax_mouse_influence;
-    out.camera_shake_enabled = document.camera_shake_enabled;
-    out.camera_shake_amplitude = document.camera_shake_amplitude;
-    out.camera_shake_speed = document.camera_shake_speed;
-    out.camera_shake_roughness = document.camera_shake_roughness;
+    out.has_clear_color = document.general.has_clear_color;
+    for (int i = 0; i < 4; ++i) out.clear_color[i] = document.general.clear_color[i];
+    out.camera_parallax_enabled = document.general.camera_parallax_enabled;
+    out.camera_parallax_amount = document.general.camera_parallax_amount;
+    out.camera_parallax_delay = document.general.camera_parallax_delay;
+    out.camera_parallax_mouse_influence = document.general.camera_parallax_mouse_influence;
+    out.camera_shake_enabled = document.general.camera_shake_enabled;
+    out.camera_shake_amplitude = document.general.camera_shake_amplitude;
+    out.camera_shake_speed = document.general.camera_shake_speed;
+    out.camera_shake_roughness = document.general.camera_shake_roughness;
 
+    ctx.camera = document.camera;
+    ctx.general = document.general;
     ctx.scene_w = out.design_width;
     ctx.scene_h = out.design_height;
-    ctx.perspective_override_fov = document.perspective_override_fov;
+    ctx.perspective_override_fov = document.general.perspective_override_fov;
 
     out.scene_tree = new SceneTree();
     for (const auto& object : document.objects) {

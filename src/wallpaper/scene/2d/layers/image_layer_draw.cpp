@@ -22,11 +22,23 @@ void ImageLayer::draw(EngineContext& ctx) {
         ctx.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
-    const float width = size[0] * layer_scale[0] * ctx.render_scale;
-    const float height = size[1] * layer_scale[1] * ctx.render_scale;
-    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
-    const float x = ctx.offset_x + (layer_origin[0] + camera_offset.x) * ctx.render_scale - width * 0.5f;
-    const float y = ctx.offset_y + (layer_origin[1] + camera_offset.y) * ctx.render_scale - height * 0.5f;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    if (is_fullscreen) {
+        x = 0.0f;
+        y = 0.0f;
+        width = ctx.renderer.view_width;
+        height = ctx.renderer.view_height;
+    } else {
+        const float scene_h = ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+        width = size[0] * layer_scale[0] * ctx.render_scale;
+        height = size[1] * layer_scale[1] * ctx.render_scale;
+        const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
+        x = ctx.offset_x + (layer_origin[0] + camera_offset.x) * ctx.render_scale - width * 0.5f;
+        y = ctx.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.render_scale - height * 0.5f;
+    }
 
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
@@ -54,11 +66,23 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
         }
         ctx.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
-    const float width = size[0] * layer_scale[0] * ctx.render_scale;
-    const float height = size[1] * layer_scale[1] * ctx.render_scale;
-    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
-    const float x = ctx.offset_x + (layer_origin[0] + camera_offset.x) * ctx.render_scale - width * 0.5f;
-    const float y = ctx.offset_y + (layer_origin[1] + camera_offset.y) * ctx.render_scale - height * 0.5f;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    if (is_fullscreen) {
+        x = 0.0f;
+        y = 0.0f;
+        width = ctx.renderer.view_width;
+        height = ctx.renderer.view_height;
+    } else {
+        const float scene_h = ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+        width = size[0] * layer_scale[0] * ctx.render_scale;
+        height = size[1] * layer_scale[1] * ctx.render_scale;
+        const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
+        x = ctx.offset_x + (layer_origin[0] + camera_offset.x) * ctx.render_scale - width * 0.5f;
+        y = ctx.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.render_scale - height * 0.5f;
+    }
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
     if (effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID) {

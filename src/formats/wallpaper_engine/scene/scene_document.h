@@ -72,21 +72,59 @@ struct SceneObjectDocument {
     std::vector<EffectInstanceDocument> effects;
 };
 
+struct SceneCameraDocument {
+    std::array<float, 3> center = {0.0f, 0.0f, -1.0f};
+    std::array<float, 3> eye = {0.0f, 0.0f, 0.0f};
+    std::array<float, 3> up = {0.0f, 1.0f, 0.0f};
+};
+
+struct SceneBloomDocument {
+    bool enabled = false;
+    float strength = 1.0f;
+    float threshold = 0.8f;
+    float hdr_feather = 0.25f;
+    float hdr_iterations = 8.0f;
+    float hdr_scatter = 2.0f;
+    float hdr_strength = 2.0f;
+    float hdr_threshold = 1.0f;
+};
+
+struct SceneGeneralDocument {
+    std::array<float, 3> ambient_color = {0.3f, 0.3f, 0.3f};
+    std::array<float, 3> skylight_color = {0.3f, 0.3f, 0.3f};
+    std::array<float, 4> clear_color = {0.0f, 0.0f, 0.0f, 1.0f};
+    bool has_clear_color = false;
+    bool clear_enabled = true;
+    bool hdr = true;
+    float zoom = 1.0f;
+    float fov = 50.0f;
+    float near_z = 0.01f;
+    float far_z = 10000.0f;
+    bool camera_fade = true;
+    bool camera_preview = true;
+
+    bool camera_parallax_enabled = false;
+    float camera_parallax_amount = 0.25f;
+    float camera_parallax_delay = 0.1f;
+    float camera_parallax_mouse_influence = 0.05f;
+
+    bool camera_shake_enabled = false;
+    float camera_shake_amplitude = 0.5f;
+    float camera_shake_speed = 0.75f;
+    float camera_shake_roughness = 1.0f;
+
+    float perspective_override_fov = 0.0f;
+    std::array<float, 2> orthogonal_projection = {0.0f, 0.0f};
+
+    SceneBloomDocument bloom;
+};
+
 struct SceneDocument {
     float design_width = 0.0f;
     float design_height = 0.0f;
-    std::array<float, 4> clear_color = {0.0f, 0.0f, 0.0f, 1.0f};
-    bool has_clear_color = false;
 
-    bool camera_parallax_enabled = false;
-    float camera_parallax_amount = 0.0f;
-    float camera_parallax_delay = 0.1f;
-    float camera_parallax_mouse_influence = 0.0f;
-    bool camera_shake_enabled = false;
-    float camera_shake_amplitude = 0.0f;
-    float camera_shake_speed = 0.0f;
-    float camera_shake_roughness = 0.0f;
-    float perspective_override_fov = 0.0f;
+    SceneCameraDocument camera;
+    SceneGeneralDocument general;
 
     std::vector<SceneObjectDocument> objects;
 };

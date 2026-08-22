@@ -210,6 +210,9 @@ void Scene2DRuntime::drawOffscreen() {
 
         auto* image = dynamic_cast<ImageLayer*>(layer);
         if (image && image->requiresSceneColor()) {
+            if (image->is_fullscreen && !image->effects.empty()) {
+                image->renderEffectChain(ctx, scene_targets[current].image, scene_targets[current].texture_view);
+            }
             const int next = 1 - current;
             sg_pass composite_pass = {};
             composite_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;

@@ -1,9 +1,10 @@
 #include "core/logger.h"
 #include "image_layer.h"
 
-bool ImageLayer::ensureEffectTargets() {
-    if (img.id == SG_INVALID_ID) return false;
-    const sg_image_desc source_desc = sg_query_image_desc(img);
+bool ImageLayer::ensureEffectTargets(sg_image source_image) {
+    sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
+    if (target_source.id == SG_INVALID_ID) return false;
+    const sg_image_desc source_desc = sg_query_image_desc(target_source);
     if (source_desc.width <= 0 || source_desc.height <= 0) return false;
     if (effect_target_width == source_desc.width && effect_target_height == source_desc.height &&
         effect_images[0].id != SG_INVALID_ID && effect_images[1].id != SG_INVALID_ID &&

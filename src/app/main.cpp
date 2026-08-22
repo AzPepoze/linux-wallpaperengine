@@ -33,22 +33,25 @@ static Scene2DRuntime* scene_engine = nullptr;
 static bool applyParsedScene(ParsedScene parsed) {
     if (!parsed.scene_tree) return false;
 
+    ctx.camera = parsed.camera;
+    ctx.general = parsed.general;
     ctx.layers = std::move(parsed.layers);
     ctx.scene_tree = parsed.scene_tree;
     ctx.scene_w = parsed.design_width;
     ctx.scene_h = parsed.design_height;
-    ctx.camera_parallax_enabled = parsed.camera_parallax_enabled;
-    ctx.camera_parallax_amount = parsed.camera_parallax_amount;
-    ctx.camera_parallax_delay = parsed.camera_parallax_delay;
-    ctx.camera_parallax_mouse_influence = parsed.camera_parallax_mouse_influence;
-    ctx.camera_shake_enabled = parsed.camera_shake_enabled;
-    ctx.camera_shake_amplitude = parsed.camera_shake_amplitude;
-    ctx.camera_shake_speed = parsed.camera_shake_speed;
-    ctx.camera_shake_roughness = parsed.camera_shake_roughness;
-    if (parsed.has_clear_color) {
+    ctx.camera_parallax_enabled = parsed.general.camera_parallax_enabled;
+    ctx.camera_parallax_amount = parsed.general.camera_parallax_amount;
+    ctx.camera_parallax_delay = parsed.general.camera_parallax_delay;
+    ctx.camera_parallax_mouse_influence = parsed.general.camera_parallax_mouse_influence;
+    ctx.camera_shake_enabled = parsed.general.camera_shake_enabled;
+    ctx.camera_shake_amplitude = parsed.general.camera_shake_amplitude;
+    ctx.camera_shake_speed = parsed.general.camera_shake_speed;
+    ctx.camera_shake_roughness = parsed.general.camera_shake_roughness;
+    ctx.perspective_override_fov = parsed.general.perspective_override_fov;
+    if (parsed.general.has_clear_color && parsed.general.clear_enabled) {
         ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        ctx.pass_action.colors[0].clear_value = {parsed.clear_color[0], parsed.clear_color[1], parsed.clear_color[2],
-                                                 parsed.clear_color[3]};
+        ctx.pass_action.colors[0].clear_value = {parsed.general.clear_color[0], parsed.general.clear_color[1],
+                                                 parsed.general.clear_color[2], parsed.general.clear_color[3]};
     }
     scene_engine->updateViewport();
     return true;
@@ -94,6 +97,7 @@ static void init(void) {
         LOG_E("A Wallpaper Engine installation with its original assets is required");
         exit(EXIT_FAILURE);
     }
+    ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
 #if DEBUG_BUILD
     RenderDiagnostics::instance().init();
 #endif
