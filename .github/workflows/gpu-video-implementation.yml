@@ -27,6 +27,7 @@ jobs:
         run: |
           python3 .github/scripts/apply_gpu_video.py
           python3 .github/scripts/fix_gpu_video.py
+          python3 .github/scripts/fix_gpu_video2.py
 
       - name: Install system dependencies
         run: |
@@ -73,7 +74,7 @@ jobs:
       - name: Commit implementation and remove temporary CI
         if: github.event_name == 'push'
         run: |
-          rm -f .github/scripts/apply_gpu_video.py .github/scripts/fix_gpu_video.py
+          rm -f .github/scripts/apply_gpu_video.py .github/scripts/fix_gpu_video.py .github/scripts/fix_gpu_video2.py
           rm -f .github/workflows/gpu-video-implementation.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
