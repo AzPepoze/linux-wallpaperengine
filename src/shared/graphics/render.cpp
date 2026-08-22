@@ -389,12 +389,6 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     }
 }
 
-void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
-    (void)ctx;
-    (void)r;
-    // No-op: Blend mode pipelines are now compiled lazily on first use.
-}
-
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
                                    sg_view scene_view, float x, float y, float width, float height, float rotation,
                                    float tint[4], int blend_mode) {

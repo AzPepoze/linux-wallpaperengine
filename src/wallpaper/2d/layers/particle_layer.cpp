@@ -61,18 +61,6 @@ void ParticleLayer::draw(EngineContext& ctx) {
     ps->parallax[0] = 0.0f;
     ps->parallax[1] = 0.0f;
 
-    bool any_eff_solo = false;
-    for (auto eff : effects) {
-        if (eff->solo) {
-            any_eff_solo = true;
-            break;
-        }
-    }
-
-    for (auto eff : effects) {
-        if (!eff->visible || (any_eff_solo && !eff->solo)) continue;
-        eff->apply(ctx);
-    }
     ps->draw(ctx);
 }
 
