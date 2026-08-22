@@ -101,9 +101,24 @@ void drawHierarchyPanel(EngineContext& ctx) {
     ImGui::TextDisabled("(%.1f FPS)", fps);
     ImGui::Separator();
 
-    if (ImGui::Selectable("Global Settings", ctx.selected_object == -1)) ctx.selected_object = -1;
+    const float isolate_btn_w = 72.0f;
+    const float available_w = ImGui::GetContentRegionAvail().x;
+    const float selectable_w = available_w - isolate_btn_w - ImGui::GetStyle().ItemSpacing.x;
+
+    if (ImGui::Selectable("Global Settings", ctx.selected_object == -1, 0,
+                          ImVec2(selectable_w > 40.0f ? selectable_w : 0.0f, 0))) {
+        ctx.selected_object = -1;
+    }
     ImGui::SameLine();
-    if (ImGui::Button(ctx.test_mode ? "Isolate: on" : "Isolate")) ctx.test_mode = !ctx.test_mode;
+    if (ctx.test_mode) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.9f, 1.0f));
+    }
+    if (ImGui::Button(ctx.test_mode ? "Isolate: ON" : "Isolate", ImVec2(isolate_btn_w, 0))) {
+        ctx.test_mode = !ctx.test_mode;
+    }
+    if (ctx.test_mode) {
+        ImGui::PopStyleColor();
+    }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Render only the selected layer");
 
     ImGui::Separator();
