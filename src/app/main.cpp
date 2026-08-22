@@ -278,7 +278,7 @@ static void frame(void) {
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
 
-    ctx.asset_mgr.updateVideoTextures(dt);
+    ctx.asset_mgr.updateVideoTextures(dt, ctx.layers);
     parallax_update(ctx, dt, sapp_width(), sapp_height());
     scene_engine->update(dt);
 #if DEBUG_BUILD

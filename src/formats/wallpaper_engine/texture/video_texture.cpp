@@ -309,8 +309,8 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
                 ++impl->zero_copy.sws_scale_calls;
                 impl->sw_scaler = sws_getCachedContext(impl->sw_scaler, impl->sw_frame->width, impl->sw_frame->height,
                                                        (AVPixelFormat)impl->sw_frame->format, impl->sw_frame->width,
-                                                       impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr,
-                                                       nullptr, nullptr);
+                                                       impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_FAST_BILINEAR,
+                                                       nullptr, nullptr, nullptr);
                 if (impl->sw_scaler) {
                     size_t bytes = (size_t)impl->sw_frame->width * impl->sw_frame->height * 4;
                     output.resize(bytes);
@@ -332,10 +332,10 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
         const int received = avcodec_receive_frame(impl->sw_codec, impl->sw_frame);
         if (received == 0) {
             ++impl->zero_copy.sws_scale_calls;
-            impl->sw_scaler =
-                sws_getCachedContext(impl->sw_scaler, impl->sw_frame->width, impl->sw_frame->height,
-                                     (AVPixelFormat)impl->sw_frame->format, impl->sw_frame->width,
-                                     impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr, nullptr, nullptr);
+            impl->sw_scaler = sws_getCachedContext(impl->sw_scaler, impl->sw_frame->width, impl->sw_frame->height,
+                                                   (AVPixelFormat)impl->sw_frame->format, impl->sw_frame->width,
+                                                   impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_FAST_BILINEAR, nullptr,
+                                                   nullptr, nullptr);
             if (!impl->sw_scaler) return false;
             size_t bytes = (size_t)impl->sw_frame->width * impl->sw_frame->height * 4;
             output.resize(bytes);

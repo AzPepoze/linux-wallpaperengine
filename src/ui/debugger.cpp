@@ -96,7 +96,10 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
 }
 
 void drawHierarchyPanel(EngineContext& ctx) {
+    const double fps = ctx.profiler.frame_avg_ms > 0.0 ? (1000.0 / ctx.profiler.frame_avg_ms) : 0.0;
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "SCENE TREE");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%.1f FPS)", fps);
     ImGui::Separator();
 
     if (ImGui::Selectable("Global Settings", ctx.selected_object == -1)) ctx.selected_object = -1;
@@ -124,7 +127,10 @@ void drawHierarchyPanel(EngineContext& ctx) {
 }
 
 void drawInspectorPanel(EngineContext& ctx) {
+    const double fps = ctx.profiler.frame_avg_ms > 0.0 ? (1000.0 / ctx.profiler.frame_avg_ms) : 0.0;
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "INSPECTOR");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "[ %.1f FPS | %.1f ms ]", fps, ctx.profiler.frame_avg_ms);
     ImGui::Separator();
 
     if (ctx.selected_object == -1) {
