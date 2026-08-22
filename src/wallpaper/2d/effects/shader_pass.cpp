@@ -44,27 +44,6 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     if (instance_config) pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
     if (owned_base_config) cJSON_Delete(owned_base_config);
 }
-#include <cstdlib>
-
-#include "effect.h"
-
-void ShaderPass::apply(EngineContext& ctx) {
-    (void)ctx;
-    if (!enabled || compiled.pipeline.id == SG_INVALID_ID) return;
-}
-
-void ShaderPass::applyUniforms() {
-    int uniform_slot = 3;
-    for (const auto& [name, values] : uniforms) {
-        (void)name;
-        if (uniform_slot >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) break;
-        alignas(16) float data[4] = {0, 0, 0, 0};
-        for (int index = 0; index < static_cast<int>(values.size()) && index < 4; ++index) data[index] = values[index];
-        sg_range range = SG_RANGE(data);
-        sg_apply_uniforms(uniform_slot, &range);
-        ++uniform_slot;
-    }
-}
 
 bool ShaderPass::resolveDepth(const char* source_texture_path, EngineContext& ctx) {
     const bool first_attempt = !pass_textures.depth_attempted;

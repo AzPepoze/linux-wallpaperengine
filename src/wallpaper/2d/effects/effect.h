@@ -47,8 +47,6 @@ class ShaderPass {
     ~ShaderPass() = default;
 
     void init(EngineContext& ctx);
-    void apply(EngineContext& ctx);
-    void applyUniforms();
 #if DEBUG_BUILD
     void rebuildWithDebugMode(int mode, EngineContext& ctx);
 #endif
@@ -125,7 +123,6 @@ class Effect {
     static Effect* load(const char* rel_path, cJSON* instance_config, EngineContext& ctx);
     static Effect* loadFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx);
     void init(EngineContext& ctx);
-    void apply(EngineContext& ctx);
 };
 
 #endif  // EFFECT_H

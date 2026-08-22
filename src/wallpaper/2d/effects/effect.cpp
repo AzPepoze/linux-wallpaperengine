@@ -505,7 +505,3 @@ Effect* Effect::loadFromDocument(const wallpaper_engine::EffectInstanceDocument&
 void Effect::init(EngineContext& ctx) {
     for (auto p : passes) p->init(ctx);
 }
-
-void Effect::apply(EngineContext& ctx) {
-    for (auto p : passes) p->apply(ctx);
-}
