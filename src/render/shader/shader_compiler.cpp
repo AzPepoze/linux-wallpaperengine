@@ -13,9 +13,8 @@
 namespace {
 
 bool usesParticleSpriteLayout(const std::string& source) {
-    return source.find("a_TexCoordVec4") != std::string::npos &&
-           source.find("a_TexCoordVec4C1") != std::string::npos && source.find("a_TexCoordC2") != std::string::npos &&
-           source.find("a_Color") != std::string::npos;
+    return source.find("a_TexCoordVec4") != std::string::npos && source.find("a_TexCoordVec4C1") != std::string::npos &&
+           source.find("a_TexCoordC2") != std::string::npos && source.find("a_Color") != std::string::npos;
 }
 
 void configureParticleBuiltins(sg_shader_desc& desc) {
@@ -23,17 +22,10 @@ void configureParticleBuiltins(sg_shader_desc& desc) {
     desc.uniform_blocks[slot].stage = SG_SHADERSTAGE_VERTEX;
     desc.uniform_blocks[slot].size = sizeof(particle_builtin_uniforms_t);
 
-    const char* names[] = {"g_ModelMatrix",
-                           "g_ModelMatrixInverse",
-                           "g_ViewProjectionMatrix",
-                           "g_OrientationUp",
-                           "g_OrientationRight",
-                           "g_OrientationForward",
-                           "g_ViewUp",
-                           "g_ViewRight",
-                           "g_EyePosition",
-                           "g_RenderVar0",
-                           "g_RenderVar1"};
+    const char* names[] = {"g_ModelMatrix",   "g_ModelMatrixInverse", "g_ViewProjectionMatrix",
+                           "g_OrientationUp", "g_OrientationRight",   "g_OrientationForward",
+                           "g_ViewUp",        "g_ViewRight",          "g_EyePosition",
+                           "g_RenderVar0",    "g_RenderVar1"};
     const sg_uniform_type types[] = {SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,
                                      SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3,
                                      SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3, SG_UNIFORMTYPE_FLOAT3,
@@ -82,9 +74,8 @@ GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout la
     if (blend_mode != ShaderBlendMode::Disabled) {
         pip_desc.colors[0].blend.enabled = true;
         pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
-        pip_desc.colors[0].blend.dst_factor_rgb = blend_mode == ShaderBlendMode::Additive
-                                                       ? SG_BLENDFACTOR_ONE
-                                                       : SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+        pip_desc.colors[0].blend.dst_factor_rgb =
+            blend_mode == ShaderBlendMode::Additive ? SG_BLENDFACTOR_ONE : SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
         pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
         pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     }
@@ -98,8 +89,8 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
-    result.vertex_layout =
-        usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite : ShaderVertexLayout::Sprite2D;
+    result.vertex_layout = usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
+                                                                          : ShaderVertexLayout::Sprite2D;
 
     sg_shader_desc shd_desc = {};
     if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {

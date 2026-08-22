@@ -21,8 +21,7 @@ const char* runtimeClassName(wallpaper_engine::SceneObjectKind kind) {
 }
 
 std::string sceneTreeDisplayName(const wallpaper_engine::SceneObjectDocument& object) {
-    const std::string object_name =
-        object.name.empty() ? "Node " + std::to_string(object.node.id) : object.name;
+    const std::string object_name = object.name.empty() ? "Node " + std::to_string(object.node.id) : object.name;
     return "[" + std::string(runtimeClassName(object.kind)) + "] " + object_name;
 }
 

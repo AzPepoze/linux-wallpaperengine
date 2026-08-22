@@ -204,7 +204,6 @@ void renderer_init(renderer_t* r, float w, float h) {
 
     for (int mode = 0; mode <= kLastWallpaperBlendMode; ++mode) {
         r->pip_image_composite[mode] = {};
-        r->image_composite_attempted[mode] = false;
     }
 }
 
@@ -352,6 +351,14 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     }
 }
 
+void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
+    for (int mode = kFirstWallpaperBlendMode; mode <= kLastWallpaperBlendMode; ++mode) {
+        if (r->pip_image_composite[mode].id == SG_INVALID_ID) {
+            r->pip_image_composite[mode] = compileWallpaperBlendPipeline(ctx, mode);
+        }
+    }
+}
+
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
                                    sg_view scene_view, float x, float y, float width, float height, float rotation,
                                    float tint[4], int blend_mode) {
@@ -365,15 +372,7 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
         return;
     }
 
-    if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) {
-        LOG_TAG_E("RENDER", "Unsupported Wallpaper Engine blend mode %d", blend_mode);
-        return;
-    }
-
-    if (!r->image_composite_attempted[blend_mode]) {
-        r->image_composite_attempted[blend_mode] = true;
-        r->pip_image_composite[blend_mode] = compileWallpaperBlendPipeline(ctx, blend_mode);
-    }
+    if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) return;
 
     if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
 
@@ -384,5 +383,6 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
     composite.shader_name = "image-composite";
     composite.override_views = background;
     composite.num_override_views = 1;
+
     renderer_draw_sprite(ctx, r, image, image_view, x, y, width, height, rotation, tint, false, &composite);
 }

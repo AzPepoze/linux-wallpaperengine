@@ -33,8 +33,8 @@ static const char* filenameFromPath(const std::string& path) {
     return slash == std::string::npos ? path.c_str() : path.c_str() + slash + 1;
 }
 
-static void showParticleTextureSlot(int slot, const char* semantic, sg_view view, const std::string& path, int width = 0,
-                                    int height = 0) {
+static void showParticleTextureSlot(int slot, const char* semantic, sg_view view, const std::string& path,
+                                    int width = 0, int height = 0) {
     ImGui::PushID(slot);
     ImGui::Text("g_Texture%d [%s]", slot, semantic && semantic[0] ? semantic : "Texture");
 
@@ -91,16 +91,15 @@ static void showParticleMaterial(::ParticleSystem& ps) {
         const char* texture0_label = "Albedo / Base";
         const auto texture0_label_it = pass.texture_labels.find(0);
         if (texture0_label_it != pass.texture_labels.end()) texture0_label = texture0_label_it->second.c_str();
-        showParticleTextureSlot(0, texture0_label, pass.pass_textures.texture0_view,
-                                pass.pass_textures.texture0_path, ps.texture_width, ps.texture_height);
+        showParticleTextureSlot(0, texture0_label, pass.pass_textures.texture0_view, pass.pass_textures.texture0_path,
+                                ps.texture_width, ps.texture_height);
 
         for (int i = 0; i < (int)pass.pass_textures.cached_views.size(); ++i) {
             const int shader_slot = i + 1;
             const auto label_it = pass.texture_labels.find(shader_slot);
             const char* label = label_it != pass.texture_labels.end() ? label_it->second.c_str() : "Extra";
-            const std::string path = i < (int)pass.pass_textures.texture_paths.size()
-                                         ? pass.pass_textures.texture_paths[i]
-                                         : std::string();
+            const std::string path =
+                i < (int)pass.pass_textures.texture_paths.size() ? pass.pass_textures.texture_paths[i] : std::string();
             showParticleTextureSlot(shader_slot, label, pass.pass_textures.cached_views[i], path);
         }
 
@@ -108,8 +107,8 @@ static void showParticleMaterial(::ParticleSystem& ps) {
             ImGui::SeparatorText("Runtime texture bindings");
             for (const auto& binding : pass.render_texture_bindings) {
                 if (binding.second == "_rt_FullFrameBuffer" && ps.sceneColorView().id != SG_INVALID_ID) {
-                    showParticleTextureSlot(binding.first, "Scene Color / Refraction", ps.sceneColorView(), std::string(),
-                                            (int)ps.scene_w, (int)ps.scene_h);
+                    showParticleTextureSlot(binding.first, "Scene Color / Refraction", ps.sceneColorView(),
+                                            std::string(), (int)ps.scene_w, (int)ps.scene_h);
                 } else {
                     ImGui::Text("g_Texture%d <- %s", binding.first, binding.second.c_str());
                 }
