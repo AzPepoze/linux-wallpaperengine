@@ -37,9 +37,8 @@ void readString(FILE* file, char* buffer, int size) {
     buffer[size] = '\0';
 }
 
-bool readTextureHeader(FILE* file, char magic[9], uint32_t& wallpaper_format, uint32_t& flags,
-                       uint32_t& image_width, uint32_t& image_height, char container_magic[9],
-                       uint32_t& image_count) {
+bool readTextureHeader(FILE* file, char magic[9], uint32_t& wallpaper_format, uint32_t& flags, uint32_t& image_width,
+                       uint32_t& image_height, char container_magic[9], uint32_t& image_count) {
     readString(file, magic, 8);
     fseek(file, 1, SEEK_CUR);
     fseek(file, 8, SEEK_CUR);  // TEXI0001

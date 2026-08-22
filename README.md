@@ -8,6 +8,7 @@ Linux renderer for Wallpaper Engine projects.
 - GCC or Clang with C++ support
 - Vulkan development libraries and a working Vulkan GPU driver
 - [Slang](https://github.com/shader-slang/slang)
+- A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
 - X11 development libraries (`libX11`, `libXcursor`, `libXi`)
 
 On Arch / CachyOS:
@@ -30,6 +31,13 @@ sudo pacman -S xmake vulkan-icd-loader shader-slang libx11 libxcursor libxi
 | Validate, build, and launch the debug effect sandbox | `xmake sandbox`                                             |
 
 Build outputs are written to `bin/<mode>/`.
+
+### Render Diagnostics (Debug Mode)
+
+When running in debug mode (`xmake f -m debug`), render diagnostics automatically run at frame 100 to capture the render pipeline state:
+- Captures pass images, scene stages, render graphs, shader code, and uniforms.
+- Output is written to `./diagnostics/<wallpaper_name>/` (named after the active wallpaper or project title).
+- If a diagnostics folder for that wallpaper already exists, it is automatically replaced with fresh capture data.
 
 ## FEATURE SUPPORT
 

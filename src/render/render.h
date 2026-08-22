@@ -105,6 +105,7 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
                                    sg_view scene_view, float x, float y, float width, float height, float rotation,
                                    float tint[4], int blend_mode);
+void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r);
 #else
 void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);

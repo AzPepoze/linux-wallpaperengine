@@ -18,7 +18,8 @@ namespace {
 
 bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& ctx, bool fallback) {
     char absolute_path[1024];
-    if (material_path.empty() || !ctx.asset_mgr.resolvePath(material_path.c_str(), absolute_path, sizeof(absolute_path)))
+    if (material_path.empty() ||
+        !ctx.asset_mgr.resolvePath(material_path.c_str(), absolute_path, sizeof(absolute_path)))
         return fallback;
 
     char* text = read_file_to_string(absolute_path);
@@ -58,8 +59,8 @@ int wallpaperTextureFormatForImage(sg_image image) {
     }
 }
 
-void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const ParticleSystemConfig& config,
-                      int& cols, int& rows, int& frames) {
+void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const ParticleSystemConfig& config, int& cols,
+                      int& rows, int& frames) {
     cols = (int)metadata.spritesheet_cols;
     rows = (int)metadata.spritesheet_rows;
     frames = (int)metadata.spritesheet_frames;
@@ -67,7 +68,8 @@ void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const P
 
     // Some Workshop particle atlases are static TEX containers with no TEXS table.
     // Only infer an atlas when it is an unambiguous strip of square frames.
-    if (config.animation_mode == "randomframe" || config.animation_mode == "sequence" || config.animation_mode == "once") {
+    if (config.animation_mode == "randomframe" || config.animation_mode == "sequence" ||
+        config.animation_mode == "once") {
         if (metadata.width > metadata.height && metadata.width % metadata.height == 0) {
             const uint32_t candidate = metadata.width / metadata.height;
             if (candidate > 1) {
@@ -142,8 +144,8 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         for (int component = 0; component < 3; ++component)
             particle_system->override_color[component] = override_color[component];
     }
-    particle_system->is_trail = particle_system->config.renderer.type == "spritetrail" ||
-                                particle_system->config.renderer.type == "trail";
+    particle_system->is_trail =
+        particle_system->config.renderer.type == "spritetrail" || particle_system->config.renderer.type == "trail";
     particle_system->use_perspective = (particle_system->config.flags & 4) != 0;
     particle_system->is_additive =
         materialUsesAdditiveBlend(particle_system->config.material_path, ctx, particle_system->config.additive);
@@ -165,8 +167,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
             pass->render_texture_bindings[3] = "_rt_FullFrameBuffer";
 
             // Texture1 provides the refraction normal map.
-            if (!pass->pass_textures.textures.empty() &&
-                pass->pass_textures.textures[0].id != SG_INVALID_ID)
+            if (!pass->pass_textures.textures.empty() && pass->pass_textures.textures[0].id != SG_INVALID_ID)
                 pass->combos["NORMALMAP"] = 1;
         }
 
@@ -187,8 +188,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         if (particle_system->spritesheet_frames > 1) {
             pass->combos["SPRITESHEET"] = 1;
             // Particle flag bit 2 disables interpolation between sequence frames.
-            if (particle_system->config.animation_mode == "sequence" &&
-                (particle_system->config.flags & 2) == 0)
+            if (particle_system->config.animation_mode == "sequence" && (particle_system->config.flags & 2) == 0)
                 pass->combos["SPRITESHEETBLEND"] = 1;
         }
 
@@ -202,10 +202,12 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         }
 
         pass->init(ctx);
-        if (pass->compiled.shader.id != SG_INVALID_ID && pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+        if (pass->compiled.shader.id != SG_INVALID_ID &&
+            pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite) {
             const ShaderBlendMode blend =
                 particle_system->is_additive ? ShaderBlendMode::Additive : ShaderBlendMode::Alpha;
-            pass->compiled.pipeline = ShaderCompiler::makePipeline(pass->compiled.shader, pass->compiled.vertex_layout, blend);
+            pass->compiled.pipeline =
+                ShaderCompiler::makePipeline(pass->compiled.shader, pass->compiled.vertex_layout, blend);
         }
 
         if ((particle_system->texture_width <= 0 || particle_system->texture_height <= 0) &&
@@ -219,10 +221,9 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
     particle_system->initParticleBuffers();
 
     for (const ParticleObjectConfig& child : particle_system->config.children) {
-        ParticleSystem* child_system = createFromPath(child.particle_path.c_str(), ctx, scene_width, scene_height,
-                                                      child.override_alpha, child.override_rate,
-                                                      child.has_override_color ? child.override_color : nullptr,
-                                                      child.override_color_is_legacy);
+        ParticleSystem* child_system = createFromPath(
+            child.particle_path.c_str(), ctx, scene_width, scene_height, child.override_alpha, child.override_rate,
+            child.has_override_color ? child.override_color : nullptr, child.override_color_is_legacy);
         if (child_system) particle_system->children.push_back(child_system);
     }
     for (float time = 0.0f; time < particle_system->config.start_time; time += 0.1f) particle_system->update(0.1f);

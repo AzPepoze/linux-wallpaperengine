@@ -6,9 +6,9 @@
 #include <string>
 
 struct DiagnosticConfig {
-    bool enabled = false;
+    bool enabled = true;
     std::string output_dir = "./diagnostics";
-    uint64_t target_frame = 120;
+    uint64_t target_frame = 100;
     bool has_deterministic_time = false;
     float deterministic_time = 0.0f;
 
@@ -21,7 +21,7 @@ struct DiagnosticConfig {
     int force_output_texture_slot = -1;
     int capture_effect_index = -1;
     int capture_pass_index = -1;
-    bool capture_pass_images = false;
+    bool capture_pass_images = true;
 
     // A/B test flag (deferred / controlled)
     bool enable_ab = false;
@@ -30,7 +30,6 @@ struct DiagnosticConfig {
     bool capture_triggered = false;
     bool capture_complete = false;
 
-    void parseFromArgs();
     bool shouldCaptureFrame(uint64_t frame_index) const {
         return enabled && !capture_complete && (frame_index == target_frame);
     }
