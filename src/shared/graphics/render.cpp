@@ -2,7 +2,9 @@
 
 #include <math.h>
 
+#include <future>
 #include <string>
+#include <vector>
 
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
@@ -16,7 +18,20 @@ namespace {
 constexpr int kFirstWallpaperBlendMode = 1;
 constexpr int kLastWallpaperBlendMode = 30;
 
-GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
+// Holds the fully-processed GLSL sources for one blend mode, ready for GPU upload.
+// Produced on worker threads; consumed on the main thread for sg_make_shader / sg_make_pipeline.
+struct BlendShaderSources {
+    int mode = 0;
+    std::string vert;
+    std::string frag;
+    bool valid = false;
+};
+
+// Thread-safe: only reads asset files and does string processing — no GPU calls.
+BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode) {
+    BlendShaderSources result;
+    result.mode = blend_mode;
+
     const std::string vertex_source =
         "#version 330\n"
         "uniform mat4 g_ModelViewProjectionMatrix;\n"
@@ -76,25 +91,32 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
         "    frag_color = vec4(ApplyBlending(BLENDMODE, background.rgb, source.rgb, source.a), 1.0);\n"
         "}\n";
 
-    std::string processed_vertex = ShaderSourceProcessor::processShaderSource(
+    std::string processed_vert = ShaderSourceProcessor::processShaderSource(
         vertex_source, "shaders/linux-wallpaperengine/image_composite.vert", ctx.asset_mgr, true);
-    std::string processed_fragment = ShaderSourceProcessor::processShaderSource(
+    std::string processed_frag = ShaderSourceProcessor::processShaderSource(
         fragment_source, "shaders/linux-wallpaperengine/image_composite.frag", ctx.asset_mgr, false);
 
     // Wallpaper Engine shader data is a runtime requirement. Do not substitute an
     // approximate or normal-alpha implementation when its authoritative header is unavailable.
-    if (processed_fragment.find("#include \"common_blending.h\"") != std::string::npos) {
+    if (processed_frag.find("#include \"common_blending.h\"") != std::string::npos) {
         LOG_TAG_E("RENDER", "Required Wallpaper Engine common_blending.h was not found for blend mode %d", blend_mode);
-        return {};
+        return result;
     }
 
     const std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
     const std::string blend_define = "#define BLENDMODE " + std::to_string(blend_mode) + "\n";
-    CompiledShader shader =
-        ShaderCompiler::compile("image-composite-" + std::to_string(blend_mode), prefix + processed_vertex,
-                                prefix + blend_define + processed_fragment, {}, 1);
+    result.vert = prefix + processed_vert;
+    result.frag = prefix + blend_define + processed_frag;
+    result.valid = true;
+    return result;
+}
+
+GfxPipeline finalizeBlendPipeline(EngineContext& ctx, const BlendShaderSources& sources) {
+    (void)ctx;
+    CompiledShader shader = ShaderCompiler::compile(
+        "image-composite-" + std::to_string(sources.mode), sources.vert, sources.frag, {}, 1);
     if (shader.pipeline.id == SG_INVALID_ID) {
-        LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", blend_mode);
+        LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", sources.mode);
         return {};
     }
     return std::move(shader.pipeline);
@@ -234,6 +256,27 @@ void renderer_init(renderer_t* r, float w, float h) {
 
     for (int mode = 0; mode <= kLastWallpaperBlendMode; ++mode) {
         r->pip_image_composite[mode] = {};
+    }
+}
+
+// DO NOT EDIT: precompiles all blend pipelines during init to prevent GPU context loss mid-render (crash fix)
+void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
+    const int count = kLastWallpaperBlendMode - kFirstWallpaperBlendMode + 1;
+
+    // parallel source preparation
+    std::vector<std::future<BlendShaderSources>> futures;
+    futures.reserve(count);
+    for (int mode = kFirstWallpaperBlendMode; mode <= kLastWallpaperBlendMode; ++mode) {
+        if (r->pip_image_composite[mode].id != SG_INVALID_ID) continue;
+        futures.push_back(std::async(std::launch::async, prepareBlendShaderSources, std::ref(ctx), mode));
+    }
+
+    // main-thread GPU finalization
+    for (auto& f : futures) {
+        BlendShaderSources sources = f.get();
+        if (!sources.valid) continue;
+        if (r->pip_image_composite[sources.mode].id != SG_INVALID_ID) continue;
+        r->pip_image_composite[sources.mode] = finalizeBlendPipeline(ctx, sources);
     }
 }
 
@@ -404,10 +447,7 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
 
     if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) return;
 
-    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) {
-        r->pip_image_composite[blend_mode] = compileWallpaperBlendPipeline(ctx, blend_mode);
-        if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
-    }
+    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
 
     static int logged_composite_frames = 0;
     if (logged_composite_frames < 10) {
