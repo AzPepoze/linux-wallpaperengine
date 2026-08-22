@@ -2,6 +2,11 @@
 .xmake/
 build/
 bin/
+compile_commands.json
+.cache/
+
+# Diagnostics and Traces
+/diagnostics/
 
 # Temporary Assets (Generated)
 extracted/
@@ -29,6 +34,6 @@ linux-wallpaperengine
 .idea/
 .DS_Store
 
-# Logs
+# Logs & Local Config
 *.log
 config.json

@@ -23,6 +23,7 @@ cJSON* TextureBindingTrace::toJson() const {
 cJSON* PassTraceEntry::toJson() const {
     cJSON* root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "frame_number", (double)frame_number);
+    cJSON_AddStringToObject(root, "layer_name", layer_name.c_str());
     cJSON_AddNumberToObject(root, "effect_index", effect_index);
     cJSON_AddStringToObject(root, "effect", effect_file.c_str());
     cJSON_AddNumberToObject(root, "pass_index", pass_index);

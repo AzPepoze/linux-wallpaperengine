@@ -11,7 +11,9 @@ float clamp01(float value) {
     return std::max(0.0f, std::min(1.0f, value));
 }
 
-float smooth(float value) { return value * value * (3.0f - 2.0f * value); }
+float smooth(float value) {
+    return value * value * (3.0f - 2.0f * value);
+}
 
 void camera_shake_update(EngineContext& ctx) {
     ctx.camera_shake_x = 0.0f;

@@ -195,6 +195,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
             if (diag.config.enabled) {
                 PassTraceEntry trace;
                 trace.frame_number = ctx.profiler.frame_index;
+                trace.layer_name = this->name.empty() ? ("Layer_" + std::to_string(scene_object_id)) : this->name;
                 trace.effect_index = eff_idx;
                 trace.effect_file = effect->file_path;
                 trace.pass_index = pass_idx;

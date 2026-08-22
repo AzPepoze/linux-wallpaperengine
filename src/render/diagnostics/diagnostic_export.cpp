@@ -2,6 +2,7 @@
 #include <fstream>
 
 #include "render_diagnostics.h"
+
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb/stb_image_write.h>
@@ -20,5 +21,8 @@ void RenderDiagnostics::writeStringToFile(const std::string& path, const std::st
 }
 
 bool RenderDiagnostics::writePng(const std::string& path, int width, int height, const uint8_t* rgba) {
-    return rgba && width > 0 && height > 0 && stbi_write_png(path.c_str(), width, height, 4, rgba, width * 4) != 0;
+    if (!rgba || width <= 0 || height <= 0) return false;
+    // Set fast PNG compression level (1 = fastest, default = 8)
+    stbi_write_png_compression_level = 1;
+    return stbi_write_png(path.c_str(), width, height, 4, rgba, width * 4) != 0;
 }

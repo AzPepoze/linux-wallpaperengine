@@ -1,9 +1,8 @@
-#include "render.h"
-
 #include <algorithm>
 #include <cstring>
 
 #include "core/engine_context.h"
+#include "render.h"
 
 void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
                                   int index_count, sg_image main_image, sg_view main_view,

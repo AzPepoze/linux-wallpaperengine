@@ -90,7 +90,10 @@ static bool loadSandboxPreviewScene(const char* scene_path) {
 
 static void init(void) {
     stm_setup();
-    detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path));
+    if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
+        LOG_E("A Wallpaper Engine installation with its original assets is required");
+        exit(EXIT_FAILURE);
+    }
 #if DEBUG_BUILD
     RenderDiagnostics::instance().init();
 #endif

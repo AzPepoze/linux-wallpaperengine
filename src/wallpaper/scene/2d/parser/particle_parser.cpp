@@ -71,7 +71,8 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
     if (cJSON_IsString(material) && material->valuestring) config.material_path = material->valuestring;
 
     const cJSON* animation_mode = cJSON_GetObjectItemCaseSensitive(document, "animationmode");
-    if (cJSON_IsString(animation_mode) && animation_mode->valuestring) config.animation_mode = animation_mode->valuestring;
+    if (cJSON_IsString(animation_mode) && animation_mode->valuestring)
+        config.animation_mode = animation_mode->valuestring;
     const cJSON* sequence_multiplier = cJSON_GetObjectItemCaseSensitive(document, "sequencemultiplier");
     if (sequence_multiplier) {
         config.sequence_multiplier = readFloat(sequence_multiplier);

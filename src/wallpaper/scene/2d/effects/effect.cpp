@@ -290,8 +290,8 @@ void ShaderPass::init(EngineContext& ctx) {
                 entry.final_source = ProvenanceSource::MaterialConstant;
                 entry.resolution[1].applied = true;
             } else {
-                entry.final_source = meta.has_default ? ProvenanceSource::ShaderMetadataDefault
-                                                      : ProvenanceSource::RuntimeBuiltin;
+                entry.final_source =
+                    meta.has_default ? ProvenanceSource::ShaderMetadataDefault : ProvenanceSource::RuntimeBuiltin;
             }
         } else {
             entry.final_source = ProvenanceSource::Unresolved;

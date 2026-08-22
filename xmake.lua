@@ -22,6 +22,7 @@ add_requires("cmake::slang", {
 target("linux-wallpaperengine")
     set_kind("binary")
     set_targetdir("bin/$(mode)")
+    set_rundir("$(projectdir)")
     add_packages("sokol", "linmath.h", "slang_shader", "vulkan-headers", "lz4", "cjson", "stb")
     add_includedirs("src")
     add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
