@@ -14,6 +14,68 @@
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
     renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
+    initBloomPipelines();
+}
+
+void Scene2DRuntime::initBloomPipelines() {
+    const std::string vs_source =
+        "#version 330\n"
+        "uniform mat4 g_ModelViewProjectionMatrix;\n"
+        "layout(location=0) in vec2 a_Position;\n"
+        "layout(location=1) in vec2 a_TexCoord;\n"
+        "out vec2 v_TexCoord;\n"
+        "void main() {\n"
+        "    gl_Position = g_ModelViewProjectionMatrix * vec4(a_Position, 0.0, 1.0);\n"
+        "    v_TexCoord = a_TexCoord;\n"
+        "}\n";
+
+    const std::string fs_extract =
+        "#version 330\n"
+        "precision mediump float;\n"
+        "uniform sampler2D g_Texture0;\n"
+        "uniform vec4 g_RenderVar0;\n"
+        "in vec2 v_TexCoord;\n"
+        "out vec4 frag_color;\n"
+        "void main() {\n"
+        "    vec4 col = texture(g_Texture0, v_TexCoord);\n"
+        "    float brightness = max(col.r, max(col.g, col.b));\n"
+        "    float threshold = g_RenderVar0.x;\n"
+        "    float strength = g_RenderVar0.y;\n"
+        "    float feather = max(0.01, g_RenderVar0.w);\n"
+        "    float knee = threshold * feather;\n"
+        "    float soft = brightness - threshold + knee;\n"
+        "    soft = clamp(soft, 0.0, 2.0 * knee);\n"
+        "    soft = soft * soft / (4.0 * max(0.0001, knee) + 0.00001);\n"
+        "    float contribution = max(soft, brightness - threshold);\n"
+        "    contribution /= max(brightness, 0.00001);\n"
+        "    frag_color = vec4(col.rgb * contribution * strength, 1.0);\n"
+        "}\n";
+
+    const std::string fs_blur =
+        "#version 330\n"
+        "precision mediump float;\n"
+        "uniform sampler2D g_Texture0;\n"
+        "uniform vec2 g_TexelSize;\n"
+        "in vec2 v_TexCoord;\n"
+        "out vec4 frag_color;\n"
+        "void main() {\n"
+        "    float weights[5];\n"
+        "    weights[0] = 0.227027;\n"
+        "    weights[1] = 0.1945946;\n"
+        "    weights[2] = 0.1216216;\n"
+        "    weights[3] = 0.054054;\n"
+        "    weights[4] = 0.016216;\n"
+        "    vec3 result = texture(g_Texture0, v_TexCoord).rgb * weights[0];\n"
+        "    for (int i = 1; i < 5; ++i) {\n"
+        "        result += texture(g_Texture0, v_TexCoord + g_TexelSize * float(i)).rgb * weights[i];\n"
+        "        result += texture(g_Texture0, v_TexCoord - g_TexelSize * float(i)).rgb * weights[i];\n"
+        "    }\n"
+        "    frag_color = vec4(result, 1.0);\n"
+        "}\n";
+
+    pip_bloom_extract = ShaderCompiler::compile("bloom_extract", vs_source, fs_extract, {}, 1).pipeline;
+    pip_bloom_blur_h = ShaderCompiler::compile("bloom_blur_h", vs_source, fs_blur, {}, 1).pipeline;
+    pip_bloom_blur_v = ShaderCompiler::compile("bloom_blur_v", vs_source, fs_blur, {}, 1).pipeline;
 }
 
 void Scene2DRuntime::update(float dt) {
@@ -25,6 +87,8 @@ void Scene2DRuntime::update(float dt) {
 }
 
 bool Scene2DRuntime::requiresOffscreenComposition() const {
+    if (ctx.general.bloom.enabled && ctx.general.bloom.strength > 0.0f) return true;
+
     if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
         const auto* particle = dynamic_cast<const ParticleLayer*>(ctx.layers[ctx.selected_object]);
         return particle && particle->requiresSceneColor();
@@ -81,6 +145,134 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
         if (target.texture_view.id == SG_INVALID_ID || target.attachment_view.id == SG_INVALID_ID) return false;
     }
     return true;
+}
+
+bool Scene2DRuntime::ensureBloomTargets(int width, int height) {
+    if (width <= 0 || height <= 0) return false;
+    if (bloom_targets[0].image.id != SG_INVALID_ID && bloom_targets[0].width == width &&
+        bloom_targets[0].height == height && bloom_targets[1].image.id != SG_INVALID_ID &&
+        bloom_targets[1].width == width && bloom_targets[1].height == height) {
+        return true;
+    }
+
+    bloom_targets[0] = SceneTarget{};
+    bloom_targets[1] = SceneTarget{};
+
+    for (SceneTarget& target : bloom_targets) {
+        sg_image_desc image_desc = {};
+        image_desc.usage.color_attachment = true;
+        image_desc.width = width;
+        image_desc.height = height;
+        image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+        target.image = sg_make_image(&image_desc);
+        if (target.image.id == SG_INVALID_ID) return false;
+
+        sg_view_desc texture_desc = {};
+        texture_desc.texture.image = target.image;
+        target.texture_view = sg_make_view(&texture_desc);
+
+        sg_view_desc attachment_desc = {};
+        attachment_desc.color_attachment.image = target.image;
+        target.attachment_view = sg_make_view(&attachment_desc);
+        target.width = width;
+        target.height = height;
+
+        if (target.texture_view.id == SG_INVALID_ID || target.attachment_view.id == SG_INVALID_ID) return false;
+    }
+    return true;
+}
+
+void Scene2DRuntime::renderBloom(int current_target_index, int width, int height) {
+    if (!ctx.general.bloom.enabled || ctx.general.bloom.strength <= 0.0f) return;
+    if (pip_bloom_extract.id == SG_INVALID_ID || pip_bloom_blur_h.id == SG_INVALID_ID ||
+        pip_bloom_blur_v.id == SG_INVALID_ID) {
+        return;
+    }
+
+    const int bloom_w = std::max(1, width / 4);
+    const int bloom_h = std::max(1, height / 4);
+    if (!ensureBloomTargets(bloom_w, bloom_h)) return;
+
+    const float threshold = ctx.general.bloom.threshold;
+    const float strength = ctx.general.bloom.strength;
+    const float scatter = ctx.general.bloom.hdr_scatter > 0.0f ? ctx.general.bloom.hdr_scatter : 2.0f;
+    const float feather = ctx.general.bloom.hdr_feather > 0.0f ? ctx.general.bloom.hdr_feather : 0.25f;
+
+    // Pass 1: Extract bright pixels to bloom_targets[0]
+    {
+        sg_pass extract_pass = {};
+        extract_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+        extract_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+        extract_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
+        extract_pass.attachments.colors[0] = bloom_targets[0].attachment_view;
+        sg_begin_pass(&extract_pass);
+        renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
+
+        render_effect_pass_t pass_desc = {};
+        pass_desc.enabled = true;
+        pass_desc.pipeline = pip_bloom_extract;
+        pass_desc.shader_name = "bloom_extract";
+        float tint[4] = {threshold, strength, scatter, feather};
+        renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current_target_index].image,
+                             scene_targets[current_target_index].texture_view, 0.0f, 0.0f, (float)bloom_w,
+                             (float)bloom_h, 0.0f, tint, false, &pass_desc);
+        sg_end_pass();
+    }
+
+    // Pass 2: Horizontal Blur from bloom_targets[0] -> bloom_targets[1]
+    {
+        sg_pass blur_h_pass = {};
+        blur_h_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+        blur_h_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+        blur_h_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
+        blur_h_pass.attachments.colors[0] = bloom_targets[1].attachment_view;
+        sg_begin_pass(&blur_h_pass);
+        renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
+
+        render_effect_pass_t pass_desc = {};
+        pass_desc.enabled = true;
+        pass_desc.pipeline = pip_bloom_blur_h;
+        pass_desc.shader_name = "bloom_blur_h";
+        float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[0].image, bloom_targets[0].texture_view, 0.0f, 0.0f,
+                             (float)bloom_w, (float)bloom_h, 0.0f, tint, false, &pass_desc);
+        sg_end_pass();
+    }
+
+    // Pass 3: Vertical Blur from bloom_targets[1] -> bloom_targets[0]
+    {
+        sg_pass blur_v_pass = {};
+        blur_v_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+        blur_v_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+        blur_v_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
+        blur_v_pass.attachments.colors[0] = bloom_targets[0].attachment_view;
+        sg_begin_pass(&blur_v_pass);
+        renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
+
+        render_effect_pass_t pass_desc = {};
+        pass_desc.enabled = true;
+        pass_desc.pipeline = pip_bloom_blur_v;
+        pass_desc.shader_name = "bloom_blur_v";
+        float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[1].image, bloom_targets[1].texture_view, 0.0f, 0.0f,
+                             (float)bloom_w, (float)bloom_h, 0.0f, tint, false, &pass_desc);
+        sg_end_pass();
+    }
+
+    // Pass 4: Combine Additive over scene_targets[current_target_index]
+    {
+        sg_pass combine_pass = {};
+        combine_pass.action.colors[0].load_action = SG_LOADACTION_LOAD;
+        combine_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+        combine_pass.attachments.colors[0] = scene_targets[current_target_index].attachment_view;
+        sg_begin_pass(&combine_pass);
+        renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+
+        float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[0].image, bloom_targets[0].texture_view, 0.0f, 0.0f,
+                             (float)width, (float)height, 0.0f, white, true, nullptr);
+        sg_end_pass();
+    }
 }
 
 void Scene2DRuntime::drawDirect() {
@@ -256,6 +448,7 @@ void Scene2DRuntime::drawOffscreen() {
         }
     }
 
+    renderBloom(current, width, height);
     scene_output_index = current;
 }
 
@@ -350,6 +543,8 @@ void Scene2DRuntime::cleanup() {
     clearScene();
     scene_targets[0] = SceneTarget{};
     scene_targets[1] = SceneTarget{};
+    bloom_targets[0] = SceneTarget{};
+    bloom_targets[1] = SceneTarget{};
     scene_output_index = -1;
     renderer_cleanup(&ctx.renderer);
 }

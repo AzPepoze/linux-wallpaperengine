@@ -157,13 +157,113 @@ static void showParticleSystem(::ParticleSystem& ps) {
     showSpriteSheetInfo(ps);
 }
 
+static const char* blendModeName(int mode) {
+    switch (mode) {
+        case 0: return "Normal (Alpha)";
+        case 1: return "Multiply";
+        case 2: return "Multiply";
+        case 3: return "Color Burn";
+        case 4: return "Linear Burn";
+        case 5: return "Darker Color";
+        case 6: return "Lighten";
+        case 7: return "Screen";
+        case 8: return "Color Dodge";
+        case 9: return "Linear Dodge (Add)";
+        case 10: return "Lighter Color";
+        case 11: return "Overlay";
+        case 12: return "Soft Light";
+        case 13: return "Hard Light";
+        case 14: return "Vivid Light";
+        case 15: return "Linear Light";
+        case 16: return "Pin Light";
+        case 17: return "Hard Mix";
+        case 18: return "Difference";
+        case 19: return "Exclusion";
+        case 20: return "Subtract";
+        case 21: return "Divide";
+        case 22: return "Hue";
+        case 23: return "Saturation";
+        case 24: return "Color";
+        case 25: return "Luminosity";
+        case 31: return "Additive";
+        default: return "Custom / Unknown";
+    }
+}
+
+void showGlobalSettings(EngineContext& ctx) {
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "GLOBAL ENGINE SETTINGS");
+    const char* modes[] = {"Cover", "Fit"};
+    int current_mode = (int)ctx.scaling_mode;
+    if (ImGui::Combo("Scaling Mode", &current_mode, modes, IM_ARRAYSIZE(modes))) {
+        ctx.scaling_mode = (scaling_mode_t)current_mode;
+    }
+    ImGui::Text("Resolution: %.0f x %.0f", ctx.scene_w, ctx.scene_h);
+    ImGui::Text("Render Scale: %.3f (Offsets: %.1f, %.1f)", ctx.render_scale, ctx.offset_x, ctx.offset_y);
+    ImGui::Text("FPS: %.1f | Frame Time: %.2f ms", ImGui::GetIO().Framerate, 1000.0f / (ImGui::GetIO().Framerate > 0.0f ? ImGui::GetIO().Framerate : 60.0f));
+
+    if (ImGui::CollapsingHeader("Camera & Optics", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3("Eye Position", ctx.camera.eye.data(), 0.1f);
+        ImGui::DragFloat3("Center LookAt", ctx.camera.center.data(), 0.1f);
+        ImGui::DragFloat3("Up Vector", ctx.camera.up.data(), 0.1f);
+        ImGui::DragFloat("FOV", &ctx.general.fov, 0.5f, 1.0f, 179.0f);
+        ImGui::DragFloat("Near Z", &ctx.general.near_z, 0.001f, 0.001f, 10.0f);
+        ImGui::DragFloat("Far Z", &ctx.general.far_z, 10.0f, 10.0f, 100000.0f);
+        ImGui::Checkbox("Camera Fade", &ctx.general.camera_fade);
+        ImGui::SameLine();
+        ImGui::Checkbox("Camera Preview", &ctx.general.camera_preview);
+    }
+
+    if (ImGui::CollapsingHeader("Parallax & Camera Shake", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Parallax Enabled", &ctx.camera_parallax_enabled);
+        ImGui::DragFloat("Parallax Amount", &ctx.camera_parallax_amount, 0.01f, 0.0f, 5.0f);
+        ImGui::DragFloat("Parallax Delay", &ctx.camera_parallax_delay, 0.01f, 0.0f, 2.0f);
+        ImGui::DragFloat("Mouse Influence", &ctx.camera_parallax_mouse_influence, 0.005f, 0.0f, 1.0f);
+        ImGui::TextDisabled("Pointer: (%.3f, %.3f) | Smooth: (%.3f, %.3f)", ctx.parallax_pointer_x,
+                            ctx.parallax_pointer_y, ctx.parallax_smooth_x, ctx.parallax_smooth_y);
+
+        ImGui::Separator();
+        ImGui::Checkbox("Camera Shake Enabled", &ctx.camera_shake_enabled);
+        ImGui::DragFloat("Shake Amplitude", &ctx.camera_shake_amplitude, 0.01f, 0.0f, 5.0f);
+        ImGui::DragFloat("Shake Speed", &ctx.camera_shake_speed, 0.01f, 0.0f, 10.0f);
+        ImGui::DragFloat("Shake Roughness", &ctx.camera_shake_roughness, 0.01f, 0.0f, 2.0f);
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Live Shake Offset: (%.2f px, %.2f px)",
+                           ctx.camera_shake_x, ctx.camera_shake_y);
+    }
+
+    if (ImGui::CollapsingHeader("Lighting & Environment", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::ColorEdit3("Ambient Color", ctx.general.ambient_color.data());
+        ImGui::ColorEdit3("Skylight Color", ctx.general.skylight_color.data());
+        ImGui::ColorEdit4("Clear Color", ctx.general.clear_color.data());
+        ImGui::Checkbox("Clear Enabled", &ctx.general.clear_enabled);
+        ImGui::SameLine();
+        ImGui::Checkbox("HDR Accumulation", &ctx.general.hdr);
+    }
+
+    if (ImGui::CollapsingHeader("Bloom & HDR Post-Process", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Bloom Enabled", &ctx.general.bloom.enabled);
+        ImGui::DragFloat("Strength", &ctx.general.bloom.strength, 0.05f, 0.0f, 10.0f);
+        ImGui::DragFloat("Threshold", &ctx.general.bloom.threshold, 0.01f, 0.0f, 2.0f);
+        ImGui::DragFloat("HDR Scatter", &ctx.general.bloom.hdr_scatter, 0.05f, 0.0f, 10.0f);
+        ImGui::DragFloat("HDR Strength", &ctx.general.bloom.hdr_strength, 0.05f, 0.0f, 10.0f);
+        ImGui::DragFloat("HDR Threshold", &ctx.general.bloom.hdr_threshold, 0.01f, 0.0f, 2.0f);
+        ImGui::DragFloat("HDR Feather", &ctx.general.bloom.hdr_feather, 0.01f, 0.0f, 1.0f);
+        ImGui::DragFloat("HDR Iterations", &ctx.general.bloom.hdr_iterations, 1.0f, 1.0f, 16.0f);
+    }
+}
+
 void showLayer(EngineContext& ctx, ::Layer& layer) {
     showBaseInspector(layer);
 
     if (auto* il = dynamic_cast<::ImageLayer*>(&layer)) {
-        ImGui::Text("Type: Image");
-        ImGui::TextDisabled("Class: ImageLayer");
-        if (!il->path.empty()) ImGui::Text("Path: %s", il->path.c_str());
+        ImGui::Text("Type: %s", il->is_fullscreen ? "Fullscreen Post-Process" : (il->solid_layer ? "Solid Layer" : "Image Layer"));
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Blend Mode: %d - %s", il->color_blend_mode,
+                           blendModeName(il->color_blend_mode));
+        if (!il->path.empty()) ImGui::TextWrapped("Path: %s", il->path.c_str());
+
+        if (il->img.id != SG_INVALID_ID) {
+            sg_image_desc desc = sg_query_image_desc(il->img);
+            showParticleTextureSlot(0, "Base Albedo", il->cached_view, il->path, desc.width, desc.height);
+        }
 
         ImGui::Separator();
         ImGui::DragFloat3("Position", (float*)il->origin, 1.0f);
@@ -171,18 +271,18 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         ImGui::DragFloat2("Size", (float*)il->size, 1.0f);
         ImGui::DragFloat("Rotation", &il->rotation, 1.0f, 0, 360);
         ImGui::ColorEdit4("Tint", il->tint);
-        ImGui::DragFloat2("Parallax", (float*)il->parallax, 0.01f, -10, 10);
+        ImGui::DragFloat2("Parallax Depth", (float*)il->parallax, 0.01f, -10, 10);
     } else if (auto* pl = dynamic_cast<::ParticleLayer*>(&layer)) {
         ImGui::Text("Type: Particle System");
         ImGui::TextDisabled("Class: ParticleLayer");
-        if (!pl->path.empty()) ImGui::Text("Path: %s", pl->path.c_str());
+        if (!pl->path.empty()) ImGui::TextWrapped("Path: %s", pl->path.c_str());
 
         ImGui::Separator();
         if (pl->ps) showParticleSystem(*pl->ps);
 
         ImGui::Separator();
         ImGui::DragFloat3("Position", (float*)pl->origin, 1.0f);
-        ImGui::DragFloat2("Parallax", (float*)pl->parallax, 0.01f, -10, 10);
+        ImGui::DragFloat2("Parallax Depth", (float*)pl->parallax, 0.01f, -10, 10);
     }
 
     showEffectsInspector(ctx, layer);
