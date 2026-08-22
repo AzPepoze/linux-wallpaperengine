@@ -19,6 +19,7 @@ class Layer;
 class SceneTree;
 
 struct profiler_stats_t {
+    static constexpr size_t HISTORY_SIZE = 128;
     double frame_ms = 0.0;
     double frame_avg_ms = 0.0;
     double frame_peak_ms = 0.0;
@@ -27,6 +28,12 @@ struct profiler_stats_t {
     double ui_ms = 0.0;
     uint32_t draw_calls = 0;
     uint64_t frame_index = 0;
+
+    float frame_history[HISTORY_SIZE] = {};
+    float update_history[HISTORY_SIZE] = {};
+    float render_history[HISTORY_SIZE] = {};
+    float ui_history[HISTORY_SIZE] = {};
+    size_t history_offset = 0;
 };
 
 struct EngineContext {
