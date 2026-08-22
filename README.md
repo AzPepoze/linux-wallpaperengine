@@ -32,6 +32,13 @@ sudo pacman -S xmake vulkan-icd-loader shader-slang libx11 libxcursor libxi
 
 Build outputs are written to `bin/<mode>/`.
 
+### Render Diagnostics (Debug Mode)
+
+When running in debug mode (`xmake f -m debug`), render diagnostics automatically run at frame 100 to capture the render pipeline state:
+- Captures pass images, scene stages, render graphs, shader code, and uniforms.
+- Output is written to `./diagnostics/<wallpaper_name>/` (named after the active wallpaper or project title).
+- If a diagnostics folder for that wallpaper already exists, it is automatically replaced with fresh capture data.
+
 ## FEATURE SUPPORT
 
 > Runtime compatibility with Wallpaper Engine wallpapers.

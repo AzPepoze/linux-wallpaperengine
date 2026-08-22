@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -15,14 +16,12 @@
 #include "render/backend/gpu_debug_labels.h"
 #include "render/backend/gpu_readback.h"
 
+namespace fs = std::filesystem;
+
 namespace {
 void ensureDir(const std::string& path) {
-    size_t pos = 0;
-    while ((pos = path.find('/', pos + 1)) != std::string::npos) {
-        std::string sub = path.substr(0, pos);
-        if (!sub.empty()) mkdir(sub.c_str(), 0755);
-    }
-    mkdir(path.c_str(), 0755);
+    std::error_code ec;
+    fs::create_directories(path, ec);
 }
 
 std::string sanitizeFilename(const std::string& str) {
@@ -34,7 +33,53 @@ std::string sanitizeFilename(const std::string& str) {
             clean.push_back('_');
         }
     }
-    return clean;
+    while (!clean.empty() && clean.front() == '_') clean.erase(clean.begin());
+    while (!clean.empty() && clean.back() == '_') clean.pop_back();
+    return clean.empty() ? "wallpaper" : clean;
+}
+
+std::string resolveWallpaperName(const EngineContext& ctx) {
+    const char* roots[] = {ctx.wallpaper_path, ctx.asset_root};
+    for (const char* root : roots) {
+        if (!root || root[0] == '\0') continue;
+        std::string project_json_path = std::string(root) + "/project.json";
+        std::ifstream file(project_json_path);
+        if (file.is_open()) {
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            std::string content = buffer.str();
+            cJSON* json = cJSON_Parse(content.c_str());
+            if (json) {
+                cJSON* title_item = cJSON_GetObjectItemCaseSensitive(json, "title");
+                if (cJSON_IsString(title_item) && title_item->valuestring && title_item->valuestring[0] != '\0') {
+                    std::string sanitized = sanitizeFilename(title_item->valuestring);
+                    cJSON_Delete(json);
+                    return sanitized;
+                }
+                cJSON_Delete(json);
+            }
+        }
+    }
+
+    if (ctx.wallpaper_path[0] != '\0') {
+        fs::path p(ctx.wallpaper_path);
+        while (p.has_filename() && p.filename().empty()) p = p.parent_path();
+        std::string stem = p.stem().string();
+        if (!stem.empty() && stem != "extracted") {
+            return sanitizeFilename(stem);
+        }
+    }
+
+    if (ctx.asset_root[0] != '\0') {
+        fs::path p(ctx.asset_root);
+        while (p.has_filename() && p.filename().empty()) p = p.parent_path();
+        std::string stem = p.stem().string();
+        if (!stem.empty() && stem != "extracted") {
+            return sanitizeFilename(stem);
+        }
+    }
+
+    return "wallpaper";
 }
 }  // namespace
 
@@ -44,11 +89,11 @@ RenderDiagnostics& RenderDiagnostics::instance() {
 }
 
 void RenderDiagnostics::init() {
-    config.parseFromArgs();
-    if (config.enabled) {
-        effect_log.info("Effect diagnostic mode ENABLED (target frame: %llu, output: %s)",
-                        (unsigned long long)config.target_frame, config.output_dir.c_str());
-    }
+    config.enabled = true;
+    config.target_frame = 100;
+    config.capture_pass_images = true;
+    effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
+                    (unsigned long long)config.target_frame);
 }
 
 void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {
@@ -62,11 +107,22 @@ void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {
         has_previous_image_ = false;
         scene_stage_index_ = 0;
 
+        std::string wallpaper_name = resolveWallpaperName(ctx);
+        config.output_dir = "./diagnostics/" + wallpaper_name;
+
+        // Replace old diagnostic directory if it already exists
+        std::error_code ec;
+        if (fs::exists(config.output_dir, ec)) {
+            fs::remove_all(config.output_dir, ec);
+        }
+        fs::create_directories(config.output_dir, ec);
+
         if (config.has_deterministic_time) {
             ctx.time = config.deterministic_time;
         }
 
-        effect_log.info(">>> Beginning diagnostic capture on frame %llu <<<", (unsigned long long)frame_index);
+        effect_log.info(">>> Beginning diagnostic capture for '%s' on frame %llu <<<", wallpaper_name.c_str(),
+                        (unsigned long long)frame_index);
     } else {
         is_capturing_frame = false;
     }
@@ -106,7 +162,7 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     std::string target_dir = config.output_dir + "/" + frame_dir_buf;
 
     printf("\n=======================================================\n");
-    printf("Effect diagnostic capture written to:\n%s/\n", target_dir.c_str());
+    printf("Effect diagnostic capture written to:\n%s/\n", config.output_dir.c_str());
     printf("=======================================================\n\n");
 }
 
