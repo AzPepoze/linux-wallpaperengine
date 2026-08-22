@@ -24,7 +24,10 @@ class VideoTexture {
     uint32_t width() const;
     uint32_t height() const;
     float frameDuration() const;
+    double fps() const;
     bool isZeroCopy() const;
+    const std::string& codecName() const;
+    const std::string& containerName() const;
 
     bool decodeNextFrame(std::vector<uint8_t>& rgba_pixels);
     bool decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, AVFrame*& out_av_frame);
