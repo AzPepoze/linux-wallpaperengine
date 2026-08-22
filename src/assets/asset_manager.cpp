@@ -78,6 +78,9 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
 }
 
 GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {
+    if (!name || name[0] == '\0') return {};
+    if (strncmp(name, "_rt_", 4) == 0 || strstr(name, "/_rt_") != nullptr) return {};
+
     char abs_path[1024];
     char name_with_ext[256] = {};
     if (!strstr(name, "."))

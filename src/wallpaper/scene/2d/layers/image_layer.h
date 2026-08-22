@@ -14,6 +14,7 @@ class ImageLayer : public Layer {
     GfxImage img;
     GfxView cached_view;
     bool solid_layer = false;
+    bool is_fullscreen = false;
     bool copy_background = false;
     int color_blend_mode = 0;
 
@@ -39,8 +40,11 @@ class ImageLayer : public Layer {
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void updateCachedView();
-    bool ensureEffectTargets();
-    void renderEffectChain(EngineContext& ctx);
+    bool ensureEffectTargets(sg_image source_image = {SG_INVALID_ID});
+   public:
+    void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
+
+   private:
 
     GfxImage effect_images[2];
     GfxView effect_texture_views[2];

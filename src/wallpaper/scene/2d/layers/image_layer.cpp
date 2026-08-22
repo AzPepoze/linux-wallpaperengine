@@ -34,12 +34,23 @@ void ImageLayer::updateCachedView() {
 #include "render/diagnostics/render_diagnostics.h"
 #endif
 
-void ImageLayer::renderEffectChain(EngineContext& ctx) {
+void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
     effect_output_image = {SG_INVALID_ID};
     effect_output_view = {SG_INVALID_ID};
-    if (effects.empty() || img.id == SG_INVALID_ID) return;
-    if (cached_view.id == SG_INVALID_ID) updateCachedView();
-    if (cached_view.id == SG_INVALID_ID || !ensureEffectTargets()) return;
+    sg_image base_img = src_img.id != SG_INVALID_ID ? src_img : (sg_image)img;
+    sg_view base_view = src_view.id != SG_INVALID_ID ? src_view : (sg_view)cached_view;
+    if (effects.empty() || base_img.id == SG_INVALID_ID) return;
+    if (base_view.id == SG_INVALID_ID) {
+        if (src_img.id != SG_INVALID_ID) {
+            sg_view_desc v_desc = {};
+            v_desc.texture.image = src_img;
+            base_view = sg_make_view(&v_desc);
+        } else {
+            updateCachedView();
+            base_view = cached_view;
+        }
+    }
+    if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(base_img)) return;
 
 #if DEBUG_BUILD
     RenderDiagnostics& diag = RenderDiagnostics::instance();
@@ -53,8 +64,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx) {
         }
     }
 
-    sg_image input_image = img;
-    sg_view input_view = cached_view;
+    sg_image input_image = base_img;
+    sg_view input_view = base_view;
     int write_index = 0;
     bool rendered_any = false;
     int draw_order = 0;
@@ -333,10 +344,21 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     free(json_str);
     if (!mdl_json) return;
     cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(mdl_json, "material");
-    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer"))) {
+    is_fullscreen = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "fullscreen")) ||
+                    cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "passthrough")) ||
+                    strstr(mdl_rel_path, "fullscreenlayer") != nullptr ||
+                    strstr(mdl_rel_path, "composelayer") != nullptr;
+    if (is_fullscreen) {
+        copy_background = true;
+        if (size[0] <= 0.0f || size[1] <= 0.0f) {
+            size[0] = ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f;
+            size[1] = ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f;
+        }
+    }
+    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer")) || is_fullscreen) {
         solid_layer = true;
-        const int width = std::max(1, (int)std::lround(size[0]));
-        const int height = std::max(1, (int)std::lround(size[1]));
+        const int width = std::max(1, (int)std::lround(size[0] > 0.0f ? size[0] : (ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f)));
+        const int height = std::max(1, (int)std::lround(size[1] > 0.0f ? size[1] : (ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f)));
         std::vector<uint32_t> pixels((size_t)width * (size_t)height, 0xFFFFFFFFu);
         sg_image_desc image_desc = {};
         image_desc.width = width;
@@ -354,7 +376,9 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
 void ImageLayer::update(float dt, EngineContext& ctx) {
     (void)dt;
     tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
-    renderEffectChain(ctx);
+    if (!is_fullscreen) {
+        renderEffectChain(ctx);
+    }
 }
 
 bool ImageLayer::requiresSceneColor() const {

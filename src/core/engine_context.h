@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../assets/asset_manager.h"
+#include "../formats/wallpaper_engine/scene/scene_document.h"
 #include "../render/render.h"
 #include "sokol_gfx.h"
 #include "wallpaper_api.h"
@@ -40,6 +41,9 @@ struct EngineContext {
     renderer_t renderer = {};
     AssetManager asset_mgr = {};
     profiler_stats_t profiler = {};
+
+    wallpaper_engine::SceneCameraDocument camera = {};
+    wallpaper_engine::SceneGeneralDocument general = {};
 
     std::vector<Layer*> layers;
     SceneTree* scene_tree = nullptr;

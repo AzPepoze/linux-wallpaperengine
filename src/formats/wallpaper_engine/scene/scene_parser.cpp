@@ -138,55 +138,74 @@ void detectResolution(const cJSON* root, SceneDocument& out) {
     }
 }
 
+void parseCamera(const cJSON* camera, SceneDocument& out) {
+    if (!camera) return;
+    parseVec(cJSON_GetObjectItemCaseSensitive(camera, "center"), out.camera.center.data(), 3);
+    parseVec(cJSON_GetObjectItemCaseSensitive(camera, "eye"), out.camera.eye.data(), 3);
+    parseVec(cJSON_GetObjectItemCaseSensitive(camera, "up"), out.camera.up.data(), 3);
+}
+
 void parseGeneral(const cJSON* general, SceneDocument& out) {
     if (!general) return;
 
+    parseVec(cJSON_GetObjectItemCaseSensitive(general, "ambientcolor"), out.general.ambient_color.data(), 3);
+    parseVec(cJSON_GetObjectItemCaseSensitive(general, "skylightcolor"), out.general.skylight_color.data(), 3);
+
     const cJSON* clear_color = cJSON_GetObjectItemCaseSensitive(general, "clearcolor");
-    if (cJSON_IsString(clear_color)) {
+    if (cJSON_IsString(clear_color) && clear_color->valuestring) {
         float r, g, b;
         if (sscanf(clear_color->valuestring, "%f %f %f", &r, &g, &b) == 3) {
-            out.clear_color = {r, g, b, 1.0f};
-            out.has_clear_color = true;
+            out.general.clear_color = {r, g, b, 1.0f};
+            out.general.has_clear_color = true;
         }
     }
 
-    const cJSON* camera_parallax = cJSON_GetObjectItemCaseSensitive(general, "cameraparallax");
-    if (cJSON_IsBool(camera_parallax)) {
-        out.camera_parallax_enabled = cJSON_IsTrue(camera_parallax);
-    } else if (cJSON_IsObject(camera_parallax)) {
-        const cJSON* value = cJSON_GetObjectItemCaseSensitive(camera_parallax, "value");
-        if (cJSON_IsBool(value)) out.camera_parallax_enabled = cJSON_IsTrue(value);
+    out.general.clear_enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "clearenabled"), true);
+    out.general.hdr = parseBool(cJSON_GetObjectItemCaseSensitive(general, "hdr"), true);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "zoom"), out.general.zoom);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "fov"), out.general.fov);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "nearz"), out.general.near_z);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "farz"), out.general.far_z);
+    out.general.camera_fade = parseBool(cJSON_GetObjectItemCaseSensitive(general, "camerafade"), true);
+    out.general.camera_preview = parseBool(cJSON_GetObjectItemCaseSensitive(general, "camerapreview"), true);
+
+    out.general.camera_parallax_enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "cameraparallax"), false);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxamount"), out.general.camera_parallax_amount);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxdelay"), out.general.camera_parallax_delay);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxmouseinfluence"),
+               out.general.camera_parallax_mouse_influence);
+
+    out.general.camera_shake_enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "camerashake"), false);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeamplitude"), out.general.camera_shake_amplitude);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakespeed"), out.general.camera_shake_speed);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeroughness"), out.general.camera_shake_roughness);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"), out.general.perspective_override_fov);
+
+    const cJSON* ortho = cJSON_GetObjectItemCaseSensitive(general, "orthogonalprojection");
+    if (cJSON_IsObject(ortho)) {
+        parseFloat(cJSON_GetObjectItemCaseSensitive(ortho, "width"), out.general.orthogonal_projection[0]);
+        parseFloat(cJSON_GetObjectItemCaseSensitive(ortho, "height"), out.general.orthogonal_projection[1]);
     }
 
-    const cJSON* amount = cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxamount");
-    if (cJSON_IsNumber(amount)) out.camera_parallax_amount = (float)amount->valuedouble;
-
-    const cJSON* delay = cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxdelay");
-    if (cJSON_IsNumber(delay)) out.camera_parallax_delay = (float)delay->valuedouble;
-
-    const cJSON* mouse_influence = cJSON_GetObjectItemCaseSensitive(general, "cameraparallaxmouseinfluence");
-    if (cJSON_IsNumber(mouse_influence)) {
-        out.camera_parallax_mouse_influence = (float)mouse_influence->valuedouble;
-    }
-
-    const cJSON* camera_shake = cJSON_GetObjectItemCaseSensitive(general, "camerashake");
-    if (cJSON_IsBool(camera_shake)) {
-        out.camera_shake_enabled = cJSON_IsTrue(camera_shake);
-    } else if (cJSON_IsObject(camera_shake)) {
-        const cJSON* value = cJSON_GetObjectItemCaseSensitive(camera_shake, "value");
-        if (cJSON_IsBool(value)) out.camera_shake_enabled = cJSON_IsTrue(value);
-    }
-    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeamplitude"), out.camera_shake_amplitude);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakespeed"), out.camera_shake_speed);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeroughness"), out.camera_shake_roughness);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"), out.perspective_override_fov);
+    out.general.bloom.enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "bloom"), false);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomstrength"), out.general.bloom.strength);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomthreshold"), out.general.bloom.threshold);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrfeather"), out.general.bloom.hdr_feather);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdriterations"), out.general.bloom.hdr_iterations);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrscatter"), out.general.bloom.hdr_scatter);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrstrength"), out.general.bloom.hdr_strength);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrthreshold"), out.general.bloom.hdr_threshold);
 
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
-          out.camera_parallax_enabled ? "enabled" : "disabled", out.camera_parallax_amount, out.camera_parallax_delay,
-          out.camera_parallax_mouse_influence);
+          out.general.camera_parallax_enabled ? "enabled" : "disabled", out.general.camera_parallax_amount,
+          out.general.camera_parallax_delay, out.general.camera_parallax_mouse_influence);
     LOG_I("Camera Shake: %s, amplitude=%.3f, speed=%.3f, roughness=%.3f",
-          out.camera_shake_enabled ? "enabled" : "disabled", out.camera_shake_amplitude, out.camera_shake_speed,
-          out.camera_shake_roughness);
+          out.general.camera_shake_enabled ? "enabled" : "disabled", out.general.camera_shake_amplitude,
+          out.general.camera_shake_speed, out.general.camera_shake_roughness);
+    LOG_I("Scene General: ambient=[%.2f, %.2f, %.2f], skylight=[%.2f, %.2f, %.2f], fov=%.1f, zoom=%.2f, bloom=%s",
+          out.general.ambient_color[0], out.general.ambient_color[1], out.general.ambient_color[2],
+          out.general.skylight_color[0], out.general.skylight_color[1], out.general.skylight_color[2], out.general.fov,
+          out.general.zoom, out.general.bloom.enabled ? "enabled" : "disabled");
 }
 
 SceneObjectDocument parseObject(const cJSON* object) {
@@ -309,6 +328,7 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out) {
 
     LOG_I("Scene JSON parsed successfully");
     detectResolution(root, out);
+    parseCamera(cJSON_GetObjectItemCaseSensitive(root, "camera"), out);
     parseGeneral(cJSON_GetObjectItemCaseSensitive(root, "general"), out);
 
     const cJSON* objects = cJSON_GetObjectItemCaseSensitive(root, "objects");
