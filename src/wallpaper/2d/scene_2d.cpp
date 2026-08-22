@@ -13,6 +13,8 @@
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
+    // DO NOT EDIT: must precompile all blend pipelines here to prevent GPU context loss mid-render (crash fix)
+    renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
 }
 
 void Scene2DRuntime::initBloomPipelines() {
