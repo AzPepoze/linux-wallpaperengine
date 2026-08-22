@@ -310,8 +310,16 @@ bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, A
 
         out_surface = impl->import_cache.get_or_import(va_disp, surface_id, (int)impl->video_width,
                                                        (int)impl->video_height, impl->zero_copy, impl->perf);
+        if (!out_surface) {
+            LOG_TAG_W(TAG,
+                      "Zero-copy DMA-BUF import failed (surface 0x%x) — "
+                      "cross-adapter import unsupported or modifier rejected; falling back to CPU decode",
+                      surface_id);
+            return false;
+        }
+		
         out_av_frame = impl->current_frame;
-        return (out_surface != nullptr);
+        return true;
     }
 
     return false;
@@ -354,6 +362,7 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
                     return true;
                 }
             }
+            LOG_TAG_W(TAG, "HW frame CPU transfer failed for VA surface 0x%x — skipping frame", surface_id);
             return true;
         }
     }

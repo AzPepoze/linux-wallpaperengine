@@ -59,8 +59,10 @@ ImportedVideoSurface* VideoImportCache::get_or_import(VADisplay display, VASurfa
 
     if (descriptor.fourcc != DRM_FORMAT_NV12 || descriptor.num_objects != 1 || descriptor.num_layers != 1 ||
         descriptor.layers[0].num_planes != 2) {
-        LOG_TAG_E(TAG, "Unsupported DRM descriptor layout (fourcc=0x%x, objects=%u, layers=%u)", descriptor.fourcc,
-                  descriptor.num_objects, descriptor.num_layers);
+        LOG_TAG_W(TAG,
+                  "Unsupported DRM descriptor layout (fourcc=0x%x, objects=%u, layers=%u) — "
+                  "zero-copy unavailable, falling back to CPU decode",
+                  descriptor.fourcc, descriptor.num_objects, descriptor.num_layers);
         for (uint32_t o = 0; o < descriptor.num_objects; ++o) {
             close(descriptor.objects[o].fd);
         }
@@ -124,7 +126,10 @@ ImportedVideoSurface* VideoImportCache::get_or_import(VADisplay display, VASurfa
 
     VkResult res = vkCreateImage(device_, &image_info, nullptr, &surface.image);
     if (res != VK_SUCCESS) {
-        LOG_TAG_E(TAG, "vkCreateImage failed: %d", res);
+        LOG_TAG_W(TAG,
+                  "vkCreateImage failed (VkResult=%d) — DRM modifier 0x%llx likely unsupported on this GPU, "
+                  "falling back to CPU decode",
+                  res, (unsigned long long)object.drm_format_modifier);
         close(imported_fd);
         return nullptr;
     }
@@ -160,7 +165,10 @@ ImportedVideoSurface* VideoImportCache::get_or_import(VADisplay display, VASurfa
 
     res = vkAllocateMemory(device_, &alloc_info, nullptr, &surface.memory);
     if (res != VK_SUCCESS) {
-        LOG_TAG_E(TAG, "vkAllocateMemory failed: %d", res);
+        LOG_TAG_W(TAG,
+                  "vkAllocateMemory failed (VkResult=%d) — cannot import cross-adapter DMA-BUF, "
+                  "falling back to CPU decode",
+                  res);
         vkDestroyImage(device_, surface.image, nullptr);
         close(imported_fd);
         return nullptr;
@@ -169,7 +177,10 @@ ImportedVideoSurface* VideoImportCache::get_or_import(VADisplay display, VASurfa
 
     res = vkBindImageMemory(device_, surface.image, surface.memory, 0);
     if (res != VK_SUCCESS) {
-        LOG_TAG_E(TAG, "vkBindImageMemory failed: %d", res);
+        LOG_TAG_W(TAG,
+                  "vkBindImageMemory failed (VkResult=%d) — DMA-BUF bind rejected, "
+                  "falling back to CPU decode",
+                  res);
         vkFreeMemory(device_, surface.memory, nullptr);
         vkDestroyImage(device_, surface.image, nullptr);
         return nullptr;

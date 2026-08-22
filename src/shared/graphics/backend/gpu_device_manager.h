@@ -35,6 +35,7 @@ class GpuDeviceManager {
     ~GpuDeviceManager();
 
     void probeDrmAndVaapi(GpuDeviceInfo& info);
+    void applyEnvironmentVars();
 
     VkInstance instance_ = VK_NULL_HANDLE;
     std::vector<GpuDeviceInfo> devices_;
