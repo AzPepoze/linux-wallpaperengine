@@ -29,6 +29,13 @@ class ImageLayer : public Layer {
     bool requiresSceneColor() const;
     void drawComposite(EngineContext& ctx, sg_view scene_view);
 
+    void start() override;
+    void stop() override;
+    void pause() override;
+    void resume() override;
+
+    wallpaper_engine::VideoTexture* bound_video_decoder = nullptr;
+
    private:
     struct EffectTarget {
         GfxImage image;
