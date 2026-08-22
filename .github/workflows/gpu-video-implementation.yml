@@ -4,9 +4,16 @@ on:
   push:
     branches:
       - feat/gpu-native-video-textures
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
+
+concurrency:
+  group: gpu-video-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   implement-and-build:
@@ -64,6 +71,7 @@ jobs:
           xmake build linux-wallpaperengine -y
 
       - name: Commit implementation and remove temporary CI
+        if: github.event_name == 'push'
         run: |
           rm -f .github/scripts/apply_gpu_video.py .github/scripts/fix_gpu_video.py
           rm -f .github/workflows/gpu-video-implementation.yml
