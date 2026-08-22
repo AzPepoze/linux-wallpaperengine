@@ -55,6 +55,4 @@
 #undef SOKOL_NO_ENTRY
 #endif
 
-#if DEBUG_BUILD
 #include "sokol_backend_ext.inl"
-#endif

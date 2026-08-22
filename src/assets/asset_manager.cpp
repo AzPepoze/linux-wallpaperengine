@@ -8,6 +8,7 @@
 #include "core/logger.h"
 #include "core/utils.h"
 #include "formats/wallpaper_engine/texture/tex_decoder.h"
+#include "render/backend/gpu_zero_copy.h"
 #include "wallpaper/scene/2d/layers/image_layer.h"
 #include "wallpaper/scene/2d/layers/layer.h"
 
@@ -88,11 +89,20 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
         }
         video.elapsed_seconds -= frame_dur;
 
-        std::vector<uint8_t> pixels;
-        if (video.decoder->decodeNextFrame(pixels) && !pixels.empty()) {
-            sg_image_data data = {};
-            data.mip_levels[0] = {pixels.data(), pixels.size()};
-            sg_update_image(video.image, &data);
+        if (video.decoder->isZeroCopy()) {
+            ImportedVideoSurface* surface = nullptr;
+            AVFrame* av_frame = nullptr;
+            if (video.decoder->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
+                gpu_blit_zero_copy_surface(*surface, video.image, (int)video.decoder->width(),
+                                           (int)video.decoder->height());
+            }
+        } else {
+            std::vector<uint8_t> pixels;
+            if (video.decoder->decodeNextFrame(pixels) && !pixels.empty()) {
+                sg_image_data data = {};
+                data.mip_levels[0] = {pixels.data(), pixels.size()};
+                sg_update_image(video.image, &data);
+            }
         }
     }
 }
@@ -174,18 +184,35 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
                 if (video.path == abs_path) return GfxImage(video.image);
             }
             std::unique_ptr<wallpaper_engine::VideoTexture> video = wallpaper_engine::VideoTexture::open(abs_path);
-            std::vector<uint8_t> pixels;
-            if (video && video->decodeNextFrame(pixels)) {
+            if (video) {
                 sg_image_desc desc = {};
                 desc.width = (int)video->width();
                 desc.height = (int)video->height();
                 desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+                desc.usage.color_attachment = true;
                 desc.usage.stream_update = true;
-                desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
-                const sg_image gpu_image = sg_make_image(&desc);
-                if (gpu_image.id != SG_INVALID_ID) {
-                    video_textures.push_back({abs_path, gpu_image, std::move(video)});
-                    return GfxImage(gpu_image);
+
+                if (video->isZeroCopy()) {
+                    const sg_image gpu_image = sg_make_image(&desc);
+                    if (gpu_image.id != SG_INVALID_ID) {
+                        ImportedVideoSurface* surface = nullptr;
+                        AVFrame* av_frame = nullptr;
+                        if (video->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
+                            gpu_blit_zero_copy_surface(*surface, gpu_image, (int)video->width(), (int)video->height());
+                        }
+                        video_textures.push_back({abs_path, gpu_image, std::move(video)});
+                        return GfxImage(gpu_image);
+                    }
+                } else {
+                    std::vector<uint8_t> pixels;
+                    if (video->decodeNextFrame(pixels)) {
+                        desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
+                        const sg_image gpu_image = sg_make_image(&desc);
+                        if (gpu_image.id != SG_INVALID_ID) {
+                            video_textures.push_back({abs_path, gpu_image, std::move(video)});
+                            return GfxImage(gpu_image);
+                        }
+                    }
                 }
             }
         }

@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include "core/logger.h"
+#include "render/backend/gpu_zero_copy.h"
 #include "video_decoder.h"
 #include "video_import_cache.h"
 #include "video_scheduler.h"
@@ -158,6 +159,7 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
         texture->impl->frame_duration = (float)texture->impl->hw_decoder.get_nominal_frame_duration();
         texture->impl->scheduler.set_time_base_and_fps(texture->impl->hw_decoder.get_time_base(),
                                                        texture->impl->hw_decoder.get_fps());
+        gpu_init_zero_copy_video(texture->impl->import_cache);
         LOG_TAG_I(TAG, "Hardware Zero-Copy VideoTexture opened: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
                   texture->impl->video_height, 1.0f / texture->impl->frame_duration);
         return texture;
