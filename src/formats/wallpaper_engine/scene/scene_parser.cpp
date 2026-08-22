@@ -187,7 +187,8 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
         parseFloat(cJSON_GetObjectItemCaseSensitive(ortho, "height"), out.general.orthogonal_projection[1]);
     }
 
-    out.general.bloom.enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "bloom"), false);
+    const bool is_hdr = parseBool(cJSON_GetObjectItemCaseSensitive(general, "hdr"), false);
+    out.general.bloom.enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "bloom"), false) || is_hdr;
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomstrength"), out.general.bloom.strength);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomthreshold"), out.general.bloom.threshold);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrfeather"), out.general.bloom.hdr_feather);
@@ -195,6 +196,11 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrscatter"), out.general.bloom.hdr_scatter);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrstrength"), out.general.bloom.hdr_strength);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrthreshold"), out.general.bloom.hdr_threshold);
+
+    if (is_hdr && out.general.bloom.hdr_strength > 0.0f) {
+        out.general.bloom.strength = out.general.bloom.hdr_strength;
+        out.general.bloom.threshold = out.general.bloom.hdr_threshold;
+    }
 
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
           out.general.camera_parallax_enabled ? "enabled" : "disabled", out.general.camera_parallax_amount,

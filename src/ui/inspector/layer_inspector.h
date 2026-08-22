@@ -6,6 +6,7 @@ class Layer;
 struct EngineContext;
 
 namespace Inspector {
+void showGlobalSettings(EngineContext& ctx);
 void showLayer(EngineContext& ctx, Layer& layer);
 }
 

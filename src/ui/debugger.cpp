@@ -17,7 +17,9 @@
 #include "ui/inspector/layer_inspector.h"
 #include "ui/widgets/visibility_solo_controls.h"
 #include "util/sokol_imgui.h"
+#include "wallpaper/scene/2d/layers/image_layer.h"
 #include "wallpaper/scene/2d/layers/layer.h"
+#include "wallpaper/scene/2d/layers/particle_layer.h"
 #include "wallpaper/scene/tree/scene_tree.h"
 
 namespace {
@@ -42,7 +44,26 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
     const int layer_index = findLayerIndex(ctx, node.id);
     const bool is_selected = layer_index >= 0 && ctx.selected_object == layer_index;
     const bool is_leaf = node.children.empty();
-    const std::string node_name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
+    std::string node_name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
+    if (layer_index >= 0 && layer_index < (int)ctx.layers.size()) {
+        const Layer* layer = ctx.layers[layer_index];
+        if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
+            if (il->is_fullscreen) node_name += " [FS PostProcess]";
+            else if (il->solid_layer) node_name += " [Solid]";
+            else node_name += " [Image]";
+
+            if (il->color_blend_mode != 0) {
+                node_name += " (Blend " + std::to_string(il->color_blend_mode) + ")";
+            }
+        } else if (dynamic_cast<const ParticleLayer*>(layer)) {
+            node_name += " [Particle]";
+        }
+        if (node.parallax_depth[0] != 0.0f || node.parallax_depth[1] != 0.0f) {
+            char p_buf[64];
+            snprintf(p_buf, sizeof(p_buf), " [P:%.1f,%.1f]", node.parallax_depth[0], node.parallax_depth[1]);
+            node_name += p_buf;
+        }
+    }
     ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
     if (is_leaf) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
@@ -104,15 +125,7 @@ void drawInspectorPanel(EngineContext& ctx) {
     ImGui::Separator();
 
     if (ctx.selected_object == -1) {
-        ImGui::TextColored(ImVec4(1, 1, 0, 1), "GLOBAL ENGINE SETTINGS");
-        const char* modes[] = {"Cover", "Fit"};
-        int current_mode = (int)ctx.scaling_mode;
-        if (ImGui::Combo("Scaling Mode", &current_mode, modes, IM_ARRAYSIZE(modes))) {
-            ctx.scaling_mode = (scaling_mode_t)current_mode;
-        }
-        ImGui::Text("Resolution: %.0fx%.0f", ctx.scene_w, ctx.scene_h);
-        ImGui::Text("Render Scale: %.3f", ctx.render_scale);
-        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        Inspector::showGlobalSettings(ctx);
         return;
     }
 

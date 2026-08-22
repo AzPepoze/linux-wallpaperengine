@@ -20,7 +20,7 @@ class Scene2DRuntime {
     void clearScene();
     void cleanup();
 
-   private:
+    private:
     struct SceneTarget {
         GfxImage image;
         GfxView texture_view;
@@ -35,9 +35,17 @@ class Scene2DRuntime {
     int output_width = 0;
     int output_height = 0;
     SceneTarget scene_targets[2];
+    SceneTarget bloom_targets[2];
     int scene_output_index = -1;
 
+    GfxPipeline pip_bloom_extract;
+    GfxPipeline pip_bloom_blur_h;
+    GfxPipeline pip_bloom_blur_v;
+
+    void initBloomPipelines();
     bool ensureSceneTargets(int width, int height);
+    bool ensureBloomTargets(int width, int height);
+    void renderBloom(int current_target_index, int width, int height);
     void drawDirect();
     void drawOffscreen();
 };

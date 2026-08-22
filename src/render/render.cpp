@@ -28,13 +28,11 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
         "uniform vec4 g_Texture4Resolution;\n"
         "uniform vec2 g_ParallaxPosition;\n"
         "uniform float g_Time;\n"
-        "uniform float g_Padding1;\n"
         "uniform vec2 g_Screen;\n"
         "uniform vec2 g_TexelSize;\n"
         "uniform mat4 g_EffectTextureProjectionMatrix;\n"
         "uniform mat4 g_EffectTextureProjectionMatrixInverse;\n"
         "uniform vec2 g_PointerPosition;\n"
-        "uniform vec2 g_Padding3;\n"
         "uniform vec4 g_LightAmbientColor;\n"
         "uniform vec4 g_LightSkylightColor;\n"
         "layout(location=0) in vec2 a_Position;\n"
@@ -59,13 +57,11 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
         "uniform vec4 g_Texture4Resolution;\n"
         "uniform vec2 g_ParallaxPosition;\n"
         "uniform float g_Time;\n"
-        "uniform float g_Padding1;\n"
         "uniform vec2 g_Screen;\n"
         "uniform vec2 g_TexelSize;\n"
         "uniform mat4 g_EffectTextureProjectionMatrix;\n"
         "uniform mat4 g_EffectTextureProjectionMatrixInverse;\n"
         "uniform vec2 g_PointerPosition;\n"
-        "uniform vec2 g_Padding3;\n"
         "uniform vec4 g_LightAmbientColor;\n"
         "uniform vec4 g_LightSkylightColor;\n"
         "uniform vec4 tint;\n"
@@ -417,6 +413,13 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
     if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) return;
 
     if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
+
+    static int logged_composite_frames = 0;
+    if (logged_composite_frames < 10) {
+        logged_composite_frames++;
+        LOG_TAG_I("RENDER", "renderer_draw_image_composite: blend=%d, img=%u, view=%u, scene_view=%u, rect=(%.1f, %.1f, %.1f, %.1f), tint=(%.2f, %.2f, %.2f, %.2f)",
+                  blend_mode, image.id, image_view.id, scene_view.id, x, y, width, height, tint[0], tint[1], tint[2], tint[3]);
+    }
 
     sg_view background[] = {scene_view};
     render_effect_pass_t composite = {};
