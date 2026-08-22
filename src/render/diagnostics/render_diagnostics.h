@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "diagnostic_config.h"
@@ -31,6 +32,50 @@ struct ShaderDump {
     std::map<std::string, std::vector<float>> uniforms;
 };
 
+struct CapturedPassImage {
+    PassTraceEntry trace;
+    std::vector<uint8_t> rgba_data;
+    int width = 0;
+    int height = 0;
+};
+
+struct CapturedStageImage {
+    std::string name;
+    std::vector<uint8_t> rgba_data;
+    int width = 0;
+    int height = 0;
+    int stage_index = 0;
+};
+
+struct DiagnosticExportPayload {
+    std::string output_dir;
+    uint64_t frame_index = 0;
+    float time = 0.0f;
+    int scene_w = 0;
+    int scene_h = 0;
+    float render_scale = 1.0f;
+    std::string wallpaper_path;
+    std::string engine_path;
+    bool has_deterministic_time = false;
+
+    // Raw memory captures
+    bool has_source_image = false;
+    std::vector<uint8_t> source_rgba;
+    int source_w = 0;
+    int source_h = 0;
+
+    bool has_final_image = false;
+    std::vector<uint8_t> final_rgba;
+    int final_w = 0;
+    int final_h = 0;
+
+    std::vector<CapturedPassImage> pass_images;
+    std::vector<CapturedStageImage> stage_images;
+    RenderGraph render_graph;
+    std::vector<ShaderDump> shader_dumps;
+    std::vector<PassUniformProvenance> provenance_list;
+};
+
 class EngineContext;
 
 class RenderDiagnostics {
@@ -52,8 +97,6 @@ class RenderDiagnostics {
     void onSourceImage(int effect_index, sg_image img, int width, int height);
     void recordPass(PassTraceEntry trace, sg_image out_img);
     void onLayerFinalImage(int effect_index, sg_image img, int width, int height);
-    // Queue a GPU snapshot of an accumulated scene target.  The image is read
-    // only after sg_commit(), so it represents the frame being diagnosed.
     void recordSceneStage(const std::string& stage_name, sg_image img, sg_view texture_view, sg_view attachment_view);
 
     // Pass isolation helpers
@@ -73,8 +116,13 @@ class RenderDiagnostics {
         return provenance_list_;
     }
 
+    static void writeJsonToFile(const std::string& path, cJSON* json);
+    static void writeStringToFile(const std::string& path, const std::string& content);
+    static bool writePng(const std::string& path, int w, int h, const uint8_t* rgba);
+
    private:
     RenderDiagnostics() = default;
+    ~RenderDiagnostics();
 
     RenderGraph render_graph_;
     std::vector<ShaderDump> shader_dumps_;
@@ -85,28 +133,25 @@ class RenderDiagnostics {
     std::vector<uint8_t> source_rgba_;
     int source_w_ = 0;
     int source_h_ = 0;
-    ImageStats source_stats_;
 
-    bool has_previous_image_ = false;
-    std::vector<uint8_t> previous_rgba_;
-    int previous_w_ = 0;
-    int previous_h_ = 0;
-    ImageStats previous_stats_;
+    bool has_final_image_ = false;
+    std::vector<uint8_t> final_rgba_;
+    int final_w_ = 0;
+    int final_h_ = 0;
 
-    std::vector<std::string> generated_files_;
+    std::vector<CapturedPassImage> pass_images_;
+
     int scene_stage_index_ = 0;
     struct SceneStageSnapshot {
         std::string name;
         sg_image image = {SG_INVALID_ID};
         sg_view texture_view = {SG_INVALID_ID};
         sg_view attachment_view = {SG_INVALID_ID};
+        int stage_index = 0;
     };
     std::vector<SceneStageSnapshot> scene_stage_snapshots_;
 
-    void writeBundle(uint64_t frame_index, const EngineContext& ctx);
-    void writeJsonToFile(const std::string& path, cJSON* json);
-    void writeStringToFile(const std::string& path, const std::string& content);
-    bool writePng(const std::string& path, int w, int h, const uint8_t* rgba);
+    std::thread worker_thread_;
 };
 
 #endif  // RENDER_DIAGNOSTICS_H
