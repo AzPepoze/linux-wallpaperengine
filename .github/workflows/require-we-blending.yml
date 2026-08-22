@@ -23,18 +23,19 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('src/render/shader/shader_processor.cpp')
           text = path.read_text()
-          old = '''            } else if (const char* compatibility = legacyHeader(include)) {
-              result += compatibility;
-          } else {
-          '''
-          new = '''            } else {
-          '''
-          if old not in text:
-              raise SystemExit('expected legacyHeader fallback block was not found')
-          path.write_text(text.replace(old, new, 1))
+          text, count = re.subn(
+              r'\n\s*} else if \(const char\* compatibility = legacyHeader\(include\)\) \{\n\s*result \+= compatibility;\n\s*} else \{\n',
+              '\n            } else {\n',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit('expected legacyHeader fallback block was not found exactly once')
+          path.write_text(text)
           PY
 
           git config user.name github-actions[bot]
