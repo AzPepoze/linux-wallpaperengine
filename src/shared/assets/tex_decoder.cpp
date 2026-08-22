@@ -24,7 +24,6 @@ namespace {
 // ============================================================================
 
 constexpr uint32_t kTextureFlagAnimated = 4;
-// Bit 1 (0x02) and bit 5 (0x20) are documented as video-embedded in Wallpaper Engine source.
 constexpr uint32_t kTextureFlagVideoMask = 0x22;
 
 enum class TexFormat : uint32_t {
@@ -32,6 +31,7 @@ enum class TexFormat : uint32_t {
     BC1_DXT1 = 4,
     BC2_DXT3 = 5,
     BC3_DXT5 = 6,
+    BC1_DXT1_ALT = 7,
     RG8 = 8,
     R8 = 9,
 };
@@ -48,6 +48,7 @@ FormatInfo getFormatInfo(uint32_t format_id) {
         case TexFormat::RGBA8:
             return {"RGBA8", PixelFormat::RGBA8, 4, 4};
         case TexFormat::BC1_DXT1:
+        case TexFormat::BC1_DXT1_ALT:
             return {"DXT1/BC1", PixelFormat::BC1, 4, 0};
         case TexFormat::BC2_DXT3:
             return {"DXT3/BC2", PixelFormat::BC2, 4, 0};
@@ -298,8 +299,10 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     // Attempting to skip those mips with the normal reader produces corrupt reads.
     // Return valid metadata (so the asset manager knows size/count) but skip mip parsing;
     // the caller will route the file to VideoTexture.
-    if (std::strcmp(header.container_magic, "TEXB0004") == 0 ||
-        (header.flags & kTextureFlagVideoMask) != 0) {
+    // NOTE: flags alone are not a reliable video indicator for TEXB0003 — a survey of
+    // 2958 tex files shows TEXB0003 textures routinely carry flags=0x02 while containing
+    // normal LZ4-compressed pixel data. Only TEXB0004 is guaranteed to be video.
+    if (std::strcmp(header.container_magic, "TEXB0004") == 0) {
         return metadata;
     }
 
@@ -408,10 +411,10 @@ DecodedImage decodeTexture(const char* path, int image_index) {
 
     // TEXB0004 contains an embedded video stream, not raw pixel data.
     // Return an invalid image so AssetManager routes this path to VideoTexture::open.
-    if (std::strcmp(header.container_magic, "TEXB0004") == 0 ||
-        (header.flags & kTextureFlagVideoMask) != 0) {
-        LOG_TAG_I(TAG, "Detected video-embedded .tex (%s), handing off to VideoTexture: %s",
-                  header.container_magic, path);
+    // NOTE: TEXB0003 with flags=0x02 is NOT a video — it is LZ4-compressed pixel data.
+    // Only route to VideoTexture when the container is explicitly TEXB0004.
+    if (std::strcmp(header.container_magic, "TEXB0004") == 0) {
+        LOG_TAG_I(TAG, "Detected video-embedded .tex (TEXB0004), handing off to VideoTexture: %s", path);
         return {};
     }
 
@@ -474,17 +477,34 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             image.channels = format.channels;
             image.format = format.pixel_format;
 
-            // Handle power-of-two GPU stride padding if applicable
+            // Handle GPU alloc-size padding:
+            // Wallpaper Engine pads mip dimensions to multiples of 4 (or POT) for GPU alignment.
+            // For uncompressed formats: mip_width > image_width means extra stride bytes per row.
+            // For block-compressed formats: the alloc block grid is larger than the image block grid.
             const size_t bpp = format.bytes_per_pixel;
-            const bool is_padded = (bpp > 0) &&
-                                   (mip_width != header.image_width || mip_height != header.image_height) &&
-                                   (raw_data.size() == static_cast<size_t>(mip_width) * mip_height * bpp) &&
-                                   (header.image_width <= mip_width) && (header.image_height <= mip_height);
+            const size_t mip_expected = expectedPixelDataSize(mip_width, mip_height, image.format);
+            const size_t img_expected = expectedPixelDataSize(header.image_width, header.image_height, image.format);
 
-            if (is_padded) {
+            const bool is_uncompressed_padded =
+                (bpp > 0) && (mip_width != header.image_width || mip_height != header.image_height) &&
+                (raw_data.size() == static_cast<size_t>(mip_width) * mip_height * bpp) &&
+                (header.image_width <= mip_width) && (header.image_height <= mip_height);
+
+            // Block-compressed padding: mip block grid is larger than image block grid but
+            // decompressed size matches the mip alloc exactly. Crop to image block grid.
+            const bool is_bc_padded =
+                (bpp == 0) && (img_expected > 0) && (mip_expected > 0) &&
+                (raw_data.size() == mip_expected) && (mip_expected != img_expected) &&
+                (mip_width >= header.image_width) && (mip_height >= header.image_height);
+
+            if (is_uncompressed_padded) {
                 image.pixels =
                     unpadPaddedRows(raw_data.data(), header.image_width, header.image_height, mip_width, bpp);
-            } else if (raw_data.size() == expectedPixelDataSize(mip_width, mip_height, image.format)) {
+            } else if (is_bc_padded) {
+                // For block-compressed data the GPU block rows are already self-contained;
+                // we can simply truncate to the image-size block count.
+                image.pixels.assign(raw_data.begin(), raw_data.begin() + static_cast<std::ptrdiff_t>(img_expected));
+            } else if (raw_data.size() == mip_expected) {
                 image.width = mip_width;
                 image.height = mip_height;
                 image.pixels = std::move(raw_data);
