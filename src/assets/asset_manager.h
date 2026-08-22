@@ -10,12 +10,14 @@
 #include "formats/wallpaper_engine/texture/video_texture.h"
 #include "sokol_gfx.h"
 
+class Layer;
+
 class AssetManager : public IAssetResolver {
    public:
     ~AssetManager();
 
     void init(const char* engine_path, const char* wallpaper_path);
-    void updateVideoTextures(float elapsed_seconds);
+    void updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers = {});
     void clearVideoTextures();
     bool resolvePath(const char* rel_path, char* out_abs_path, int max_len) const override;
 

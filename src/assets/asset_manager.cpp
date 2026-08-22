@@ -8,6 +8,8 @@
 #include "core/logger.h"
 #include "core/utils.h"
 #include "formats/wallpaper_engine/texture/tex_decoder.h"
+#include "wallpaper/scene/2d/layers/image_layer.h"
+#include "wallpaper/scene/2d/layers/layer.h"
 
 namespace {
 
@@ -61,16 +63,33 @@ const AssetManager::ActiveVideoTexture* AssetManager::findVideoTexture(const std
     return nullptr;
 }
 
-void AssetManager::updateVideoTextures(float elapsed_seconds) {
+void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers) {
     for (ActiveVideoTexture& video : video_textures) {
-        video.elapsed_seconds += elapsed_seconds;
-        if (video.elapsed_seconds < video.decoder->frameDuration()) continue;
-        std::vector<uint8_t> pixels;
-        while (video.elapsed_seconds >= video.decoder->frameDuration()) {
-            if (!video.decoder->decodeNextFrame(pixels)) break;
-            video.elapsed_seconds -= video.decoder->frameDuration();
+        if (!active_layers.empty()) {
+            bool is_used_by_visible_layer = false;
+            for (const auto* layer : active_layers) {
+                if (!layer || !layer->visible) continue;
+                if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
+                    if (il->img.id == video.image.id || (!video.path.empty() && il->path == video.path)) {
+                        is_used_by_visible_layer = true;
+                        break;
+                    }
+                }
+            }
+            if (!is_used_by_visible_layer) continue;
         }
-        if (!pixels.empty()) {
+
+        video.elapsed_seconds += elapsed_seconds;
+        const float frame_dur = video.decoder->frameDuration();
+        if (video.elapsed_seconds < frame_dur) continue;
+
+        while (video.elapsed_seconds >= frame_dur * 2.0f) {
+            video.elapsed_seconds -= frame_dur;
+        }
+        video.elapsed_seconds -= frame_dur;
+
+        std::vector<uint8_t> pixels;
+        if (video.decoder->decodeNextFrame(pixels) && !pixels.empty()) {
             sg_image_data data = {};
             data.mip_levels[0] = {pixels.data(), pixels.size()};
             sg_update_image(video.image, &data);
