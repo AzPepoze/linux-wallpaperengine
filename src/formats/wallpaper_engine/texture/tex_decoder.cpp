@@ -15,6 +15,29 @@
 #define TAG "TEXTURE"
 
 namespace wallpaper_engine {
+
+namespace {
+
+size_t expectedPixelDataSize(uint32_t width, uint32_t height, PixelFormat format) {
+    const size_t pixel_count = (size_t)width * height;
+    switch (format) {
+        case PixelFormat::RGBA8:
+            return pixel_count * 4;
+        case PixelFormat::RG8:
+            return pixel_count * 2;
+        case PixelFormat::R8:
+            return pixel_count;
+        case PixelFormat::BC1:
+            return (size_t)((width + 3) / 4) * ((height + 3) / 4) * 8;
+        case PixelFormat::BC2:
+        case PixelFormat::BC3:
+            return (size_t)((width + 3) / 4) * ((height + 3) / 4) * 16;
+        default:
+            return 0;
+    }
+}
+
+}  // namespace
 namespace {
 
 constexpr uint32_t kTextureFlagAnimated = 4;
@@ -408,6 +431,15 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             }
 
             image.data_size = (uint32_t)image.pixels.size();
+            const size_t expected_size = expectedPixelDataSize(image.width, image.height, image.format);
+            if (expected_size == 0 || image.pixels.size() != expected_size) {
+                LOG_TAG_E(TAG,
+                          "Texture data size mismatch for %s: format %s at %ux%u requires %zu bytes, got %zu; "
+                          "skipping unsupported payload",
+                          path, format_name, image.width, image.height, expected_size, image.pixels.size());
+                fclose(file);
+                return {};
+            }
             fclose(file);
             return image;
         }
