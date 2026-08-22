@@ -190,67 +190,42 @@ static void showParticleSystem(::ParticleSystem& ps) {
     showSpriteSheetInfo(ps);
 }
 
-const char* blendModeName(int mode) {
-    switch (mode) {
-        case 0:
-            return "Normal (Alpha)";
-        case 1:
-        case 2:
-            return "Multiply";
-        case 3:
-            return "Color Burn";
-        case 4:
-            return "Linear Burn";
-        case 5:
-            return "Darker Color";
-        case 6:
-            return "Lighten";
-        case 7:
-            return "Screen";
-        case 8:
-            return "Color Dodge";
-        case 9:
-            return "Linear Dodge (Add)";
-        case 10:
-            return "Lighter Color";
-        case 11:
-            return "Overlay";
-        case 12:
-            return "Soft Light";
-        case 13:
-            return "Hard Light";
-        case 14:
-            return "Vivid Light";
-        case 15:
-            return "Linear Light";
-        case 16:
-            return "Pin Light";
-        case 17:
-            return "Hard Mix";
-        case 18:
-            return "Difference";
-        case 19:
-            return "Exclusion";
-        case 20:
-            return "Subtract";
-        case 21:
-            return "Divide";
-        case 22:
-            return "Hue";
-        case 23:
-            return "Saturation";
-        case 24:
-            return "Color";
-        case 25:
-            return "Luminosity";
-        case 31:
-            return "Additive";
-        default:
-            return "Custom / Unknown";
-    }
-}
+static constexpr const char* kBlendModeNames[] = {
+    "Normal (Alpha)",      // 0
+    "Multiply",            // 1
+    "Multiply",            // 2
+    "Color Burn",          // 3
+    "Linear Burn",         // 4
+    "Darker Color",        // 5
+    "Lighten",             // 6
+    "Screen",              // 7
+    "Color Dodge",         // 8
+    "Linear Dodge (Add)",  // 9
+    "Lighter Color",       // 10
+    "Overlay",             // 11
+    "Soft Light",          // 12
+    "Hard Light",          // 13
+    "Vivid Light",         // 14
+    "Linear Light",        // 15
+    "Pin Light",           // 16
+    "Hard Mix",            // 17
+    "Difference",          // 18
+    "Exclusion",           // 19
+    "Subtract",            // 20
+    "Divide",              // 21
+    "Hue",                 // 22
+    "Saturation",          // 23
+    "Color",               // 24
+    "Luminosity",          // 25
+};
 
-constexpr int kMaxAuthoredBlendModes = 26;
+const char* blendModeName(int mode) {
+    if (mode >= 0 && mode < static_cast<int>(IM_ARRAYSIZE(kBlendModeNames))) {
+        return kBlendModeNames[mode];
+    }
+    if (mode == 31) return "Additive";
+    return "Custom / Unknown";
+}
 
 bool showBlendModeSelector(const char* label, int& blend_mode) {
     bool changed = false;
@@ -258,10 +233,10 @@ bool showBlendModeSelector(const char* label, int& blend_mode) {
     snprintf(current_label, sizeof(current_label), "%d - %s", blend_mode, blendModeName(blend_mode));
 
     if (ImGui::BeginCombo(label, current_label)) {
-        for (int i = 0; i < kMaxAuthoredBlendModes; ++i) {
+        for (int i = 0; i < static_cast<int>(IM_ARRAYSIZE(kBlendModeNames)); ++i) {
             const bool is_selected = (blend_mode == i);
             char item_name[64];
-            snprintf(item_name, sizeof(item_name), "%d - %s", i, blendModeName(i));
+            snprintf(item_name, sizeof(item_name), "%d - %s", i, kBlendModeNames[i]);
             if (ImGui::Selectable(item_name, is_selected)) {
                 blend_mode = i;
                 changed = true;
