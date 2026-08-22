@@ -4,41 +4,83 @@ Linux renderer for Wallpaper Engine projects.
 
 ## Requirements
 
+### System requirements
+
+- Linux
+- GCC or Clang with C++20 support
 - [xmake](https://xmake.io/)
-- GCC or Clang with C++ support
 - Vulkan development libraries and a working Vulkan GPU driver
-- [Slang](https://github.com/shader-slang/slang)
-- A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
+- [Slang](https://github.com/shader-slang/slang) compiler/runtime libraries
 - X11 development libraries (`libX11`, `libXcursor`, `libXi`)
 - FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`)
+- VA-API development libraries (`libva`, `libva-drm`)
+- `libdrm`
+- A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
 
-On Arch / CachyOS:
+### Dependencies managed by xmake
+
+The following dependencies are fetched by xmake and normally do not need to be installed manually:
+
+- Sokol
+- linmath.h
+- Vulkan-Headers
+- LZ4
+- cJSON
+- stb
+- Dear ImGui (debug builds only)
+
+### Arch Linux / CachyOS
 
 ```bash
-sudo pacman -S xmake vulkan-icd-loader shader-slang libx11 libxcursor libxi ffmpeg
+sudo pacman -S --needed \
+    xmake \
+    gcc \
+    vulkan-icd-loader \
+    shader-slang \
+    libx11 \
+    libxcursor \
+    libxi \
+    ffmpeg \
+    libva \
+    libdrm
+```
+
+A Vulkan driver for your GPU is also required, for example `vulkan-radeon`, `vulkan-intel`, or the appropriate NVIDIA driver.
+
+For development checks:
+
+```bash
+sudo pacman -S --needed clang cppcheck
 ```
 
 ## Build and run
 
-| Goal                                                 | Command                                                     |
-| ---------------------------------------------------- | ----------------------------------------------------------- |
-| Build the default configuration                      | `xmake`                                                     |
-| Run a wallpaper project directory or `.pkg` file     | `xmake run linux-wallpaperengine "/path/to/wallpaper"`      |
-| Configure and run a debug build                      | `xmake f -m debug` then `xmake run linux-wallpaperengine`   |
-| Configure and run a release build                    | `xmake f -m release` then `xmake run linux-wallpaperengine` |
-| Clean build outputs                                  | `xmake clean`                                               |
-| Validate formatting and static analysis              | `xmake check`                                               |
-| Format source files                                  | `xmake format`                                              |
-| Validate, build, and launch the debug effect sandbox | `xmake sandbox`                                             |
+| Goal                                                 | Command                                                               |
+| ---------------------------------------------------- | --------------------------------------------------------------------- |
+| Build the default configuration                      | `xmake`                                                               |
+| Run a wallpaper project directory or `.pkg` file     | `xmake run linux-wallpaperengine "/path/to/wallpaper"`                |
+| Run a video wallpaper                                | `xmake run linux-wallpaperengine "/path/to/video.mp4"`                |
+| Configure and run a debug build                      | `xmake f -m debug` then `xmake run linux-wallpaperengine`             |
+| Configure and run a release build                    | `xmake f -m release` then `xmake run linux-wallpaperengine`           |
+| List available GPUs                                  | `bin/<mode>/linux-wallpaperengine --list-gpus`                         |
+| Select a GPU                                         | `bin/<mode>/linux-wallpaperengine --gpu <index-or-name> "/path"`      |
+| Extract a package                                    | `bin/<mode>/linux-wallpaperengine --extract-only "/path/to/scene.pkg"` |
+| Clean build outputs                                  | `xmake clean`                                                         |
+| Validate formatting and static analysis              | `xmake check`                                                         |
+| Format source files                                  | `xmake format`                                                        |
+| Validate, build, and launch the debug effect sandbox | `xmake sandbox`                                                       |
 
 Build outputs are written to `bin/<mode>/`.
 
 ### Render Diagnostics (Debug Mode)
 
-When running in debug mode (`xmake f -m debug`), render diagnostics automatically run at frame 100 to capture the render pipeline state:
-- Captures pass images, scene stages, render graphs, shader code, and uniforms.
-- Output is written to `./diagnostics/<wallpaper_name>/` (named after the active wallpaper or project title).
-- If a diagnostics folder for that wallpaper already exists, it is automatically replaced with fresh capture data.
+Render diagnostics are available in debug builds and are opt-in. Enable them with `--diagnose` or `--diagnostics`:
+
+```bash
+bin/debug/linux-wallpaperengine --diagnose "/path/to/wallpaper"
+```
+
+Diagnostics can capture render-pipeline state including pass images, scene stages, render graphs, shader code, and uniforms.
 
 ## FEATURE SUPPORT
 
@@ -51,7 +93,7 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 ### Wallpaper Types
 
 - [-] Scene wallpapers
-- [ ] Video wallpapers
+- [x] Video wallpapers
 - [ ] Web wallpapers
 - [ ] Application wallpapers
 
@@ -69,7 +111,7 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 - [x] Layer visibility
 - [x] Layer position
 - [x] Layer scale
-- [ ] Layer rotation
+- [x] Layer rotation
 - [-] Parent transforms
 - [-] Layer blending
 - [ ] Layer attachments
@@ -190,16 +232,17 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 - [x] Maximum particle count
 - [x] Start-time warmup
 - [ ] World-space particles
-- [ ] Perspective particles
-- [ ] Sprite sheets
+- [x] Perspective particles
+- [-] Sprite sheets
 - [ ] Frame blending
 - [ ] Material lighting
-- [ ] Refraction
+- [-] Refraction
 - [-] Blend modes
 
 #### Renderers
 
 - [-] Particle sprite rendering
+- [-] Particle trail rendering
 - [ ] Full particle renderer set
 
 #### Emitters
@@ -239,7 +282,7 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 - [ ] Control points
 - [ ] Mouse-interactive particles
 - [ ] Audio-responsive particles
-- [ ] Particle sprite-sheet animations
+- [-] Particle sprite-sheet animations
 - [ ] Particle instance modifiers
 - [-] Particle instance overrides
 
@@ -476,6 +519,7 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 - [x] `scene.pkg` extraction
 - [x] Standalone package input
 - [x] `scene.json` parsing
+- [x] `project.json` video target detection
 - [x] Authored scene resolution
 - [x] Orthographic projection resolution
 - [x] Clear color
@@ -497,12 +541,20 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 
 ### Video Wallpapers
 
-- [ ] Video wallpaper playback
-- [ ] MP4 wallpapers
-- [ ] Looping
+- [x] Video wallpaper playback
+- [x] MP4 wallpapers
+- [x] WebM wallpapers
+- [x] MKV wallpapers
+- [x] AVI wallpapers
+- [x] MOV wallpapers
+- [x] WMV wallpapers
+- [x] Looping
 - [ ] Audio
-- [ ] Playback controls
-- [ ] Hardware video decoding
+- [-] Playback controls
+- [x] FFmpeg software decoding
+- [x] VA-API hardware decoding
+- [-] GPU-native VA-API / DMA-BUF video textures
+- [x] Automatic software decode fallback
 - [ ] Video user properties
 
 ### Application Wallpapers
@@ -524,4 +576,9 @@ When running in debug mode (`xmake f -m debug`), render diagnostics automaticall
 - [ ] FPS limits
 - [ ] Fullscreen application detection
 - [ ] Screensaver mode
-- [ ] Runtime command-line controls
+- [-] Runtime command-line controls
+- [x] GPU enumeration
+- [x] GPU selection
+- [x] Package extraction CLI
+- [x] Debug sandbox
+- [x] Debug render diagnostics
