@@ -159,34 +159,62 @@ static void showParticleSystem(::ParticleSystem& ps) {
 
 static const char* blendModeName(int mode) {
     switch (mode) {
-        case 0: return "Normal (Alpha)";
-        case 1: return "Multiply";
-        case 2: return "Multiply";
-        case 3: return "Color Burn";
-        case 4: return "Linear Burn";
-        case 5: return "Darker Color";
-        case 6: return "Lighten";
-        case 7: return "Screen";
-        case 8: return "Color Dodge";
-        case 9: return "Linear Dodge (Add)";
-        case 10: return "Lighter Color";
-        case 11: return "Overlay";
-        case 12: return "Soft Light";
-        case 13: return "Hard Light";
-        case 14: return "Vivid Light";
-        case 15: return "Linear Light";
-        case 16: return "Pin Light";
-        case 17: return "Hard Mix";
-        case 18: return "Difference";
-        case 19: return "Exclusion";
-        case 20: return "Subtract";
-        case 21: return "Divide";
-        case 22: return "Hue";
-        case 23: return "Saturation";
-        case 24: return "Color";
-        case 25: return "Luminosity";
-        case 31: return "Additive";
-        default: return "Custom / Unknown";
+        case 0:
+            return "Normal (Alpha)";
+        case 1:
+            return "Multiply";
+        case 2:
+            return "Multiply";
+        case 3:
+            return "Color Burn";
+        case 4:
+            return "Linear Burn";
+        case 5:
+            return "Darker Color";
+        case 6:
+            return "Lighten";
+        case 7:
+            return "Screen";
+        case 8:
+            return "Color Dodge";
+        case 9:
+            return "Linear Dodge (Add)";
+        case 10:
+            return "Lighter Color";
+        case 11:
+            return "Overlay";
+        case 12:
+            return "Soft Light";
+        case 13:
+            return "Hard Light";
+        case 14:
+            return "Vivid Light";
+        case 15:
+            return "Linear Light";
+        case 16:
+            return "Pin Light";
+        case 17:
+            return "Hard Mix";
+        case 18:
+            return "Difference";
+        case 19:
+            return "Exclusion";
+        case 20:
+            return "Subtract";
+        case 21:
+            return "Divide";
+        case 22:
+            return "Hue";
+        case 23:
+            return "Saturation";
+        case 24:
+            return "Color";
+        case 25:
+            return "Luminosity";
+        case 31:
+            return "Additive";
+        default:
+            return "Custom / Unknown";
     }
 }
 
@@ -199,15 +227,19 @@ void showGlobalSettings(EngineContext& ctx) {
     }
     ImGui::Text("Resolution: %.0f x %.0f", ctx.scene_w, ctx.scene_h);
     ImGui::Text("Render Scale: %.3f (Offsets: %.1f, %.1f)", ctx.render_scale, ctx.offset_x, ctx.offset_y);
-    ImGui::Text("FPS: %.1f | Frame Time: %.2f ms", ImGui::GetIO().Framerate, 1000.0f / (ImGui::GetIO().Framerate > 0.0f ? ImGui::GetIO().Framerate : 60.0f));
+    ImGui::Text("FPS: %.1f | Frame Time: %.2f ms", ImGui::GetIO().Framerate,
+                1000.0f / (ImGui::GetIO().Framerate > 0.0f ? ImGui::GetIO().Framerate : 60.0f));
 
     if (ImGui::CollapsingHeader("Camera & Optics", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat3("Eye Position", ctx.camera.eye.data(), 0.1f);
-        ImGui::DragFloat3("Center LookAt", ctx.camera.center.data(), 0.1f);
-        ImGui::DragFloat3("Up Vector", ctx.camera.up.data(), 0.1f);
+        ImGui::InputFloat3("Eye Position", ctx.camera.eye.data());
+        ImGui::InputFloat3("Center LookAt", ctx.camera.center.data());
+        ImGui::InputFloat3("Up Vector", ctx.camera.up.data());
         ImGui::DragFloat("FOV", &ctx.general.fov, 0.5f, 1.0f, 179.0f);
-        ImGui::DragFloat("Near Z", &ctx.general.near_z, 0.001f, 0.001f, 10.0f);
+        ImGui::DragFloat("Near Z", &ctx.general.near_z, 0.001f, 0.001f, 10.0f, "%.5f");
         ImGui::DragFloat("Far Z", &ctx.general.far_z, 10.0f, 10.0f, 100000.0f);
+        ImGui::DragFloat2("Orthographic Extent", ctx.general.orthogonal_projection.data(), 1.0f, 0.0f, 100000.0f);
+        ImGui::DragFloat("Zoom", &ctx.general.zoom, 0.01f, 0.01f, 10.0f);
+        ImGui::DragFloat("Perspective Particle FOV", &ctx.general.perspective_override_fov, 0.5f, 0.0f, 179.0f);
         ImGui::Checkbox("Camera Fade", &ctx.general.camera_fade);
         ImGui::SameLine();
         ImGui::Checkbox("Camera Preview", &ctx.general.camera_preview);
@@ -226,8 +258,8 @@ void showGlobalSettings(EngineContext& ctx) {
         ImGui::DragFloat("Shake Amplitude", &ctx.camera_shake_amplitude, 0.01f, 0.0f, 5.0f);
         ImGui::DragFloat("Shake Speed", &ctx.camera_shake_speed, 0.01f, 0.0f, 10.0f);
         ImGui::DragFloat("Shake Roughness", &ctx.camera_shake_roughness, 0.01f, 0.0f, 2.0f);
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Live Shake Offset: (%.2f px, %.2f px)",
-                           ctx.camera_shake_x, ctx.camera_shake_y);
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Live Shake Offset: (%.2f px, %.2f px)", ctx.camera_shake_x,
+                           ctx.camera_shake_y);
     }
 
     if (ImGui::CollapsingHeader("Lighting & Environment", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -241,8 +273,8 @@ void showGlobalSettings(EngineContext& ctx) {
 
     if (ImGui::CollapsingHeader("Bloom & HDR Post-Process", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Checkbox("Bloom Enabled", &ctx.general.bloom.enabled);
-        ImGui::DragFloat("Strength", &ctx.general.bloom.strength, 0.05f, 0.0f, 10.0f);
-        ImGui::DragFloat("Threshold", &ctx.general.bloom.threshold, 0.01f, 0.0f, 2.0f);
+        ImGui::DragFloat("LDR Strength", &ctx.general.bloom.strength, 0.05f, 0.0f, 10.0f);
+        ImGui::DragFloat("LDR Threshold", &ctx.general.bloom.threshold, 0.01f, 0.0f, 2.0f);
         ImGui::DragFloat("HDR Scatter", &ctx.general.bloom.hdr_scatter, 0.05f, 0.0f, 10.0f);
         ImGui::DragFloat("HDR Strength", &ctx.general.bloom.hdr_strength, 0.05f, 0.0f, 10.0f);
         ImGui::DragFloat("HDR Threshold", &ctx.general.bloom.hdr_threshold, 0.01f, 0.0f, 2.0f);
@@ -255,7 +287,8 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
     showBaseInspector(layer);
 
     if (auto* il = dynamic_cast<::ImageLayer*>(&layer)) {
-        ImGui::Text("Type: %s", il->is_fullscreen ? "Fullscreen Post-Process" : (il->solid_layer ? "Solid Layer" : "Image Layer"));
+        ImGui::Text("Type: %s",
+                    il->is_fullscreen ? "Fullscreen Post-Process" : (il->solid_layer ? "Solid Layer" : "Image Layer"));
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Blend Mode: %d - %s", il->color_blend_mode,
                            blendModeName(il->color_blend_mode));
         if (!il->path.empty()) ImGui::TextWrapped("Path: %s", il->path.c_str());

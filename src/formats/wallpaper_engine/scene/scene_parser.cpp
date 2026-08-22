@@ -179,7 +179,8 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeamplitude"), out.general.camera_shake_amplitude);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakespeed"), out.general.camera_shake_speed);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "camerashakeroughness"), out.general.camera_shake_roughness);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"), out.general.perspective_override_fov);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(general, "perspectiveoverridefov"),
+               out.general.perspective_override_fov);
 
     const cJSON* ortho = cJSON_GetObjectItemCaseSensitive(general, "orthogonalprojection");
     if (cJSON_IsObject(ortho)) {
@@ -196,11 +197,6 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrscatter"), out.general.bloom.hdr_scatter);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrstrength"), out.general.bloom.hdr_strength);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrthreshold"), out.general.bloom.hdr_threshold);
-
-    if (is_hdr && out.general.bloom.hdr_strength > 0.0f) {
-        out.general.bloom.strength = out.general.bloom.hdr_strength;
-        out.general.bloom.threshold = out.general.bloom.hdr_threshold;
-    }
 
     LOG_I("Camera Parallax: %s, amount=%.3f, delay=%.3f, mouse influence=%.3f",
           out.general.camera_parallax_enabled ? "enabled" : "disabled", out.general.camera_parallax_amount,

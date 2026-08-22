@@ -169,7 +169,10 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             bool has_overrides = false;
             for (const auto& [slot, binding] : pass->render_texture_bindings) {
                 if (slot < 0 || slot > 11) continue;
-                if (binding == "previous") {
+                // Full-frame-buffer is the accumulated scene supplied by the
+                // compositor.  It must be bound once, not treated as a named
+                // effect target (which would silently leave it invalid).
+                if (binding == "previous" || binding == "_rt_FullFrameBuffer") {
                     if (slot == 0) {
                         shader_input_image = effect_source_image;
                         shader_input_view = effect_source_view;
@@ -242,7 +245,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                     TextureBindingTrace in_b;
                     in_b.slot = slot;
                     in_b.semantic_source = binding;
-                    if (binding == "previous") {
+                    if (binding == "previous" || binding == "_rt_FullFrameBuffer") {
                         in_b.image_id = effect_source_image.id;
                         in_b.view_id = effect_source_view.id;
                         sg_image_desc d = sg_query_image_desc(effect_source_image);
@@ -357,8 +360,10 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     }
     if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer")) || is_fullscreen) {
         solid_layer = true;
-        const int width = std::max(1, (int)std::lround(size[0] > 0.0f ? size[0] : (ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f)));
-        const int height = std::max(1, (int)std::lround(size[1] > 0.0f ? size[1] : (ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f)));
+        const int width =
+            std::max(1, (int)std::lround(size[0] > 0.0f ? size[0] : (ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f)));
+        const int height =
+            std::max(1, (int)std::lround(size[1] > 0.0f ? size[1] : (ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f)));
         std::vector<uint32_t> pixels((size_t)width * (size_t)height, 0xFFFFFFFFu);
         sg_image_desc image_desc = {};
         image_desc.width = width;

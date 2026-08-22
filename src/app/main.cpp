@@ -183,6 +183,11 @@ static void frame(void) {
     }
 #endif
     scene_engine->updateViewport();
+    // Inspector edits are intentionally runtime-only.  Rebuild the clear pass
+    // every frame so direct and offscreen composition see the same live state.
+    ctx.pass_action.colors[0].load_action = ctx.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
+    ctx.pass_action.colors[0].clear_value = {ctx.general.clear_color[0], ctx.general.clear_color[1],
+                                             ctx.general.clear_color[2], ctx.general.clear_color[3]};
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
 

@@ -20,13 +20,14 @@ class Scene2DRuntime {
     void clearScene();
     void cleanup();
 
-    private:
+   private:
     struct SceneTarget {
         GfxImage image;
         GfxView texture_view;
         GfxView attachment_view;
         int width = 0;
         int height = 0;
+        sg_pixel_format pixel_format = SG_PIXELFORMAT_NONE;
     };
 
     EngineContext& ctx;
@@ -43,6 +44,7 @@ class Scene2DRuntime {
     GfxPipeline pip_bloom_blur_v;
 
     void initBloomPipelines();
+    sg_pixel_format compositionPixelFormat() const;
     bool ensureSceneTargets(int width, int height);
     bool ensureBloomTargets(int width, int height);
     void renderBloom(int current_target_index, int width, int height);

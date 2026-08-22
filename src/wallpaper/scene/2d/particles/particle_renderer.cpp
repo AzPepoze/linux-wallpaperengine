@@ -139,7 +139,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
             if (use_perspective) {
                 // Particle coordinates are Wallpaper Engine world coordinates (Y-up).
                 // The focal length makes the z=0 reference plane match the scene extent.
-                makePerspectiveCamera(projection, view, scene_w, scene_h, ctx.perspective_override_fov,
+                makePerspectiveCamera(projection, view, scene_w, scene_h, ctx.general.perspective_override_fov,
                                       camera_distance);
                 mat4x4_translate_in_place(model, layer_origin[0] + parallax_x, layer_origin[1] + parallax_y,
                                           layer_origin[2]);
