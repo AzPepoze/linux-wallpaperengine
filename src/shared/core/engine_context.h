@@ -34,6 +34,9 @@ struct profiler_stats_t {
     float render_history[HISTORY_SIZE] = {};
     float ui_history[HISTORY_SIZE] = {};
     size_t history_offset = 0;
+
+    double sample_timer = 0.0;
+    float sample_interval = 0.040f;  // 40ms per point (~25 Hz) -> ~5.1s continuous visible timeline
 };
 
 struct EngineContext {

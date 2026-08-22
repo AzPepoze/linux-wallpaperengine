@@ -222,11 +222,15 @@ static void frame(void) {
     }
     if (ctx.profiler.frame_ms > ctx.profiler.frame_peak_ms) ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
 
-    ctx.profiler.frame_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.frame_ms);
-    ctx.profiler.update_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.update_ms);
-    ctx.profiler.render_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.render_ms);
-    ctx.profiler.ui_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.ui_ms);
-    ctx.profiler.history_offset = (ctx.profiler.history_offset + 1) % profiler_stats_t::HISTORY_SIZE;
+    ctx.profiler.sample_timer += ctx.profiler.frame_ms * 0.001;
+    if (ctx.profiler.sample_timer >= ctx.profiler.sample_interval) {
+        ctx.profiler.sample_timer = 0.0;
+        ctx.profiler.frame_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.frame_ms);
+        ctx.profiler.update_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.update_ms);
+        ctx.profiler.render_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.render_ms);
+        ctx.profiler.ui_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.ui_ms);
+        ctx.profiler.history_offset = (ctx.profiler.history_offset + 1) % profiler_stats_t::HISTORY_SIZE;
+    }
 #endif
 }
 
