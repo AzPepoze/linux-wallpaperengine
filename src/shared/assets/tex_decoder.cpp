@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <cstring>
 #include <vector>
 
 #include "lz4.h"
@@ -334,8 +335,8 @@ DecodedImage decodeTexture(const char* path, int image_index) {
                 readU32(file);
             }
 
-            readU32(file);  // mip width
-            readU32(file);  // mip height
+            const uint32_t mip_width = readU32(file);
+            const uint32_t mip_height = readU32(file);
 
             bool compressed_lz4 = false;
             uint32_t decompressed_size = 0;
@@ -358,24 +359,24 @@ DecodedImage decodeTexture(const char* path, int image_index) {
                 return {};
             }
 
-            if (data_size > 8 && data_block[0] == 0x89 && data_block[1] == 'P' && data_block[2] == 'N' &&
-                data_block[3] == 'G') {
-                int width = 0;
-                int height = 0;
-                int channels = 0;
+            int img_w = 0;
+            int img_h = 0;
+            int img_channels = 0;
+            if (data_size > 4 &&
+                stbi_info_from_memory(data_block.data(), (int)data_block.size(), &img_w, &img_h, &img_channels)) {
                 stbi_uc* pixels =
-                    stbi_load_from_memory(data_block.data(), (int)data_block.size(), &width, &height, &channels, 4);
+                    stbi_load_from_memory(data_block.data(), (int)data_block.size(), &img_w, &img_h, &img_channels, 4);
                 if (pixels) {
-                    image.width = (uint32_t)width;
-                    image.height = (uint32_t)height;
+                    image.width = (uint32_t)img_w;
+                    image.height = (uint32_t)img_h;
                     image.channels = 4;
                     image.format = PixelFormat::RGBA8;
                     image.data_size = image.width * image.height * 4;
                     image.pixels.assign(pixels, pixels + image.data_size);
                     stbi_image_free(pixels);
+                    fclose(file);
+                    return image;
                 }
-                fclose(file);
-                return image;
             }
 
             std::vector<uint8_t> raw_data;
@@ -400,34 +401,49 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             switch (wallpaper_format) {
                 case 0:
                     image.format = PixelFormat::RGBA8;
-                    image.pixels = std::move(raw_data);
                     break;
                 case 4:
                     image.format = PixelFormat::BC1;
-                    image.pixels = std::move(raw_data);
                     break;
                 case 5:
                     image.format = PixelFormat::BC2;
-                    image.pixels = std::move(raw_data);
                     break;
                 case 6:
                     image.format = PixelFormat::BC3;
-                    image.pixels = std::move(raw_data);
                     break;
                 case 8:
                     image.format = PixelFormat::RG8;
                     image.channels = 2;
-                    image.pixels = std::move(raw_data);
                     break;
                 case 9:
                     image.format = PixelFormat::R8;
                     image.channels = 1;
-                    image.pixels = std::move(raw_data);
                     break;
                 default:
                     LOG_TAG_E(TAG, "Unsupported Wallpaper Engine texture format: %u", wallpaper_format);
                     fclose(file);
                     return {};
+            }
+
+            const size_t bpp = (image.format == PixelFormat::RGBA8)
+                                   ? 4
+                                   : (image.format == PixelFormat::RG8 ? 2 : (image.format == PixelFormat::R8 ? 1 : 0));
+            if (bpp > 0 && (mip_width != image_width || mip_height != image_height) &&
+                raw_data.size() == (size_t)mip_width * mip_height * bpp && image_width <= mip_width &&
+                image_height <= mip_height) {
+                // Unpad row-by-row to authored image dimensions
+                std::vector<uint8_t> unpadded((size_t)image_width * image_height * bpp);
+                for (uint32_t y = 0; y < image_height; ++y) {
+                    std::memcpy(unpadded.data() + (size_t)y * image_width * bpp,
+                                raw_data.data() + (size_t)y * mip_width * bpp, (size_t)image_width * bpp);
+                }
+                image.pixels = std::move(unpadded);
+            } else if (raw_data.size() == expectedPixelDataSize(mip_width, mip_height, image.format)) {
+                image.width = mip_width;
+                image.height = mip_height;
+                image.pixels = std::move(raw_data);
+            } else {
+                image.pixels = std::move(raw_data);
             }
 
             image.data_size = (uint32_t)image.pixels.size();
