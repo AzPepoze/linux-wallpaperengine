@@ -9,13 +9,14 @@ void drawVisibilitySoloControls(bool& visible, bool& solo, const char* visibilit
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", visibility_tooltip);
 
     ImGui::SameLine();
-    if (solo) {
+    const bool was_solo = solo;
+    if (was_solo) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
     }
     if (ImGui::Button("S", ImVec2(25.0f, 0.0f))) solo = !solo;
-    if (solo) ImGui::PopStyleColor(3);
+    if (was_solo) ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", solo_tooltip);
 }
 

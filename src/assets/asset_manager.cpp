@@ -115,16 +115,22 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
 
     if (resolvePath(name_with_ext, abs_path, sizeof(abs_path))) {
         if (out_path) *out_path = abs_path;
-        wallpaper_engine::DecodedImage image = wallpaper_engine::decodeTexture(abs_path, image_index);
-        if (image.valid()) {
-            const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
-            if (pixel_format != SG_PIXELFORMAT_NONE) {
-                sg_image_desc desc = {};
-                desc.width = (int)image.width;
-                desc.height = (int)image.height;
-                desc.pixel_format = pixel_format;
-                desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
-                return sg_make_image(&desc);
+        const char* ext = strrchr(abs_path, '.');
+        const bool is_video =
+            ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
+                    strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
+        if (!is_video) {
+            wallpaper_engine::DecodedImage image = wallpaper_engine::decodeTexture(abs_path, image_index);
+            if (image.valid()) {
+                const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
+                if (pixel_format != SG_PIXELFORMAT_NONE) {
+                    sg_image_desc desc = {};
+                    desc.width = (int)image.width;
+                    desc.height = (int)image.height;
+                    desc.pixel_format = pixel_format;
+                    desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
+                    return sg_make_image(&desc);
+                }
             }
         }
 
