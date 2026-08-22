@@ -74,8 +74,7 @@ void ParticleSystem::spawnParticle() {
             // compact runtime keeps its authored forward direction, random
             // phase and speed, which importantly establishes a valid trail
             // direction before the turbulence operator evolves it.
-            const float phase = initializer.turbulence_offset +
-                                (randomFloat() - 0.5f) * initializer.turbulence_scale;
+            const float phase = initializer.turbulence_offset + (randomFloat() - 0.5f) * initializer.turbulence_scale;
             const float speed = initializer.turbulence_speed_min +
                                 randomFloat() * (initializer.turbulence_speed_max - initializer.turbulence_speed_min);
             const float forward_x = initializer.turbulence_forward[0];

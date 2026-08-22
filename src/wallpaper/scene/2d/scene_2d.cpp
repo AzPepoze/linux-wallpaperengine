@@ -13,6 +13,7 @@
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
+    renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
 }
 
 void Scene2DRuntime::update(float dt) {
