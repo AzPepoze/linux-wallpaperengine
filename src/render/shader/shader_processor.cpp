@@ -136,8 +136,6 @@ std::string expandIncludes(const std::string& source, const std::string& sourceP
                     active.erase(includePath);
                     expanded.insert(includePath);
                 }
-            } else if (const char* compatibility = legacyHeader(include)) {
-                result += compatibility;
             } else {
                 result += line;
                 result += '\n';
