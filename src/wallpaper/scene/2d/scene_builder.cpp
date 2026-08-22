@@ -121,8 +121,8 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     layer->visible = true;
     layer->size[0] = w;
     layer->size[1] = h;
-    layer->origin[0] = 0.0f;
-    layer->origin[1] = 0.0f;
+    layer->origin[0] = w * 0.5f;
+    layer->origin[1] = h * 0.5f;
     layer->origin[2] = 0.0f;
     layer->scale[0] = 1.0f;
     layer->scale[1] = 1.0f;
@@ -143,7 +143,7 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     node.id = 1;
     node.parent_id = 0;
     node.name = "[VideoLayer] Video Wallpaper";
-    node.origin = {0.0f, 0.0f, 0.0f};
+    node.origin = {w * 0.5f, h * 0.5f, 0.0f};
     node.scale = {1.0f, 1.0f, 1.0f};
     node.angles = {0.0f, 0.0f, 0.0f};
     node.parallax_depth = {0.0f, 0.0f};

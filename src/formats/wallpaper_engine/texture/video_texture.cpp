@@ -15,6 +15,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
 }
 
@@ -30,23 +31,32 @@ struct MemoryInput {
     size_t position = 0;
 };
 
-int readPacket(void* opaque, uint8_t* buffer, int buffer_size) {
+int readMemory(void* opaque, uint8_t* buf, int buf_size) {
     auto* input = static_cast<MemoryInput*>(opaque);
-    const size_t count = std::min(input->bytes.size() - input->position, (size_t)buffer_size);
-    if (count == 0) return AVERROR_EOF;
-    memcpy(buffer, input->bytes.data() + input->position, count);
-    input->position += count;
-    return (int)count;
+    if (!input || input->position >= input->bytes.size()) return AVERROR_EOF;
+    const size_t available = input->bytes.size() - input->position;
+    const size_t to_read = std::min((size_t)buf_size, available);
+    memcpy(buf, input->bytes.data() + input->position, to_read);
+    input->position += to_read;
+    return (int)to_read;
 }
 
-int64_t seek(void* opaque, int64_t offset, int whence) {
+int64_t seekMemory(void* opaque, int64_t offset, int whence) {
     auto* input = static_cast<MemoryInput*>(opaque);
-    if (whence == AVSEEK_SIZE) return (int64_t)input->bytes.size();
-    const int origin = whence & ~AVSEEK_FORCE;
-    int64_t position = origin == SEEK_SET   ? offset
-                       : origin == SEEK_CUR ? (int64_t)input->position + offset
-                                            : (int64_t)input->bytes.size() + offset;
-    if (position < 0 || position > (int64_t)input->bytes.size()) return AVERROR(EINVAL);
+    if (!input) return -1;
+    int64_t position = 0;
+    if (whence == SEEK_SET)
+        position = offset;
+    else if (whence == SEEK_CUR)
+        position = (int64_t)input->position + offset;
+    else if (whence == SEEK_END)
+        position = (int64_t)input->bytes.size() + offset;
+    else if (whence == AVSEEK_SIZE)
+        return (int64_t)input->bytes.size();
+    else
+        return -1;
+
+    if (position < 0 || position > (int64_t)input->bytes.size()) return -1;
     input->position = (size_t)position;
     return position;
 }
@@ -103,6 +113,7 @@ struct VideoTexture::Impl {
 
     Impl() {
         current_frame = av_frame_alloc();
+        sw_frame = av_frame_alloc();
     }
 
     ~Impl() {
@@ -150,20 +161,18 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
         return texture;
     }
 
-    // Fall back to software decode if HW VAAPI failed
-    LOG_TAG_W(TAG, "VAAPI failed for %s, falling back to software decoder", path);
+    // Fallback: Software FFmpeg decoder
+    texture->impl->sw_format = avformat_alloc_context();
+    if (!texture->impl->sw_format) return nullptr;
+
     if (is_embedded) {
         texture->impl->input.bytes = std::move(mp4_bytes);
-        texture->impl->sw_io_buffer = (uint8_t*)av_malloc(kIoBufferSize);
-        texture->impl->sw_io = texture->impl->sw_io_buffer
-                                   ? avio_alloc_context(texture->impl->sw_io_buffer, kIoBufferSize, 0,
-                                                        &texture->impl->input, readPacket, nullptr, seek)
-                                   : nullptr;
-        texture->impl->sw_format = avformat_alloc_context();
-        if (!texture->impl->sw_io || !texture->impl->sw_format) return nullptr;
+        texture->impl->sw_io_buffer = static_cast<uint8_t*>(av_malloc(kIoBufferSize));
+        texture->impl->sw_io = avio_alloc_context(texture->impl->sw_io_buffer, kIoBufferSize, 0, &texture->impl->input,
+                                                  readMemory, nullptr, seekMemory);
+        if (!texture->impl->sw_io) return nullptr;
         texture->impl->sw_format->pb = texture->impl->sw_io;
-        texture->impl->sw_format->flags |= AVFMT_FLAG_CUSTOM_IO;
-        if (avformat_open_input(&texture->impl->sw_format, nullptr, nullptr, nullptr) < 0) return nullptr;
+        if (avformat_open_input(&texture->impl->sw_format, "memory", nullptr, nullptr) < 0) return nullptr;
     } else {
         if (avformat_open_input(&texture->impl->sw_format, path, nullptr, nullptr) < 0) return nullptr;
     }
@@ -184,7 +193,6 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
     texture->impl->video_height = (uint32_t)texture->impl->sw_codec->height;
     const AVRational frame_rate = av_guess_frame_rate(texture->impl->sw_format, stream, nullptr);
     if (frame_rate.num > 0 && frame_rate.den > 0) texture->impl->frame_duration = (float)av_q2d(av_inv_q(frame_rate));
-    texture->impl->sw_frame = av_frame_alloc();
     texture->impl->sw_packet = av_packet_alloc();
     if (!texture->impl->sw_frame || !texture->impl->sw_packet || texture->impl->video_width == 0 ||
         texture->impl->video_height == 0)
@@ -258,7 +266,6 @@ bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, A
 
 bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
     if (impl->is_hw_active) {
-        // HW mode does zero copy to GPU
         bool eof = false;
         av_frame_unref(impl->current_frame);
         while (!impl->hw_decoder.receive_frame(impl->current_frame, eof, impl->zero_copy, impl->stats, impl->perf)) {
@@ -272,7 +279,26 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
             VASurfaceID surface_id = (VASurfaceID)(uintptr_t)impl->current_frame->data[3];
             VADisplay va_disp = impl->hw_decoder.get_va_display();
             vaSyncSurface(va_disp, surface_id);
-            // In zero-copy mode, CPU RGBA bytes remain 0
+
+            if (!impl->sw_frame) impl->sw_frame = av_frame_alloc();
+            av_frame_unref(impl->sw_frame);
+            if (av_hwframe_transfer_data(impl->sw_frame, impl->current_frame, 0) >= 0) {
+                ++impl->zero_copy.sws_scale_calls;
+                impl->sw_scaler = sws_getCachedContext(impl->sw_scaler, impl->sw_frame->width, impl->sw_frame->height,
+                                                       (AVPixelFormat)impl->sw_frame->format, impl->sw_frame->width,
+                                                       impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr,
+                                                       nullptr, nullptr);
+                if (impl->sw_scaler) {
+                    size_t bytes = (size_t)impl->sw_frame->width * impl->sw_frame->height * 4;
+                    output.resize(bytes);
+                    impl->zero_copy.cpu_rgba_bytes += bytes;
+                    uint8_t* dest[] = {output.data()};
+                    int stride[] = {impl->sw_frame->width * 4};
+                    sws_scale(impl->sw_scaler, impl->sw_frame->data, impl->sw_frame->linesize, 0,
+                              impl->sw_frame->height, dest, stride);
+                    return true;
+                }
+            }
             return true;
         }
     }
