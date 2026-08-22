@@ -9,40 +9,13 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: refactor/wallpaper-engine-blending
-
-      - name: Commit strict shader include resolution
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          path = Path('src/render/shader/shader_processor.cpp')
-          text = path.read_text()
-          text, count = re.subn(
-              r'\n\s*} else if \(const char\* compatibility = legacyHeader\(include\)\) \{\n\s*result \+= compatibility;\n\s*} else \{\n',
-              '\n            } else {\n',
-              text,
-              count=1,
-          )
-          if count != 1:
-              raise SystemExit('expected legacyHeader fallback block was not found exactly once')
-          path.write_text(text)
-          PY
-
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -- src/render/shader/shader_processor.cpp
-          git commit -m 'fix: remove legacy shader header fallback'
-          git push origin HEAD:refactor/wallpaper-engine-blending
 
       - name: Install system dependencies
         run: |
