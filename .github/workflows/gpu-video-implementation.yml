@@ -1,0 +1,75 @@
+name: GPU-native video implementation
+
+on:
+  push:
+    branches:
+      - feat/gpu-native-video-textures
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply implementation
+        run: |
+          python3 .github/scripts/apply_gpu_video.py
+          python3 .github/scripts/fix_gpu_video.py
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config curl unzip clang-format \
+            libvulkan-dev mesa-vulkan-drivers \
+            libx11-dev libxcursor-dev libxi-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev \
+            libplacebo-dev libdrm-dev
+          curl -fL "https://github.com/shader-slang/slang/releases/download/v2026.14/slang-2026.14-linux-x86_64.zip" -o /tmp/slang.zip
+          sudo unzip -q /tmp/slang.zip -d /usr/local
+          sudo ldconfig
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Format changed sources
+        run: |
+          clang-format -i \
+            src/formats/wallpaper_engine/texture/video_frame.h \
+            src/formats/wallpaper_engine/texture/video_texture.h \
+            src/formats/wallpaper_engine/texture/video_texture.cpp \
+            src/render/backend/sokol/sokol_vulkan_interop.h \
+            src/render/backend/sokol/sokol_implementation.cpp \
+            src/render/backend/sokol/sokol_backend_ext.inl \
+            src/assets/asset_manager.cpp \
+            src/assets/asset_manager.h \
+            src/app/main.cpp \
+            src/wallpaper/scene/2d/effects/effect.cpp \
+            src/formats/wallpaper_engine/texture/tex_decoder.cpp
+
+      - name: Build Debug
+        run: |
+          xmake f -c -m debug -y
+          xmake build linux-wallpaperengine -y
+
+      - name: Build Release
+        run: |
+          xmake f -c -m release -y
+          xmake build linux-wallpaperengine -y
+
+      - name: Commit implementation and remove temporary CI
+        run: |
+          rm -f .github/scripts/apply_gpu_video.py .github/scripts/fix_gpu_video.py
+          rm -f .github/workflows/gpu-video-implementation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md xmake.lua src
+          git add -u .github
+          git commit -m "feat: add GPU-native video texture backends"
+          git push origin HEAD:feat/gpu-native-video-textures
