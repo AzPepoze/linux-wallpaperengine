@@ -13,8 +13,6 @@
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
-    renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
-    initBloomPipelines();
 }
 
 void Scene2DRuntime::initBloomPipelines() {
@@ -212,6 +210,9 @@ void Scene2DRuntime::renderBloom(int current_target_index, int width, int height
     const bool hdr = ctx.general.hdr;
     const float strength = hdr ? ctx.general.bloom.hdr_strength : ctx.general.bloom.strength;
     if (!ctx.general.bloom.enabled || strength <= 0.0f) return;
+    if (pip_bloom_extract.id == SG_INVALID_ID) {
+        initBloomPipelines();
+    }
     if (pip_bloom_extract.id == SG_INVALID_ID || pip_bloom_blur_h.id == SG_INVALID_ID ||
         pip_bloom_blur_v.id == SG_INVALID_ID) {
         return;

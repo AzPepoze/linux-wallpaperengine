@@ -390,11 +390,9 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
 }
 
 void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
-    for (int mode = kFirstWallpaperBlendMode; mode <= kLastWallpaperBlendMode; ++mode) {
-        if (r->pip_image_composite[mode].id == SG_INVALID_ID) {
-            r->pip_image_composite[mode] = compileWallpaperBlendPipeline(ctx, mode);
-        }
-    }
+    (void)ctx;
+    (void)r;
+    // No-op: Blend mode pipelines are now compiled lazily on first use.
 }
 
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
@@ -412,7 +410,10 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
 
     if (blend_mode < kFirstWallpaperBlendMode || blend_mode > kLastWallpaperBlendMode) return;
 
-    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
+    if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) {
+        r->pip_image_composite[blend_mode] = compileWallpaperBlendPipeline(ctx, blend_mode);
+        if (r->pip_image_composite[blend_mode].id == SG_INVALID_ID) return;
+    }
 
     static int logged_composite_frames = 0;
     if (logged_composite_frames < 10) {

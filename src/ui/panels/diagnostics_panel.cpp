@@ -6,6 +6,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/shader/shader_backend.h"
 #include "ui/widgets/ui_components.h"
 
 void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
@@ -64,6 +65,11 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
                               gpu.pci_bus_id.empty() ? "N/A" : gpu.pci_bus_id.c_str());
     UiComponents::PropertyRow("DRM Node:", "%s", gpu.drm_render_node.empty() ? "N/A" : gpu.drm_render_node.c_str());
     UiComponents::StatusBadge("VA-API Driver:", gpu.vaapi_supported, gpu.vaapi_driver.c_str(), "Not Available");
+
+    uint64_t shd_hits = 0, shd_misses = 0;
+    get_shader_cache_stats(&shd_hits, &shd_misses);
+    UiComponents::PropertyRow("SPIR-V Cache:", "%llu Hits / %llu Misses (/tmp/linux-wallpaperengine)",
+                              static_cast<unsigned long long>(shd_hits), static_cast<unsigned long long>(shd_misses));
 
     // 4. Video Pipeline Performance & Zero-Copy VRAM Cache
     const auto& videos = ctx.asset_mgr.getVideoTextures();

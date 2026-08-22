@@ -5,9 +5,14 @@
 
 #include <atomic>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <future>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "shared/core/logger.h"
@@ -359,39 +364,139 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
     return "#version 450\n" + declarations + source;
 }
 
-struct SlangCompilerContext {
-    Slang::ComPtr<slang::IGlobalSession> global_session;
-    Slang::ComPtr<slang::ISession> session;
+struct ShaderDiskCache {
+    std::mutex mem_cache_mutex;
+    std::unordered_map<uint64_t, std::vector<uint32_t>> in_memory_cache;
+    std::atomic<uint64_t> cache_hits{0};
+    std::atomic<uint64_t> cache_misses{0};
 
-    bool initialize() {
-        if (session) return true;
+    static constexpr const char* kCacheDir = "/tmp/linux-wallpaperengine/shaders";
 
-        SlangGlobalSessionDesc global_desc = {};
-        global_desc.enableGLSL = true;
-        if (slang_createGlobalSession2(&global_desc, global_session.writeRef()) != SLANG_OK || !global_session) {
-            core_log.error("Failed to initialize Slang global session");
+    static uint64_t computeHash(SlangStage stage, const std::string& source) {
+        uint64_t hash = 14695981039346656037ULL;
+        hash ^= static_cast<uint64_t>(stage);
+        hash *= 1099511628211ULL;
+        for (char c : source) {
+            hash ^= static_cast<uint8_t>(c);
+            hash *= 1099511628211ULL;
+        }
+        return hash;
+    }
+
+    bool tryGet(uint64_t hash, const char* stage_str, std::vector<uint32_t>& out_spirv) {
+        // 1. Check in-memory fast cache
+        {
+            std::lock_guard<std::mutex> lock(mem_cache_mutex);
+            auto it = in_memory_cache.find(hash);
+            if (it != in_memory_cache.end()) {
+                out_spirv = it->second;
+                cache_hits.fetch_add(1, std::memory_order_relaxed);
+                return true;
+            }
+        }
+
+        // 2. Check /tmp disk cache
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s_%016llx.spv", kCacheDir, stage_str, (unsigned long long)hash);
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            cache_misses.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
 
-        slang::TargetDesc target_desc = {};
-        target_desc.format = SLANG_SPIRV;
-        target_desc.profile = global_session->findProfile("glsl_450");
-
-        slang::SessionDesc session_desc = {};
-        session_desc.targetCount = 1;
-        session_desc.targets = &target_desc;
-        session_desc.allowGLSLSyntax = true;
-        if (global_session->createSession(session_desc, session.writeRef()) != SLANG_OK || !session) {
-            core_log.error("Failed to initialize Slang GLSL-to-SPIR-V session");
+        const std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+        if (size <= 0 || (size % sizeof(uint32_t)) != 0) {
+            cache_misses.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
+
+        out_spirv.resize(size / sizeof(uint32_t));
+        if (!file.read(reinterpret_cast<char*>(out_spirv.data()), size)) {
+            cache_misses.fetch_add(1, std::memory_order_relaxed);
+            return false;
+        }
+
+        // Store into in-memory cache
+        {
+            std::lock_guard<std::mutex> lock(mem_cache_mutex);
+            in_memory_cache[hash] = out_spirv;
+        }
+
+        cache_hits.fetch_add(1, std::memory_order_relaxed);
         return true;
+    }
+
+    void put(uint64_t hash, const char* stage_str, const std::vector<uint32_t>& spirv) {
+        if (spirv.empty()) return;
+
+        // 1. Store into in-memory cache
+        {
+            std::lock_guard<std::mutex> lock(mem_cache_mutex);
+            in_memory_cache[hash] = spirv;
+        }
+
+        // 2. Write to /tmp disk cache
+        std::error_code ec;
+        std::filesystem::create_directories(kCacheDir, ec);
+
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s_%016llx.spv", kCacheDir, stage_str, (unsigned long long)hash);
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        if (file.is_open()) {
+            file.write(reinterpret_cast<const char*>(spirv.data()), spirv.size() * sizeof(uint32_t));
+        }
     }
 };
 
-SlangCompilerContext& slang_context() {
-    static SlangCompilerContext context;
-    return context;
+ShaderDiskCache& shader_cache() {
+    static ShaderDiskCache cache;
+    return cache;
+}
+
+struct SlangGlobalContext {
+    Slang::ComPtr<slang::IGlobalSession> global_session;
+    std::mutex init_mutex;
+
+    slang::IGlobalSession* get() {
+        std::lock_guard<std::mutex> lock(init_mutex);
+        if (!global_session) {
+            SlangGlobalSessionDesc global_desc = {};
+            global_desc.enableGLSL = true;
+            if (slang_createGlobalSession2(&global_desc, global_session.writeRef()) != SLANG_OK || !global_session) {
+                core_log.error("Failed to initialize Slang global session");
+                return nullptr;
+            }
+        }
+        return global_session.get();
+    }
+};
+
+SlangGlobalContext& slang_global() {
+    static SlangGlobalContext ctx;
+    return ctx;
+}
+
+slang::ISession* get_thread_slang_session() {
+    thread_local Slang::ComPtr<slang::ISession> thread_session;
+    if (thread_session) return thread_session.get();
+
+    slang::IGlobalSession* global = slang_global().get();
+    if (!global) return nullptr;
+
+    slang::TargetDesc target_desc = {};
+    target_desc.format = SLANG_SPIRV;
+    target_desc.profile = global->findProfile("glsl_450");
+
+    slang::SessionDesc session_desc = {};
+    session_desc.targetCount = 1;
+    session_desc.targets = &target_desc;
+    session_desc.allowGLSLSyntax = true;
+    if (global->createSession(session_desc, thread_session.writeRef()) != SLANG_OK || !thread_session) {
+        core_log.error("Failed to initialize thread-local Slang session");
+        return nullptr;
+    }
+    return thread_session.get();
 }
 
 std::atomic<uint64_t> slang_module_counter{0};
@@ -402,18 +507,18 @@ void log_slang_diagnostics(const char* source_name, slang::IBlob* diagnostics) {
     core_log.error("Slang diagnostics for %s: %s", source_name, text.c_str());
 }
 
-bool compile_spirv(SlangStage stage, const std::string& source, const char* source_name,
-                   std::vector<uint32_t>& output) {
-    SlangCompilerContext& context = slang_context();
-    if (!context.initialize()) return false;
+bool compile_spirv_impl(SlangStage stage, const std::string& source, const char* source_name,
+                        std::vector<uint32_t>& output) {
+    slang::ISession* session = get_thread_slang_session();
+    if (!session) return false;
 
     const uint64_t module_id = slang_module_counter.fetch_add(1, std::memory_order_relaxed);
     const std::string module_name = "lwe_runtime_shader_" + std::to_string(module_id);
     const std::string virtual_source_name = module_name + "/" + source_name;
 
     Slang::ComPtr<slang::IBlob> diagnostics;
-    slang::IModule* module = context.session->loadModuleFromSourceString(
-        module_name.c_str(), virtual_source_name.c_str(), source.c_str(), diagnostics.writeRef());
+    slang::IModule* module = session->loadModuleFromSourceString(module_name.c_str(), virtual_source_name.c_str(),
+                                                                 source.c_str(), diagnostics.writeRef());
     if (!module) {
         log_slang_diagnostics(source_name, diagnostics.get());
         core_log.error("Slang failed to load GLSL module for %s", source_name);
@@ -432,8 +537,8 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
     slang::IComponentType* components[2] = {module, entry_point.get()};
     Slang::ComPtr<slang::IComponentType> composed_program;
     diagnostics.setNull();
-    if (context.session->createCompositeComponentType(components, 2, composed_program.writeRef(),
-                                                      diagnostics.writeRef()) != SLANG_OK ||
+    if (session->createCompositeComponentType(components, 2, composed_program.writeRef(), diagnostics.writeRef()) !=
+            SLANG_OK ||
         !composed_program) {
         log_slang_diagnostics(source_name, diagnostics.get());
         core_log.error("Slang failed to compose shader program for %s", source_name);
@@ -467,6 +572,21 @@ bool compile_spirv(SlangStage stage, const std::string& source, const char* sour
     return true;
 }
 
+bool get_or_compile_spirv(SlangStage stage, const std::string& source, const char* source_name, const char* stage_str,
+                          std::vector<uint32_t>& output) {
+    const uint64_t hash = ShaderDiskCache::computeHash(stage, source);
+    if (shader_cache().tryGet(hash, stage_str, output)) {
+        return true;
+    }
+
+    if (!compile_spirv_impl(stage, source, source_name, output)) {
+        return false;
+    }
+
+    shader_cache().put(hash, stage_str, output);
+    return true;
+}
+
 }  // namespace
 
 sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_source,
@@ -488,8 +608,45 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
     const std::string vertex_name = std::string(label ? label : "shader") + ".vert";
     const std::string fragment_name = std::string(label ? label : "shader") + ".frag";
 
-    const bool vertex_ok = compile_spirv(SLANG_STAGE_VERTEX, vulkan_vs, vertex_name.c_str(), vertex_spirv);
-    const bool fragment_ok = compile_spirv(SLANG_STAGE_FRAGMENT, vulkan_fs, fragment_name.c_str(), fragment_spirv);
+    const uint64_t vert_hash = ShaderDiskCache::computeHash(SLANG_STAGE_VERTEX, vulkan_vs);
+    const uint64_t frag_hash = ShaderDiskCache::computeHash(SLANG_STAGE_FRAGMENT, vulkan_fs);
+
+    const bool vert_cached = shader_cache().tryGet(vert_hash, "vert", vertex_spirv);
+    const bool frag_cached = shader_cache().tryGet(frag_hash, "frag", fragment_spirv);
+
+    bool vertex_ok = vert_cached;
+    bool fragment_ok = frag_cached;
+
+    if (!vert_cached && !frag_cached) {
+        // Parallel multi-threaded compilation: execute both stages across worker threads
+        auto vert_future = std::async(std::launch::async, [&]() {
+            if (compile_spirv_impl(SLANG_STAGE_VERTEX, vulkan_vs, vertex_name.c_str(), vertex_spirv)) {
+                shader_cache().put(vert_hash, "vert", vertex_spirv);
+                return true;
+            }
+            return false;
+        });
+
+        auto frag_future = std::async(std::launch::async, [&]() {
+            if (compile_spirv_impl(SLANG_STAGE_FRAGMENT, vulkan_fs, fragment_name.c_str(), fragment_spirv)) {
+                shader_cache().put(frag_hash, "frag", fragment_spirv);
+                return true;
+            }
+            return false;
+        });
+
+        vertex_ok = vert_future.get();
+        fragment_ok = frag_future.get();
+    } else {
+        if (!vert_cached) {
+            vertex_ok = get_or_compile_spirv(SLANG_STAGE_VERTEX, vulkan_vs, vertex_name.c_str(), "vert", vertex_spirv);
+        }
+        if (!frag_cached) {
+            fragment_ok =
+                get_or_compile_spirv(SLANG_STAGE_FRAGMENT, vulkan_fs, fragment_name.c_str(), "frag", fragment_spirv);
+        }
+    }
+
     if (!vertex_ok || !fragment_ok) return {SG_INVALID_ID};
 
     desc->vertex_func.source = nullptr;
@@ -500,4 +657,9 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
     desc->fragment_func.entry = "main";
 
     return sg_make_shader(desc);
+}
+
+void get_shader_cache_stats(uint64_t* out_hits, uint64_t* out_misses) {
+    if (out_hits) *out_hits = shader_cache().cache_hits.load(std::memory_order_relaxed);
+    if (out_misses) *out_misses = shader_cache().cache_misses.load(std::memory_order_relaxed);
 }
