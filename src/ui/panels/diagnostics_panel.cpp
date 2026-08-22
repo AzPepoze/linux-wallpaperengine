@@ -53,6 +53,24 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
             }
         }
     }
+
+    ImGui::Spacing();
+    ImGui::Text("Diagnostics Capture");
+    ImGui::Separator();
+    const char* status =
+        diagnostics.config.capture_complete
+            ? "Complete (Written to disk)"
+            : (diagnostics.is_capturing_frame ? "Capturing..." : (diagnostics.config.enabled ? "Pending..." : "Idle"));
+    ImGui::Text("Status: %s", status);
+    if (!diagnostics.config.output_dir.empty()) {
+        ImGui::TextDisabled("Output: %s", diagnostics.config.output_dir.c_str());
+    }
+    if (ImGui::Button("Dump Diagnostics Now", ImVec2(-1.0f, 28.0f))) {
+        diagnostics.triggerCapture(ctx.profiler.frame_index);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Dumps shader passes, textures, render graph, and uniforms to ./diagnostics");
+    }
 }
 
 #endif

@@ -4,6 +4,7 @@
 
 #include "effect_inspector.h"
 #include "imgui.h"
+#include "render/diagnostics/render_diagnostics.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
@@ -280,6 +281,25 @@ void showGlobalSettings(EngineContext& ctx) {
         ImGui::DragFloat("HDR Threshold", &ctx.general.bloom.hdr_threshold, 0.01f, 0.0f, 2.0f);
         ImGui::DragFloat("HDR Feather", &ctx.general.bloom.hdr_feather, 0.01f, 0.0f, 1.0f);
         ImGui::DragFloat("HDR Iterations", &ctx.general.bloom.hdr_iterations, 1.0f, 1.0f, 16.0f);
+    }
+
+    if (ImGui::CollapsingHeader("Diagnostics & Dump", ImGuiTreeNodeFlags_DefaultOpen)) {
+        RenderDiagnostics& diagnostics = RenderDiagnostics::instance();
+        const char* status =
+            diagnostics.config.capture_complete
+                ? "Complete (Written to disk)"
+                : (diagnostics.is_capturing_frame ? "Capturing..."
+                                                  : (diagnostics.config.enabled ? "Pending..." : "Idle"));
+        ImGui::Text("Status: %s", status);
+        if (!diagnostics.config.output_dir.empty()) {
+            ImGui::TextDisabled("Output: %s", diagnostics.config.output_dir.c_str());
+        }
+        if (ImGui::Button("Dump Diagnostics Now", ImVec2(-1.0f, 28.0f))) {
+            diagnostics.triggerCapture(ctx.profiler.frame_index);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Dumps shader passes, textures, render graph, and uniforms to ./diagnostics");
+        }
     }
 }
 

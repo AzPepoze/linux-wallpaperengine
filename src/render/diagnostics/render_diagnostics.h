@@ -86,6 +86,7 @@ class RenderDiagnostics {
     bool is_capturing_frame = false;
 
     void init(bool enabled = false);
+    void triggerCapture(uint64_t current_frame);
     void onFrameStart(uint64_t frame_index, EngineContext& ctx);
     void onFrameEnd(uint64_t frame_index, EngineContext& ctx);
 
