@@ -108,8 +108,8 @@ parallax_offset_t parallax_layer_offset(const EngineContext& ctx, uint32_t scene
     const float mouse_x = (0.5f - ctx.parallax_pointer_x) * ctx.scene_w * ctx.camera_parallax_mouse_influence;
     const float mouse_y = (ctx.parallax_pointer_y - 0.5f) * ctx.scene_h * ctx.camera_parallax_mouse_influence;
 
-    result.x = (node_position[0] - camera_x + mouse_x) * depth[0] * ctx.camera_parallax_amount;
-    result.y = (node_position[1] - camera_y + mouse_y) * depth[1] * ctx.camera_parallax_amount;
+    result.x = ctx.camera_shake_x + (node_position[0] - camera_x + mouse_x) * depth[0] * ctx.camera_parallax_amount;
+    result.y = ctx.camera_shake_y + (node_position[1] - camera_y + mouse_y) * depth[1] * ctx.camera_parallax_amount;
     return result;
 }
 
