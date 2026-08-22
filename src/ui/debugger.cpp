@@ -101,7 +101,7 @@ void drawHierarchyPanel(EngineContext& ctx) {
     ImGui::TextDisabled("(%.1f FPS)", fps);
     ImGui::Separator();
 
-    const float isolate_btn_w = 72.0f;
+    const float isolate_btn_w = ImGui::CalcTextSize("Isolate: ON").x + ImGui::GetStyle().FramePadding.x * 2.0f + 10.0f;
     const float available_w = ImGui::GetContentRegionAvail().x;
     const float selectable_w = available_w - isolate_btn_w - ImGui::GetStyle().ItemSpacing.x;
 
