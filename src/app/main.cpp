@@ -1,6 +1,7 @@
 #define SOKOL_VULKAN
 #include <cjson/cJSON.h>
 #include <dirent.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -309,6 +310,36 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     if (ctx.wallpaper_path[0] != '\0' && !ctx.is_pkg) {
         size_t len = strlen(ctx.wallpaper_path);
         if (len >= 4 && strcmp(ctx.wallpaper_path + len - 4, ".pkg") == 0) ctx.is_pkg = true;
+    }
+
+    const bool extract_only = sargs_exists("extract-only") || sargs_exists("--extract-only");
+    if (extract_only && ctx.wallpaper_path[0] != '\0') {
+        char out_dir[1024] = {};
+        if (sargs_exists("extract-dir")) {
+            strncpy(out_dir, sargs_value("extract-dir"), sizeof(out_dir) - 1);
+        } else {
+            char wp_copy[1024];
+            strncpy(wp_copy, ctx.wallpaper_path, sizeof(wp_copy) - 1);
+            const char* wp_name = basename(wp_copy);
+            snprintf(out_dir, sizeof(out_dir), "extracted/%s", wp_name);
+        }
+        mkdir("extracted", 0755);
+        mkdir(out_dir, 0755);
+
+        char pkg_file[1024];
+        if (ctx.is_pkg) {
+            strncpy(pkg_file, ctx.wallpaper_path, sizeof(pkg_file) - 1);
+        } else {
+            snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
+        }
+
+        if (access(pkg_file, F_OK) == 0) {
+            const bool ok = extract_pkg(pkg_file, out_dir);
+            exit(ok ? EXIT_SUCCESS : EXIT_FAILURE);
+        } else {
+            fprintf(stderr, "extract-only: no scene.pkg found at %s\n", pkg_file);
+            exit(EXIT_FAILURE);
+        }
     }
 
     sapp_desc desc = {};
