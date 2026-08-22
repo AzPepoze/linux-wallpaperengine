@@ -37,6 +37,27 @@ void AssetManager::init(const char* ep, const char* wp) {
     wallpaper_path = wp;
 }
 
+AssetManager::~AssetManager() { clearVideoTextures(); }
+
+void AssetManager::clearVideoTextures() { video_textures.clear(); }
+
+void AssetManager::updateVideoTextures(float elapsed_seconds) {
+    for (ActiveVideoTexture& video : video_textures) {
+        video.elapsed_seconds += elapsed_seconds;
+        if (video.elapsed_seconds < video.decoder->frameDuration()) continue;
+        std::vector<uint8_t> pixels;
+        while (video.elapsed_seconds >= video.decoder->frameDuration()) {
+            if (!video.decoder->decodeNextFrame(pixels)) break;
+            video.elapsed_seconds -= video.decoder->frameDuration();
+        }
+        if (!pixels.empty()) {
+            sg_image_data data = {};
+            data.mip_levels[0] = {pixels.data(), pixels.size()};
+            sg_update_image(video.image, &data);
+        }
+    }
+}
+
 bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {
     if (!rel_path || !out_abs_path || max_len <= 0) return false;
     if (rel_path[0] == '/' && access(rel_path, F_OK) == 0) {
@@ -100,6 +121,27 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
                 desc.pixel_format = pixel_format;
                 desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
                 return sg_make_image(&desc);
+            }
+        }
+
+        if (image_index == 0) {
+            for (const ActiveVideoTexture& video : video_textures) {
+                if (video.path == abs_path) return GfxImage(video.image);
+            }
+            std::unique_ptr<wallpaper_engine::VideoTexture> video = wallpaper_engine::VideoTexture::open(abs_path);
+            std::vector<uint8_t> pixels;
+            if (video && video->decodeNextFrame(pixels)) {
+                sg_image_desc desc = {};
+                desc.width = (int)video->width();
+                desc.height = (int)video->height();
+                desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+                desc.usage.stream_update = true;
+                desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
+                const sg_image gpu_image = sg_make_image(&desc);
+                if (gpu_image.id != SG_INVALID_ID) {
+                    video_textures.push_back({abs_path, gpu_image, std::move(video)});
+                    return GfxImage(gpu_image);
+                }
             }
         }
     }

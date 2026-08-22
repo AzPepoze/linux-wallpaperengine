@@ -108,6 +108,9 @@ static void init(void) {
     s_desc.image_pool_size = 512;
     s_desc.shader_pool_size = 128;
     s_desc.pipeline_pool_size = 256;
+    // A single 4K RGBA video frame needs about 32 MiB. Sokol's default Vulkan
+    // streaming staging buffer is 16 MiB, which corrupts per-frame video uploads.
+    s_desc.vulkan.stream_staging_buffer_size = 64 * 1024 * 1024;
     sg_setup(&s_desc);
 
 #if DEBUG_BUILD
@@ -191,6 +194,7 @@ static void frame(void) {
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
 
+    ctx.asset_mgr.updateVideoTextures(dt);
     parallax_update(ctx, dt, sapp_width(), sapp_height());
     scene_engine->update(dt);
 #if DEBUG_BUILD
@@ -261,6 +265,7 @@ static void cleanup(void) {
         delete scene_engine;
         scene_engine = nullptr;
     }
+    ctx.asset_mgr.clearVideoTextures();
 #if DEBUG_BUILD
     simgui_shutdown();
 #endif

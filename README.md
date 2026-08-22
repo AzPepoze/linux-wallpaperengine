@@ -10,11 +10,12 @@ Linux renderer for Wallpaper Engine projects.
 - [Slang](https://github.com/shader-slang/slang)
 - A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
 - X11 development libraries (`libX11`, `libXcursor`, `libXi`)
+- FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`)
 
 On Arch / CachyOS:
 
 ```bash
-sudo pacman -S xmake vulkan-icd-loader shader-slang libx11 libxcursor libxi
+sudo pacman -S xmake vulkan-icd-loader shader-slang libx11 libxcursor libxi ffmpeg
 ```
 
 ## Build and run

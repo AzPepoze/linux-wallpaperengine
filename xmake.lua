@@ -25,7 +25,7 @@ target("linux-wallpaperengine")
     set_rundir("$(projectdir)")
     add_packages("sokol", "linmath.h", "slang_shader", "vulkan-headers", "lz4", "cjson", "stb")
     add_includedirs("src")
-    add_syslinks("vulkan", "X11", "Xcursor", "Xi", "dl", "m", "pthread")
+    add_syslinks("vulkan", "X11", "Xcursor", "Xi", "avformat", "avcodec", "avutil", "swscale", "dl", "m", "pthread")
 
     if is_mode("debug") then
         add_files("src/**.cpp")
