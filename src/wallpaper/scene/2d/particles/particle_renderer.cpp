@@ -179,6 +179,14 @@ void ParticleSystem::draw(EngineContext& ctx) {
             }
             mat4x4_identity(builtins.effect_texture_projection);
             mat4x4_identity(builtins.effect_texture_projection_inverse);
+            builtins.light_ambient_color[0] = ctx.general.ambient_color[0];
+            builtins.light_ambient_color[1] = ctx.general.ambient_color[1];
+            builtins.light_ambient_color[2] = ctx.general.ambient_color[2];
+            builtins.light_ambient_color[3] = 1.0f;
+            builtins.light_skylight_color[0] = ctx.general.skylight_color[0];
+            builtins.light_skylight_color[1] = ctx.general.skylight_color[1];
+            builtins.light_skylight_color[2] = ctx.general.skylight_color[2];
+            builtins.light_skylight_color[3] = 1.0f;
 
             particle_builtin_uniforms_t particle_builtins = {};
             memcpy(particle_builtins.model_matrix, model, sizeof(mat4x4));

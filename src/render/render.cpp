@@ -35,6 +35,8 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
         "uniform mat4 g_EffectTextureProjectionMatrixInverse;\n"
         "uniform vec2 g_PointerPosition;\n"
         "uniform vec2 g_Padding3;\n"
+        "uniform vec4 g_LightAmbientColor;\n"
+        "uniform vec4 g_LightSkylightColor;\n"
         "layout(location=0) in vec2 a_Position;\n"
         "layout(location=1) in vec2 a_TexCoord;\n"
         "out vec2 v_TexCoord;\n"
@@ -64,6 +66,8 @@ GfxPipeline compileWallpaperBlendPipeline(EngineContext& ctx, int blend_mode) {
         "uniform mat4 g_EffectTextureProjectionMatrixInverse;\n"
         "uniform vec2 g_PointerPosition;\n"
         "uniform vec2 g_Padding3;\n"
+        "uniform vec4 g_LightAmbientColor;\n"
+        "uniform vec4 g_LightSkylightColor;\n"
         "uniform vec4 tint;\n"
         "uniform sampler2D g_Texture0;\n"
         "uniform sampler2D g_Texture1;\n"
@@ -273,6 +277,14 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         }
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
+        builtin.light_ambient_color[0] = ctx.general.ambient_color[0];
+        builtin.light_ambient_color[1] = ctx.general.ambient_color[1];
+        builtin.light_ambient_color[2] = ctx.general.ambient_color[2];
+        builtin.light_ambient_color[3] = 1.0f;
+        builtin.light_skylight_color[0] = ctx.general.skylight_color[0];
+        builtin.light_skylight_color[1] = ctx.general.skylight_color[1];
+        builtin.light_skylight_color[2] = ctx.general.skylight_color[2];
+        builtin.light_skylight_color[3] = 1.0f;
 
         // Slot 0 (g_Texture0) is ALWAYS the current effect input view.
         r->bind.views[0] = main_view;
