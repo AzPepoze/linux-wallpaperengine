@@ -92,9 +92,45 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     }
 
     ImGui::Indent();
-    if (pass.pass_textures.textures.empty()) {
-        ImGui::TextDisabled("[No textures for this pass]");
-    } else {
+    // g_Texture0 is a real resolved slot too: it may be an authored image,
+    // the previous pass, or an invalid fallback.  Keep it visible alongside
+    // the numbered texture array rather than treating it as implicit.
+    if (ImGui::TreeNodeEx("Resolved Texture Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto show_resolved_slot = [&](int slot, sg_image image, sg_view view, const std::string& path,
+                                      const char* source) {
+            const char* label = pass.texture_labels.count(slot) ? pass.texture_labels[slot].c_str() : "Texture";
+            const bool valid = view.id != SG_INVALID_ID;
+            ImGui::Text("g_Texture%d [%s] — %s", slot, label, valid ? "bound" : "INVALID / fallback");
+            ImGui::SameLine();
+            ImGui::TextDisabled("source: %s", source);
+            if (valid) {
+                const sg_image_desc desc = sg_query_image_desc(image);
+                ImGui::Image((ImTextureID)simgui_imtextureid(view), ImVec2(96.0f, 64.0f));
+                ImGui::SameLine();
+                ImGui::TextDisabled("%d x %d%s%s", desc.width, desc.height, path.empty() ? "" : "\n",
+                                    path.empty() ? "" : path.c_str());
+            } else if (!path.empty()) {
+                ImGui::TextDisabled("%s", path.c_str());
+            }
+        };
+        show_resolved_slot(
+            0, pass.pass_textures.texture0, pass.pass_textures.texture0_view, pass.pass_textures.texture0_path,
+            pass.render_texture_bindings.count(0) ? pass.render_texture_bindings[0].c_str() : "previous/authored");
+        for (int i = 0; i < (int)pass.pass_textures.textures.size(); ++i) {
+            const int slot = i + 1;
+            const char* source =
+                pass.render_texture_bindings.count(slot) ? pass.render_texture_bindings[slot].c_str() : "authored";
+            sg_view view = {SG_INVALID_ID};
+            if (i < (int)pass.pass_textures.cached_views.size()) view = pass.pass_textures.cached_views[i];
+            show_resolved_slot(
+                slot, pass.pass_textures.textures[i], view,
+                i < (int)pass.pass_textures.texture_paths.size() ? pass.pass_textures.texture_paths[i] : std::string(),
+                source);
+        }
+        ImGui::TreePop();
+    }
+
+    if (!pass.pass_textures.textures.empty()) {
         // Texture Grid Visualization
         if (ImGui::TreeNodeEx("Texture Slots Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
             float size = 72.0f;
