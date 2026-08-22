@@ -343,12 +343,14 @@ RenderDiagnostics::~RenderDiagnostics() {
     }
 }
 
-void RenderDiagnostics::init() {
-    config.enabled = true;
+void RenderDiagnostics::init(bool enabled) {
+    config.enabled = enabled;
     config.target_frame = 100;
     config.capture_pass_images = true;
-    effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
-                    (unsigned long long)config.target_frame);
+    if (enabled) {
+        effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
+                        (unsigned long long)config.target_frame);
+    }
 }
 
 void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {

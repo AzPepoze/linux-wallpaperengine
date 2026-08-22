@@ -107,7 +107,9 @@ static void init(void) {
     }
     ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
 #if DEBUG_BUILD
-    RenderDiagnostics::instance().init();
+    const bool enable_diagnostics = sargs_exists("diagnose") || sargs_exists("--diagnose") ||
+                                    sargs_exists("diagnostics") || sargs_exists("--diagnostics");
+    RenderDiagnostics::instance().init(enable_diagnostics);
 #endif
 
     sg_desc s_desc = {};

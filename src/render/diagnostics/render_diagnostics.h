@@ -85,7 +85,7 @@ class RenderDiagnostics {
     DiagnosticConfig config;
     bool is_capturing_frame = false;
 
-    void init();
+    void init(bool enabled = false);
     void onFrameStart(uint64_t frame_index, EngineContext& ctx);
     void onFrameEnd(uint64_t frame_index, EngineContext& ctx);
 
