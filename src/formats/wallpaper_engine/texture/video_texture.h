@@ -29,6 +29,13 @@ class VideoTexture {
     const std::string& codecName() const;
     const std::string& containerName() const;
 
+    void start();
+    void stop();
+    void pause();
+    void resume();
+    bool isPlaying() const;
+    bool isPaused() const;
+
     bool decodeNextFrame(std::vector<uint8_t>& rgba_pixels);
     bool decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, AVFrame*& out_av_frame);
 

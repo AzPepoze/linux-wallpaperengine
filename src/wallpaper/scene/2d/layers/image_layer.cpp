@@ -327,6 +327,9 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
                 layer->size[0] = (float)desc.width;
                 layer->size[1] = (float)desc.height;
             }
+            const auto* v = ctx.asset_mgr.findVideoTexture(layer->img);
+            if (!v && !layer->path.empty()) v = ctx.asset_mgr.findVideoTexture(layer->path);
+            if (v && v->decoder) layer->bound_video_decoder = v->decoder.get();
         }
     }
 
@@ -336,6 +339,9 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
 void ImageLayer::loadMaterial(const char* mat_rel_path, EngineContext& ctx) {
     img = ctx.asset_mgr.resolveMaterialTexture(mat_rel_path, &path);
     updateCachedView();
+    const auto* v = ctx.asset_mgr.findVideoTexture(img);
+    if (!v && !path.empty()) v = ctx.asset_mgr.findVideoTexture(path);
+    if (v && v->decoder) bound_video_decoder = v->decoder.get();
 }
 
 void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
@@ -384,6 +390,22 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
     if (!is_fullscreen) {
         renderEffectChain(ctx);
     }
+}
+
+void ImageLayer::start() {
+    if (bound_video_decoder) bound_video_decoder->start();
+}
+
+void ImageLayer::stop() {
+    if (bound_video_decoder) bound_video_decoder->stop();
+}
+
+void ImageLayer::pause() {
+    if (bound_video_decoder) bound_video_decoder->pause();
+}
+
+void ImageLayer::resume() {
+    if (bound_video_decoder) bound_video_decoder->resume();
 }
 
 bool ImageLayer::requiresSceneColor() const {

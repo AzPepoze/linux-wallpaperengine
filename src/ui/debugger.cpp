@@ -74,14 +74,13 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
 
     ImGui::PushID((int)node.id);
     if (layer_index >= 0) {
-        UiWidgets::drawVisibilitySoloControls(ctx.layers[layer_index]->visible, ctx.layers[layer_index]->solo,
-                                              "Toggle layer visibility", "Solo layer");
+        UiWidgets::drawVisibilitySoloControls(*ctx.layers[layer_index], "Toggle layer visibility", "Solo layer");
         ImGui::SameLine();
     }
     const bool open = ImGui::TreeNodeEx(node_name.c_str(), flags);
     if (layer_index >= 0 && ImGui::IsItemClicked()) {
         ctx.selected_object = layer_index;
-        if (ImGui::GetIO().KeyCtrl) ctx.layers[layer_index]->solo = !ctx.layers[layer_index]->solo;
+        if (ImGui::GetIO().KeyCtrl) ctx.layers[layer_index]->setSolo(!ctx.layers[layer_index]->solo);
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scene node %u", node.id);
 
@@ -119,7 +118,7 @@ void drawHierarchyPanel(EngineContext& ctx) {
     for (int index = 0; index < (int)ctx.layers.size(); ++index) {
         Layer* layer = ctx.layers[index];
         ImGui::PushID(index);
-        UiWidgets::drawVisibilitySoloControls(layer->visible, layer->solo, "Toggle layer visibility", "Solo layer");
+        UiWidgets::drawVisibilitySoloControls(*layer, "Toggle layer visibility", "Solo layer");
         ImGui::SameLine();
         if (ImGui::Selectable(layer->name.c_str(), ctx.selected_object == index)) ctx.selected_object = index;
         ImGui::PopID();

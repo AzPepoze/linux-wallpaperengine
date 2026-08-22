@@ -95,6 +95,8 @@ struct VideoTexture::Impl {
     PerformanceTiming perf;
 
     bool is_hw_active = false;
+    bool is_playing = true;
+    bool is_paused = false;
     AVFrame* current_frame = nullptr;
 
     // Software fallback structures if VAAPI is unavailable
@@ -243,6 +245,32 @@ const std::string& VideoTexture::containerName() const {
     return kEmpty;
 }
 
+void VideoTexture::start() {
+    impl->is_playing = true;
+    impl->is_paused = false;
+}
+
+void VideoTexture::stop() {
+    impl->is_playing = false;
+}
+
+void VideoTexture::pause() {
+    impl->is_paused = true;
+}
+
+void VideoTexture::resume() {
+    impl->is_paused = false;
+    impl->is_playing = true;
+}
+
+bool VideoTexture::isPlaying() const {
+    return impl->is_playing && !impl->is_paused;
+}
+
+bool VideoTexture::isPaused() const {
+    return impl->is_paused;
+}
+
 const ZeroCopyMetrics& VideoTexture::getMetrics() const {
     return impl->zero_copy;
 }
@@ -256,7 +284,7 @@ const PerformanceTiming& VideoTexture::getTiming() const {
 bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, AVFrame*& out_av_frame) {
     out_surface = nullptr;
     out_av_frame = nullptr;
-    if (!impl->is_hw_active) return false;
+    if (!impl->is_hw_active || !impl->is_playing || impl->is_paused) return false;
 
     bool eof = false;
     av_frame_unref(impl->current_frame);
@@ -288,6 +316,8 @@ bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, A
 }
 
 bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
+    if (!impl->is_playing || impl->is_paused) return false;
+
     if (impl->is_hw_active) {
         bool eof = false;
         av_frame_unref(impl->current_frame);

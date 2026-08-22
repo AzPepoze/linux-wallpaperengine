@@ -136,6 +136,10 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     view_desc.texture.image = layer->img;
     layer->cached_view = sg_make_view(&view_desc);
 
+    const auto* v = ctx.asset_mgr.findVideoTexture(layer->img);
+    if (!v && !layer->path.empty()) v = ctx.asset_mgr.findVideoTexture(layer->path);
+    if (v && v->decoder) layer->bound_video_decoder = v->decoder.get();
+
     out.layers.push_back(layer);
 
     out.scene_tree = new SceneTree();

@@ -47,6 +47,23 @@ class Layer : public ILayer {
     virtual bool is_visible() const override {
         return visible;
     }
+    virtual void setVisible(bool v) {
+        if (visible != v) {
+            visible = v;
+            if (visible)
+                start();
+            else
+                stop();
+        }
+    }
+    virtual void setSolo(bool s) {
+        solo = s;
+    }
+
+    virtual void start() {}
+    virtual void stop() {}
+    virtual void pause() {}
+    virtual void resume() {}
 
     bool draw_debug_bounds = false;
 

@@ -20,9 +20,15 @@
 namespace Inspector {
 
 static void showBaseInspector(::Layer& layer) {
-    ImGui::Checkbox("Visible", &layer.visible);
+    bool visible = layer.is_visible();
+    if (ImGui::Checkbox("Visible", &visible)) {
+        layer.setVisible(visible);
+    }
     ImGui::SameLine();
-    ImGui::Checkbox("Solo", &layer.solo);
+    bool solo = layer.solo;
+    if (ImGui::Checkbox("Solo", &solo)) {
+        layer.setSolo(solo);
+    }
 }
 
 static void showEffectsInspector(EngineContext& ctx, ::Layer& layer) {
