@@ -5,7 +5,7 @@
 #include "sokol_gfx.h"
 #include "ui/widgets/visibility_solo_controls.h"
 #include "util/sokol_imgui.h"
-#include "wallpaper/scene/2d/effects/effect.h"
+#include "wallpaper/2d/effects/effect.h"
 
 namespace Inspector {
 

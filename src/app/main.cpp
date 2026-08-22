@@ -7,147 +7,35 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "assets/unpack.h"
-#include "core/build_config.h"
-#include "core/config.h"
-#include "core/context.h"
-#include "core/gpu_device_manager.h"
-#include "core/logger.h"
-#include "core/utils.h"
+#include "shared/assets/unpack.h"
+#include "shared/core/build_config.h"
+#include "shared/core/config.h"
+#include "shared/core/context.h"
+#include "shared/core/logger.h"
+#include "shared/core/utils.h"
+#include "shared/graphics/backend/gpu_device_manager.h"
 #include "sokol_app.h"
 #include "sokol_args.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_log.h"
 #include "sokol_time.h"
-#include "wallpaper/scene/2d/parallax.h"
-#include "wallpaper/scene/2d/scene_2d.h"
-#include "wallpaper/scene/2d/scene_builder.h"
+#include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/video/video_wallpaper.h"
+#include "wallpaper/wallpaper_manager.h"
 
 #if DEBUG_BUILD
-#include "render/diagnostics/render_diagnostics.h"
+#include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "ui/debugger.h"
 #include "util/sokol_imgui.h"
 #endif
 
 namespace {
-
-Scene2DRuntime* scene_engine = nullptr;
-
-bool isVideoFile(const char* path) {
-    if (!path) return false;
-    const char* ext = strrchr(path, '.');
-    if (!ext) return false;
-    return (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
-            strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
-}
-
+WallpaperManager wallpaper_mgr;
 }  // namespace
 
 static EngineContext ctx;
-
-static bool applyParsedScene(ParsedScene parsed) {
-    if (parsed.layers.empty() && !parsed.scene_tree) return false;
-
-    ctx.camera = parsed.camera;
-    ctx.general = parsed.general;
-    ctx.layers = std::move(parsed.layers);
-    ctx.scene_tree = parsed.scene_tree;
-    ctx.scene_w = parsed.design_width;
-    ctx.scene_h = parsed.design_height;
-    ctx.camera_parallax_enabled = parsed.general.camera_parallax_enabled;
-    ctx.camera_parallax_amount = parsed.general.camera_parallax_amount;
-    ctx.camera_parallax_delay = parsed.general.camera_parallax_delay;
-    ctx.camera_parallax_mouse_influence = parsed.general.camera_parallax_mouse_influence;
-    ctx.camera_shake_enabled = parsed.general.camera_shake_enabled;
-    ctx.camera_shake_amplitude = parsed.general.camera_shake_amplitude;
-    ctx.camera_shake_speed = parsed.general.camera_shake_speed;
-    ctx.camera_shake_roughness = parsed.general.camera_shake_roughness;
-    ctx.perspective_override_fov = parsed.general.perspective_override_fov;
-    if (parsed.general.has_clear_color && parsed.general.clear_enabled) {
-        ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        ctx.pass_action.colors[0].clear_value = {parsed.general.clear_color[0], parsed.general.clear_color[1],
-                                                 parsed.general.clear_color[2], parsed.general.clear_color[3]};
-    }
-    scene_engine->updateViewport();
-    return true;
-}
-
-static bool loadSceneDirectory(const char* scene_directory) {
-    if (!scene_engine || !scene_directory || scene_directory[0] == '\0') return false;
-
-    // 1. Direct video file
-    if (isVideoFile(scene_directory) && access(scene_directory, F_OK) == 0) {
-        scene_engine->clearScene();
-        strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
-        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
-        return applyParsedScene(SceneBuilder::buildVideoScene(scene_directory, ctx));
-    }
-
-    char scene_path[1024] = {};
-    snprintf(scene_path, sizeof(scene_path), "%s/scene.json", scene_directory);
-    if (access(scene_path, F_OK) == 0) {
-        scene_engine->clearScene();
-        strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
-        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
-        if (!applyParsedScene(SceneBuilder::load(scene_path, ctx))) {
-            LOG_TAG_W("SANDBOX", "Could not parse scene: %s", scene_path);
-            return false;
-        }
-        return true;
-    }
-
-    // 2. Check project.json
-    char project_path[1024] = {};
-    snprintf(project_path, sizeof(project_path), "%s/project.json", scene_directory);
-    if (access(project_path, F_OK) == 0) {
-        char* json_str = read_file_to_string(project_path);
-        if (json_str) {
-            cJSON* root = cJSON_Parse(json_str);
-            free(json_str);
-            if (root) {
-                cJSON* file_item = cJSON_GetObjectItemCaseSensitive(root, "file");
-                if (cJSON_IsString(file_item) && file_item->valuestring && file_item->valuestring[0] != '\0') {
-                    char video_path[1024] = {};
-                    snprintf(video_path, sizeof(video_path), "%s/%s", scene_directory, file_item->valuestring);
-                    if (access(video_path, F_OK) == 0) {
-                        cJSON_Delete(root);
-                        scene_engine->clearScene();
-                        strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
-                        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-                        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
-                        return applyParsedScene(SceneBuilder::buildVideoScene(video_path, ctx));
-                    }
-                }
-                cJSON_Delete(root);
-            }
-        }
-    }
-
-    // 3. Scan directory for video files
-    DIR* dir = opendir(scene_directory);
-    if (dir) {
-        struct dirent* entry = nullptr;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (isVideoFile(entry->d_name)) {
-                char video_path[1024] = {};
-                snprintf(video_path, sizeof(video_path), "%s/%s", scene_directory, entry->d_name);
-                closedir(dir);
-                scene_engine->clearScene();
-                strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
-                ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-                ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
-                return applyParsedScene(SceneBuilder::buildVideoScene(video_path, ctx));
-            }
-        }
-        closedir(dir);
-    }
-
-    LOG_TAG_W("SANDBOX", "Preview scene or video not found in directory: %s", scene_directory);
-    return false;
-}
 
 #if DEBUG_BUILD
 static bool loadSandboxPreviewScene(const char* scene_path) {
@@ -158,7 +46,7 @@ static bool loadSandboxPreviewScene(const char* scene_path) {
     char* separator = strrchr(scene_directory, '/');
     if (!separator) return false;
     *separator = '\0';
-    return loadSceneDirectory(scene_directory);
+    return wallpaper_mgr.load(scene_directory, ctx);
 }
 #endif
 
@@ -214,9 +102,6 @@ static void init(void) {
         if (value > 0) ctx.particle_debug_max_particles = value;
     }
 
-    scene_engine = new Scene2DRuntime(ctx);
-    scene_engine->init();
-
 #if DEBUG_BUILD
     if (ctx.runtime_mode == RuntimeMode::Sandbox) {
         Debugger::startSandbox(ctx, loadSandboxPreviewScene);
@@ -226,8 +111,8 @@ static void init(void) {
 #endif
 
     if (ctx.wallpaper_path[0] != '\0') {
-        if (isVideoFile(ctx.wallpaper_path)) {
-            loadSceneDirectory(ctx.wallpaper_path);
+        if (WallpaperManager::isVideoFile(ctx.wallpaper_path)) {
+            wallpaper_mgr.load(ctx.wallpaper_path, ctx);
         } else {
             mkdir("extracted", 0755);
             strcpy(ctx.asset_root, "extracted");
@@ -240,10 +125,12 @@ static void init(void) {
                 snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
                 if (access(pkg_file, F_OK) == 0)
                     extract_pkg(pkg_file, "extracted");
-                else
+                else {
                     strncpy(ctx.asset_root, ctx.wallpaper_path, sizeof(ctx.asset_root) - 1);
+                    ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
+                }
             }
-            loadSceneDirectory(ctx.asset_root);
+            wallpaper_mgr.load(ctx.asset_root, ctx);
         }
     }
     LOG_I("Linux Wallpaper Engine Initialized");
@@ -259,18 +146,27 @@ static void frame(void) {
     RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
     const uint64_t update_start = stm_now();
 #endif
+
+    Scene2DRuntime* runtime = nullptr;
+    if (auto* s2d = dynamic_cast<Scene2DWallpaper*>(wallpaper_mgr.getActiveWallpaper())) {
+        runtime = s2d->getRuntime();
+    }
+
 #if DEBUG_BUILD
-    if (ctx.runtime_mode == RuntimeMode::Sandbox) {
+    if (ctx.runtime_mode == RuntimeMode::Sandbox && runtime) {
         const SandboxPreviewRect preview_rect = Debugger::sandboxPreviewRect();
         if (preview_rect.width > 0 && preview_rect.height > 0) {
-            scene_engine->setOutputViewport(preview_rect.x, preview_rect.y, preview_rect.width, preview_rect.height);
+            runtime->setOutputViewport(preview_rect.x, preview_rect.y, preview_rect.width, preview_rect.height);
+        } else {
+            runtime->resetOutputViewport();
         }
-    } else {
-        scene_engine->resetOutputViewport();
     }
 #endif
-    scene_engine->updateViewport();
-    // Inspector edits are intentionally runtime-only.  Rebuild the clear pass
+    if (runtime) {
+        runtime->updateViewport();
+    }
+
+    // Inspector edits are intentionally runtime-only. Rebuild the clear pass
     // every frame so direct and offscreen composition see the same live state.
     ctx.pass_action.colors[0].load_action = ctx.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
     ctx.pass_action.colors[0].clear_value = {ctx.general.clear_color[0], ctx.general.clear_color[1],
@@ -280,26 +176,27 @@ static void frame(void) {
 
     ctx.asset_mgr.updateVideoTextures(dt, ctx.layers);
     parallax_update(ctx, dt, sapp_width(), sapp_height());
-    scene_engine->update(dt);
+    wallpaper_mgr.update(dt, ctx);
+
 #if DEBUG_BUILD
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
     const uint64_t render_start = stm_now();
 #endif
 
-    const bool offscreen_composition = scene_engine->requiresOffscreenComposition();
-    if (offscreen_composition) scene_engine->draw();
+    const bool offscreen_composition = runtime ? runtime->requiresOffscreenComposition() : false;
+    if (offscreen_composition && runtime) runtime->draw();
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(&pass);
 
-    if (offscreen_composition)
-        scene_engine->present();
-    else
-        scene_engine->draw();
+    if (offscreen_composition && runtime)
+        runtime->present();
+    else if (runtime)
+        runtime->draw();
 
-    scene_engine->drawParticleDiagnostics();
+    if (runtime) runtime->drawParticleDiagnostics();
 
 #if DEBUG_BUILD
     ctx.profiler.render_ms = stm_ms(stm_since(render_start));
@@ -334,6 +231,8 @@ static void event(const sapp_event* e) {
         ctx.mouse_position_valid = true;
     }
 
+    wallpaper_mgr.handleInput(e, ctx);
+
 #if DEBUG_BUILD
     if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) {
         ctx.show_ui = !ctx.show_ui;
@@ -344,11 +243,7 @@ static void event(const sapp_event* e) {
 }
 
 static void cleanup(void) {
-    if (scene_engine) {
-        scene_engine->cleanup();
-        delete scene_engine;
-        scene_engine = nullptr;
-    }
+    wallpaper_mgr.clear();
     ctx.asset_mgr.clearVideoTextures();
 #if DEBUG_BUILD
     simgui_shutdown();

@@ -1,7 +1,7 @@
 #ifndef DEBUGGER_H
 #define DEBUGGER_H
 
-#include "core/build_config.h"
+#include "shared/core/build_config.h"
 
 #if DEBUG_BUILD
 
