@@ -87,3 +87,70 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     LOG_I("Built scene tree with %zu nodes and %zu layers", out.scene_tree->size(), out.layers.size());
     return out;
 }
+
+ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext& ctx) {
+    if (!video_path || video_path[0] == '\0') return {};
+
+    std::string resolved_path;
+    GfxImage img = ctx.asset_mgr.resolveTexture(video_path, &resolved_path);
+    if (img.id == SG_INVALID_ID) {
+        LOG_E("Failed to resolve video texture for wallpaper: %s", video_path);
+        return {};
+    }
+
+    sg_image_desc desc = sg_query_image_desc(img);
+    const float w = desc.width > 0 ? (float)desc.width : 1920.0f;
+    const float h = desc.height > 0 ? (float)desc.height : 1080.0f;
+
+    ParsedScene out;
+    out.type = SCENE_TYPE_VIDEO;
+    out.design_width = w;
+    out.design_height = h;
+    out.has_clear_color = true;
+    out.clear_color[0] = 0.0f;
+    out.clear_color[1] = 0.0f;
+    out.clear_color[2] = 0.0f;
+    out.clear_color[3] = 1.0f;
+
+    ctx.scene_w = w;
+    ctx.scene_h = h;
+
+    auto* layer = new ImageLayer("Video Layer", std::move(img));
+    layer->path = resolved_path.empty() ? video_path : resolved_path;
+    layer->scene_object_id = 1;
+    layer->visible = true;
+    layer->size[0] = w;
+    layer->size[1] = h;
+    layer->origin[0] = 0.0f;
+    layer->origin[1] = 0.0f;
+    layer->origin[2] = 0.0f;
+    layer->scale[0] = 1.0f;
+    layer->scale[1] = 1.0f;
+    layer->scale[2] = 1.0f;
+    layer->tint[0] = 1.0f;
+    layer->tint[1] = 1.0f;
+    layer->tint[2] = 1.0f;
+    layer->tint[3] = 1.0f;
+
+    sg_view_desc view_desc = {};
+    view_desc.texture.image = layer->img;
+    layer->cached_view = sg_make_view(&view_desc);
+
+    out.layers.push_back(layer);
+
+    out.scene_tree = new SceneTree();
+    SceneTreeNode node;
+    node.id = 1;
+    node.parent_id = 0;
+    node.name = "[VideoLayer] Video Wallpaper";
+    node.origin = {0.0f, 0.0f, 0.0f};
+    node.scale = {1.0f, 1.0f, 1.0f};
+    node.angles = {0.0f, 0.0f, 0.0f};
+    node.parallax_depth = {0.0f, 0.0f};
+    node.propagate_to_children = false;
+    out.scene_tree->addNode(node);
+    out.scene_tree->rebuildHierarchy();
+
+    LOG_I("Built video wallpaper scene (%ux%u): %s", (uint32_t)w, (uint32_t)h, layer->path.c_str());
+    return out;
+}

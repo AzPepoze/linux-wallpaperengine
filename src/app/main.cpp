@@ -1,4 +1,6 @@
 #define SOKOL_VULKAN
+#include <cjson/cJSON.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,11 +30,24 @@
 #include "util/sokol_imgui.h"
 #endif
 
+namespace {
+
+Scene2DRuntime* scene_engine = nullptr;
+
+bool isVideoFile(const char* path) {
+    if (!path) return false;
+    const char* ext = strrchr(path, '.');
+    if (!ext) return false;
+    return (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
+            strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
+}
+
+}  // namespace
+
 static EngineContext ctx;
-static Scene2DRuntime* scene_engine = nullptr;
 
 static bool applyParsedScene(ParsedScene parsed) {
-    if (!parsed.scene_tree) return false;
+    if (parsed.layers.empty() && !parsed.scene_tree) return false;
 
     ctx.camera = parsed.camera;
     ctx.general = parsed.general;
@@ -61,22 +76,77 @@ static bool applyParsedScene(ParsedScene parsed) {
 static bool loadSceneDirectory(const char* scene_directory) {
     if (!scene_engine || !scene_directory || scene_directory[0] == '\0') return false;
 
-    char scene_path[1024] = {};
-    snprintf(scene_path, sizeof(scene_path), "%s/scene.json", scene_directory);
-    if (access(scene_path, F_OK) != 0) {
-        LOG_TAG_W("SANDBOX", "Preview scene not found: %s", scene_path);
-        return false;
+    // 1. Direct video file
+    if (isVideoFile(scene_directory) && access(scene_directory, F_OK) == 0) {
+        scene_engine->clearScene();
+        strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
+        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
+        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+        return applyParsedScene(SceneBuilder::buildVideoScene(scene_directory, ctx));
     }
 
-    scene_engine->clearScene();
-    strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
-    ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-    ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
-    if (!applyParsedScene(SceneBuilder::load(scene_path, ctx))) {
-        LOG_TAG_W("SANDBOX", "Could not parse scene: %s", scene_path);
-        return false;
+    char scene_path[1024] = {};
+    snprintf(scene_path, sizeof(scene_path), "%s/scene.json", scene_directory);
+    if (access(scene_path, F_OK) == 0) {
+        scene_engine->clearScene();
+        strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
+        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
+        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+        if (!applyParsedScene(SceneBuilder::load(scene_path, ctx))) {
+            LOG_TAG_W("SANDBOX", "Could not parse scene: %s", scene_path);
+            return false;
+        }
+        return true;
     }
-    return true;
+
+    // 2. Check project.json
+    char project_path[1024] = {};
+    snprintf(project_path, sizeof(project_path), "%s/project.json", scene_directory);
+    if (access(project_path, F_OK) == 0) {
+        char* json_str = read_file_to_string(project_path);
+        if (json_str) {
+            cJSON* root = cJSON_Parse(json_str);
+            free(json_str);
+            if (root) {
+                cJSON* file_item = cJSON_GetObjectItemCaseSensitive(root, "file");
+                if (cJSON_IsString(file_item) && file_item->valuestring && file_item->valuestring[0] != '\0') {
+                    char video_path[1024] = {};
+                    snprintf(video_path, sizeof(video_path), "%s/%s", scene_directory, file_item->valuestring);
+                    if (access(video_path, F_OK) == 0) {
+                        cJSON_Delete(root);
+                        scene_engine->clearScene();
+                        strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
+                        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
+                        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+                        return applyParsedScene(SceneBuilder::buildVideoScene(video_path, ctx));
+                    }
+                }
+                cJSON_Delete(root);
+            }
+        }
+    }
+
+    // 3. Scan directory for video files
+    DIR* dir = opendir(scene_directory);
+    if (dir) {
+        struct dirent* entry = nullptr;
+        while ((entry = readdir(dir)) != nullptr) {
+            if (isVideoFile(entry->d_name)) {
+                char video_path[1024] = {};
+                snprintf(video_path, sizeof(video_path), "%s/%s", scene_directory, entry->d_name);
+                closedir(dir);
+                scene_engine->clearScene();
+                strncpy(ctx.asset_root, scene_directory, sizeof(ctx.asset_root) - 1);
+                ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
+                ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+                return applyParsedScene(SceneBuilder::buildVideoScene(video_path, ctx));
+            }
+        }
+        closedir(dir);
+    }
+
+    LOG_TAG_W("SANDBOX", "Preview scene or video not found in directory: %s", scene_directory);
+    return false;
 }
 
 #if DEBUG_BUILD
@@ -156,21 +226,25 @@ static void init(void) {
 #endif
 
     if (ctx.wallpaper_path[0] != '\0') {
-        mkdir("extracted", 0755);
-        strcpy(ctx.asset_root, "extracted");
-        ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
+        if (isVideoFile(ctx.wallpaper_path)) {
+            loadSceneDirectory(ctx.wallpaper_path);
+        } else {
+            mkdir("extracted", 0755);
+            strcpy(ctx.asset_root, "extracted");
+            ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
 
-        if (ctx.is_pkg)
-            extract_pkg(ctx.wallpaper_path, "extracted");
-        else {
-            char pkg_file[1024];
-            snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
-            if (access(pkg_file, F_OK) == 0)
-                extract_pkg(pkg_file, "extracted");
-            else
-                strncpy(ctx.asset_root, ctx.wallpaper_path, sizeof(ctx.asset_root) - 1);
+            if (ctx.is_pkg)
+                extract_pkg(ctx.wallpaper_path, "extracted");
+            else {
+                char pkg_file[1024];
+                snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
+                if (access(pkg_file, F_OK) == 0)
+                    extract_pkg(pkg_file, "extracted");
+                else
+                    strncpy(ctx.asset_root, ctx.wallpaper_path, sizeof(ctx.asset_root) - 1);
+            }
+            loadSceneDirectory(ctx.asset_root);
         }
-        loadSceneDirectory(ctx.asset_root);
     }
     LOG_I("Linux Wallpaper Engine Initialized");
 }
