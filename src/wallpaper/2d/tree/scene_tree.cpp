@@ -53,6 +53,12 @@ const SceneTreeNode* SceneTree::find(uint32_t id) const {
     return it == nodes_.end() ? nullptr : &it->second;
 }
 
+SceneTreeNode* SceneTree::find(uint32_t id) {
+    if (id == 0) return nullptr;
+    auto it = nodes_.find(id);
+    return it == nodes_.end() ? nullptr : &it->second;
+}
+
 std::vector<uint32_t> SceneTree::rootIds() const {
     std::vector<uint32_t> roots;
     roots.reserve(nodes_.size());

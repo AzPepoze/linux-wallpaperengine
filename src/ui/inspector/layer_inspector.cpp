@@ -127,13 +127,36 @@ static void showParticleMaterial(::ParticleSystem& ps) {
         ImGui::TreePop();
     }
 
+    if (!pass.uniforms.empty() && ImGui::TreeNodeEx("Shader Uniforms", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (auto& [name, values] : pass.uniforms) {
+            if (values.empty()) continue;
+            ImGui::PushID(name.c_str());
+            if (values.size() == 1) {
+                ImGui::DragFloat(name.c_str(), &values[0], 0.01f);
+            } else if (values.size() == 2) {
+                ImGui::DragFloat2(name.c_str(), values.data(), 0.01f);
+            } else if (values.size() == 3) {
+                ImGui::DragFloat3(name.c_str(), values.data(), 0.01f);
+            } else if (values.size() >= 4) {
+                if (name.find("color") != std::string::npos || name.find("Color") != std::string::npos ||
+                    name.find("tint") != std::string::npos || name.find("Tint") != std::string::npos) {
+                    ImGui::ColorEdit4(name.c_str(), values.data());
+                } else {
+                    ImGui::DragFloat4(name.c_str(), values.data(), 0.01f);
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+
     if (!pass.combos.empty() && ImGui::TreeNode("Shader Combos")) {
         for (const auto& combo : pass.combos) ImGui::BulletText("%s = %d", combo.first.c_str(), combo.second);
         ImGui::TreePop();
     }
 }
 
-static void showSpriteSheetInfo(const ::ParticleSystem& ps) {
+static void showSpriteSheetInfo(::ParticleSystem& ps) {
     const bool detected = ps.spritesheet_frames > 1 && ps.spritesheet_cols > 0 && ps.spritesheet_rows > 0;
     if (!detected) {
         ImGui::Text("Sprite Sheet: Not detected");
@@ -149,7 +172,7 @@ static void showSpriteSheetInfo(const ::ParticleSystem& ps) {
     if (ps.config.animation_mode == "randomframe") {
         ImGui::TextDisabled("Random frame: each particle keeps one atlas frame.");
     } else if (ps.config.animation_mode == "sequence" || ps.config.animation_mode == "once") {
-        ImGui::Text("Sequence Multiplier: %.3f", ps.config.sequence_multiplier);
+        ImGui::DragFloat("Sequence Multiplier", &ps.config.sequence_multiplier, 0.01f, 0.0f, 100.0f);
         ImGui::TextDisabled("Sequence: sprite frames advance over particle lifetime.");
     }
 }
@@ -157,7 +180,7 @@ static void showSpriteSheetInfo(const ::ParticleSystem& ps) {
 static void showParticleSystem(::ParticleSystem& ps) {
     ImGui::Text("Active Particles: %d / %d", (int)ps.particles.size(), ps.max_particles);
     if (!ps.config_path.empty()) ImGui::TextWrapped("Config: %s", ps.config_path.c_str());
-    ImGui::Text("Blending: %s", ps.is_additive ? "Additive" : "Alpha");
+    ImGui::Checkbox("Additive Blending", &ps.is_additive);
     ImGui::Text("Children: %d", (int)ps.children.size());
 
     ImGui::SeparatorText("Particle Material");
@@ -165,67 +188,6 @@ static void showParticleSystem(::ParticleSystem& ps) {
 
     ImGui::SeparatorText("Sprite Detection");
     showSpriteSheetInfo(ps);
-}
-
-static const char* blendModeName(int mode) {
-    switch (mode) {
-        case 0:
-            return "Normal (Alpha)";
-        case 1:
-            return "Multiply";
-        case 2:
-            return "Multiply";
-        case 3:
-            return "Color Burn";
-        case 4:
-            return "Linear Burn";
-        case 5:
-            return "Darker Color";
-        case 6:
-            return "Lighten";
-        case 7:
-            return "Screen";
-        case 8:
-            return "Color Dodge";
-        case 9:
-            return "Linear Dodge (Add)";
-        case 10:
-            return "Lighter Color";
-        case 11:
-            return "Overlay";
-        case 12:
-            return "Soft Light";
-        case 13:
-            return "Hard Light";
-        case 14:
-            return "Vivid Light";
-        case 15:
-            return "Linear Light";
-        case 16:
-            return "Pin Light";
-        case 17:
-            return "Hard Mix";
-        case 18:
-            return "Difference";
-        case 19:
-            return "Exclusion";
-        case 20:
-            return "Subtract";
-        case 21:
-            return "Divide";
-        case 22:
-            return "Hue";
-        case 23:
-            return "Saturation";
-        case 24:
-            return "Color";
-        case 25:
-            return "Luminosity";
-        case 31:
-            return "Additive";
-        default:
-            return "Custom / Unknown";
-    }
 }
 
 void showGlobalSettings(EngineContext& ctx) {
@@ -318,8 +280,23 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
     if (auto* il = dynamic_cast<::ImageLayer*>(&layer)) {
         ImGui::Text("Type: %s",
                     il->is_fullscreen ? "Fullscreen Post-Process" : (il->solid_layer ? "Solid Layer" : "Image Layer"));
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Blend Mode: %d - %s", il->color_blend_mode,
-                           blendModeName(il->color_blend_mode));
+        if (!il->is_fullscreen) {
+            const char* blend_names[] = {
+                "0 - Normal (Alpha)", "1 - Multiply",   "2 - Multiply",    "3 - Color Burn",  "4 - Linear Burn",
+                "5 - Darker Color",   "6 - Lighten",    "7 - Screen",      "8 - Color Dodge", "9 - Linear Dodge (Add)",
+                "10 - Lighter Color", "11 - Overlay",   "12 - Soft Light", "13 - Hard Light", "14 - Vivid Light",
+                "15 - Linear Light",  "16 - Pin Light", "17 - Hard Mix",   "18 - Difference", "19 - Exclusion",
+                "20 - Subtract",      "21 - Divide",    "22 - Hue",        "23 - Saturation", "24 - Color",
+                "25 - Luminosity"};
+            int current_mode = il->color_blend_mode;
+            if (current_mode >= 0 && current_mode < (int)IM_ARRAYSIZE(blend_names)) {
+                if (ImGui::Combo("Blend Mode", &current_mode, blend_names, IM_ARRAYSIZE(blend_names))) {
+                    il->color_blend_mode = current_mode;
+                }
+            } else {
+                ImGui::DragInt("Blend Mode", &il->color_blend_mode, 1, 0, 30);
+            }
+        }
         if (!il->path.empty()) ImGui::TextWrapped("Path: %s", il->path.c_str());
 
         if (il->img.id != SG_INVALID_ID) {
@@ -327,16 +304,15 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
             showParticleTextureSlot(0, "Base Albedo", il->cached_view, il->path, desc.width, desc.height);
         }
 
-        float layer_scale[3] = {il->scale[0], il->scale[1], il->scale[2]};
-        float layer_origin[3] = {il->origin[0], il->origin[1], il->origin[2]};
-        float layer_rotation = il->rotation;
+        SceneTreeNode* node =
+            (il->scene_object_id != 0 && ctx.scene_tree) ? ctx.scene_tree->find(il->scene_object_id) : nullptr;
+
+        float layer_scale[3] = {node ? node->scale[0] : il->scale[0], node ? node->scale[1] : il->scale[1],
+                                node ? node->scale[2] : il->scale[2]};
+        float layer_origin[3] = {node ? node->origin[0] : il->origin[0], node ? node->origin[1] : il->origin[1],
+                                 node ? node->origin[2] : il->origin[2]};
+        float layer_rotation = node ? node->angles[2] : il->rotation;
         if (il->scene_object_id != 0 && ctx.scene_tree) {
-            if (const SceneTreeNode* node = ctx.scene_tree->find(il->scene_object_id)) {
-                layer_scale[0] = node->scale[0];
-                layer_scale[1] = node->scale[1];
-                layer_scale[2] = node->scale[2];
-                layer_rotation = node->angles[2];
-            }
             ctx.scene_tree->worldPosition(il->scene_object_id, layer_origin);
         }
 
@@ -400,12 +376,41 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         }
 
         ImGui::Separator();
-        ImGui::DragFloat3("Position", (float*)il->origin, 1.0f);
-        ImGui::DragFloat3("Scale", (float*)il->scale, 0.01f);
-        ImGui::DragFloat2("Size", (float*)il->size, 1.0f);
-        ImGui::DragFloat("Rotation", &il->rotation, 1.0f, 0, 360);
+        float* pos_ptr = node ? node->origin.data() : (float*)il->origin;
+        if (ImGui::DragFloat3("Position", pos_ptr, 1.0f)) {
+            if (node) {
+                il->origin[0] = node->origin[0];
+                il->origin[1] = node->origin[1];
+                il->origin[2] = node->origin[2];
+            }
+        }
+
+        float* scale_ptr = node ? node->scale.data() : (float*)il->scale;
+        if (ImGui::DragFloat3("Scale", scale_ptr, 0.01f, 0.001f, 100.0f)) {
+            if (node) {
+                il->scale[0] = node->scale[0];
+                il->scale[1] = node->scale[1];
+                il->scale[2] = node->scale[2];
+            }
+        }
+
+        ImGui::DragFloat2("Size", (float*)il->size, 1.0f, 1.0f, 16384.0f);
+
+        float rot = node ? node->angles[2] : il->rotation;
+        if (ImGui::DragFloat("Rotation", &rot, 1.0f, -360.0f, 360.0f)) {
+            if (node) node->angles[2] = rot;
+            il->rotation = rot;
+        }
+
         ImGui::ColorEdit4("Tint", il->tint);
-        ImGui::DragFloat2("Parallax Depth", (float*)il->parallax, 0.01f, -10, 10);
+
+        float* parallax_ptr = node ? node->parallax_depth.data() : (float*)il->parallax;
+        if (ImGui::DragFloat2("Parallax Depth", parallax_ptr, 0.01f, -10.0f, 10.0f)) {
+            if (node) {
+                il->parallax[0] = node->parallax_depth[0];
+                il->parallax[1] = node->parallax_depth[1];
+            }
+        }
     } else if (auto* pl = dynamic_cast<::ParticleLayer*>(&layer)) {
         ImGui::Text("Type: Particle System");
         ImGui::TextDisabled("Class: ParticleLayer");
@@ -415,8 +420,40 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
         if (pl->ps) showParticleSystem(*pl->ps);
 
         ImGui::Separator();
-        ImGui::DragFloat3("Position", (float*)pl->origin, 1.0f);
-        ImGui::DragFloat2("Parallax Depth", (float*)pl->parallax, 0.01f, -10, 10);
+        SceneTreeNode* node =
+            (pl->scene_object_id != 0 && ctx.scene_tree) ? ctx.scene_tree->find(pl->scene_object_id) : nullptr;
+
+        float* pos_ptr = node ? node->origin.data() : (float*)pl->origin;
+        if (ImGui::DragFloat3("Position", pos_ptr, 1.0f)) {
+            if (node) {
+                pl->origin[0] = node->origin[0];
+                pl->origin[1] = node->origin[1];
+                pl->origin[2] = node->origin[2];
+            }
+        }
+
+        float* scale_ptr = node ? node->scale.data() : (float*)pl->scale;
+        if (ImGui::DragFloat3("Scale", scale_ptr, 0.01f, 0.001f, 100.0f)) {
+            if (node) {
+                pl->scale[0] = node->scale[0];
+                pl->scale[1] = node->scale[1];
+                pl->scale[2] = node->scale[2];
+            }
+        }
+
+        float rot = node ? node->angles[2] : pl->rotation;
+        if (ImGui::DragFloat("Rotation", &rot, 1.0f, -360.0f, 360.0f)) {
+            if (node) node->angles[2] = rot;
+            pl->rotation = rot;
+        }
+
+        float* parallax_ptr = node ? node->parallax_depth.data() : (float*)pl->parallax;
+        if (ImGui::DragFloat2("Parallax Depth", parallax_ptr, 0.01f, -10.0f, 10.0f)) {
+            if (node) {
+                pl->parallax[0] = node->parallax_depth[0];
+                pl->parallax[1] = node->parallax_depth[1];
+            }
+        }
     }
 
     showEffectsInspector(ctx, layer);
