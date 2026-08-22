@@ -24,6 +24,8 @@ namespace {
 // ============================================================================
 
 constexpr uint32_t kTextureFlagAnimated = 4;
+// Bit 1 (0x02) and bit 5 (0x20) are documented as video-embedded in Wallpaper Engine source.
+constexpr uint32_t kTextureFlagVideoMask = 0x22;
 
 enum class TexFormat : uint32_t {
     RGBA8 = 0,
@@ -292,6 +294,15 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     metadata.flags = header.flags;
     metadata.image_count = header.image_count;
 
+    // TEXB0004 embeds raw video (MP4/H.264) in the mip payload.
+    // Attempting to skip those mips with the normal reader produces corrupt reads.
+    // Return valid metadata (so the asset manager knows size/count) but skip mip parsing;
+    // the caller will route the file to VideoTexture.
+    if (std::strcmp(header.container_magic, "TEXB0004") == 0 ||
+        (header.flags & kTextureFlagVideoMask) != 0) {
+        return metadata;
+    }
+
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
@@ -394,6 +405,15 @@ DecodedImage decodeTexture(const char* path, int image_index) {
     LOG_TAG_D(TAG, "  .tex version: %s", header.version_magic);
     LOG_TAG_D(TAG, "  Format: %s (wp:%u), Size: %ux%u, Container: %s", format.name, header.format_id,
               header.image_width, header.image_height, header.container_magic);
+
+    // TEXB0004 contains an embedded video stream, not raw pixel data.
+    // Return an invalid image so AssetManager routes this path to VideoTexture::open.
+    if (std::strcmp(header.container_magic, "TEXB0004") == 0 ||
+        (header.flags & kTextureFlagVideoMask) != 0) {
+        LOG_TAG_I(TAG, "Detected video-embedded .tex (%s), handing off to VideoTexture: %s",
+                  header.container_magic, path);
+        return {};
+    }
 
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);

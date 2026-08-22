@@ -185,8 +185,29 @@ void GpuDeviceManager::init() {
     for (size_t i = 0; i < devices_.size(); ++i) {
         if (devices_[i].device_type == "Discrete GPU") {
             selected_index_ = (int)i;
+            LOG_TAG_I(TAG, "Auto-selected discrete GPU [%zu]: %s", i, devices_[i].name.c_str());
             break;
         }
+    }
+
+    applyEnvironmentVars();
+}
+
+void GpuDeviceManager::applyEnvironmentVars() {
+    const auto& gpu = getSelectedGpu();
+    if (gpu.pci_bus_id.empty() && gpu.drm_render_node.empty()) return;
+
+    // MESA_VK_DEVICE_SELECT steers vulkan loader (radv, lavapipe) to the right physical device.
+    // DRI_PRIME steers Mesa OpenGL/VA-API/video decode to the same DRM node.
+    if (!gpu.pci_bus_id.empty()) {
+        setenv("MESA_VK_DEVICE_SELECT", gpu.pci_bus_id.c_str(), 0);
+        LOG_TAG_I(TAG, "Set MESA_VK_DEVICE_SELECT=%s", gpu.pci_bus_id.c_str());
+    }
+    if (!gpu.drm_render_node.empty()) {
+        // DRI_PRIME accepts either the render node path or the PCI ID.
+        const char* pci = gpu.pci_bus_id.empty() ? gpu.drm_render_node.c_str() : gpu.pci_bus_id.c_str();
+        setenv("DRI_PRIME", pci, 0);
+        LOG_TAG_I(TAG, "Set DRI_PRIME=%s", pci);
     }
 }
 
@@ -202,6 +223,7 @@ bool GpuDeviceManager::selectGpu(const std::string& selector) {
     long index = strtol(selector.c_str(), &endptr, 10);
     if (*endptr == '\0' && index >= 0 && index < (long)devices_.size()) {
         selected_index_ = (int)index;
+        applyEnvironmentVars();
         return true;
     }
 
@@ -211,6 +233,7 @@ bool GpuDeviceManager::selectGpu(const std::string& selector) {
     for (size_t i = 0; i < devices_.size(); ++i) {
         if (!devices_[i].pci_bus_id.empty() && toLower(devices_[i].pci_bus_id).find(lower_sel) != std::string::npos) {
             selected_index_ = (int)i;
+            applyEnvironmentVars();
             return true;
         }
     }
@@ -219,6 +242,7 @@ bool GpuDeviceManager::selectGpu(const std::string& selector) {
     for (size_t i = 0; i < devices_.size(); ++i) {
         if (toLower(devices_[i].name).find(lower_sel) != std::string::npos) {
             selected_index_ = (int)i;
+            applyEnvironmentVars();
             return true;
         }
     }

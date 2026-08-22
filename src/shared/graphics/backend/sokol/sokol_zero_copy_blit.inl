@@ -5,7 +5,7 @@
 
 bool gpu_blit_zero_copy_surface(const ImportedVideoSurface& surface, sg_image dst_image, int width, int height) {
     if (!_sg.vk.dev || !_sg.vk.queue || dst_image.id == SG_INVALID_ID || surface.descriptor_set == VK_NULL_HANDLE ||
-        s_zc.pipeline == VK_NULL_HANDLE) {
+        s_zc.pipeline == VK_NULL_HANDLE || s_zc.render_pass == VK_NULL_HANDLE || surface.image == VK_NULL_HANDLE) {
         return false;
     }
 
