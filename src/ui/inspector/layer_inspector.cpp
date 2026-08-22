@@ -2,20 +2,20 @@
 
 #include <string>
 
-#include "core/gpu_device_manager.h"
 #include "effect_inspector.h"
 #include "imgui.h"
-#include "render/diagnostics/render_diagnostics.h"
+#include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
-#include "wallpaper/scene/2d/effects/effect.h"
-#include "wallpaper/scene/2d/layers/image_layer.h"
-#include "wallpaper/scene/2d/layers/layer.h"
-#include "wallpaper/scene/2d/layers/particle_layer.h"
-#include "wallpaper/scene/2d/parallax.h"
-#include "wallpaper/scene/2d/particles/particle_system.h"
-#include "wallpaper/scene/tree/scene_tree.h"
+#include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/effects/effect.h"
+#include "wallpaper/2d/layers/image_layer.h"
+#include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/layers/particle_layer.h"
+#include "wallpaper/2d/particles/particle_system.h"
+#include "wallpaper/2d/tree/scene_tree.h"
 
 namespace Inspector {
 
@@ -355,6 +355,7 @@ void showLayer(EngineContext& ctx, ::Layer& layer) {
             sg_image_desc src_desc = (il->img.id != SG_INVALID_ID) ? sg_query_image_desc(il->img) : sg_image_desc{};
             ImGui::Text("Source Texture:   %d x %d px", src_desc.width, src_desc.height);
             ImGui::Text("Layer Author Size: %.0f x %.0f px", il->size[0], il->size[1]);
+            ImGui::Text("Layer Rotation:   %.1f deg", layer_rotation);
             ImGui::Text("Rendered Bounds:  [x: %.1f, y: %.1f, w: %.1f, h: %.1f]", rendered_x, rendered_y, rendered_w,
                         rendered_h);
             ImGui::Text("Viewport Window:  %.0f x %.0f px", ctx.renderer.view_width, ctx.renderer.view_height);

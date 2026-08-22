@@ -2,8 +2,8 @@
 
 #if DEBUG_BUILD
 
-#include "core/logger.h"
 #include "imgui.h"
+#include "shared/core/logger.h"
 
 void Debugger::drawLogsTab() {
     static bool show_warnings = true;

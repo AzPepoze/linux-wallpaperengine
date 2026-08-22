@@ -2,10 +2,10 @@
 
 #if DEBUG_BUILD
 
-#include "core/engine_context.h"
-#include "core/gpu_device_manager.h"
 #include "imgui.h"
-#include "render/diagnostics/render_diagnostics.h"
+#include "shared/core/engine_context.h"
+#include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/diagnostics/render_diagnostics.h"
 
 void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
     RenderDiagnostics& diagnostics = RenderDiagnostics::instance();

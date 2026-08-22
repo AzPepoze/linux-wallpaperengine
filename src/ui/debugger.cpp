@@ -7,20 +7,20 @@
 #include <string>
 #include <vector>
 
-#include "core/engine_context.h"
-#include "core/logger.h"
 #include "imgui.h"
-#include "render/diagnostics/render_diagnostics.h"
 #include "sandbox_catalog.h"
+#include "shared/core/engine_context.h"
+#include "shared/core/logger.h"
+#include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "sokol_app.h"
 #include "sokol_log.h"
 #include "ui/inspector/layer_inspector.h"
 #include "ui/widgets/visibility_solo_controls.h"
 #include "util/sokol_imgui.h"
-#include "wallpaper/scene/2d/layers/image_layer.h"
-#include "wallpaper/scene/2d/layers/layer.h"
-#include "wallpaper/scene/2d/layers/particle_layer.h"
-#include "wallpaper/scene/tree/scene_tree.h"
+#include "wallpaper/2d/layers/image_layer.h"
+#include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/layers/particle_layer.h"
+#include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
 

@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "core/build_config.h"
+#include "shared/core/build_config.h"
 
 #if !DEBUG_BUILD
 #include "sokol_app.h"

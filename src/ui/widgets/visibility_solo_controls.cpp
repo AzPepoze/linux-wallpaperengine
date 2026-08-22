@@ -1,7 +1,7 @@
 #include "visibility_solo_controls.h"
 
 #include "imgui.h"
-#include "wallpaper/scene/2d/layers/layer.h"
+#include "wallpaper/2d/layers/layer.h"
 
 namespace UiWidgets {
 
