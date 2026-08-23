@@ -54,6 +54,8 @@ class ShaderPass {
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
+    uint64_t current_frame = 0;
+
     void applyCompiledUniforms() {
         for (const auto& block : compiled.custom_uniform_blocks) {
             if (block.slot < 0 || block.uniform_names.empty()) continue;
@@ -71,12 +73,13 @@ class ShaderPass {
             sg_apply_uniforms(block.slot, &range);
 #if DEBUG_BUILD
             uint64_t cur_serial = gpu_trace_get_current_pass_serial();
-            gpu_trace_apply_uniforms(cur_serial, 0, block.slot, range.size);
+            gpu_trace_apply_uniforms(cur_serial, current_frame, block.slot, range.size);
 #endif
         }
     }
 
-    render_effect_pass_t getRenderPass() {
+    render_effect_pass_t getRenderPass(uint64_t frame_index = 0) {
+        current_frame = frame_index;
         if (!geometry_classified) {
             is_fullscreen_quad = effectShaderUsesClipSpaceGeometry(stored_vs_source, shader_name.c_str());
             geometry_classified = true;

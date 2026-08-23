@@ -215,7 +215,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
             fillVec4(particle_builtins.render_var1, frame_width, frame_height, (float)spritesheet_frames,
                      texture_ratio);
 
-            render_effect_pass_t render_pass = pass->getRenderPass();
+            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index);
             sg_view overrides[11] = {};
             if (has_refract && scene_color_view.id != SG_INVALID_ID) overrides[2] = scene_color_view;
             render_pass.override_views = overrides;
