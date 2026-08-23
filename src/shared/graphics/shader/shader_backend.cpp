@@ -84,29 +84,44 @@ void emit_sampler_adapter(std::string& declarations, sg_image_type type, bool& e
                 "struct LweCombinedSampler2D { Texture2D t; SamplerState s; };\n"
                 "vec4 texture(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
                 "vec4 texSample2D(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
-                "vec4 texture2D(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+                "vec4 texture2D(LweCombinedSampler2D sampler, vec2 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
+                "vec4 textureLod(LweCombinedSampler2D sampler, vec2 uv, float lod) { return "
+                "sampler.t.SampleLevel(sampler.s, uv, lod); }\n"
+                "vec4 texSample2DLod(LweCombinedSampler2D sampler, vec2 uv, float lod) { return "
+                "sampler.t.SampleLevel(sampler.s, uv, lod); }\n"
+                "vec4 texture2DLod(LweCombinedSampler2D sampler, vec2 uv, float lod) { return "
+                "sampler.t.SampleLevel(sampler.s, uv, lod); }\n"
+                "vec4 textureGrad(LweCombinedSampler2D sampler, vec2 uv, vec2 dx, vec2 dy) { return "
+                "sampler.t.SampleGrad(sampler.s, uv, dx, dy); }\n"
+                "vec4 texSample2DGrad(LweCombinedSampler2D sampler, vec2 uv, vec2 dx, vec2 dy) { return "
+                "sampler.t.SampleGrad(sampler.s, uv, dx, dy); }\n";
             return;
         case SG_IMAGETYPE_CUBE:
             if (emitted_cube) return;
             emitted_cube = true;
             declarations +=
                 "struct LweCombinedSamplerCube { TextureCube t; SamplerState s; };\n"
-                "vec4 texture(LweCombinedSamplerCube sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+                "vec4 texture(LweCombinedSamplerCube sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
+                "vec4 textureLod(LweCombinedSamplerCube sampler, vec3 uv, float lod) { return "
+                "sampler.t.SampleLevel(sampler.s, uv, lod); }\n";
             return;
         case SG_IMAGETYPE_ARRAY:
             if (emitted_array) return;
             emitted_array = true;
             declarations +=
                 "struct LweCombinedSampler2DArray { Texture2DArray t; SamplerState s; };\n"
-                "vec4 texture(LweCombinedSampler2DArray sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); "
-                "}\n";
+                "vec4 texture(LweCombinedSampler2DArray sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
+                "vec4 textureLod(LweCombinedSampler2DArray sampler, vec3 uv, float lod) { return "
+                "sampler.t.SampleLevel(sampler.s, uv, lod); }\n";
             return;
         case SG_IMAGETYPE_3D:
             if (emitted_3d) return;
             emitted_3d = true;
             declarations +=
                 "struct LweCombinedSampler3D { Texture3D t; SamplerState s; };\n"
-                "vec4 texture(LweCombinedSampler3D sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n";
+                "vec4 texture(LweCombinedSampler3D sampler, vec3 uv) { return sampler.t.Sample(sampler.s, uv); }\n"
+                "vec4 textureLod(LweCombinedSampler3D sampler, vec3 uv, float lod) { return "
+                "sampler.t.SampleLevel(sampler.s, uv, lod); }\n";
             return;
         default:
             return;
@@ -292,26 +307,6 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
 
         if (!has_member) {
             core_log.error("Vulkan uniform block %d has no GLSL member metadata", slot);
-        }
-    }
-
-    std::string dummy_uses;
-    for (int slot = 0; slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS; ++slot) {
-        const sg_shader_uniform_block& block = desc.uniform_blocks[slot];
-        if (block.stage != stage) continue;
-        const char* first_member = block.glsl_uniforms[0].glsl_name;
-        if (first_member && first_member[0]) {
-            dummy_uses += "    (void)" + std::string(first_member) + ";\n";
-        }
-    }
-    if (!dummy_uses.empty()) {
-        declarations += "void _lwe_retain_uniforms() {\n" + dummy_uses + "}\n";
-        size_t main_pos = source.find("main()");
-        if (main_pos != std::string::npos) {
-            size_t brace_pos = source.find('{', main_pos);
-            if (brace_pos != std::string::npos) {
-                source.insert(brace_pos + 1, "\n    _lwe_retain_uniforms();\n");
-            }
         }
     }
 

@@ -1,7 +1,6 @@
 #include <math.h>
 
 #include "render.h"
-#include "shared/graphics/diagnostics/gpu_trace.h"
 
 void renderer_draw_rect(renderer_t* r, float x, float y, float w, float h, float color[4]) {
     renderer_draw_line(r, x, y, x + w, y, color);
@@ -15,15 +14,6 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
     r->bind.index_buffer = r->index_buffer;
     r->bind.views[0] = r->white_view;
     for (int i = 1; i < 12; i++) r->bind.views[i] = r->black_view;
-
-#if DEBUG_BUILD
-    uint64_t pass_serial = gpu_trace_get_current_pass_serial();
-    gpu_trace_bound_slots(pass_serial, &r->bind);
-    if (!gpu_trace_validate_bindings(pass_serial, 0, &r->bind)) {
-        for (int i = 0; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
-        return;
-    }
-#endif
 
     sg_apply_pipeline(r->pip_lines);
     sg_apply_bindings(&r->bind);

@@ -155,7 +155,9 @@ void WallpaperManager::handleInput(const sapp_event* event, EngineContext& ctx) 
 
 void WallpaperManager::clear() {
     if (active_wallpaper_) {
+        LOG_TAG_I("WALLPAPER_MGR", "Clearing active wallpaper instance...");
         active_wallpaper_->clear();
         active_wallpaper_.reset();
+        LOG_TAG_I("WALLPAPER_MGR", "Active wallpaper cleared.");
     }
 }

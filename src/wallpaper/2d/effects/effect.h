@@ -10,7 +10,6 @@
 #include "effect_geometry.h"
 #include "pass_textures.h"
 #include "shared/core/build_config.h"
-#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "shared/graphics/gfx_resource.h"
 #include "shared/graphics/render.h"
 #include "shared/graphics/shader/shader_compiler.h"
@@ -71,10 +70,6 @@ class ShaderPass {
 
             sg_range range = {.ptr = packed.data(), .size = packed.size() * sizeof(float)};
             sg_apply_uniforms(block.slot, &range);
-#if DEBUG_BUILD
-            uint64_t cur_serial = gpu_trace_get_current_pass_serial();
-            gpu_trace_apply_uniforms(cur_serial, current_frame, block.slot, range.size);
-#endif
         }
     }
 

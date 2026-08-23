@@ -1,5 +1,6 @@
 #include "render_diagnostics.h"
 
+#include <sokol_args.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -348,9 +349,68 @@ void RenderDiagnostics::init(bool enabled) {
     config.target_frame = 100;
     config.capture_pass_images = true;
     if (enabled) {
+        // CLI bisection switches. NOTE: this sokol_args version stores keys WITH
+        // leading dashes and needs '=' syntax for values (--disable-effects=a,b),
+        // but we probe both spellings for robustness.
+        std::string list;
+        for (const char* key : {"--disable-effects", "disable-effects", "--disable_effects", "disable_effects"}) {
+            if (sargs_exists(key)) {
+                list = sargs_value_def(key, "");
+                break;
+            }
+        }
+        if (!list.empty() && list.front() == '=') list.erase(list.begin());
+        if (!list.empty()) {
+            size_t start = 0;
+            while (start <= list.size()) {
+                size_t comma = list.find(',', start);
+                std::string item = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+                while (!item.empty() && (item.front() == ' ' || item.front() == '\t')) item.erase(item.begin());
+                while (!item.empty() && (item.back() == ' ' || item.back() == '\t')) item.pop_back();
+                if (!item.empty()) {
+                    config.disable_effect_paths.push_back(item);
+                    effect_log.info("Bisect: disabling effects matching \"%s\"", item.c_str());
+                }
+                if (comma == std::string::npos) break;
+                start = comma + 1;
+            }
+        }
+        bool no_particles = false;
+        for (const char* key :
+             {"--disable-particles", "disable-particles", "--disable_particles", "disable_particles"}) {
+            if (sargs_exists(key)) {
+                no_particles = true;
+                break;
+            }
+        }
+        if (no_particles) {
+            config.disable_particles = true;
+            effect_log.info("Bisect: particle rendering disabled");
+        }
+        bool no_bloom = false;
+        for (const char* key : {"--disable-bloom", "disable-bloom", "--disable_bloom", "disable_bloom"}) {
+            if (sargs_exists(key)) {
+                no_bloom = true;
+                break;
+            }
+        }
+        if (no_bloom) {
+            config.disable_bloom = true;
+            effect_log.info("Bisect: bloom rendering disabled");
+        }
         effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
                         (unsigned long long)config.target_frame);
     }
+}
+
+bool RenderDiagnostics::isEffectDisabled(int effect_index, const std::string& effect_path) const {
+    (void)effect_index;
+    if (config.disable_effect_paths.empty()) return false;
+    for (const auto& needle : config.disable_effect_paths) {
+        if (needle == "*" || needle == "all") return true;
+        if (effect_path.find(needle) != std::string::npos) return true;
+    }
+    return false;
 }
 
 void RenderDiagnostics::triggerCapture(uint64_t current_frame) {

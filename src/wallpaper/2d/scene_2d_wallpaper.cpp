@@ -84,6 +84,7 @@ void Scene2DWallpaper::handleInput(const sapp_event* event, EngineContext& ctx) 
 
 void Scene2DWallpaper::clear() {
     if (runtime_) {
-        runtime_->clearScene();
+        LOG_TAG_I("SCENE_2D", "Clearing 2D wallpaper runtime...");
+        runtime_->cleanup();
     }
 }

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <vector>
 
 struct DiagnosticConfig {
     bool enabled = true;
@@ -22,6 +23,12 @@ struct DiagnosticConfig {
     int capture_effect_index = -1;
     int capture_pass_index = -1;
     bool capture_pass_images = true;
+
+    // Bisection controls (CLI-driven): substring matches against effect path.
+    // "*" or "all" disables everything matching that hook.
+    std::vector<std::string> disable_effect_paths;
+    bool disable_particles = false;
+    bool disable_bloom = false;
 
     // A/B test flag (deferred / controlled)
     bool enable_ab = false;

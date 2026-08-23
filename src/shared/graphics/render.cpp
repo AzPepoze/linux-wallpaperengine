@@ -12,7 +12,6 @@
 #include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
-#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "sokol_glue.h"
 
 namespace {
@@ -187,17 +186,6 @@ void renderer_init(renderer_t* r, float w, float h) {
     gv_desc.texture.image = r->gray_pixel;
     r->gray_view = sg_make_view(&gv_desc);
 
-    gpu_trace_register_buffer(r->vertex_buffer.id, sizeof(vertices), "quad_vertex", "renderer", "vertex_buffer");
-    gpu_trace_register_buffer(r->fullscreen_vertex_buffer.id, sizeof(fullscreen_vertices), "fullscreen_vertex",
-                              "renderer", "fullscreen_vertex_buffer");
-    gpu_trace_register_buffer(r->index_buffer.id, sizeof(indices), "quad_index", "renderer", "index_buffer");
-    gpu_trace_register_image(r->white_pixel.id, "renderer", "white_pixel", 1, 1, 0);
-    gpu_trace_register_view(r->white_view.id, r->white_pixel.id, "renderer", "white_view", 0);
-    gpu_trace_register_image(r->black_pixel.id, "renderer", "black_pixel", 1, 1, 0);
-    gpu_trace_register_view(r->black_view.id, r->black_pixel.id, "renderer", "black_view", 0);
-    gpu_trace_register_image(r->gray_pixel.id, "renderer", "gray_pixel", 1, 1, 0);
-    gpu_trace_register_view(r->gray_view.id, r->gray_pixel.id, "renderer", "gray_view", 0);
-
     const std::string vertex_source =
         "#version 330\n"
         "uniform mat4 mvp;\n"
@@ -302,12 +290,17 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     mat4x4_scale_aniso(model, model, w, h, 1.0f);
     mat4x4_mul(mvp, proj, model);
 
+    const sg_image_desc main_img_desc = sg_query_image_desc(img);
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; ++i) r->bind.samplers[i] = r->smp_repeat;
+    if (main_img_desc.usage.color_attachment) {
+        r->bind.samplers[0] = r->smp_clamp;
+    }
 
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
         r->bind.vertex_buffers[0] = pass->is_fullscreen_quad ? r->fullscreen_vertex_buffer : r->vertex_buffer;
-        r->bind.samplers[0] = pass->repeat_effect_input ? r->smp_repeat : r->smp_clamp;
+        r->bind.samplers[0] =
+            (!main_img_desc.usage.color_attachment && pass->repeat_effect_input) ? r->smp_repeat : r->smp_clamp;
 
         // Built-in Uniforms Setup
         builtin_uniforms_t builtin = {};
@@ -415,42 +408,25 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         memcpy(fragment_uniforms + kBuiltinRestSize, tint, sizeof(float) * 4);
         sg_range fragment_range = {.ptr = fragment_uniforms, .size = sizeof(fragment_uniforms)};
         sg_apply_uniforms(2, &fragment_range);
-
-#if DEBUG_BUILD
-        uint64_t cur_serial = gpu_trace_get_current_pass_serial();
-        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 0, b_range.size);
-        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 1, res_range.size);
-        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 2, fragment_range.size);
-#endif
     } else {
+        sg_pipeline target_pipeline = additive ? r->pip_add : r->pip_alpha;
+        if (target_pipeline.id == SG_INVALID_ID) {
+            LOG_TAG_E("RENDER", "renderer_draw_sprite: default sprite pipeline %s is invalid (id=0)!",
+                      additive ? "pip_add" : "pip_alpha");
+            return;
+        }
         r->bind.views[0] = main_view;
         for (int i = 1; i < 12; i++) {
             r->bind.views[i] = r->black_view;
         }
-        sg_apply_pipeline(additive ? r->pip_add : r->pip_alpha);
+        sg_apply_pipeline(target_pipeline);
 
         sg_range mvp_range = SG_RANGE(mvp);
         sg_apply_uniforms(0, &mvp_range);
         sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
         sg_apply_uniforms(1, &tint_range);
-
-#if DEBUG_BUILD
-        uint64_t cur_serial = gpu_trace_get_current_pass_serial();
-        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 0, mvp_range.size);
-        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 1, tint_range.size);
-#endif
     }
 
-#if DEBUG_BUILD
-    uint64_t pass_serial = gpu_trace_get_current_pass_serial();
-    gpu_trace_bound_slots(pass_serial, &r->bind);
-    if (!gpu_trace_validate_bindings(pass_serial, ctx.profiler.frame_index, &r->bind)) {
-        for (int i = 0; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
-        r->bind.vertex_buffers[0] = r->vertex_buffer;
-        r->bind.index_buffer = r->index_buffer;
-        return;
-    }
-#endif
     sg_apply_bindings(&r->bind);
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         if (pass->apply_custom_uniforms) {

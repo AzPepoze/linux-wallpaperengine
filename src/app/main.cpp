@@ -33,16 +33,23 @@
 #endif
 
 #include <signal.h>
+#include <sys/prctl.h>
 
-#include "shared/graphics/diagnostics/gpu_trace.h"
+#include "shared/graphics/backend/sokol/sokol_sync.h"
 
 namespace {
 WallpaperManager wallpaper_mgr;
 
 void crash_signal_handler(int sig) {
-    gpu_trace_dump_history_signal_safe();
+    LOG_E("[CRASH] Fatal signal %d (%s) received", sig, (sig == SIGSEGV) ? "SIGSEGV" : "SIGABRT");
     signal(sig, SIG_DFL);
     raise(sig);
+}
+
+void termination_signal_handler(int sig) {
+    LOG_I("[SIGNAL] Caught signal %d (%s), requesting clean quit...", sig, (sig == SIGINT) ? "SIGINT" : "SIGTERM");
+    signal(sig, SIG_DFL);
+    sapp_request_quit();
 }
 }  // namespace
 
@@ -62,8 +69,16 @@ static bool loadSandboxPreviewScene(const char* scene_path) {
 #endif
 
 static void init(void) {
+    logger_init(LOG_LEVEL_DEBUG);
+#if DEBUG_BUILD
+    // Distinguish this test binary in kernel GPU-fault logs ("comm" field)
+    // from other concurrently running wallpaper engine instances.
+    prctl(PR_SET_NAME, "lwe-debug-repo", 0, 0, 0);
+#endif
     signal(SIGSEGV, crash_signal_handler);
     signal(SIGABRT, crash_signal_handler);
+    signal(SIGINT, termination_signal_handler);
+    signal(SIGTERM, termination_signal_handler);
     stm_setup();
     GpuDeviceManager::instance().init();
     const auto& active_gpu = GpuDeviceManager::instance().getSelectedGpu();
@@ -89,8 +104,8 @@ static void init(void) {
     s_desc.image_pool_size = 512;
     s_desc.shader_pool_size = 128;
     s_desc.pipeline_pool_size = 256;
-    // A single 4K RGBA video frame needs about 32 MiB. Sokol's default Vulkan
-    // streaming staging buffer is 16 MiB, which corrupts per-frame video uploads.
+    s_desc.uniform_buffer_size = 64 * 1024 * 1024;
+    s_desc.vulkan.descriptor_buffer_size = 64 * 1024 * 1024;
     s_desc.vulkan.stream_staging_buffer_size = 64 * 1024 * 1024;
     sg_setup(&s_desc);
 
@@ -199,16 +214,6 @@ static void frame(void) {
     const bool offscreen_composition = runtime ? runtime->requiresOffscreenComposition() : false;
     if (offscreen_composition && runtime) runtime->draw();
 
-    uint64_t swapchain_serial = gpu_trace_next_pass_serial();
-    GpuPassTraceInfo swapchain_info;
-    swapchain_info.pass_serial = swapchain_serial;
-    swapchain_info.frame_index = ctx.profiler.frame_index;
-    swapchain_info.category = "swapchain_present";
-    swapchain_info.layer_name = "swapchain";
-    swapchain_info.target_width = sapp_width();
-    swapchain_info.target_height = sapp_height();
-    gpu_trace_pass_begin(swapchain_info);
-
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
@@ -230,11 +235,7 @@ static void frame(void) {
 #endif
 
     sg_end_pass();
-    gpu_trace_pass_end(swapchain_serial);
-
-    gpu_trace_frame_commit_begin(ctx.profiler.frame_index);
     sg_commit();
-    gpu_trace_frame_commit_end(ctx.profiler.frame_index);
 
 #if DEBUG_BUILD
     RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);
@@ -266,6 +267,15 @@ static void event(const sapp_event* e) {
         ctx.mouse_x = e->mouse_x;
         ctx.mouse_y = e->mouse_y;
         ctx.mouse_position_valid = true;
+    } else if (e->type == SAPP_EVENTTYPE_QUIT_REQUESTED) {
+        LOG_I("[APP] Received quit request from window/system");
+    } else if (e->type == SAPP_EVENTTYPE_RESIZED) {
+        LOG_I("[APP] Window resized: window=%dx%d, framebuffer=%dx%d", e->window_width, e->window_height,
+              e->framebuffer_width, e->framebuffer_height);
+    } else if (e->type == SAPP_EVENTTYPE_SUSPENDED) {
+        LOG_I("[APP] Application suspended");
+    } else if (e->type == SAPP_EVENTTYPE_RESUMED) {
+        LOG_I("[APP] Application resumed");
     }
 
     wallpaper_mgr.handleInput(e, ctx);
@@ -280,17 +290,37 @@ static void event(const sapp_event* e) {
 }
 
 static void cleanup(void) {
+    LOG_I("[APP] ==================== INITIATING APPLICATION SHUTDOWN ====================");
+    LOG_I("[APP] Step 1/6: Waiting for GPU device idle before resource teardown...");
+    lwe_vk_wait_idle();
+
+    LOG_I("[APP] Step 2/6: Clearing active wallpaper instance...");
     wallpaper_mgr.clear();
+
+    LOG_I("[APP] Step 3/6: Clearing video textures...");
     ctx.asset_mgr.clearVideoTextures();
+
+    LOG_I("[APP] Step 4/6: Cleaning up renderer pipelines and primitive buffers...");
     renderer_cleanup(&ctx.renderer);
+
 #if DEBUG_BUILD
+    LOG_I("[APP] Step 5/6: Shutting down ImGui debug overlay...");
     simgui_shutdown();
+#else
+    LOG_I("[APP] Step 5/6: Skipping ImGui (release build)...");
 #endif
+
     sargs_shutdown();
+
+    LOG_I("[APP] Step 6/6: Synchronizing GPU queues and shutting down Sokol graphics backend...");
+    lwe_vk_wait_idle();
     sg_shutdown();
+
+    LOG_I("[APP] ==================== APPLICATION SHUTDOWN COMPLETE ====================");
 }
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
+    logger_init(LOG_LEVEL_DEBUG);
     sargs_desc a_desc = {};
     a_desc.argc = argc;
     a_desc.argv = argv;

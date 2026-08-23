@@ -385,8 +385,8 @@ void gpu_trace_apply_uniforms(uint64_t pass_serial, uint64_t frame_index, int ub
     fprintf(stderr, "[UNIFORM-TRACE] frame=%lu pass_serial=%lu slot=%d size=%zu cum_frame_bytes=%zu\n",
             (unsigned long)frame_index, (unsigned long)pass_serial, ub_slot, byte_size, cumulative);
     fflush(stderr);
-    gpu_trace_record_event("UNIFORM_APPLY", "frame=%lu pass=%lu slot=%d size=%zu cum=%zu",
-                           (unsigned long)frame_index, (unsigned long)pass_serial, ub_slot, byte_size, cumulative);
+    gpu_trace_record_event("UNIFORM_APPLY", "frame=%lu pass=%lu slot=%d size=%zu cum=%zu", (unsigned long)frame_index,
+                           (unsigned long)pass_serial, ub_slot, byte_size, cumulative);
 }
 
 void gpu_trace_bound_slots(uint64_t pass_serial, const sg_bindings* bind) {

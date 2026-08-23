@@ -28,6 +28,8 @@ Logger effect_log("EFFECT");
 
 void logger_init(log_level_t level) {
     min_level = level;
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
 }
 
 static uint32_t hash_string(const char* str) {
@@ -65,6 +67,8 @@ static void print_log(log_level_t level, const char* tag, const char* fmt, va_li
     printf("%s [%s%s%s] [%s%s%s] ", time_str, level_colors[level], level_strs[level], reset, tag_color, tag, reset);
     vprintf(fmt, args);
     printf("\n");
+    fflush(stdout);
+    fflush(stderr);
 }
 
 std::vector<RuntimeLogEntry> logger_recent_entries() {

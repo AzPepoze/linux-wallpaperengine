@@ -6,6 +6,7 @@
 #include "particle_system.h"
 #include "shared/core/config.h"
 #include "shared/core/engine_context.h"
+#include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/render.h"
 #include "shared/graphics/shader/shader_compiler.h"
 #include "wallpaper/2d/effects/effect.h"
@@ -56,6 +57,8 @@ void makePerspectiveCamera(mat4x4 projection, mat4x4 view, float scene_width, fl
 }  // namespace
 
 void ParticleSystem::draw(EngineContext& ctx) {
+    if (RenderDiagnostics::instance().getConfig().disable_particles) return;
+
     ShaderPass* pass = material_pass;
     const bool material_ready = pass && pass->pass_textures.texture0.id != SG_INVALID_ID &&
                                 pass->pass_textures.texture0_view.id != SG_INVALID_ID;
@@ -125,6 +128,17 @@ void ParticleSystem::draw(EngineContext& ctx) {
         }
 
         if (!vertices.empty() && !indices.empty()) {
+            const size_t max_vertices = (size_t)max_particles * 4;
+            const size_t max_indices = (size_t)max_particles * 6;
+            if (vertices.size() > max_vertices) vertices.resize(max_vertices);
+            if (indices.size() > max_indices) indices.resize(max_indices);
+
+            for (size_t i = 0; i < indices.size(); ++i) {
+                if (indices[i] >= vertices.size()) {
+                    indices[i] = 0;
+                }
+            }
+
             sg_range vertex_range = {.ptr = vertices.data(), .size = vertices.size() * sizeof(ParticleVertex)};
             sg_range index_range = {.ptr = indices.data(), .size = indices.size() * sizeof(uint32_t)};
             sg_update_buffer(particle_vertex_buffer, &vertex_range);

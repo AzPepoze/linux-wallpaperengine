@@ -4,7 +4,6 @@
 #include "render.h"
 #include "shared/core/config.h"
 #include "shared/core/engine_context.h"
-#include "shared/graphics/diagnostics/gpu_trace.h"
 
 void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
                                   int index_count, sg_image main_image, sg_view main_view,
@@ -82,16 +81,6 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
     sg_range particle_range = {.ptr = &particle_builtins, .size = sizeof(particle_builtins)};
     sg_apply_uniforms(3, &particle_range);
 
-#if DEBUG_BUILD
-    uint64_t pass_serial = gpu_trace_get_current_pass_serial();
-    gpu_trace_bound_slots(pass_serial, &r->bind);
-    if (!gpu_trace_validate_bindings(pass_serial, ctx.profiler.frame_index, &r->bind)) {
-        for (int slot = 0; slot < 12; ++slot) r->bind.views[slot] = {SG_INVALID_ID};
-        r->bind.vertex_buffers[0] = r->vertex_buffer;
-        r->bind.index_buffer = r->index_buffer;
-        return;
-    }
-#endif
     sg_apply_bindings(&r->bind);
     if (pass->apply_custom_uniforms) pass->apply_custom_uniforms(pass->user_data);
     sg_draw(0, index_count, 1);
