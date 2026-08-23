@@ -32,8 +32,18 @@
 #include "util/sokol_imgui.h"
 #endif
 
+#include <signal.h>
+
+#include "shared/graphics/diagnostics/gpu_trace.h"
+
 namespace {
 WallpaperManager wallpaper_mgr;
+
+void crash_signal_handler(int sig) {
+    gpu_trace_dump_history_signal_safe();
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
 }  // namespace
 
 static EngineContext ctx;
@@ -52,6 +62,8 @@ static bool loadSandboxPreviewScene(const char* scene_path) {
 #endif
 
 static void init(void) {
+    signal(SIGSEGV, crash_signal_handler);
+    signal(SIGABRT, crash_signal_handler);
     stm_setup();
     GpuDeviceManager::instance().init();
     const auto& active_gpu = GpuDeviceManager::instance().getSelectedGpu();
