@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 
+#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/layers/layer.h"
 
@@ -43,8 +44,13 @@ class ImageLayer : public Layer {
         GfxImage image;
         int width = 0;
         int height = 0;
+        uint64_t generation = 0;
 
-        void reset() {
+        void reset(const char* reason = "reset", const char* name = "effect_target") {
+            if (image.id != SG_INVALID_ID) {
+                gpu_trace_rt_destroy(reason, name, image.id, texture_view.id, attachment_view.id, width, height,
+                                     generation);
+            }
             attachment_view = {};
             texture_view = {};
             image = {};
@@ -52,8 +58,8 @@ class ImageLayer : public Layer {
             height = 0;
         }
 
-        bool create(int w, int h) {
-            reset();
+        bool create(int w, int h, const char* kind = "effect_pingpong", const char* name = "effect_target") {
+            reset("recreate", name);
             sg_image_desc image_desc = {};
             image_desc.usage.color_attachment = true;
             image_desc.width = w;
@@ -72,12 +78,14 @@ class ImageLayer : public Layer {
             attachment_view = sg_make_view(&attachment_desc);
 
             if (texture_view.id == SG_INVALID_ID || attachment_view.id == SG_INVALID_ID) {
-                reset();
+                reset("error_rollback", name);
                 return false;
             }
 
             width = w;
             height = h;
+            generation = gpu_trace_next_target_generation();
+            gpu_trace_rt_create(kind, name, image.id, texture_view.id, attachment_view.id, width, height, generation);
             return true;
         }
     };
@@ -88,15 +96,20 @@ class ImageLayer : public Layer {
         int target_width = 0;
         int target_height = 0;
         bool has_rendered = false;
+        std::string name;
 
-        bool ensureSize(int w, int h) {
-            if (target_width == w && target_height == h &&
-                buffers[0].image.id != SG_INVALID_ID && buffers[1].image.id != SG_INVALID_ID) {
+        bool ensureSize(int w, int h, const std::string& target_name) {
+            name = target_name;
+            if (target_width == w && target_height == h && buffers[0].image.id != SG_INVALID_ID &&
+                buffers[1].image.id != SG_INVALID_ID) {
                 return true;
             }
-            reset();
-            if (!buffers[0].create(w, h) || !buffers[1].create(w, h)) {
-                reset();
+            reset("resize");
+            std::string n0 = name + "[0]";
+            std::string n1 = name + "[1]";
+            if (!buffers[0].create(w, h, "effect_named", n0.c_str()) ||
+                !buffers[1].create(w, h, "effect_named", n1.c_str())) {
+                reset("error_rollback");
                 return false;
             }
             target_width = w;
@@ -106,7 +119,9 @@ class ImageLayer : public Layer {
             return true;
         }
 
-        EffectTarget& currentWrite() { return buffers[write_index]; }
+        EffectTarget& currentWrite() {
+            return buffers[write_index];
+        }
         const EffectTarget& currentRead() const {
             return has_rendered ? buffers[1 - write_index] : buffers[write_index];
         }
@@ -114,9 +129,9 @@ class ImageLayer : public Layer {
             write_index = 1 - write_index;
             has_rendered = true;
         }
-        void reset() {
-            buffers[0].reset();
-            buffers[1].reset();
+        void reset(const char* reason = "reset") {
+            buffers[0].reset(reason, (name + "[0]").c_str());
+            buffers[1].reset(reason, (name + "[1]").c_str());
             write_index = 0;
             target_width = 0;
             target_height = 0;

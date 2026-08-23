@@ -1,5 +1,6 @@
 #include "scene_2d.h"
 
+#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "shared/graphics/render.h"
 #include "sokol_app.h"
 #include "wallpaper/2d/layers/image_layer.h"
@@ -134,34 +135,14 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
         return true;
     }
 
-    scene_targets[0].reset();
-    scene_targets[1].reset();
+    scene_targets[0].reset("resize", "scene_target[0]");
+    scene_targets[1].reset("resize", "scene_target[1]");
 
-    for (SceneTarget& target : scene_targets) {
-        sg_image_desc image_desc = {};
-        image_desc.usage.color_attachment = true;
-        image_desc.width = width;
-        image_desc.height = height;
-        image_desc.pixel_format = requested_format;
-        target.image = sg_make_image(&image_desc);
-        if (target.image.id == SG_INVALID_ID && requested_format != SG_PIXELFORMAT_RGBA8) {
-            image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-            target.image = sg_make_image(&image_desc);
-        }
-        if (target.image.id == SG_INVALID_ID) return false;
-
-        sg_view_desc texture_desc = {};
-        texture_desc.texture.image = target.image;
-        target.texture_view = sg_make_view(&texture_desc);
-
-        sg_view_desc attachment_desc = {};
-        attachment_desc.color_attachment.image = target.image;
-        target.attachment_view = sg_make_view(&attachment_desc);
-        target.width = width;
-        target.height = height;
-        target.pixel_format = image_desc.pixel_format;
-
-        if (target.texture_view.id == SG_INVALID_ID || target.attachment_view.id == SG_INVALID_ID) return false;
+    if (!scene_targets[0].create(width, height, requested_format, "scene", "scene_target[0]") ||
+        !scene_targets[1].create(width, height, requested_format, "scene", "scene_target[1]")) {
+        scene_targets[0].reset("error_rollback", "scene_target[0]");
+        scene_targets[1].reset("error_rollback", "scene_target[1]");
+        return false;
     }
     return true;
 }
@@ -176,34 +157,14 @@ bool Scene2DRuntime::ensureBloomTargets(int width, int height) {
         return true;
     }
 
-    bloom_targets[0].reset();
-    bloom_targets[1].reset();
+    bloom_targets[0].reset("resize", "bloom_target[0]");
+    bloom_targets[1].reset("resize", "bloom_target[1]");
 
-    for (SceneTarget& target : bloom_targets) {
-        sg_image_desc image_desc = {};
-        image_desc.usage.color_attachment = true;
-        image_desc.width = width;
-        image_desc.height = height;
-        image_desc.pixel_format = requested_format;
-        target.image = sg_make_image(&image_desc);
-        if (target.image.id == SG_INVALID_ID && requested_format != SG_PIXELFORMAT_RGBA8) {
-            image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-            target.image = sg_make_image(&image_desc);
-        }
-        if (target.image.id == SG_INVALID_ID) return false;
-
-        sg_view_desc texture_desc = {};
-        texture_desc.texture.image = target.image;
-        target.texture_view = sg_make_view(&texture_desc);
-
-        sg_view_desc attachment_desc = {};
-        attachment_desc.color_attachment.image = target.image;
-        target.attachment_view = sg_make_view(&attachment_desc);
-        target.width = width;
-        target.height = height;
-        target.pixel_format = image_desc.pixel_format;
-
-        if (target.texture_view.id == SG_INVALID_ID || target.attachment_view.id == SG_INVALID_ID) return false;
+    if (!bloom_targets[0].create(width, height, requested_format, "bloom", "bloom_target[0]") ||
+        !bloom_targets[1].create(width, height, requested_format, "bloom", "bloom_target[1]")) {
+        bloom_targets[0].reset("error_rollback", "bloom_target[0]");
+        bloom_targets[1].reset("error_rollback", "bloom_target[1]");
+        return false;
     }
     return true;
 }
@@ -233,6 +194,26 @@ void Scene2DRuntime::renderBloom(int current_target_index, int width, int height
 
     // Pass 1: Extract bright pixels to bloom_targets[0]
     {
+        uint64_t extract_serial = gpu_trace_next_pass_serial();
+        GpuPassTraceInfo extract_info;
+        extract_info.pass_serial = extract_serial;
+        extract_info.frame_index = ctx.profiler.frame_index;
+        extract_info.category = "bloom_extract";
+        extract_info.target_width = bloom_w;
+        extract_info.target_height = bloom_h;
+        extract_info.output_image_id = bloom_targets[0].image.id;
+        extract_info.output_view_id = bloom_targets[0].attachment_view.id;
+        extract_info.output_generation = bloom_targets[0].generation;
+        GpuTraceInputBinding in0;
+        in0.slot = 0;
+        in0.semantic = "scene_current";
+        in0.image_id = scene_targets[current_target_index].image.id;
+        in0.view_id = scene_targets[current_target_index].texture_view.id;
+        in0.generation = scene_targets[current_target_index].generation;
+        in0.is_render_target = true;
+        extract_info.inputs.push_back(in0);
+        gpu_trace_pass_begin(extract_info);
+
         sg_pass extract_pass = {};
         extract_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
         extract_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -250,11 +231,32 @@ void Scene2DRuntime::renderBloom(int current_target_index, int width, int height
                              scene_targets[current_target_index].texture_view, 0.0f, 0.0f, (float)bloom_w,
                              (float)bloom_h, 0.0f, tint, false, &pass_desc);
         sg_end_pass();
+        gpu_trace_pass_end(extract_serial);
     }
 
     // Passes 2/3: secondary mip approximation and separable scatter blur.
     // Repeating the ping-pong blur gives HDR iterations a real authored effect.
     for (int iteration = 0; iteration < blur_iterations; ++iteration) {
+        uint64_t blur_h_serial = gpu_trace_next_pass_serial();
+        GpuPassTraceInfo blur_h_info;
+        blur_h_info.pass_serial = blur_h_serial;
+        blur_h_info.frame_index = ctx.profiler.frame_index;
+        blur_h_info.category = "bloom_blur_h";
+        blur_h_info.target_width = bloom_w;
+        blur_h_info.target_height = bloom_h;
+        blur_h_info.output_image_id = bloom_targets[1].image.id;
+        blur_h_info.output_view_id = bloom_targets[1].attachment_view.id;
+        blur_h_info.output_generation = bloom_targets[1].generation;
+        GpuTraceInputBinding in0;
+        in0.slot = 0;
+        in0.semantic = "bloom_0";
+        in0.image_id = bloom_targets[0].image.id;
+        in0.view_id = bloom_targets[0].texture_view.id;
+        in0.generation = bloom_targets[0].generation;
+        in0.is_render_target = true;
+        blur_h_info.inputs.push_back(in0);
+        gpu_trace_pass_begin(blur_h_info);
+
         sg_pass blur_h_pass = {};
         blur_h_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
         blur_h_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -271,6 +273,27 @@ void Scene2DRuntime::renderBloom(int current_target_index, int width, int height
         renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[0].image, bloom_targets[0].texture_view, 0.0f, 0.0f,
                              (float)bloom_w, (float)bloom_h, 0.0f, tint, false, &pass_desc);
         sg_end_pass();
+        gpu_trace_pass_end(blur_h_serial);
+
+        uint64_t blur_v_serial = gpu_trace_next_pass_serial();
+        GpuPassTraceInfo blur_v_info;
+        blur_v_info.pass_serial = blur_v_serial;
+        blur_v_info.frame_index = ctx.profiler.frame_index;
+        blur_v_info.category = "bloom_blur_v";
+        blur_v_info.target_width = bloom_w;
+        blur_v_info.target_height = bloom_h;
+        blur_v_info.output_image_id = bloom_targets[0].image.id;
+        blur_v_info.output_view_id = bloom_targets[0].attachment_view.id;
+        blur_v_info.output_generation = bloom_targets[0].generation;
+        GpuTraceInputBinding in1;
+        in1.slot = 0;
+        in1.semantic = "bloom_1";
+        in1.image_id = bloom_targets[1].image.id;
+        in1.view_id = bloom_targets[1].texture_view.id;
+        in1.generation = bloom_targets[1].generation;
+        in1.is_render_target = true;
+        blur_v_info.inputs.push_back(in1);
+        gpu_trace_pass_begin(blur_v_info);
 
         sg_pass blur_v_pass = {};
         blur_v_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -288,10 +311,31 @@ void Scene2DRuntime::renderBloom(int current_target_index, int width, int height
         renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[1].image, bloom_targets[1].texture_view, 0.0f, 0.0f,
                              (float)bloom_w, (float)bloom_h, 0.0f, vertical_tint, false, &vertical_pass_desc);
         sg_end_pass();
+        gpu_trace_pass_end(blur_v_serial);
     }
 
     // Pass 4: Combine Additive over scene_targets[current_target_index]
     {
+        uint64_t comb_serial = gpu_trace_next_pass_serial();
+        GpuPassTraceInfo comb_info;
+        comb_info.pass_serial = comb_serial;
+        comb_info.frame_index = ctx.profiler.frame_index;
+        comb_info.category = "bloom_combine";
+        comb_info.target_width = width;
+        comb_info.target_height = height;
+        comb_info.output_image_id = scene_targets[current_target_index].image.id;
+        comb_info.output_view_id = scene_targets[current_target_index].attachment_view.id;
+        comb_info.output_generation = scene_targets[current_target_index].generation;
+        GpuTraceInputBinding in0;
+        in0.slot = 0;
+        in0.semantic = "bloom_0";
+        in0.image_id = bloom_targets[0].image.id;
+        in0.view_id = bloom_targets[0].texture_view.id;
+        in0.generation = bloom_targets[0].generation;
+        in0.is_render_target = true;
+        comb_info.inputs.push_back(in0);
+        gpu_trace_pass_begin(comb_info);
+
         sg_pass combine_pass = {};
         combine_pass.action.colors[0].load_action = SG_LOADACTION_LOAD;
         combine_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -303,6 +347,7 @@ void Scene2DRuntime::renderBloom(int current_target_index, int width, int height
         renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[0].image, bloom_targets[0].texture_view, 0.0f, 0.0f,
                              (float)width, (float)height, 0.0f, white, true, nullptr);
         sg_end_pass();
+        gpu_trace_pass_end(comb_serial);
     }
 }
 
@@ -350,12 +395,25 @@ void Scene2DRuntime::drawOffscreen() {
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
 
     int current = 0;
+    uint64_t clear_serial = gpu_trace_next_pass_serial();
+    GpuPassTraceInfo clear_info;
+    clear_info.pass_serial = clear_serial;
+    clear_info.frame_index = ctx.profiler.frame_index;
+    clear_info.category = "scene_clear";
+    clear_info.target_width = width;
+    clear_info.target_height = height;
+    clear_info.output_image_id = scene_targets[current].image.id;
+    clear_info.output_view_id = scene_targets[current].attachment_view.id;
+    clear_info.output_generation = scene_targets[current].generation;
+    gpu_trace_pass_begin(clear_info);
+
     sg_pass clear_pass = {};
     clear_pass.action = ctx.pass_action;
     clear_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
     clear_pass.attachments.colors[0] = scene_targets[current].attachment_view;
     sg_begin_pass(&clear_pass);
     sg_end_pass();
+    gpu_trace_pass_end(clear_serial);
 
     int layer_index = 0;
     auto capture_layer_result = [&](Layer* layer, bool raw_layer) {
@@ -385,6 +443,17 @@ void Scene2DRuntime::drawOffscreen() {
             return;
         }
 
+        uint64_t snap_serial = gpu_trace_next_pass_serial();
+        GpuPassTraceInfo snap_info;
+        snap_info.pass_serial = snap_serial;
+        snap_info.frame_index = ctx.profiler.frame_index;
+        snap_info.category = "diagnostic_snapshot";
+        snap_info.target_width = width;
+        snap_info.target_height = height;
+        snap_info.output_image_id = snapshot.id;
+        snap_info.output_view_id = snapshot_attachment.id;
+        gpu_trace_pass_begin(snap_info);
+
         sg_pass snapshot_pass = {};
         snapshot_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
         snapshot_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -401,6 +470,7 @@ void Scene2DRuntime::drawOffscreen() {
                                  0.0f, 0.0f, (float)width, (float)height, 0.0f, white, false, nullptr);
         }
         sg_end_pass();
+        gpu_trace_pass_end(snap_serial);
 
         char stage_name[320];
         if (const auto* image = dynamic_cast<const ImageLayer*>(layer)) {
@@ -424,6 +494,29 @@ void Scene2DRuntime::drawOffscreen() {
             particle->setSceneColorView(scene_targets[current].texture_view);
             capture_layer_result(layer, true);
             const int next = 1 - current;
+
+            uint64_t comp_serial = gpu_trace_next_pass_serial();
+            GpuPassTraceInfo comp_info;
+            comp_info.pass_serial = comp_serial;
+            comp_info.frame_index = ctx.profiler.frame_index;
+            comp_info.category = "scene_particle_composite";
+            comp_info.layer_name = layer->name.c_str();
+            comp_info.layer_id = layer->scene_object_id;
+            comp_info.target_width = width;
+            comp_info.target_height = height;
+            comp_info.output_image_id = scene_targets[next].image.id;
+            comp_info.output_view_id = scene_targets[next].attachment_view.id;
+            comp_info.output_generation = scene_targets[next].generation;
+            GpuTraceInputBinding in0;
+            in0.slot = 0;
+            in0.semantic = "scene_current";
+            in0.image_id = scene_targets[current].image.id;
+            in0.view_id = scene_targets[current].texture_view.id;
+            in0.generation = scene_targets[current].generation;
+            in0.is_render_target = true;
+            comp_info.inputs.push_back(in0);
+            gpu_trace_pass_begin(comp_info);
+
             sg_pass composite_pass = {};
             composite_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
             composite_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -437,6 +530,8 @@ void Scene2DRuntime::drawOffscreen() {
             particle->setSceneColorView(scene_targets[current].texture_view);
             particle->draw(ctx);
             sg_end_pass();
+            gpu_trace_pass_end(comp_serial);
+
             current = next;
             capture_layer_result(layer, false);
             return;
@@ -449,6 +544,29 @@ void Scene2DRuntime::drawOffscreen() {
             }
             capture_layer_result(layer, true);
             const int next = 1 - current;
+
+            uint64_t comp_serial = gpu_trace_next_pass_serial();
+            GpuPassTraceInfo comp_info;
+            comp_info.pass_serial = comp_serial;
+            comp_info.frame_index = ctx.profiler.frame_index;
+            comp_info.category = "scene_image_composite";
+            comp_info.layer_name = layer->name.c_str();
+            comp_info.layer_id = layer->scene_object_id;
+            comp_info.target_width = width;
+            comp_info.target_height = height;
+            comp_info.output_image_id = scene_targets[next].image.id;
+            comp_info.output_view_id = scene_targets[next].attachment_view.id;
+            comp_info.output_generation = scene_targets[next].generation;
+            GpuTraceInputBinding in0;
+            in0.slot = 0;
+            in0.semantic = "scene_current";
+            in0.image_id = scene_targets[current].image.id;
+            in0.view_id = scene_targets[current].texture_view.id;
+            in0.generation = scene_targets[current].generation;
+            in0.is_render_target = true;
+            comp_info.inputs.push_back(in0);
+            gpu_trace_pass_begin(comp_info);
+
             sg_pass composite_pass = {};
             composite_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
             composite_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -460,12 +578,28 @@ void Scene2DRuntime::drawOffscreen() {
                                  0, 0, (float)width, (float)height, 0, white, false, nullptr);
             image->drawComposite(ctx, scene_targets[current].texture_view);
             sg_end_pass();
+            gpu_trace_pass_end(comp_serial);
+
             current = next;
             capture_layer_result(layer, false);
             return;
         }
 
         capture_layer_result(layer, true);
+
+        uint64_t layer_serial = gpu_trace_next_pass_serial();
+        GpuPassTraceInfo layer_info;
+        layer_info.pass_serial = layer_serial;
+        layer_info.frame_index = ctx.profiler.frame_index;
+        layer_info.category = "scene_layer_direct";
+        layer_info.layer_name = layer->name.c_str();
+        layer_info.layer_id = layer->scene_object_id;
+        layer_info.target_width = width;
+        layer_info.target_height = height;
+        layer_info.output_image_id = scene_targets[current].image.id;
+        layer_info.output_view_id = scene_targets[current].attachment_view.id;
+        layer_info.output_generation = scene_targets[current].generation;
+        gpu_trace_pass_begin(layer_info);
 
         sg_pass layer_pass = {};
         layer_pass.action.colors[0].load_action = SG_LOADACTION_LOAD;
@@ -474,6 +608,8 @@ void Scene2DRuntime::drawOffscreen() {
         sg_begin_pass(&layer_pass);
         layer->draw(ctx);
         sg_end_pass();
+        gpu_trace_pass_end(layer_serial);
+
         capture_layer_result(layer, false);
     };
 

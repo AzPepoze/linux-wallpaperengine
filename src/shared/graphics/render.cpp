@@ -12,6 +12,7 @@
 #include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "sokol_glue.h"
 
 namespace {
@@ -416,6 +417,9 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         sg_apply_uniforms(1, &tint_range);
     }
 
+#if DEBUG_BUILD
+    gpu_trace_bound_slots(0, &r->bind);
+#endif
     sg_apply_bindings(&r->bind);
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         if (pass->apply_custom_uniforms) {

@@ -28,6 +28,7 @@ target("linux-wallpaperengine")
         add_packages("imgui")
     else
         add_files("src/**.cpp|ui/**.cpp|shared/graphics/diagnostics/**.cpp")
+        add_files("src/shared/graphics/diagnostics/gpu_trace.cpp")
         add_defines("DEBUG_BUILD=0")
         set_symbols("hidden")
         set_optimize("fastest")

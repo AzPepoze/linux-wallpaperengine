@@ -112,7 +112,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 target_width = std::max(1, (int)std::lround(effect_target_width / pass->render_scale));
                 target_height = std::max(1, (int)std::lround(effect_target_height / pass->render_scale));
                 auto& target = named_effect_targets[pass->render_target];
-                if (!target.ensureSize(target_width, target_height)) {
+                if (!target.ensureSize(target_width, target_height, pass->render_target)) {
                     continue;
                 }
                 named_target = &target;
@@ -140,8 +140,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
             const sg_image output_image =
                 named_target ? named_target->currentWrite().image : effect_targets[write_index].image;
-            const sg_view output_attachment =
-                named_target ? named_target->currentWrite().attachment_view : effect_targets[write_index].attachment_view;
+            const sg_view output_attachment = named_target ? named_target->currentWrite().attachment_view
+                                                           : effect_targets[write_index].attachment_view;
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             render_effect_pass_t render_pass = pass->getRenderPass();
@@ -223,7 +223,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                     sg_view_desc vd = sg_query_view_desc(render_pass.extra_views[i]);
                     if (vd.texture.image.id != SG_INVALID_ID && vd.texture.image.id == output_image.id) {
                         effect_log.error(
-                            "Effect pass '%s' (layer '%s') aliases extra view slot %zu (image %u) with output attachment (image %u)",
+                            "Effect pass '%s' (layer '%s') aliases extra view slot %zu (image %u) with output "
+                            "attachment (image %u)",
                             pass->shader_name.c_str(), name.c_str(), i + 1, vd.texture.image.id, output_image.id);
                         has_alias = true;
                     }
@@ -235,6 +236,45 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                                 pass->shader_name.c_str());
                 continue;
             }
+
+            uint64_t pass_serial = gpu_trace_next_pass_serial();
+            GpuPassTraceInfo trace_info;
+            trace_info.pass_serial = pass_serial;
+            trace_info.frame_index = ctx.profiler.frame_index;
+            trace_info.category = named_target ? "effect_named" : "effect_pingpong";
+            trace_info.layer_name = name.c_str();
+            trace_info.layer_id = scene_object_id;
+            trace_info.effect_index = eff_idx;
+            trace_info.effect_path = effect->file_path.c_str();
+            trace_info.pass_index = pass_idx;
+            trace_info.shader_name = pass->shader_name.c_str();
+            trace_info.render_target_name = pass->render_target.c_str();
+            trace_info.render_scale = pass->render_scale;
+            trace_info.target_width = target_width;
+            trace_info.target_height = target_height;
+            trace_info.output_image_id = output_image.id;
+            trace_info.output_view_id = output_attachment.id;
+            trace_info.output_generation =
+                named_target ? named_target->currentWrite().generation : effect_targets[write_index].generation;
+
+            GpuTraceInputBinding in0;
+            in0.slot = 0;
+            in0.semantic = pass->render_texture_bindings.count(0) ? pass->render_texture_bindings.at(0) : "previous";
+            in0.image_id = shader_input_image.id;
+            in0.view_id = shader_input_view.id;
+            trace_info.inputs.push_back(in0);
+
+            for (const auto& [slot, binding] : pass->render_texture_bindings) {
+                if (slot == 0 || slot > 11) continue;
+                GpuTraceInputBinding in_b;
+                in_b.slot = slot;
+                in_b.semantic = binding;
+                in_b.image_id = override_images[slot - 1].id;
+                in_b.view_id = override_views[slot - 1].id;
+                trace_info.inputs.push_back(in_b);
+            }
+
+            gpu_trace_pass_begin(trace_info);
 
             sg_pass offscreen_pass = {};
             offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -250,6 +290,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                                  (float)target_width, (float)target_height, 0.0f, effect_tint, false, &render_pass);
 
             sg_end_pass();
+            gpu_trace_pass_end(pass_serial);
 
 #if DEBUG_BUILD
             sg_image out_img = output_image;
@@ -266,8 +307,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 trace.draw_order = draw_order++;
                 trace.render_target_name = pass->render_target;
                 trace.target_image_id = out_img.id;
-                trace.target_view_id =
-                    named_target ? named_target->currentWrite().attachment_view.id : effect_targets[write_index].attachment_view.id;
+                trace.target_view_id = named_target ? named_target->currentWrite().attachment_view.id
+                                                    : effect_targets[write_index].attachment_view.id;
                 trace.target_width = target_width;
                 trace.target_height = target_height;
                 trace.target_pixel_format = "RGBA8";

@@ -9,7 +9,8 @@ bool ImageLayer::ensureEffectTargets(sg_image source_image) {
     if (effect_target_width == source_desc.width && effect_target_height == source_desc.height &&
         effect_targets[0].image.id != SG_INVALID_ID && effect_targets[1].image.id != SG_INVALID_ID &&
         effect_targets[0].texture_view.id != SG_INVALID_ID && effect_targets[1].texture_view.id != SG_INVALID_ID &&
-        effect_targets[0].attachment_view.id != SG_INVALID_ID && effect_targets[1].attachment_view.id != SG_INVALID_ID) {
+        effect_targets[0].attachment_view.id != SG_INVALID_ID &&
+        effect_targets[1].attachment_view.id != SG_INVALID_ID) {
         return true;
     }
     for (int index = 0; index < 2; ++index) {
