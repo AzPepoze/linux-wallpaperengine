@@ -28,10 +28,10 @@ constexpr uint32_t kTextureFlagVideoMask = 0x22;
 
 enum class TexFormat : uint32_t {
     RGBA8 = 0,
-    BC1_DXT1 = 4,
-    BC2_DXT3 = 5,
-    BC3_DXT5 = 6,
-    BC1_DXT1_ALT = 7,
+    BC1_DXT1 = 1,
+    BC2_DXT3 = 2,
+    BC3_DXT5 = 4,
+    BC1_DXT1_ALT = 6,
     RG8 = 8,
     R8 = 9,
 };
@@ -152,6 +152,9 @@ bool readTextureHeader(FILE* file, TexHeader& header) {
     readU32(file);  // allocated height
     header.image_width = readU32(file);
     header.image_height = readU32(file);
+    if ((header.flags & 0x40) != 0) {
+        readU32(file);  // image depth / 3D slice count
+    }
     readU32(file);  // reserved
 
     readFixedString(file, header.container_magic, 8);
@@ -167,20 +170,12 @@ bool readTextureHeader(FILE* file, TexHeader& header) {
     return true;
 }
 
-bool skipMipmap(FILE* file, const char* container_magic) {
-    if (std::strcmp(container_magic, "TEXB0004") == 0) {
-        readU32(file);
-        readU32(file);
-        int c = 0;
-        do {
-            c = std::fgetc(file);
-            if (c == EOF) return false;
-        } while (c != 0);
-        readU32(file);
-    }
-
+bool skipMipmap(FILE* file, const char* container_magic, uint32_t flags = 0) {
     readU32(file);  // mip width
     readU32(file);  // mip height
+    if ((flags & 0x40) != 0) {
+        readU32(file);  // mip depth
+    }
     if (std::strcmp(container_magic, "TEXB0001") != 0) {
         readU32(file);  // LZ4 flag
         readU32(file);  // decompressed size
@@ -295,21 +290,11 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     metadata.flags = header.flags;
     metadata.image_count = header.image_count;
 
-    // TEXB0004 embeds raw video (MP4/H.264) in the mip payload.
-    // Attempting to skip those mips with the normal reader produces corrupt reads.
-    // Return valid metadata (so the asset manager knows size/count) but skip mip parsing;
-    // the caller will route the file to VideoTexture.
-    // NOTE: flags alone are not a reliable video indicator for TEXB0003 — a survey of
-    // 2958 tex files shows TEXB0003 textures routinely carry flags=0x02 while containing
-    // normal LZ4-compressed pixel data. Only TEXB0004 is guaranteed to be video.
-    if (std::strcmp(header.container_magic, "TEXB0004") == 0) {
-        return metadata;
-    }
 
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
-            if (!skipMipmap(file, header.container_magic)) return metadata;
+            if (!skipMipmap(file, header.container_magic, header.flags)) return metadata;
         }
     }
 
@@ -409,31 +394,16 @@ DecodedImage decodeTexture(const char* path, int image_index) {
     LOG_TAG_D(TAG, "  Format: %s (wp:%u), Size: %ux%u, Container: %s", format.name, header.format_id,
               header.image_width, header.image_height, header.container_magic);
 
-    // TEXB0004 contains an embedded video stream, not raw pixel data.
-    // Return an invalid image so AssetManager routes this path to VideoTexture::open.
-    // NOTE: TEXB0003 with flags=0x02 is NOT a video — it is LZ4-compressed pixel data.
-    // Only route to VideoTexture when the container is explicitly TEXB0004.
-    if (std::strcmp(header.container_magic, "TEXB0004") == 0) {
-        LOG_TAG_I(TAG, "Detected video-embedded .tex (TEXB0004), handing off to VideoTexture: %s", path);
-        return {};
-    }
 
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
-            if (std::strcmp(header.container_magic, "TEXB0004") == 0) {
-                readU32(file);
-                readU32(file);
-                int c = 0;
-                do {
-                    c = std::fgetc(file);
-                    if (c == EOF) return {};
-                } while (c != 0);
-                readU32(file);
-            }
 
             const uint32_t mip_width = readU32(file);
             const uint32_t mip_height = readU32(file);
+            if ((header.flags & 0x40) != 0) {
+                readU32(file);  // mip depth
+            }
 
             bool compressed_lz4 = false;
             uint32_t decompressed_size = 0;
