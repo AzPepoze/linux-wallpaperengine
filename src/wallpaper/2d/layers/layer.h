@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "linmath.h"
+#include "shared/core/build_config.h"
 #include "shared/core/interfaces.h"
 #include "sokol_gfx.h"
 #include "wallpaper/2d/effects/effect.h"
@@ -64,6 +65,19 @@ class Layer : public ILayer {
     virtual void stop() {}
     virtual void pause() {}
     virtual void resume() {}
+
+    virtual bool usesTexture(sg_image /*img*/) const {
+        return false;
+    }
+    virtual bool usesTexturePath(const std::string& /*path*/) const {
+        return false;
+    }
+
+#if DEBUG_BUILD
+    virtual void showInspector(EngineContext& ctx);
+    void showGeneralInspector(EngineContext& ctx);
+    void showEffectsInspector(EngineContext& ctx);
+#endif
 
     bool draw_debug_bounds = false;
 

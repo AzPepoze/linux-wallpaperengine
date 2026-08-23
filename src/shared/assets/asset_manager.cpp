@@ -9,7 +9,6 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_zero_copy.h"
-#include "wallpaper/2d/layers/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
 
 namespace {
@@ -35,13 +34,19 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
 
 }  // namespace
 
-void AssetManager::init(const char* ep, const char* wp) {
-    engine_path = ep;
-    wallpaper_path = wp;
-}
+AssetManager::AssetManager() : internal_provider(std::make_unique<InternalAssetProvider>()) {}
 
 AssetManager::~AssetManager() {
     clearVideoTextures();
+}
+
+void AssetManager::init(const char* ep, const char* wp) {
+    engine_path = ep ? ep : "";
+    wallpaper_path = wp ? wp : "";
+
+    engine_provider = std::make_unique<EngineAssetProvider>(engine_path);
+    wallpaper_provider = std::make_unique<WallpaperAssetProvider>(wallpaper_path);
+    internal_provider = std::make_unique<InternalAssetProvider>();
 }
 
 void AssetManager::clearVideoTextures() {
@@ -70,11 +75,9 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
             bool is_used_by_visible_layer = false;
             for (const auto* layer : active_layers) {
                 if (!layer || !layer->visible) continue;
-                if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
-                    if (il->img.id == video.image.id || (!video.path.empty() && il->path == video.path)) {
-                        is_used_by_visible_layer = true;
-                        break;
-                    }
+                if (layer->usesTexture(video.image) || (!video.path.empty() && layer->usesTexturePath(video.path))) {
+                    is_used_by_visible_layer = true;
+                    break;
                 }
             }
             if (!is_used_by_visible_layer) continue;
@@ -109,42 +112,23 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
 
 bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {
     if (!rel_path || !out_abs_path || max_len <= 0) return false;
-    if (rel_path[0] == '/' && access(rel_path, F_OK) == 0) {
-        snprintf(out_abs_path, max_len, "%s", rel_path);
+
+    // 1. Internal/Absolute path check
+    if (internal_provider && internal_provider->resolvePath(rel_path, out_abs_path, max_len)) {
         return true;
     }
-    snprintf(out_abs_path, max_len, "%s/%s", wallpaper_path.c_str(), rel_path);
-    if (access(out_abs_path, F_OK) == 0) return true;
 
-    snprintf(out_abs_path, max_len, "%s/assets/%s", engine_path.c_str(), rel_path);
-    if (access(out_abs_path, F_OK) == 0) return true;
-
-    snprintf(out_abs_path, max_len, "%s/assets/materials/%s", engine_path.c_str(), rel_path);
-    if (access(out_abs_path, F_OK) == 0) return true;
-
-    snprintf(out_abs_path, max_len, "%s/materials/%s", wallpaper_path.c_str(), rel_path);
-    if (access(out_abs_path, F_OK) == 0) return true;
-
-    const char* filename = strrchr(rel_path, '/');
-    if (filename) {
-        filename++;
-        if (strstr(rel_path, "materials/presets/") == rel_path) {
-            char preset_name[64];
-            const char* start = rel_path + 18;
-            const char* end = strstr(start, ".json");
-            if (end) {
-                size_t len = end - start;
-                if (len > 4) len -= 4;
-                strncpy(preset_name, start, len);
-                preset_name[len] = '\0';
-                snprintf(out_abs_path, max_len, "%s/assets/presets/%s/%s", engine_path.c_str(), preset_name, rel_path);
-                if (access(out_abs_path, F_OK) == 0) return true;
-            }
-        }
+    // 2. Wallpaper Asset Provider (scene-local priority)
+    if (wallpaper_provider && wallpaper_provider->resolvePath(rel_path, out_abs_path, max_len)) {
+        return true;
     }
 
-    snprintf(out_abs_path, max_len, "%s/%s", engine_path.c_str(), rel_path);
-    return access(out_abs_path, F_OK) == 0;
+    // 3. Engine Asset Provider (WE installation / global packages)
+    if (engine_provider && engine_provider->resolvePath(rel_path, out_abs_path, max_len)) {
+        return true;
+    }
+
+    return false;
 }
 
 GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 
+#include "image_parser.h"
 #include "shared/core/build_config.h"
 #include "shared/core/context.h"
 #include "shared/core/engine_context.h"
@@ -13,8 +14,6 @@
 #include "shared/core/utils.h"
 #include "shared/graphics/render.h"
 #include "wallpaper/2d/alpha_curve.h"
-#include "wallpaper/2d/camera/parallax.h"
-#include "wallpaper/2d/parser/image_parser.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
@@ -469,3 +468,13 @@ void ImageLayer::resume() {
 bool ImageLayer::requiresSceneColor() const {
     return copy_background || color_blend_mode != 0;
 }
+
+#if DEBUG_BUILD
+#include "image_inspector.h"
+
+void ImageLayer::showInspector(EngineContext& ctx) {
+    showGeneralInspector(ctx);
+    Inspector::showImageLayerInspector(ctx, *this);
+    showEffectsInspector(ctx);
+}
+#endif

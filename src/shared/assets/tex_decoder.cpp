@@ -290,7 +290,6 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     metadata.flags = header.flags;
     metadata.image_count = header.image_count;
 
-
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
@@ -394,11 +393,9 @@ DecodedImage decodeTexture(const char* path, int image_index) {
     LOG_TAG_D(TAG, "  Format: %s (wp:%u), Size: %ux%u, Container: %s", format.name, header.format_id,
               header.image_width, header.image_height, header.container_magic);
 
-
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
-
             const uint32_t mip_width = readU32(file);
             const uint32_t mip_height = readU32(file);
             if ((header.flags & 0x40) != 0) {

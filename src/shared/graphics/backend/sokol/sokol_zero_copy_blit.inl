@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../gpu_zero_copy.h"
-#include "shared/media/video_import_cache.h"
+#include "shared/assets/media/video_import_cache.h"
 
 bool gpu_blit_zero_copy_surface(const ImportedVideoSurface& surface, sg_image dst_image, int width, int height) {
     if (!_sg.vk.dev || !_sg.vk.queue || dst_image.id == SG_INVALID_ID || surface.descriptor_set == VK_NULL_HANDLE ||

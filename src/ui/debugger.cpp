@@ -14,12 +14,13 @@
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "sokol_app.h"
 #include "sokol_log.h"
+#include "ui/inspector/global_inspector.h"
 #include "ui/inspector/layer_inspector.h"
 #include "ui/widgets/visibility_solo_controls.h"
 #include "util/sokol_imgui.h"
-#include "wallpaper/2d/layers/image_layer.h"
+#include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
-#include "wallpaper/2d/layers/particle_layer.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
@@ -148,7 +149,7 @@ void drawInspectorPanel(EngineContext& ctx) {
     ImGui::Separator();
 
     if (ctx.selected_object == -1) {
-        Inspector::showGlobalSettings(ctx);
+        Inspector::GlobalInspector::show(ctx);
         return;
     }
 

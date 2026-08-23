@@ -4,13 +4,12 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "particle_parser.h"
 #include "shared/assets/tex_decoder.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
-#include "shared/graphics/shader/shader_compiler.h"
-#include "wallpaper/2d/effects/effect.h"
-#include "wallpaper/2d/parser/particle_parser.h"
+#include "shared/graphics/passes/shader_pass.h"
 
 #define TAG "PARTICLE"
 

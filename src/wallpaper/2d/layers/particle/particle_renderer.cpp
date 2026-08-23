@@ -7,9 +7,8 @@
 #include "shared/core/config.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
-#include "shared/graphics/shader/shader_compiler.h"
-#include "wallpaper/2d/effects/effect.h"
 
 namespace {
 

@@ -5,12 +5,14 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/passes/pass_loader.h"
+#include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
 #include "sokol_app.h"
 #include "wallpaper/2d/effects/effect.h"
-#include "wallpaper/2d/layers/image_layer.h"
+#include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
-#include "wallpaper/2d/layers/particle_layer.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {

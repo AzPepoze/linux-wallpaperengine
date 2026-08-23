@@ -1,6 +1,9 @@
 #include "effect_inspector.h"
 
+#if DEBUG_BUILD
+
 #include "imgui.h"
+#include "shared/graphics/passes/shader_pass.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "ui/widgets/visibility_solo_controls.h"
@@ -304,3 +307,5 @@ void showEffect(EngineContext& ctx, ::Effect& effect, int id) {
 }
 
 }  // namespace Inspector
+
+#endif  // DEBUG_BUILD

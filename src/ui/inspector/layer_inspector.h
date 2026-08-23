@@ -1,13 +1,17 @@
 #ifndef LAYER_INSPECTOR_H
 #define LAYER_INSPECTOR_H
 
-class Layer;
+#include "shared/core/build_config.h"
 
+#if DEBUG_BUILD
+
+class Layer;
 struct EngineContext;
 
 namespace Inspector {
-void showGlobalSettings(EngineContext& ctx);
 void showLayer(EngineContext& ctx, Layer& layer);
 }  // namespace Inspector
+
+#endif  // DEBUG_BUILD
 
 #endif  // LAYER_INSPECTOR_H
