@@ -25,7 +25,8 @@ enum class TexFormat : uint32_t {
     BC1_DXT1 = 1,
     BC2_DXT3 = 2,
     BC3_DXT5 = 4,
-    BC1_DXT1_ALT = 6,
+    BC2_DXT3_ALT = 6,
+    BC1_DXT1_ALT = 7,
     RG8 = 8,
     R8 = 9,
 };
@@ -45,6 +46,7 @@ FormatInfo getFormatInfo(uint32_t format_id) {
         case TexFormat::BC1_DXT1_ALT:
             return {"DXT1/BC1", PixelFormat::BC1, 4, 0};
         case TexFormat::BC2_DXT3:
+        case TexFormat::BC2_DXT3_ALT:
             return {"DXT3/BC2", PixelFormat::BC2, 4, 0};
         case TexFormat::BC3_DXT5:
             return {"DXT5/BC3", PixelFormat::BC3, 4, 0};
@@ -54,6 +56,18 @@ FormatInfo getFormatInfo(uint32_t format_id) {
             return {"R8 (Grayscale)", PixelFormat::R8, 1, 1};
         default:
             return {"Unknown", PixelFormat::RGBA8, 4, 0};
+    }
+}
+
+size_t getBlockCompressedBlockSize(PixelFormat format) {
+    switch (format) {
+        case PixelFormat::BC1:
+            return 8;
+        case PixelFormat::BC2:
+        case PixelFormat::BC3:
+            return 16;
+        default:
+            return 0;
     }
 }
 
@@ -209,6 +223,22 @@ std::vector<uint8_t> unpadPaddedRows(const uint8_t* src, uint32_t img_w, uint32_
     for (uint32_t y = 0; y < img_h; ++y) {
         std::memcpy(unpadded.data() + static_cast<size_t>(y) * img_w * bpp, src + static_cast<size_t>(y) * mip_w * bpp,
                     static_cast<size_t>(img_w) * bpp);
+    }
+    return unpadded;
+}
+
+std::vector<uint8_t> unpadBlockCompressedRows(const uint8_t* src, uint32_t img_w, uint32_t img_h, uint32_t mip_w,
+                                              size_t block_bytes) {
+    const uint32_t img_blocks_x = (img_w + 3) / 4;
+    const uint32_t img_blocks_y = (img_h + 3) / 4;
+    const uint32_t mip_blocks_x = (mip_w + 3) / 4;
+    const size_t row_bytes_to_copy = static_cast<size_t>(img_blocks_x) * block_bytes;
+    const size_t mip_row_stride = static_cast<size_t>(mip_blocks_x) * block_bytes;
+
+    std::vector<uint8_t> unpadded(static_cast<size_t>(img_blocks_x) * img_blocks_y * block_bytes);
+    for (uint32_t by = 0; by < img_blocks_y; ++by) {
+        std::memcpy(unpadded.data() + static_cast<size_t>(by) * row_bytes_to_copy,
+                    src + static_cast<size_t>(by) * mip_row_stride, row_bytes_to_copy);
     }
     return unpadded;
 }
@@ -419,6 +449,7 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             // Wallpaper Engine pads mip dimensions for GPU alignment, so a mip can be
             // larger than the image; unpad below.
             const size_t bpp = format.bytes_per_pixel;
+            const size_t block_bytes = getBlockCompressedBlockSize(image.format);
             const size_t mip_expected = expectedPixelDataSize(mip_width, mip_height, image.format);
             const size_t img_expected = expectedPixelDataSize(header.image_width, header.image_height, image.format);
 
@@ -427,9 +458,8 @@ DecodedImage decodeTexture(const char* path, int image_index) {
                 (raw_data.size() == static_cast<size_t>(mip_width) * mip_height * bpp) &&
                 (header.image_width <= mip_width) && (header.image_height <= mip_height);
 
-            // Block-compressed padding: mip block grid is larger than image block grid but
-            // decompressed size matches the mip alloc exactly. Crop to image block grid.
-            const bool is_bc_padded = (bpp == 0) && (img_expected > 0) && (mip_expected > 0) &&
+            // Block-compressed mip grid is larger than the image grid; crop to the image grid.
+            const bool is_bc_padded = (block_bytes > 0) && (img_expected > 0) && (mip_expected > 0) &&
                                       (raw_data.size() == mip_expected) && (mip_expected != img_expected) &&
                                       (mip_width >= header.image_width) && (mip_height >= header.image_height);
 
@@ -437,9 +467,10 @@ DecodedImage decodeTexture(const char* path, int image_index) {
                 image.pixels =
                     unpadPaddedRows(raw_data.data(), header.image_width, header.image_height, mip_width, bpp);
             } else if (is_bc_padded) {
-                // For block-compressed data the GPU block rows are already self-contained;
-                // we can simply truncate to the image-size block count.
-                image.pixels.assign(raw_data.begin(), raw_data.begin() + static_cast<std::ptrdiff_t>(img_expected));
+                image.pixels = unpadBlockCompressedRows(raw_data.data(), header.image_width, header.image_height,
+                                                        mip_width, block_bytes);
+            } else if (raw_data.size() == mip_expected && mip_expected == img_expected) {
+                image.pixels = std::move(raw_data);
             } else if (raw_data.size() == mip_expected) {
                 image.width = mip_width;
                 image.height = mip_height;
