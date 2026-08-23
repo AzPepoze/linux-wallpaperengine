@@ -68,9 +68,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     sg_view input_view = base_view;
     int write_index = 0;
     bool rendered_any = false;
-    int draw_order = 0;
-
 #if DEBUG_BUILD
+    int draw_order = 0;
     diag.onSourceImage(0, input_image, effect_target_width, effect_target_height);
 #endif
 
@@ -145,14 +144,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             }
 #endif
 
-            sg_pass offscreen_pass = {};
-            offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-            offscreen_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-            offscreen_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-            offscreen_pass.attachments.colors[0] =
+            const sg_image output_image = named_target ? named_target->image : effect_images[write_index];
+            const sg_view output_attachment =
                 named_target ? named_target->attachment_view : effect_attachment_views[write_index];
-            sg_begin_pass(&offscreen_pass);
-            renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             render_effect_pass_t render_pass = pass->getRenderPass();
@@ -165,6 +159,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 shader_input_view = pass->pass_textures.texture0_view;
             }
 
+            std::vector<sg_image> override_images(11, sg_image{SG_INVALID_ID});
             std::vector<sg_view> override_views(11, sg_view{SG_INVALID_ID});
             bool has_overrides = false;
             for (const auto& [slot, binding] : pass->render_texture_bindings) {
@@ -177,6 +172,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                         shader_input_image = effect_source_image;
                         shader_input_view = effect_source_view;
                     } else {
+                        override_images[slot - 1] = effect_source_image;
                         override_views[slot - 1] = effect_source_view;
                     }
                     has_overrides = true;
@@ -187,11 +183,44 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                         shader_input_image = target->second.image;
                         shader_input_view = target->second.texture_view;
                     } else {
+                        override_images[slot - 1] = target->second.image;
                         override_views[slot - 1] = target->second.texture_view;
                     }
                     has_overrides = true;
                 }
             }
+
+            bool has_alias = false;
+            if (output_image.id != SG_INVALID_ID && shader_input_image.id == output_image.id) {
+                effect_log.error(
+                    "Effect pass '%s' (layer '%s') aliases input slot 0 (image %u) with output attachment (image %u)",
+                    pass->shader_name.c_str(), name.c_str(), shader_input_image.id, output_image.id);
+                has_alias = true;
+            }
+            for (size_t i = 0; i < override_images.size(); ++i) {
+                if (output_image.id != SG_INVALID_ID && override_images[i].id == output_image.id) {
+                    effect_log.error(
+                        "Effect pass '%s' (layer '%s') aliases input slot %zu (image %u) with output attachment "
+                        "(image %u)",
+                        pass->shader_name.c_str(), name.c_str(), i + 1, override_images[i].id, output_image.id);
+                    has_alias = true;
+                }
+            }
+
+            if (has_alias) {
+                effect_log.warn("Skipping pass '%s' to avoid Vulkan render target aliasing hazard",
+                                pass->shader_name.c_str());
+                continue;
+            }
+
+            sg_pass offscreen_pass = {};
+            offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+            offscreen_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+            offscreen_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+            offscreen_pass.attachments.colors[0] = output_attachment;
+            sg_begin_pass(&offscreen_pass);
+            renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+
             if (has_overrides) {
                 render_pass.override_views = override_views.data();
                 render_pass.num_override_views = override_views.size();
@@ -203,9 +232,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
             sg_end_pass();
 
-            sg_image out_img = named_target ? named_target->image : effect_images[write_index];
-
 #if DEBUG_BUILD
+            sg_image out_img = output_image;
             if (diag.config.enabled) {
                 PassTraceEntry trace;
                 trace.frame_number = ctx.profiler.frame_index;

@@ -317,7 +317,7 @@ bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, A
                       surface_id);
             return false;
         }
-		
+
         out_av_frame = impl->current_frame;
         return true;
     }
