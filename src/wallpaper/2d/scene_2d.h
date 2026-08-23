@@ -22,12 +22,21 @@ class Scene2DRuntime {
 
    private:
     struct SceneTarget {
-        GfxImage image;
-        GfxView texture_view;
         GfxView attachment_view;
+        GfxView texture_view;
+        GfxImage image;
         int width = 0;
         int height = 0;
         sg_pixel_format pixel_format = SG_PIXELFORMAT_NONE;
+
+        void reset() {
+            attachment_view = {};
+            texture_view = {};
+            image = {};
+            width = 0;
+            height = 0;
+            pixel_format = SG_PIXELFORMAT_NONE;
+        }
     };
 
     EngineContext& ctx;

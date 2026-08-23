@@ -133,8 +133,8 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
         return true;
     }
 
-    scene_targets[0] = SceneTarget{};
-    scene_targets[1] = SceneTarget{};
+    scene_targets[0].reset();
+    scene_targets[1].reset();
 
     for (SceneTarget& target : scene_targets) {
         sg_image_desc image_desc = {};
@@ -175,8 +175,8 @@ bool Scene2DRuntime::ensureBloomTargets(int width, int height) {
         return true;
     }
 
-    bloom_targets[0] = SceneTarget{};
-    bloom_targets[1] = SceneTarget{};
+    bloom_targets[0].reset();
+    bloom_targets[1].reset();
 
     for (SceneTarget& target : bloom_targets) {
         sg_image_desc image_desc = {};
@@ -358,6 +358,8 @@ void Scene2DRuntime::drawOffscreen() {
 
     int layer_index = 0;
     auto capture_layer_result = [&](Layer* layer, bool raw_layer) {
+        (void)raw_layer;
+        (void)layer_index;
 #if DEBUG_BUILD
         RenderDiagnostics& diagnostics = RenderDiagnostics::instance();
         if (!diagnostics.is_capturing_frame) return;
@@ -624,10 +626,10 @@ void Scene2DRuntime::clearScene() {
 
 void Scene2DRuntime::cleanup() {
     clearScene();
-    scene_targets[0] = SceneTarget{};
-    scene_targets[1] = SceneTarget{};
-    bloom_targets[0] = SceneTarget{};
-    bloom_targets[1] = SceneTarget{};
+    scene_targets[0].reset();
+    scene_targets[1].reset();
+    bloom_targets[0].reset();
+    bloom_targets[1].reset();
     scene_output_index = -1;
     renderer_cleanup(&ctx.renderer);
 }
