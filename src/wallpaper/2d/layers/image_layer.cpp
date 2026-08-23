@@ -19,7 +19,16 @@
 
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
-ImageLayer::~ImageLayer() {}
+ImageLayer::~ImageLayer() {
+    for (auto& target : effect_targets) {
+        target.reset();
+    }
+    for (auto& [name, rt] : named_effect_targets) {
+        rt.reset();
+    }
+    cached_view = {};
+    img = {};
+}
 
 void ImageLayer::updateCachedView() {
     if (img.id != SG_INVALID_ID) {
@@ -64,6 +73,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         }
     }
 
+    const sg_image layer_source_image = base_img;
+    const sg_view layer_source_view = base_view;
     sg_image input_image = base_img;
     sg_view input_view = base_view;
     int write_index = 0;
@@ -85,9 +96,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
 #endif
 
-        const sg_image effect_source_image = input_image;
-        const sg_view effect_source_view = input_view;
-
         for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
             auto pass = effect->passes[pass_idx];
             if (!pass || !pass->enabled || pass->compiled.pipeline.id == SG_INVALID_ID) continue;
@@ -99,28 +107,13 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
             int target_width = effect_target_width;
             int target_height = effect_target_height;
-            EffectTarget* named_target = nullptr;
+            NamedRenderTarget* named_target = nullptr;
             if (!pass->render_target.empty()) {
                 target_width = std::max(1, (int)std::lround(effect_target_width / pass->render_scale));
                 target_height = std::max(1, (int)std::lround(effect_target_height / pass->render_scale));
                 auto& target = named_effect_targets[pass->render_target];
-                if (target.width != target_width || target.height != target_height ||
-                    target.image.id == SG_INVALID_ID) {
-                    target = {};
-                    sg_image_desc image_desc = {};
-                    image_desc.usage.color_attachment = true;
-                    image_desc.width = target_width;
-                    image_desc.height = target_height;
-                    image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-                    target.image = sg_make_image(&image_desc);
-                    sg_view_desc texture_desc = {};
-                    texture_desc.texture.image = target.image;
-                    target.texture_view = sg_make_view(&texture_desc);
-                    sg_view_desc attachment_desc = {};
-                    attachment_desc.color_attachment.image = target.image;
-                    target.attachment_view = sg_make_view(&attachment_desc);
-                    target.width = target_width;
-                    target.height = target_height;
+                if (!target.ensureSize(target_width, target_height)) {
+                    continue;
                 }
                 named_target = &target;
             }
@@ -132,21 +125,23 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                     sg_pass copy_pass = {};
                     copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
                     copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-                    copy_pass.attachments.colors[0] = named_target->attachment_view;
+                    copy_pass.attachments.colors[0] = named_target->currentWrite().attachment_view;
                     sg_begin_pass(&copy_pass);
                     renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
                     float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
                     renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
                                          (float)target_height, 0.0f, full_white, false, nullptr);
                     sg_end_pass();
+                    named_target->swap();
                 }
                 continue;
             }
 #endif
 
-            const sg_image output_image = named_target ? named_target->image : effect_images[write_index];
+            const sg_image output_image =
+                named_target ? named_target->currentWrite().image : effect_targets[write_index].image;
             const sg_view output_attachment =
-                named_target ? named_target->attachment_view : effect_attachment_views[write_index];
+                named_target ? named_target->currentWrite().attachment_view : effect_targets[write_index].attachment_view;
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             render_effect_pass_t render_pass = pass->getRenderPass();
@@ -164,27 +159,35 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             bool has_overrides = false;
             for (const auto& [slot, binding] : pass->render_texture_bindings) {
                 if (slot < 0 || slot > 11) continue;
-                // Full-frame-buffer is the accumulated scene supplied by the
-                // compositor.  It must be bound once, not treated as a named
-                // effect target (which would silently leave it invalid).
-                if (binding == "previous" || binding == "_rt_FullFrameBuffer") {
+                if (binding == "previous") {
                     if (slot == 0) {
-                        shader_input_image = effect_source_image;
-                        shader_input_view = effect_source_view;
+                        shader_input_image = input_image;
+                        shader_input_view = input_view;
                     } else {
-                        override_images[slot - 1] = effect_source_image;
-                        override_views[slot - 1] = effect_source_view;
+                        override_images[slot - 1] = input_image;
+                        override_views[slot - 1] = input_view;
+                    }
+                    has_overrides = true;
+                } else if (binding == "_rt_FullFrameBuffer") {
+                    if (slot == 0) {
+                        shader_input_image = layer_source_image;
+                        shader_input_view = layer_source_view;
+                    } else {
+                        override_images[slot - 1] = layer_source_image;
+                        override_views[slot - 1] = layer_source_view;
                     }
                     has_overrides = true;
                 } else {
                     auto target = named_effect_targets.find(binding);
                     if (target == named_effect_targets.end()) continue;
+                    const auto& read_buf = target->second.currentRead();
+                    if (read_buf.image.id == SG_INVALID_ID) continue;
                     if (slot == 0) {
-                        shader_input_image = target->second.image;
-                        shader_input_view = target->second.texture_view;
+                        shader_input_image = read_buf.image;
+                        shader_input_view = read_buf.texture_view;
                     } else {
-                        override_images[slot - 1] = target->second.image;
-                        override_views[slot - 1] = target->second.texture_view;
+                        override_images[slot - 1] = read_buf.image;
+                        override_views[slot - 1] = read_buf.texture_view;
                     }
                     has_overrides = true;
                 }
@@ -206,6 +209,26 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                     has_alias = true;
                 }
             }
+            if (has_overrides) {
+                render_pass.override_views = override_views.data();
+                render_pass.num_override_views = override_views.size();
+            }
+
+            for (size_t i = 0; i < (size_t)render_pass.num_extra_views; ++i) {
+                if (render_pass.override_views && i < render_pass.num_override_views &&
+                    render_pass.override_views[i].id != SG_INVALID_ID) {
+                    continue;
+                }
+                if (render_pass.extra_views && render_pass.extra_views[i].id != SG_INVALID_ID) {
+                    sg_view_desc vd = sg_query_view_desc(render_pass.extra_views[i]);
+                    if (vd.texture.image.id != SG_INVALID_ID && vd.texture.image.id == output_image.id) {
+                        effect_log.error(
+                            "Effect pass '%s' (layer '%s') aliases extra view slot %zu (image %u) with output attachment (image %u)",
+                            pass->shader_name.c_str(), name.c_str(), i + 1, vd.texture.image.id, output_image.id);
+                        has_alias = true;
+                    }
+                }
+            }
 
             if (has_alias) {
                 effect_log.warn("Skipping pass '%s' to avoid Vulkan render target aliasing hazard",
@@ -221,10 +244,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
 
-            if (has_overrides) {
-                render_pass.override_views = override_views.data();
-                render_pass.num_override_views = override_views.size();
-            }
             render_pass.is_fullscreen_quad = pass->is_fullscreen_quad;
 
             renderer_draw_sprite(ctx, &ctx.renderer, shader_input_image, shader_input_view, 0.0f, 0.0f,
@@ -248,7 +267,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 trace.render_target_name = pass->render_target;
                 trace.target_image_id = out_img.id;
                 trace.target_view_id =
-                    named_target ? named_target->attachment_view.id : effect_attachment_views[write_index].id;
+                    named_target ? named_target->currentWrite().attachment_view.id : effect_targets[write_index].attachment_view.id;
                 trace.target_width = target_width;
                 trace.target_height = target_height;
                 trace.target_pixel_format = "RGBA8";
@@ -273,20 +292,28 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                     TextureBindingTrace in_b;
                     in_b.slot = slot;
                     in_b.semantic_source = binding;
-                    if (binding == "previous" || binding == "_rt_FullFrameBuffer") {
-                        in_b.image_id = effect_source_image.id;
-                        in_b.view_id = effect_source_view.id;
-                        sg_image_desc d = sg_query_image_desc(effect_source_image);
+                    if (binding == "previous") {
+                        in_b.image_id = input_image.id;
+                        in_b.view_id = input_view.id;
+                        sg_image_desc d = sg_query_image_desc(input_image);
+                        in_b.width = d.width;
+                        in_b.height = d.height;
+                        in_b.is_render_target = d.usage.color_attachment;
+                    } else if (binding == "_rt_FullFrameBuffer") {
+                        in_b.image_id = layer_source_image.id;
+                        in_b.view_id = layer_source_view.id;
+                        sg_image_desc d = sg_query_image_desc(layer_source_image);
                         in_b.width = d.width;
                         in_b.height = d.height;
                         in_b.is_render_target = d.usage.color_attachment;
                     } else {
                         auto target_it = named_effect_targets.find(binding);
                         if (target_it != named_effect_targets.end()) {
-                            in_b.image_id = target_it->second.image.id;
-                            in_b.view_id = target_it->second.texture_view.id;
-                            in_b.width = target_it->second.width;
-                            in_b.height = target_it->second.height;
+                            const auto& read_buf = target_it->second.currentRead();
+                            in_b.image_id = read_buf.image.id;
+                            in_b.view_id = read_buf.texture_view.id;
+                            in_b.width = read_buf.width;
+                            in_b.height = read_buf.height;
                             in_b.is_render_target = true;
                         }
                     }
@@ -299,11 +326,12 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 #endif
 
             if (named_target) {
-                input_image = named_target->image;
-                input_view = named_target->texture_view;
+                named_target->swap();
+                input_image = named_target->currentRead().image;
+                input_view = named_target->currentRead().texture_view;
             } else {
-                input_image = effect_images[write_index];
-                input_view = effect_texture_views[write_index];
+                input_image = effect_targets[write_index].image;
+                input_view = effect_targets[write_index].texture_view;
                 write_index = 1 - write_index;
             }
             effect_output_image = input_image;
