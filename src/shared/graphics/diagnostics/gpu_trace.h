@@ -53,7 +53,23 @@ void gpu_trace_rt_destroy(const char* reason, const char* name, uint32_t image_i
 void gpu_trace_pass_begin(const GpuPassTraceInfo& info);
 void gpu_trace_pass_end(uint64_t pass_serial);
 
+void gpu_trace_frame_commit_begin(uint64_t frame_index);
+void gpu_trace_frame_commit_end(uint64_t frame_index);
+
 void gpu_trace_bound_slots(uint64_t pass_serial, const sg_bindings* bind);
+bool gpu_trace_validate_bindings(uint64_t pass_serial, uint64_t frame_index, const sg_bindings* bind);
+
+// Debug Resource Lifetime Registry
+void gpu_trace_register_image(uint32_t id, const char* owner_kind, const char* name, int width, int height,
+                              uint64_t generation);
+void gpu_trace_unregister_image(uint32_t id, const char* reason);
+
+void gpu_trace_register_view(uint32_t id, uint32_t image_id, const char* owner_kind, const char* name,
+                             uint64_t generation);
+void gpu_trace_unregister_view(uint32_t id, const char* reason);
+
+void gpu_trace_register_buffer(uint32_t id, size_t size, const char* role, const char* owner_kind, const char* name);
+void gpu_trace_unregister_buffer(uint32_t id, const char* reason);
 
 void gpu_trace_record_event(const char* kind, const char* fmt, ...);
 void gpu_trace_dump_history();

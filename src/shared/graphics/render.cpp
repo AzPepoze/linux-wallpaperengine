@@ -187,6 +187,17 @@ void renderer_init(renderer_t* r, float w, float h) {
     gv_desc.texture.image = r->gray_pixel;
     r->gray_view = sg_make_view(&gv_desc);
 
+    gpu_trace_register_buffer(r->vertex_buffer.id, sizeof(vertices), "quad_vertex", "renderer", "vertex_buffer");
+    gpu_trace_register_buffer(r->fullscreen_vertex_buffer.id, sizeof(fullscreen_vertices), "fullscreen_vertex",
+                              "renderer", "fullscreen_vertex_buffer");
+    gpu_trace_register_buffer(r->index_buffer.id, sizeof(indices), "quad_index", "renderer", "index_buffer");
+    gpu_trace_register_image(r->white_pixel.id, "renderer", "white_pixel", 1, 1, 0);
+    gpu_trace_register_view(r->white_view.id, r->white_pixel.id, "renderer", "white_view", 0);
+    gpu_trace_register_image(r->black_pixel.id, "renderer", "black_pixel", 1, 1, 0);
+    gpu_trace_register_view(r->black_view.id, r->black_pixel.id, "renderer", "black_view", 0);
+    gpu_trace_register_image(r->gray_pixel.id, "renderer", "gray_pixel", 1, 1, 0);
+    gpu_trace_register_view(r->gray_view.id, r->gray_pixel.id, "renderer", "gray_view", 0);
+
     const std::string vertex_source =
         "#version 330\n"
         "uniform mat4 mvp;\n"
@@ -418,7 +429,14 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     }
 
 #if DEBUG_BUILD
-    gpu_trace_bound_slots(gpu_trace_get_current_pass_serial(), &r->bind);
+    uint64_t pass_serial = gpu_trace_get_current_pass_serial();
+    gpu_trace_bound_slots(pass_serial, &r->bind);
+    if (!gpu_trace_validate_bindings(pass_serial, ctx.profiler.frame_index, &r->bind)) {
+        for (int i = 0; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
+        r->bind.vertex_buffers[0] = r->vertex_buffer;
+        r->bind.index_buffer = r->index_buffer;
+        return;
+    }
 #endif
     sg_apply_bindings(&r->bind);
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
@@ -434,6 +452,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     for (int i = 0; i < 12; i++) {
         r->bind.views[i] = (sg_view){SG_INVALID_ID};
     }
+    r->bind.vertex_buffers[0] = r->vertex_buffer;
+    r->bind.index_buffer = r->index_buffer;
 }
 
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
