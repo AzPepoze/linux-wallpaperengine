@@ -199,6 +199,16 @@ static void frame(void) {
     const bool offscreen_composition = runtime ? runtime->requiresOffscreenComposition() : false;
     if (offscreen_composition && runtime) runtime->draw();
 
+    uint64_t swapchain_serial = gpu_trace_next_pass_serial();
+    GpuPassTraceInfo swapchain_info;
+    swapchain_info.pass_serial = swapchain_serial;
+    swapchain_info.frame_index = ctx.profiler.frame_index;
+    swapchain_info.category = "swapchain_present";
+    swapchain_info.layer_name = "swapchain";
+    swapchain_info.target_width = sapp_width();
+    swapchain_info.target_height = sapp_height();
+    gpu_trace_pass_begin(swapchain_info);
+
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = sglue_swapchain();
@@ -220,7 +230,11 @@ static void frame(void) {
 #endif
 
     sg_end_pass();
+    gpu_trace_pass_end(swapchain_serial);
+
+    gpu_trace_frame_commit_begin(ctx.profiler.frame_index);
     sg_commit();
+    gpu_trace_frame_commit_end(ctx.profiler.frame_index);
 
 #if DEBUG_BUILD
     RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);

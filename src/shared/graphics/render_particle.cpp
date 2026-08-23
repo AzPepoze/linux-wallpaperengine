@@ -83,7 +83,14 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
     sg_apply_uniforms(3, &particle_range);
 
 #if DEBUG_BUILD
-    gpu_trace_bound_slots(gpu_trace_get_current_pass_serial(), &r->bind);
+    uint64_t pass_serial = gpu_trace_get_current_pass_serial();
+    gpu_trace_bound_slots(pass_serial, &r->bind);
+    if (!gpu_trace_validate_bindings(pass_serial, ctx.profiler.frame_index, &r->bind)) {
+        for (int slot = 0; slot < 12; ++slot) r->bind.views[slot] = {SG_INVALID_ID};
+        r->bind.vertex_buffers[0] = r->vertex_buffer;
+        r->bind.index_buffer = r->index_buffer;
+        return;
+    }
 #endif
     sg_apply_bindings(&r->bind);
     if (pass->apply_custom_uniforms) pass->apply_custom_uniforms(pass->user_data);
