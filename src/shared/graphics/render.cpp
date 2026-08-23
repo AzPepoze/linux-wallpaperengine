@@ -415,6 +415,13 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         memcpy(fragment_uniforms + kBuiltinRestSize, tint, sizeof(float) * 4);
         sg_range fragment_range = {.ptr = fragment_uniforms, .size = sizeof(fragment_uniforms)};
         sg_apply_uniforms(2, &fragment_range);
+
+#if DEBUG_BUILD
+        uint64_t cur_serial = gpu_trace_get_current_pass_serial();
+        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 0, b_range.size);
+        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 1, res_range.size);
+        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 2, fragment_range.size);
+#endif
     } else {
         r->bind.views[0] = main_view;
         for (int i = 1; i < 12; i++) {
@@ -426,6 +433,12 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         sg_apply_uniforms(0, &mvp_range);
         sg_range tint_range = {.ptr = tint, .size = sizeof(float) * 4};
         sg_apply_uniforms(1, &tint_range);
+
+#if DEBUG_BUILD
+        uint64_t cur_serial = gpu_trace_get_current_pass_serial();
+        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 0, mvp_range.size);
+        gpu_trace_apply_uniforms(cur_serial, ctx.profiler.frame_index, 1, tint_range.size);
+#endif
     }
 
 #if DEBUG_BUILD

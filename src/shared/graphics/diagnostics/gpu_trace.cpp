@@ -11,6 +11,7 @@
 
 static std::atomic<uint64_t> g_pass_serial{1};
 static std::atomic<uint64_t> g_target_generation{1};
+static std::atomic<size_t> g_frame_cumulative_uniform_bytes{0};
 
 // ============================================================================
 // 1. Pass Serial Stack (Solves Sticky Global Serial)
@@ -341,6 +342,7 @@ void gpu_trace_pass_end(uint64_t pass_serial) {
 }
 
 void gpu_trace_frame_commit_begin(uint64_t frame_index) {
+    g_frame_cumulative_uniform_bytes.store(0, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(g_trace_mutex);
     fprintf(stderr, "[FRAME-TRACE] COMMIT-BEGIN frame=%lu\n", (unsigned long)frame_index);
     fflush(stderr);
@@ -377,6 +379,16 @@ static const char* sokol_state_str(sg_resource_state st) {
     }
 }
 
+void gpu_trace_apply_uniforms(uint64_t pass_serial, uint64_t frame_index, int ub_slot, size_t byte_size) {
+    size_t cumulative = g_frame_cumulative_uniform_bytes.fetch_add(byte_size, std::memory_order_relaxed) + byte_size;
+    std::lock_guard<std::mutex> lock(g_trace_mutex);
+    fprintf(stderr, "[UNIFORM-TRACE] frame=%lu pass_serial=%lu slot=%d size=%zu cum_frame_bytes=%zu\n",
+            (unsigned long)frame_index, (unsigned long)pass_serial, ub_slot, byte_size, cumulative);
+    fflush(stderr);
+    gpu_trace_record_event("UNIFORM_APPLY", "frame=%lu pass=%lu slot=%d size=%zu cum=%zu",
+                           (unsigned long)frame_index, (unsigned long)pass_serial, ub_slot, byte_size, cumulative);
+}
+
 void gpu_trace_bound_slots(uint64_t pass_serial, const sg_bindings* bind) {
     if (!bind) return;
     std::lock_guard<std::mutex> lock(g_trace_mutex);
@@ -385,6 +397,12 @@ void gpu_trace_bound_slots(uint64_t pass_serial, const sg_bindings* bind) {
         if (bind->views[i].id != SG_INVALID_ID) {
             sg_view_desc vd = sg_query_view_desc(bind->views[i]);
             fprintf(stderr, "%d:(v=%u,img=%u) ", i, bind->views[i].id, vd.texture.image.id);
+        }
+    }
+    fprintf(stderr, "] smp=[");
+    for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; ++i) {
+        if (bind->samplers[i].id != SG_INVALID_ID) {
+            fprintf(stderr, "%d:s=%u ", i, bind->samplers[i].id);
         }
     }
     fprintf(stderr, "] vb=[");
@@ -532,6 +550,22 @@ bool gpu_trace_validate_bindings(uint64_t pass_serial, uint64_t frame_index, con
                 fflush(stderr);
                 return false;
             }
+        }
+    }
+
+    // Validate Samplers
+    for (int smp_slot = 0; smp_slot < SG_MAX_SAMPLER_BINDSLOTS; ++smp_slot) {
+        uint32_t s_id = bind->samplers[smp_slot].id;
+        if (s_id == SG_INVALID_ID) continue;
+
+        sg_resource_state s_state = sg_query_sampler_state(bind->samplers[smp_slot]);
+        if (s_state == SG_RESOURCESTATE_FAILED || s_state == SG_RESOURCESTATE_INVALID) {
+            fprintf(stderr,
+                    "[GPU-VALIDATION] INVALID SOKOL SAMPLER STATE BOUND frame=%lu pass_serial=%lu slot=%d sampler=%u "
+                    "state=%s\n",
+                    (unsigned long)frame_index, (unsigned long)pass_serial, smp_slot, s_id, sokol_state_str(s_state));
+            fflush(stderr);
+            return false;
         }
     }
 

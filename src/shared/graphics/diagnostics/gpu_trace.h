@@ -58,6 +58,7 @@ void gpu_trace_frame_commit_end(uint64_t frame_index);
 
 void gpu_trace_bound_slots(uint64_t pass_serial, const sg_bindings* bind);
 bool gpu_trace_validate_bindings(uint64_t pass_serial, uint64_t frame_index, const sg_bindings* bind);
+void gpu_trace_apply_uniforms(uint64_t pass_serial, uint64_t frame_index, int ub_slot, size_t byte_size);
 
 // Debug Resource Lifetime Registry
 void gpu_trace_register_image(uint32_t id, const char* owner_kind, const char* name, int width, int height,
