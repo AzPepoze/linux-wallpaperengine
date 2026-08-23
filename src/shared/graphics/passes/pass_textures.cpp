@@ -43,15 +43,10 @@ void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_
     cJSON* textures_node = cJSON_GetObjectItemCaseSensitive(base_config, "textures");
     if (!cJSON_IsArray(textures_node)) return;
 
-    // Wallpaper Engine binds material texture array indices directly to g_TextureN.
-    // For image effects only an empty g_Texture0 means "use the current/previous pass input".
-    // Preserve an explicitly authored textures[0] instead of unconditionally replacing it.
     if (cJSON_GetArraySize(textures_node) > 0) {
         load_texture0(*this, cJSON_GetArrayItem(textures_node, 0), shader_name, ctx, true);
     }
 
-    // Extra pass-owned textures begin at g_Texture1 and are exposed to the renderer
-    // through cached_views[0]. Keep empty/null logical slots so sampler indices stay aligned.
     for (int source_slot = 1; source_slot < cJSON_GetArraySize(textures_node); ++source_slot) {
         cJSON* tex_node = cJSON_GetArrayItem(textures_node, source_slot);
         const int pass_idx = source_slot - 1;

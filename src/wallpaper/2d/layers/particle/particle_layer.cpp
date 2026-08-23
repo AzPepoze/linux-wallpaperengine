@@ -1,11 +1,16 @@
 #include "particle_layer.h"
 
+#include "particle_parser.h"
+#include "particle_system.h"
 #include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/utils.h"
 #include "wallpaper/2d/camera/parallax.h"
-#include "wallpaper/2d/parser/particle_parser.h"
 #include "wallpaper/2d/tree/scene_tree.h"
+
+#if DEBUG_BUILD
+#include "particle_inspector.h"
+#endif
 
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
 
@@ -90,8 +95,6 @@ void ParticleLayer::drawDebug(EngineContext& ctx) {
     ps->layer_rotation = layer_rotation;
     ps->parallax[0] = 0.0f;
     ps->parallax[1] = 0.0f;
-    // A selected layer gets a readable bounding box by default. The CLI flags
-    // explicitly select which overlays the global diagnostic pass draws.
     const bool cli_diagnostics = ctx.particle_debug_bounds || ctx.particle_debug_velocity;
     ps->show_bounds = cli_diagnostics ? ctx.particle_debug_bounds : true;
     ps->show_velocity = cli_diagnostics ? ctx.particle_debug_velocity : false;
@@ -105,3 +108,11 @@ bool ParticleLayer::requiresSceneColor() const {
 void ParticleLayer::setSceneColorView(sg_view view) {
     if (ps) ps->setSceneColorView(view);
 }
+
+#if DEBUG_BUILD
+void ParticleLayer::showInspector(EngineContext& ctx) {
+    showGeneralInspector(ctx);
+    Inspector::showParticleLayerInspector(ctx, *this);
+    showEffectsInspector(ctx);
+}
+#endif

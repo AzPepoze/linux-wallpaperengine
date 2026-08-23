@@ -70,10 +70,8 @@ void ParticleSystem::spawnParticle() {
             particle.angular_vel =
                 initializer.minimum[2] + randomFloat() * (initializer.maximum[2] - initializer.minimum[2]);
         } else if (initializer.type == "turbulentvelocityrandom") {
-            // Wallpaper Engine seeds this initializer with curl noise. The
-            // compact runtime keeps its authored forward direction, random
-            // phase and speed, which importantly establishes a valid trail
-            // direction before the turbulence operator evolves it.
+            // WE seeds this with curl noise; keep the authored forward direction, phase and
+            // speed so the trail has a valid direction before turbulence evolves it.
             const float phase = initializer.turbulence_offset + (randomFloat() - 0.5f) * initializer.turbulence_scale;
             const float speed = initializer.turbulence_speed_min +
                                 randomFloat() * (initializer.turbulence_speed_max - initializer.turbulence_speed_min);

@@ -34,6 +34,17 @@ class ImageLayer : public Layer {
     void pause() override;
     void resume() override;
 
+    bool usesTexture(sg_image i) const override {
+        return img.id == i.id;
+    }
+    bool usesTexturePath(const std::string& p) const override {
+        return !path.empty() && (path == p || path.find(p) != std::string::npos);
+    }
+
+#if DEBUG_BUILD
+    void showInspector(EngineContext& ctx) override;
+#endif
+
     wallpaper_engine::VideoTexture* bound_video_decoder = nullptr;
 
    private:

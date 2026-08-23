@@ -1,6 +1,9 @@
 #include "effect_inspector.h"
 
+#if DEBUG_BUILD
+
 #include "imgui.h"
+#include "shared/graphics/passes/shader_pass.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "ui/widgets/visibility_solo_controls.h"
@@ -8,23 +11,18 @@
 #include "wallpaper/2d/effects/effect.h"
 
 namespace Inspector {
-
 void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     ImGui::PushID(id);
 
-    // Pass header with enable toggle
     if (ImGui::Checkbox(pass.shader_name.empty() ? "Pass" : pass.shader_name.c_str(), &pass.enabled)) {
-        // Toggle logic if needed
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Toggle this specific shader pass");
     }
 
-    // Debug view mode selector
     std::vector<std::string> mode_names = {"Normal"};
     mode_names.push_back("g_Texture0 [Color]");
 
-    // Resolve labels for dropdown
     for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
         int slot = i + 1;
         char buf[64];
@@ -46,7 +44,6 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     for (auto& s : mode_names) mode_ptrs.push_back(s.c_str());
 
     int prev_mode = pass.debug_view_mode;
-    // Map current mode to index in mode_ptrs
     int current_idx = 0;
     int extra_count = (int)pass.pass_textures.textures.size();
     if (pass.debug_view_mode >= 1 && pass.debug_view_mode <= 10) {
@@ -92,9 +89,8 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     }
 
     ImGui::Indent();
-    // g_Texture0 is a real resolved slot too: it may be an authored image,
-    // the previous pass, or an invalid fallback.  Keep it visible alongside
-    // the numbered texture array rather than treating it as implicit.
+    // g_Texture0 may be an authored image, the previous pass, or a fallback, so show it
+    // alongside the numbered texture array rather than treating it as implicit.
     if (ImGui::TreeNodeEx("Resolved Texture Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto show_resolved_slot = [&](int slot, sg_image image, sg_view view, const std::string& path,
                                       const char* source) {
@@ -131,7 +127,6 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
     }
 
     if (!pass.pass_textures.textures.empty()) {
-        // Texture Grid Visualization
         if (ImGui::TreeNodeEx("Texture Slots Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
             float size = 72.0f;
             float avl_x = ImGui::GetContentRegionAvail().x;
@@ -142,7 +137,6 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
                 if (i > 0 && i % cols != 0) ImGui::SameLine();
                 int shader_slot = i + 1;  // textures[0] = g_Texture1, textures[1] = g_Texture2, ...
 
-                // Resolve label from shader-parsed texture_labels (keyed by g_Texture#)
                 const char* slot_label = nullptr;
                 if (pass.texture_labels.count(shader_slot)) {
                     slot_label = pass.texture_labels[shader_slot].c_str();
@@ -183,12 +177,10 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
             ImGui::TreePop();
         }
 
-        // List view with paths
         for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
             ImGui::PushID(i);
             int shader_slot = i + 1;
 
-            // Label from shader
             const char* slot_desc = "Extra";
             if (pass.texture_labels.count(shader_slot)) {
                 slot_desc = pass.texture_labels[shader_slot].c_str();
@@ -304,3 +296,5 @@ void showEffect(EngineContext& ctx, ::Effect& effect, int id) {
 }
 
 }  // namespace Inspector
+
+#endif  // DEBUG_BUILD

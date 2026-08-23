@@ -24,7 +24,6 @@ extern "C" {
 
 namespace wallpaper_engine {
 namespace {
-
 constexpr int kIoBufferSize = 4096;
 
 struct MemoryInput {
@@ -100,7 +99,6 @@ struct VideoTexture::Impl {
     bool is_paused = false;
     AVFrame* current_frame = nullptr;
 
-    // Software fallback structures if VAAPI is unavailable
     MemoryInput input;
     AVFormatContext* sw_format = nullptr;
     AVCodecContext* sw_codec = nullptr;
@@ -142,7 +140,6 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
     std::vector<uint8_t> mp4_bytes;
     const bool is_embedded = readEmbeddedMp4(path, mp4_bytes);
 
-    // Try hardware VAAPI decoder first
     if (is_embedded) {
         if (texture->impl->hw_decoder.openMemory(mp4_bytes, texture->impl->zero_copy)) {
             texture->impl->is_hw_active = true;
@@ -165,7 +162,6 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
         return texture;
     }
 
-    // Fallback: Software FFmpeg decoder
     texture->impl->sw_format = avformat_alloc_context();
     if (!texture->impl->sw_format) return nullptr;
 
@@ -367,7 +363,6 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
         }
     }
 
-    // Software decode fallback
     if (!impl->sw_codec || !impl->sw_format) return false;
     for (;;) {
         const int received = avcodec_receive_frame(impl->sw_codec, impl->sw_frame);

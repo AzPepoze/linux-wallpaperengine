@@ -94,8 +94,7 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         config.renderer.max_length = readFloat(cJSON_GetObjectItemCaseSensitive(renderer, "maxlength"));
     }
 
-    // Legacy particle files sometimes carry a pass directly. Keep this fallback,
-    // but the referenced material is the authoritative source for rendering state.
+    // Legacy particle files may carry a pass directly; the referenced material still wins.
     const cJSON* passes = cJSON_GetObjectItemCaseSensitive(document, "passes");
     const cJSON* pass = cJSON_IsArray(passes) ? cJSON_GetArrayItem(passes, 0) : nullptr;
     const cJSON* blending = cJSON_GetObjectItemCaseSensitive(pass, "blending");

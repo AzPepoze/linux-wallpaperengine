@@ -5,7 +5,7 @@
 #include "../gpu_zero_copy.h"
 #include "../shaders/fullscreen_tri.vert.spv.h"
 #include "../shaders/ycbcr_blit.frag.spv.h"
-#include "shared/media/video_import_cache.h"
+#include "shared/assets/media/video_import_cache.h"
 
 namespace {
 

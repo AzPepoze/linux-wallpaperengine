@@ -5,16 +5,18 @@
 #include <string>
 #include <vector>
 
+#include "providers/asset_provider.h"
+#include "shared/assets/media/video_texture.h"
 #include "shared/core/interfaces.h"
 #include "shared/graphics/gfx_resource.h"
-#include "shared/media/video_texture.h"
 #include "sokol_gfx.h"
 
 class Layer;
 
 class AssetManager : public IAssetResolver {
    public:
-    ~AssetManager();
+    AssetManager();
+    ~AssetManager() override;
 
     void init(const char* engine_path, const char* wallpaper_path);
     void updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers = {});
@@ -39,9 +41,21 @@ class AssetManager : public IAssetResolver {
     const ActiveVideoTexture* findVideoTexture(sg_image img) const;
     const ActiveVideoTexture* findVideoTexture(const std::string& path) const;
 
+    const std::string& getEnginePath() const {
+        return engine_path;
+    }
+    const std::string& getWallpaperPath() const {
+        return wallpaper_path;
+    }
+
    private:
     std::string engine_path;
     std::string wallpaper_path;
+
+    std::unique_ptr<WallpaperAssetProvider> wallpaper_provider;
+    std::unique_ptr<EngineAssetProvider> engine_provider;
+    std::unique_ptr<InternalAssetProvider> internal_provider;
+
     mutable std::vector<ActiveVideoTexture> video_textures;
 };
 

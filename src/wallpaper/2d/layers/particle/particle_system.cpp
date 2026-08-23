@@ -4,18 +4,16 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "particle_parser.h"
 #include "shared/assets/tex_decoder.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
-#include "shared/graphics/shader/shader_compiler.h"
-#include "wallpaper/2d/effects/effect.h"
-#include "wallpaper/2d/parser/particle_parser.h"
+#include "shared/graphics/passes/shader_pass.h"
 
 #define TAG "PARTICLE"
 
 namespace {
-
 bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& ctx, bool fallback) {
     char absolute_path[1024];
     if (material_path.empty() ||
@@ -66,8 +64,8 @@ void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const P
     frames = (int)metadata.spritesheet_frames;
     if (frames > 1 || metadata.width == 0 || metadata.height == 0) return;
 
-    // Some Workshop particle atlases are static TEX containers with no TEXS table.
-    // Only infer an atlas when it is an unambiguous strip of square frames.
+    // Some Workshop particle atlases are static TEX containers with no TEXS table; only
+    // infer a strip atlas when the frames are unambiguous squares.
     if (config.animation_mode == "randomframe" || config.animation_mode == "sequence" ||
         config.animation_mode == "once") {
         if (metadata.width > metadata.height && metadata.width % metadata.height == 0) {
@@ -192,9 +190,8 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
                 pass->combos["SPRITESHEETBLEND"] = 1;
         }
 
-        // Wallpaper Engine's generic particle shader interprets single/dual-channel
-        // textures differently from RGBA textures. Preserve that semantic through
-        // TEX0FORMAT so ConvertTexture0Format() can turn R8 into an alpha mask, etc.
+        // WE's generic particle shader treats single/dual-channel textures differently from RGBA;
+        // keep that in TEX0FORMAT so ConvertTexture0Format() can turn R8 into an alpha mask.
         pass->combos["TEX0FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.texture0);
         if (!pass->pass_textures.textures.empty()) {
             // The normal decoder uses Texture1's independently authored format.

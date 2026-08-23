@@ -5,9 +5,8 @@
 #include <vector>
 
 #include "linmath.h"
+#include "particle_parser.h"
 #include "shared/graphics/gfx_resource.h"
-#include "sokol_gfx.h"
-#include "wallpaper/2d/parser/particle_parser.h"
 
 struct Particle {
     vec3 position = {0, 0, 0};

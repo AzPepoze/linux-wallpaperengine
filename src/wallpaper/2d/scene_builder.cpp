@@ -3,8 +3,9 @@
 #include <string>
 
 #include "shared/core/logger.h"
-#include "wallpaper/2d/layers/image_layer.h"
-#include "wallpaper/2d/layers/particle_layer.h"
+#include "shared/core/task_pool.h"
+#include "wallpaper/2d/layers/image/image_layer.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
 
 namespace {

@@ -7,12 +7,10 @@
 #include "shared/core/config.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
-#include "shared/graphics/shader/shader_compiler.h"
-#include "wallpaper/2d/effects/effect.h"
 
 namespace {
-
 struct ParticleVertex {
     float position[3];
     float texcoord[4];
@@ -94,8 +92,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.texcoord[0] = u;
                 vertex.texcoord[1] = v;
                 vertex.texcoord[2] = particle.rotation;
-                // Wallpaper Engine stores particle size as a diameter; the shader
-                // expands the quad around its centre using this half-extent.
+                // WE stores particle size as a diameter; use the half-extent.
                 vertex.texcoord[3] = particle.size * 0.5f;
                 vertex.color[0] = particle.color[0];
                 vertex.color[1] = particle.color[1];

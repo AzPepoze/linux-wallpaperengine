@@ -1,8 +1,9 @@
 #ifndef PARTICLE_LAYER_H
 #define PARTICLE_LAYER_H
 
+#include "particle_system.h"
+#include "shared/core/build_config.h"
 #include "wallpaper/2d/layers/layer.h"
-#include "wallpaper/2d/particles/particle_system.h"
 
 class EngineContext;
 
@@ -20,6 +21,10 @@ class ParticleLayer : public Layer {
     void drawDebug(EngineContext& ctx) override;
     bool requiresSceneColor() const;
     void setSceneColorView(sg_view view);
+
+#if DEBUG_BUILD
+    void showInspector(EngineContext& ctx) override;
+#endif
 };
 
 #endif  // PARTICLE_LAYER_H
