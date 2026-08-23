@@ -83,9 +83,13 @@ class RenderDiagnostics {
     static RenderDiagnostics& instance();
 
     DiagnosticConfig config;
+    const DiagnosticConfig& getConfig() const {
+        return config;
+    }
     bool is_capturing_frame = false;
 
     void init(bool enabled = false);
+    bool isEffectDisabled(int effect_index, const std::string& effect_path) const;
     void triggerCapture(uint64_t current_frame);
     void onFrameStart(uint64_t frame_index, EngineContext& ctx);
     void onFrameEnd(uint64_t frame_index, EngineContext& ctx);

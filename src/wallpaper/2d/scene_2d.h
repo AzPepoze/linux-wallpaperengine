@@ -2,7 +2,6 @@
 #define SCENE_2D_RUNTIME_H
 
 #include "shared/core/engine_context.h"
-#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "shared/graphics/gfx_resource.h"
 
 class Scene2DRuntime {
@@ -29,13 +28,11 @@ class Scene2DRuntime {
         int width = 0;
         int height = 0;
         sg_pixel_format pixel_format = SG_PIXELFORMAT_NONE;
-        uint64_t generation = 0;
 
-        void reset(const char* reason = "reset", const char* name = "scene_target") {
-            if (image.id != SG_INVALID_ID) {
-                gpu_trace_rt_destroy(reason, name, image.id, texture_view.id, attachment_view.id, width, height,
-                                     generation);
-            }
+        void reset() {
+            if (attachment_view.id != SG_INVALID_ID) sg_destroy_view(attachment_view);
+            if (texture_view.id != SG_INVALID_ID) sg_destroy_view(texture_view);
+            if (image.id != SG_INVALID_ID) sg_destroy_image(image);
             attachment_view = {};
             texture_view = {};
             image = {};
@@ -44,8 +41,8 @@ class Scene2DRuntime {
             pixel_format = SG_PIXELFORMAT_NONE;
         }
 
-        bool create(int w, int h, sg_pixel_format fmt, const char* kind = "scene", const char* name = "scene_target") {
-            reset("recreate", name);
+        bool create(int w, int h, sg_pixel_format fmt) {
+            reset();
             sg_image_desc image_desc = {};
             image_desc.usage.color_attachment = true;
             image_desc.width = w;
@@ -67,15 +64,13 @@ class Scene2DRuntime {
             attachment_view = sg_make_view(&attachment_desc);
 
             if (texture_view.id == SG_INVALID_ID || attachment_view.id == SG_INVALID_ID) {
-                reset("error_rollback", name);
+                reset();
                 return false;
             }
 
             width = w;
             height = h;
             pixel_format = image_desc.pixel_format;
-            generation = gpu_trace_next_target_generation();
-            gpu_trace_rt_create(kind, name, image.id, texture_view.id, attachment_view.id, width, height, generation);
             return true;
         }
     };
@@ -88,16 +83,17 @@ class Scene2DRuntime {
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];
     int scene_output_index = -1;
-
-    GfxPipeline pip_bloom_extract;
-    GfxPipeline pip_bloom_blur_h;
-    GfxPipeline pip_bloom_blur_v;
+    class ShaderPass* bloom_pass_extract = nullptr;
+    class ShaderPass* bloom_pass_blur_v = nullptr;
+    class ShaderPass* bloom_pass_blur_h = nullptr;
+    class ShaderPass* bloom_pass_combine = nullptr;
 
     void initBloomPipelines();
+    void destroyBloomPipelines();
     sg_pixel_format compositionPixelFormat() const;
     bool ensureSceneTargets(int width, int height);
     bool ensureBloomTargets(int width, int height);
-    void renderBloom(int current_target_index, int width, int height);
+    int renderBloom(int current_target_index, int width, int height);
     void drawDirect();
     void drawOffscreen();
 };

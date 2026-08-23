@@ -94,6 +94,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         if (!effect->visible || (any_effect_solo && !effect->solo)) continue;
 #if DEBUG_BUILD
         if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
+        if (diag.isEffectDisabled(eff_idx, effect->file_path)) continue;
 #endif
 
         for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
@@ -237,45 +238,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 continue;
             }
 
-            uint64_t pass_serial = gpu_trace_next_pass_serial();
-            GpuPassTraceInfo trace_info;
-            trace_info.pass_serial = pass_serial;
-            trace_info.frame_index = ctx.profiler.frame_index;
-            trace_info.category = named_target ? "effect_named" : "effect_pingpong";
-            trace_info.layer_name = name.c_str();
-            trace_info.layer_id = scene_object_id;
-            trace_info.effect_index = eff_idx;
-            trace_info.effect_path = effect->file_path.c_str();
-            trace_info.pass_index = pass_idx;
-            trace_info.shader_name = pass->shader_name.c_str();
-            trace_info.render_target_name = pass->render_target.c_str();
-            trace_info.render_scale = pass->render_scale;
-            trace_info.target_width = target_width;
-            trace_info.target_height = target_height;
-            trace_info.output_image_id = output_image.id;
-            trace_info.output_view_id = output_attachment.id;
-            trace_info.output_generation =
-                named_target ? named_target->currentWrite().generation : effect_targets[write_index].generation;
-
-            GpuTraceInputBinding in0;
-            in0.slot = 0;
-            in0.semantic = pass->render_texture_bindings.count(0) ? pass->render_texture_bindings.at(0) : "previous";
-            in0.image_id = shader_input_image.id;
-            in0.view_id = shader_input_view.id;
-            trace_info.inputs.push_back(in0);
-
-            for (const auto& [slot, binding] : pass->render_texture_bindings) {
-                if (slot == 0 || slot > 11) continue;
-                GpuTraceInputBinding in_b;
-                in_b.slot = slot;
-                in_b.semantic = binding;
-                in_b.image_id = override_images[slot - 1].id;
-                in_b.view_id = override_views[slot - 1].id;
-                trace_info.inputs.push_back(in_b);
-            }
-
-            gpu_trace_pass_begin(trace_info);
-
             sg_pass offscreen_pass = {};
             offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
             offscreen_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
@@ -290,7 +252,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                                  (float)target_width, (float)target_height, 0.0f, effect_tint, false, &render_pass);
 
             sg_end_pass();
-            gpu_trace_pass_end(pass_serial);
 
 #if DEBUG_BUILD
             sg_image out_img = output_image;

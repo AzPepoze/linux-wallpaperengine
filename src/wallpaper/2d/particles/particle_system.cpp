@@ -8,7 +8,6 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
-#include "shared/graphics/diagnostics/gpu_trace.h"
 #include "shared/graphics/shader/shader_compiler.h"
 #include "wallpaper/2d/effects/effect.h"
 #include "wallpaper/2d/parser/particle_parser.h"
@@ -100,8 +99,6 @@ ParticleSystem::ParticleSystem(ParticleSystemConfig config, float scene_width, f
 }
 
 ParticleSystem::~ParticleSystem() {
-    gpu_trace_unregister_buffer(particle_vertex_buffer.id, "destructor");
-    gpu_trace_unregister_buffer(particle_index_buffer.id, "destructor");
     delete material_pass;
     for (ParticleSystem* child : children) delete child;
 }
@@ -114,16 +111,12 @@ void ParticleSystem::initParticleBuffers() {
     vertex_desc.usage.vertex_buffer = true;
     vertex_desc.usage.stream_update = true;
     particle_vertex_buffer = sg_make_buffer(&vertex_desc);
-    gpu_trace_register_buffer(particle_vertex_buffer.id, vertex_desc.size, "particle_vertex", "particle_system",
-                              config_path.c_str());
 
     sg_buffer_desc index_desc = {};
     index_desc.size = (size_t)max_particles * 6 * sizeof(uint32_t);
     index_desc.usage.index_buffer = true;
     index_desc.usage.stream_update = true;
     particle_index_buffer = sg_make_buffer(&index_desc);
-    gpu_trace_register_buffer(particle_index_buffer.id, index_desc.size, "particle_index", "particle_system",
-                              config_path.c_str());
 }
 
 ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, EngineContext& ctx, float scene_width,

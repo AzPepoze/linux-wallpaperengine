@@ -59,3 +59,9 @@
 #include "sokol_readback.inl"
 #include "sokol_ycbcr_pipeline.inl"
 #include "sokol_zero_copy_blit.inl"
+
+extern "C" void lwe_vk_wait_idle(void) {
+    if (sg_isvalid() && _sg.vk.dev != VK_NULL_HANDLE) {
+        vkDeviceWaitIdle(_sg.vk.dev);
+    }
+}
