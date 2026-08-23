@@ -41,6 +41,8 @@ struct GpuPassTraceInfo {
 
 uint64_t gpu_trace_next_pass_serial();
 uint64_t gpu_trace_next_target_generation();
+void gpu_trace_set_current_pass_serial(uint64_t serial);
+uint64_t gpu_trace_get_current_pass_serial();
 
 void gpu_trace_rt_create(const char* kind, const char* name, uint32_t image_id, uint32_t tex_view_id,
                          uint32_t att_view_id, int width, int height, uint64_t generation);
