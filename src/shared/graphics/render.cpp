@@ -418,7 +418,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     }
 
 #if DEBUG_BUILD
-    gpu_trace_bound_slots(0, &r->bind);
+    gpu_trace_bound_slots(gpu_trace_get_current_pass_serial(), &r->bind);
 #endif
     sg_apply_bindings(&r->bind);
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {

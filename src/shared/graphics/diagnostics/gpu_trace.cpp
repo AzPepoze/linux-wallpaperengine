@@ -70,7 +70,18 @@ void gpu_trace_rt_destroy(const char* reason, const char* name, uint32_t image_i
                            (unsigned long)generation);
 }
 
+static std::atomic<uint64_t> g_current_pass_serial{0};
+
+void gpu_trace_set_current_pass_serial(uint64_t serial) {
+    g_current_pass_serial.store(serial, std::memory_order_relaxed);
+}
+
+uint64_t gpu_trace_get_current_pass_serial() {
+    return g_current_pass_serial.load(std::memory_order_relaxed);
+}
+
 void gpu_trace_pass_begin(const GpuPassTraceInfo& info) {
+    gpu_trace_set_current_pass_serial(info.pass_serial);
     std::lock_guard<std::mutex> lock(g_trace_mutex);
     fprintf(stderr,
             "[PASS-TRACE] BEGIN serial=%lu frame=%lu cat=%s layer=\"%s\"(id=%u) eff=%d(\"%s\") pass=%d "
@@ -110,7 +121,17 @@ void gpu_trace_bound_slots(uint64_t pass_serial, const sg_bindings* bind) {
             fprintf(stderr, "%d:(v=%u,img=%u) ", i, bind->views[i].id, vd.texture.image.id);
         }
     }
-    fprintf(stderr, "]\n");
+    fprintf(stderr, "] vb=[");
+    for (int i = 0; i < SG_MAX_VERTEXBUFFER_BINDSLOTS; ++i) {
+        if (bind->vertex_buffers[i].id != SG_INVALID_ID) {
+            fprintf(stderr, "%d:b=%u ", i, bind->vertex_buffers[i].id);
+        }
+    }
+    if (bind->index_buffer.id != SG_INVALID_ID) {
+        fprintf(stderr, "] ib=b=%u\n", bind->index_buffer.id);
+    } else {
+        fprintf(stderr, "]\n");
+    }
     fflush(stderr);
 }
 
