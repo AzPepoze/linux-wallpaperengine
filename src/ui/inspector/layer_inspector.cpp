@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/shader/shader_compiler.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
@@ -180,8 +181,53 @@ static void showSpriteSheetInfo(::ParticleSystem& ps) {
 static void showParticleSystem(::ParticleSystem& ps) {
     ImGui::Text("Active Particles: %d / %d", (int)ps.particles.size(), ps.max_particles);
     if (!ps.config_path.empty()) ImGui::TextWrapped("Config: %s", ps.config_path.c_str());
-    ImGui::Checkbox("Additive Blending", &ps.is_additive);
+
+    if (ImGui::Checkbox("Additive Blending", &ps.is_additive)) {
+        if (ps.material_pass && ps.material_pass->compiled.shader.id != SG_INVALID_ID) {
+            ps.material_pass->compiled.pipeline = ShaderCompiler::makePipeline(
+                ps.material_pass->compiled.shader, ps.material_pass->compiled.vertex_layout,
+                ps.is_additive ? ShaderBlendMode::Additive : ShaderBlendMode::Alpha);
+        }
+    }
+
+    ImGui::SliderFloat("Alpha Override", &ps.override_alpha, 0.0f, 5.0f, "%.2f");
+    ImGui::SliderFloat("Rate / Count Multiplier", &ps.override_rate, 0.0f, 20.0f, "%.2f");
+
+    if (ImGui::TreeNode("Emitter / Spawn Controls")) {
+        for (size_t i = 0; i < ps.config.emitters.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::Text("Emitter #%zu (%s)", i, ps.config.emitters[i].type.c_str());
+            ImGui::DragFloat("Authored Rate", &ps.config.emitters[i].rate, 0.1f, 0.0f, 100.0f);
+            ImGui::DragFloat3("Origin", ps.config.emitters[i].origin, 1.0f);
+            ImGui::PopID();
+        }
+        for (size_t i = 0; i < ps.config.initializers.size(); ++i) {
+            auto& init = ps.config.initializers[i];
+            ImGui::PushID(static_cast<int>(100 + i));
+            if (init.type == "lifetimerandom") {
+                ImGui::DragFloatRange2("Lifetime (s)", &init.minimum_scalar, &init.maximum_scalar, 0.05f, 0.01f, 30.0f);
+            } else if (init.type == "sizerandom") {
+                ImGui::DragFloatRange2("Size", &init.minimum_scalar, &init.maximum_scalar, 1.0f, 1.0f, 5000.0f);
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
+
     ImGui::Text("Children: %d", (int)ps.children.size());
+    if (!ps.children.empty() && ImGui::TreeNode("Child Systems")) {
+        for (size_t i = 0; i < ps.children.size(); ++i) {
+            ImGui::PushID(static_cast<int>(200 + i));
+            if (ps.children[i] && ImGui::TreeNode(ps.children[i]->name.empty()
+                                                      ? ("Child #" + std::to_string(i)).c_str()
+                                                      : ps.children[i]->name.c_str())) {
+                showParticleSystem(*ps.children[i]);
+                ImGui::TreePop();
+            }
+            ImGui::PopID();
+        }
+        ImGui::TreePop();
+    }
 
     ImGui::SeparatorText("Particle Material");
     showParticleMaterial(ps);
