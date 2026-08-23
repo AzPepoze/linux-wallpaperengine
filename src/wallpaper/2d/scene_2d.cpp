@@ -348,8 +348,6 @@ void Scene2DRuntime::drawOffscreen() {
     }
 
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    sg_apply_viewport(0, 0, width, height, true);
-    sg_apply_scissor_rect(0, 0, width, height, true);
 
     int current = 0;
     sg_pass clear_pass = {};

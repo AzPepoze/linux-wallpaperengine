@@ -113,8 +113,8 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
 
 GfxPipeline finalizeBlendPipeline(EngineContext& ctx, const BlendShaderSources& sources) {
     (void)ctx;
-    CompiledShader shader = ShaderCompiler::compile(
-        "image-composite-" + std::to_string(sources.mode), sources.vert, sources.frag, {}, 1);
+    CompiledShader shader =
+        ShaderCompiler::compile("image-composite-" + std::to_string(sources.mode), sources.vert, sources.frag, {}, 1);
     if (shader.pipeline.id == SG_INVALID_ID) {
         LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", sources.mode);
         return {};

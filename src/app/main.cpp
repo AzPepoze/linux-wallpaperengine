@@ -256,6 +256,7 @@ static void event(const sapp_event* e) {
 static void cleanup(void) {
     wallpaper_mgr.clear();
     ctx.asset_mgr.clearVideoTextures();
+    renderer_cleanup(&ctx.renderer);
 #if DEBUG_BUILD
     simgui_shutdown();
 #endif

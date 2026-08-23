@@ -492,10 +492,9 @@ DecodedImage decodeTexture(const char* path, int image_index) {
 
             // Block-compressed padding: mip block grid is larger than image block grid but
             // decompressed size matches the mip alloc exactly. Crop to image block grid.
-            const bool is_bc_padded =
-                (bpp == 0) && (img_expected > 0) && (mip_expected > 0) &&
-                (raw_data.size() == mip_expected) && (mip_expected != img_expected) &&
-                (mip_width >= header.image_width) && (mip_height >= header.image_height);
+            const bool is_bc_padded = (bpp == 0) && (img_expected > 0) && (mip_expected > 0) &&
+                                      (raw_data.size() == mip_expected) && (mip_expected != img_expected) &&
+                                      (mip_width >= header.image_width) && (mip_height >= header.image_height);
 
             if (is_uncompressed_padded) {
                 image.pixels =
