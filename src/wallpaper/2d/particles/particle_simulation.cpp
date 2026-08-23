@@ -48,8 +48,10 @@ void ParticleSystem::update(float dt) {
         }
         const float age = particle.max_life - particle.life;
         float alpha = particle.initial_alpha * override_alpha;
-        if (age < particle.fade_in) alpha *= age / particle.fade_in;
-        if (particle.life < particle.fade_out) alpha *= particle.life / particle.fade_out;
+        const float life_norm = particle.max_life > 0.0f ? age / particle.max_life : 0.0f;
+        const float remain_norm = particle.max_life > 0.0f ? particle.life / particle.max_life : 0.0f;
+        if (particle.fade_in > 0.0f && life_norm < particle.fade_in) alpha *= life_norm / particle.fade_in;
+        if (particle.fade_out > 0.0f && remain_norm < particle.fade_out) alpha *= remain_norm / particle.fade_out;
         if (particle.osc_alpha_freq > 0) {
             const float wave =
                 (sinf(global_time * particle.osc_alpha_freq + particle.random_seed * 10.0f) + 1.0f) * 0.5f;

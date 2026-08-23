@@ -121,4 +121,8 @@ void ParticleSystem::spawnParticle() {
         }
     }
     particles.push_back(particle);
+
+    for (ParticleSystem* child : children) {
+        child->spawnParticle();
+    }
 }
