@@ -54,7 +54,7 @@ bool isVectorReference(const std::string& expression, const std::string& name) {
 void normalizeHlslVectorToScalarInitializers(std::string& source) {
     static const std::regex vector_uniform(R"(\buniform\s+(?:vec[234]|float[234])\s+([A-Za-z_][A-Za-z0-9_]*))");
     static const std::regex float_initializer(
-        R"(\bfloat\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z0-9_\.\s\+\-\*/\(\)]+);)");
+        R"(\bfloat\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z0-9_\.\s\+\-\*/\(\),]+);)");
 
     std::set<std::string> vector_names;
     for (std::sregex_iterator it(source.begin(), source.end(), vector_uniform), end; it != end; ++it) {
@@ -191,6 +191,7 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
 void ShaderSourceProcessor::rewriteGlslCompatibility(std::string& source) {
     rewriteSamplerArguments(source);
     rewriteFunctionArguments(source);
+    rewriteScalarVectorBroadcast(source);
     rewriteScalarFromVectorCall(source);
     rewriteOutOfRangeSwizzles(source);
     rewriteNarrowingConversions(source);

@@ -33,6 +33,19 @@ int countOccurrences(const std::string& text, const std::string& needle) {
     return count;
 }
 
+// Resolves nothing; used to exercise the full source-processing pipeline.
+struct StubResolver : public IAssetResolver {
+    GfxImage resolveTexture(const char*, std::string* = nullptr, int = 0) const override {
+        return GfxImage{};
+    }
+    GfxImage resolveMaterialTexture(const char*, std::string* = nullptr) const override {
+        return GfxImage{};
+    }
+    bool resolvePath(const char*, char*, int) const override {
+        return false;
+    }
+};
+
 void testPreprocessorUndefinedMacro() {
     std::string source = "#if UNKNOWN == 1\nint a;\n#endif\n";
     ShaderSourceProcessor::normalizePreprocessor(source);
@@ -139,6 +152,26 @@ void testFunctionArgumentNarrowing() {
     expectContains("rewrite.function_argument", source, "scale2(a.xy)");
 }
 
+void testScalarFirstVectorBroadcast() {
+    std::string source = "uniform vec2 scale;\nvoid main() {\nfloat f = max(1, abs(scale));\n}\n";
+    ShaderSourceProcessor::rewriteGlslCompatibility(source);
+    expectContains("rewrite.scalar_vector_broadcast", source, "max(vec2(1), abs(scale))");
+}
+
+void testVectorFirstScalarPreserved() {
+    std::string source = "uniform vec2 scale;\nvoid main() {\nvec2 f = max(scale, 1.0);\n}\n";
+    ShaderSourceProcessor::rewriteGlslCompatibility(source);
+    expectNotContains("rewrite.vector_scalar_preserved", source, "vec2(1.0)");
+}
+
+void testHlslVectorToScalarInitializerWithCall() {
+    StubResolver resolver;
+    std::string source = "uniform vec2 scale;\nvoid main() {\nfloat f = (1 + abs(scale)) * max(1, abs(scale));\n}\n";
+    const std::string processed = ShaderSourceProcessor::processShaderSource(source, "test.vert", resolver, true);
+    expectContains("rewrite.hlsl_scalar_call", processed, "max(vec2(1), abs(scale))");
+    expectContains("rewrite.hlsl_scalar_call", processed, ").x;");
+}
+
 }  // namespace
 
 void testRepeatedSwizzleNeverAssigned() {
@@ -178,6 +211,9 @@ int main() {
     testScalarFromVectorCall();
     testAmbiguousWidthSwizzlePreserved();
     testFunctionArgumentNarrowing();
+    testScalarFirstVectorBroadcast();
+    testVectorFirstScalarPreserved();
+    testHlslVectorToScalarInitializerWithCall();
 
     std::printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

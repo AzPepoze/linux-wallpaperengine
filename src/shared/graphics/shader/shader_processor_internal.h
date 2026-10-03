@@ -16,6 +16,7 @@ void rewriteNarrowingConversions(std::string& source);
 void rewriteOutOfRangeSwizzles(std::string& source);
 void rewriteScalarFromVectorCall(std::string& source);
 void rewriteBinaryVectorMismatch(std::string& source);
+void rewriteScalarVectorBroadcast(std::string& source);
 }  // namespace shader_processor_internal
 
 #endif  // SHADER_PROCESSOR_INTERNAL_H
