@@ -32,6 +32,9 @@ void Scene2DRuntime::update(float dt) {
 }
 
 bool Scene2DRuntime::requiresOffscreenComposition() const {
+    // Direct drawing has no readable target, so captures render offscreen to expose per-layer stages.
+    if (renderObserver().isCapturingFrame()) return true;
+
     if (!RenderDiagnostics::instance().getConfig().disable_bloom) {
         const float bloom_strength =
             ctx.scene.general.hdr ? ctx.scene.general.bloom.hdr_strength : ctx.scene.general.bloom.strength;

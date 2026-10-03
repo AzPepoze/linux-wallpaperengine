@@ -11,6 +11,7 @@
 #include <future>
 #include <iomanip>
 #include <sstream>
+#include <thread>
 
 #include "render_diagnostics_internal.h"
 #include "shared/core/engine_context.h"
@@ -129,8 +130,20 @@ void exportBundleAsync(DiagnosticExportPayload payload, const std::atomic<bool>*
     if (!payload.stage_images.empty()) {
         std::string stage_dir = frame_dir + "/scene-stages";
         bool stage_dir_ready = false;
+        // PNG encoding dominates export time in unoptimised builds, so encode stages concurrently.
+        const size_t batch_size = std::max(1u, std::thread::hardware_concurrency());
+        std::vector<std::pair<std::future<bool>, std::string>> batch;
+        auto flush_batch = [&]() {
+            for (auto& [done, file] : batch) {
+                if (done.get()) generated_files.push_back(std::string(frame_dir_buf) + "/scene-stages/" + file);
+            }
+            batch.clear();
+        };
         for (const auto& stage : payload.stage_images) {
-            if (cancelled()) return;
+            if (cancelled()) {
+                flush_batch();
+                return;
+            }
             if (payload.final_only && stage.name != "post-bloom-final") continue;
             if (!stage_dir_ready) {
                 ensureDir(stage_dir);
@@ -140,10 +153,15 @@ void exportBundleAsync(DiagnosticExportPayload payload, const std::atomic<bool>*
             std::string clean_stage = sanitizeFilename(stage.name);
             snprintf(file_buf, sizeof(file_buf), "%03d-%s.png", stage.stage_index, clean_stage.c_str());
             std::string path = stage_dir + "/" + file_buf;
-            if (RenderDiagnostics::writePng(path, stage.width, stage.height, stage.rgba_data.data())) {
-                generated_files.push_back(std::string(frame_dir_buf) + "/scene-stages/" + file_buf);
-            }
+            batch.emplace_back(std::async(std::launch::async,
+                                          [&stage, path]() {
+                                              return RenderDiagnostics::writePng(path, stage.width, stage.height,
+                                                                                 stage.rgba_data.data());
+                                          }),
+                               file_buf);
+            if (batch.size() >= batch_size) flush_batch();
         }
+        flush_batch();
     }
 
     ImageStats previous_stats = source_stats;
