@@ -101,7 +101,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 ### Wallpaper Types
 
 - [-] Scene wallpapers
-- [x] Video wallpapers (no audio yet)
+- [x] Video wallpapers
 - [-] Web wallpapers (experimental, build with `xmake f --web=y`)
 - [ ] Application wallpapers
 
@@ -516,13 +516,16 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [x] MOV wallpapers
 - [x] WMV wallpapers
 - [x] Looping
-- [ ] Audio
+- [x] Audio (`--no-audio` or `LWE_NO_AUDIO=1` to silence)
+- [x] Playback rate, volume and fit (fit / fill) from `project.json` properties
+- [x] Pause while the window is iconified or suspended
+- [x] Decode path logged at startup (zero-copy, CPU copy or software)
 - [-] Playback controls
 - [x] FFmpeg software decoding
 - [x] VA-API hardware decoding
 - [-] GPU-native VA-API / DMA-BUF video textures
 - [x] Automatic software decode fallback
-- [ ] Video user properties
+- [-] Video user properties (rate, volume and fit defaults only; no live editing)
 
 ### Application Wallpapers
 
