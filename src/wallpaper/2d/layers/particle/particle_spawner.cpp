@@ -54,10 +54,12 @@ void ParticleSystem::spawnParticle() {
             particle.velocity[1] =
                 initializer.minimum[1] + randomFloat() * (initializer.maximum[1] - initializer.minimum[1]);
         } else if (initializer.type == "colorrandom") {
+            // One blend factor for all channels: independent draws would tint ranges such as white..grey.
+            const float blend = randomFloat();
             for (int component = 0; component < 3; ++component)
                 particle.color[component] =
                     (initializer.minimum[component] +
-                     randomFloat() * (initializer.maximum[component] - initializer.minimum[component])) /
+                     blend * (initializer.maximum[component] - initializer.minimum[component])) /
                     255.0f;
         } else if (initializer.type == "alpharandom") {
             particle.alpha =
