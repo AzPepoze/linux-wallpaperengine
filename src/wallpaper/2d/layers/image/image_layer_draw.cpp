@@ -6,8 +6,9 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 void ImageLayer::draw(EngineContext& ctx) {
-    if (img.id == SG_INVALID_ID) return;
-    if (cached_view.id == SG_INVALID_ID) updateCachedView();
+    const bool has_effect_output = effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID;
+    if (img.id == SG_INVALID_ID && !has_effect_output) return;
+    if (img.id != SG_INVALID_ID && cached_view.id == SG_INVALID_ID) updateCachedView();
 
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
@@ -43,7 +44,7 @@ void ImageLayer::draw(EngineContext& ctx) {
 
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
-    if (effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID) {
+    if (has_effect_output) {
         draw_image = effect_output_image;
         draw_view = effect_output_view;
     }
@@ -52,8 +53,9 @@ void ImageLayer::draw(EngineContext& ctx) {
 }
 
 void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
-    if (img.id == SG_INVALID_ID) return;
-    if (cached_view.id == SG_INVALID_ID) updateCachedView();
+    const bool has_effect_output = effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID;
+    if (img.id == SG_INVALID_ID && !has_effect_output) return;
+    if (img.id != SG_INVALID_ID && cached_view.id == SG_INVALID_ID) updateCachedView();
 
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
@@ -87,7 +89,7 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
     }
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
-    if (effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID) {
+    if (has_effect_output) {
         draw_image = effect_output_image;
         draw_view = effect_output_view;
     }
