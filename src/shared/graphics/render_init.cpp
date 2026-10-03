@@ -109,15 +109,18 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
     return result;
 }
 
-GfxPipeline finalizeBlendPipeline(EngineContext& ctx, const BlendShaderSources& sources) {
-    (void)ctx;
+// The pipeline borrows the shader's layouts, so the shader must outlive it (sokol frees them a few frames after
+// sg_destroy_shader).
+bool finalizeBlendPipeline(const BlendShaderSources& sources, GfxShader& shader_out, GfxPipeline& pipeline_out) {
     CompiledShader shader =
         ShaderCompiler::compile("image-composite-" + std::to_string(sources.mode), sources.vert, sources.frag, {}, 1);
     if (shader.pipeline.id == SG_INVALID_ID) {
         LOG_TAG_E("RENDER", "Required Wallpaper Engine blend mode %d failed to compile", sources.mode);
-        return {};
+        return false;
     }
-    return std::move(shader.pipeline);
+    shader_out = std::move(shader.shader);
+    pipeline_out = std::move(shader.pipeline);
+    return true;
 }
 }  // namespace
 
@@ -324,6 +327,7 @@ void renderer_init(renderer_t* r, float w, float h) {
 
     for (int mode = 0; mode <= kLastWallpaperBlendMode; ++mode) {
         r->pip_image_composite[mode] = {};
+        r->shd_image_composite[mode] = {};
     }
 }
 
@@ -342,7 +346,7 @@ void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
         BlendShaderSources sources = f.get();
         if (!sources.valid) continue;
         if (r->pip_image_composite[sources.mode].id != SG_INVALID_ID) continue;
-        r->pip_image_composite[sources.mode] = finalizeBlendPipeline(ctx, sources);
+        finalizeBlendPipeline(sources, r->shd_image_composite[sources.mode], r->pip_image_composite[sources.mode]);
     }
 }
 
@@ -352,6 +356,7 @@ void renderer_cleanup(renderer_t* r) {
     r->pip_unpremul = {};
     r->pip_lines = {};
     for (auto& pipeline : r->pip_image_composite) pipeline = {};
+    for (auto& shader : r->shd_image_composite) shader = {};
     r->vertex_buffer = {};
     r->fullscreen_vertex_buffer = {};
     r->index_buffer = {};

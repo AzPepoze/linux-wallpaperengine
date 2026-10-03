@@ -41,6 +41,7 @@ struct renderer_t {
     GfxPipeline pip_lines;
     GfxPipeline pip_mesh;
     GfxPipeline pip_image_composite[31];
+    GfxShader shd_image_composite[31];
     GfxBuffer vertex_buffer;
     GfxBuffer fullscreen_vertex_buffer;
     GfxBuffer index_buffer;
