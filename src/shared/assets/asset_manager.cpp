@@ -236,7 +236,9 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
     else
         strncpy(name_with_ext, name, sizeof(name_with_ext) - 1);
 
-    if (resolvePath(name_with_ext, abs_path, sizeof(abs_path))) {
+    const bool resolved_file = access(name, R_OK) == 0;
+    if (resolved_file) snprintf(abs_path, sizeof(abs_path), "%s", name);
+    if (resolved_file || resolvePath(name_with_ext, abs_path, sizeof(abs_path))) {
         if (out_path) *out_path = abs_path;
         const char* ext = strrchr(abs_path, '.');
         const bool is_video =
