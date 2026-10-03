@@ -37,6 +37,7 @@ typedef struct {
 struct renderer_t {
     GfxPipeline pip_alpha;
     GfxPipeline pip_add;
+    GfxPipeline pip_unpremul;
     GfxPipeline pip_lines;
     GfxPipeline pip_mesh;
     GfxPipeline pip_image_composite[31];
@@ -108,6 +109,8 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 // Draws a puppet mesh: position (vec3) and uv (vec2) live in separate vertex
 // buffers, tinted by the material texture and mapped into a width x height
 // top-left pixel space.
+void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float width, float height);
+
 void renderer_draw_mesh(EngineContext& ctx, renderer_t* r, sg_buffer position_buffer, sg_buffer uv_buffer,
                         sg_buffer index_buffer, int index_count, sg_image image, sg_view main_view, const float tint[4],
                         float width, float height);

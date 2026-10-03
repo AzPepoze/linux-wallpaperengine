@@ -241,6 +241,25 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     r->pip_alpha = sg_make_pipeline(&pip_desc);
 
+    // Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
+    const std::string unpremul_fragment_source =
+        "#version 330\n"
+        "precision mediump float;\n"
+        "uniform sampler2D tex;\n"
+        "uniform vec4 tint;\n"
+        "in vec2 uv;\n"
+        "out vec4 frag_color;\n"
+        "void main() {\n"
+        "  vec4 c = texture(tex, uv);\n"
+        "  if (c.a > 0.0) c.rgb = min(c.rgb / c.a, vec3(1.0));\n"
+        "  frag_color = c * tint;\n"
+        "}\n";
+    sg_pipeline_desc unpremul_desc = pip_desc;
+    unpremul_desc.shader =
+        create_backend_shader(&shd_desc, vertex_source, unpremul_fragment_source, "renderer-unpremul");
+    unpremul_desc.colors[0].blend = {};
+    r->pip_unpremul = sg_make_pipeline(&unpremul_desc);
+
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
     r->pip_add = sg_make_pipeline(&pip_desc);
@@ -330,6 +349,7 @@ void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
 void renderer_cleanup(renderer_t* r) {
     r->pip_alpha = {};
     r->pip_add = {};
+    r->pip_unpremul = {};
     r->pip_lines = {};
     for (auto& pipeline : r->pip_image_composite) pipeline = {};
     r->vertex_buffer = {};

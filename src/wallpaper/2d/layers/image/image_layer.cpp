@@ -46,7 +46,7 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
     if (has_puppet_mesh) {
         puppet_pose.advance(puppet_layers, dt);
         if (renderPuppet(ctx)) {
-            renderEffectChain(ctx, (sg_image)puppet_target.image, (sg_view)puppet_target.texture_view);
+            renderEffectChain(ctx, (sg_image)puppet_straight.image, (sg_view)puppet_straight.texture_view);
             return;
         }
     }

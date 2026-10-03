@@ -104,7 +104,7 @@ bool ImageLayer::ensurePuppetTarget(int width, int height) {
     if (puppet_target.image.id != SG_INVALID_ID && puppet_target.width == width && puppet_target.height == height) {
         return true;
     }
-    return puppet_target.create(width, height);
+    return puppet_target.create(width, height) && puppet_straight.create(width, height);
 }
 
 void ImageLayer::updatePuppetPositions(int width, int height) {
@@ -149,6 +149,16 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
     const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_mesh(ctx, &ctx.renderer, puppet_position_buffer, puppet_uv_buffer, puppet_index_buffer,
                        puppet_index_count, (sg_image)img, (sg_view)cached_view, white, (float)width, (float)height);
+    sg_end_pass();
+
+    sg_pass resolve_pass = {};
+    resolve_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    resolve_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+    resolve_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+    resolve_pass.attachments.colors[0] = puppet_straight.attachment_view;
+    sg_begin_pass(&resolve_pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    renderer_draw_unpremultiplied(&ctx.renderer, puppet_target.texture_view, (float)width, (float)height);
     sg_end_pass();
 
     renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);

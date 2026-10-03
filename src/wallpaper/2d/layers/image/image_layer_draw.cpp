@@ -52,9 +52,9 @@ void ImageLayer::draw(EngineContext& ctx) {
     if (has_effect_output) {
         draw_image = effect_output_image;
         draw_view = effect_output_view;
-    } else if (has_puppet_mesh && puppet_target.image.id != SG_INVALID_ID) {
-        draw_image = puppet_target.image;
-        draw_view = puppet_target.texture_view;
+    } else if (has_puppet_mesh && puppet_straight.image.id != SG_INVALID_ID) {
+        draw_image = puppet_straight.image;
+        draw_view = puppet_straight.texture_view;
     }
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
                          rect.rotation, tint, false, nullptr);
@@ -71,9 +71,9 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
     if (has_effect_output) {
         draw_image = effect_output_image;
         draw_view = effect_output_view;
-    } else if (has_puppet_mesh && puppet_target.image.id != SG_INVALID_ID) {
-        draw_image = puppet_target.image;
-        draw_view = puppet_target.texture_view;
+    } else if (has_puppet_mesh && puppet_straight.image.id != SG_INVALID_ID) {
+        draw_image = puppet_straight.image;
+        draw_view = puppet_straight.texture_view;
     }
     renderer_draw_image_composite(ctx, &ctx.renderer, draw_image, draw_view, scene_view, rect.x, rect.y, rect.width,
                                   rect.height, rect.rotation, tint, color_blend_mode);

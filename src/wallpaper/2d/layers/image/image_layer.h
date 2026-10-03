@@ -182,6 +182,7 @@ class ImageLayer : public Layer {
     std::vector<float> puppet_skinned;
     std::vector<float> puppet_positions;
     EffectTarget puppet_target;
+    EffectTarget puppet_straight;
     wallpaper_engine::PuppetPose puppet_pose;
     std::vector<wallpaper_engine::PuppetAnimationLayer> puppet_layers;
 };
