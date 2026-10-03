@@ -1,5 +1,7 @@
 #include "image_layer.h"
 
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <algorithm>
@@ -22,6 +24,22 @@ bool isCompositeRenderTarget(const std::string& name) {
     if (name == "_rt_FullFrameBuffer") return true;
     if (name.rfind("_rt_imageLayerComposite_", 0) == 0) return true;
     return name.find("FrameBuffer") != std::string::npos;
+}
+
+bool readFileBytes(const char* path, std::vector<uint8_t>& out) {
+    FILE* file = fopen(path, "rb");
+    if (!file) return false;
+    fseek(file, 0, SEEK_END);
+    const long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (size <= 0) {
+        fclose(file);
+        return false;
+    }
+    out.resize((size_t)size);
+    const size_t read = fread(out.data(), 1, out.size(), file);
+    fclose(file);
+    return read == out.size();
 }
 }  // namespace
 
@@ -453,15 +471,134 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     } else if (cJSON_IsString(mat_ref)) {
         loadMaterial(mat_ref->valuestring, ctx);
     }
+    cJSON* puppet_ref = cJSON_GetObjectItemCaseSensitive(mdl_json, "puppet");
+    if (!is_fullscreen && cJSON_IsString(puppet_ref)) {
+        loadPuppet(puppet_ref->valuestring, ctx);
+    }
     cJSON_Delete(mdl_json);
+}
+
+void ImageLayer::loadPuppet(const char* mdl_rel_path, EngineContext& ctx) {
+    char abs_path[1024];
+    if (!ctx.asset_mgr.resolvePath(mdl_rel_path, abs_path, sizeof(abs_path))) return;
+    std::vector<uint8_t> bytes;
+    if (!readFileBytes(abs_path, bytes)) return;
+
+    wallpaper_engine::MdlModel model;
+    if (!wallpaper_engine::parseMdl(bytes.data(), bytes.size(), model)) {
+        LOG_TAG_W("PUPPET", "Failed to parse puppet mesh %s", mdl_rel_path);
+        return;
+    }
+    puppet = std::move(model);
+    has_puppet_mesh = !puppet.vertices.empty() && !puppet.triangles.empty();
+    if (!has_puppet_mesh) return;
+
+    puppet_raw_positions.resize(puppet.vertices.size() * 3);
+    std::vector<float> uvs;
+    uvs.reserve(puppet.vertices.size() * 2);
+    for (size_t i = 0; i < puppet.vertices.size(); ++i) {
+        const wallpaper_engine::MdlVertex& vertex = puppet.vertices[i];
+        puppet_raw_positions[i * 3 + 0] = vertex.position[0];
+        puppet_raw_positions[i * 3 + 1] = vertex.position[1];
+        puppet_raw_positions[i * 3 + 2] = vertex.position[2];
+        uvs.push_back(vertex.uv[0]);
+        uvs.push_back(vertex.uv[1]);
+    }
+
+    sg_buffer_desc uv_desc = {};
+    uv_desc.usage.vertex_buffer = true;
+    uv_desc.data = {uvs.data(), uvs.size() * sizeof(float)};
+    puppet_uv_buffer = sg_make_buffer(&uv_desc);
+
+    std::vector<uint16_t> indices;
+    indices.reserve(puppet.triangles.size() * 3);
+    for (const wallpaper_engine::MdlTriangle& triangle : puppet.triangles) {
+        indices.push_back(triangle.a);
+        indices.push_back(triangle.b);
+        indices.push_back(triangle.c);
+    }
+    sg_buffer_desc index_desc = {};
+    index_desc.usage.index_buffer = true;
+    index_desc.data = {indices.data(), indices.size() * sizeof(uint16_t)};
+    puppet_index_buffer = sg_make_buffer(&index_desc);
+    puppet_index_count = (int)indices.size();
+
+    sg_buffer_desc position_desc = {};
+    position_desc.size = puppet_raw_positions.size() * sizeof(float);
+    position_desc.usage.vertex_buffer = true;
+    position_desc.usage.stream_update = true;
+    puppet_position_buffer = sg_make_buffer(&position_desc);
+    LOG_TAG_I("PUPPET", "Loaded puppet mesh %s (%zu vertices, %zu triangles, %zu bones)", mdl_rel_path,
+              puppet.vertices.size(), puppet.triangles.size(), puppet.bones.size());
+}
+
+bool ImageLayer::ensurePuppetTarget(int width, int height) {
+    if (puppet_target.image.id != SG_INVALID_ID && puppet_target.width == width && puppet_target.height == height) {
+        return true;
+    }
+    return puppet_target.create(width, height);
+}
+
+void ImageLayer::updatePuppetPositions(int width, int height) {
+    const size_t count = puppet.vertices.size();
+    puppet_positions.resize(count * 3);
+    const float center_x = (float)width * 0.5f;
+    const float center_y = (float)height * 0.5f;
+    for (size_t i = 0; i < count; ++i) {
+        const wallpaper_engine::MdlVertex& vertex = puppet.vertices[i];
+        puppet_positions[i * 3 + 0] = center_x + vertex.position[0];
+        puppet_positions[i * 3 + 1] = center_y - vertex.position[1];
+        puppet_positions[i * 3 + 2] = 0.0f;
+    }
+    if (puppet_position_buffer.id == SG_INVALID_ID) return;
+    sg_range range = {puppet_positions.data(), puppet_positions.size() * sizeof(float)};
+    sg_update_buffer(puppet_position_buffer, &range);
+}
+
+bool ImageLayer::renderPuppet(EngineContext& ctx) {
+    if (!has_puppet_mesh || img.id == SG_INVALID_ID) return false;
+    if (cached_view.id == SG_INVALID_ID) updateCachedView();
+    if (cached_view.id == SG_INVALID_ID) return false;
+
+    const sg_image_desc material_desc = sg_query_image_desc(img);
+    int width = (int)std::lround(size[0] > 0.0f ? size[0] : (float)material_desc.width);
+    int height = (int)std::lround(size[1] > 0.0f ? size[1] : (float)material_desc.height);
+    width = std::max(1, width);
+    height = std::max(1, height);
+    if (!ensurePuppetTarget(width, height)) return false;
+
+    updatePuppetPositions(width, height);
+
+    const float saved_view_width = ctx.renderer.view_width;
+    const float saved_view_height = ctx.renderer.view_height;
+
+    sg_pass pass = {};
+    pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+    pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+    pass.attachments.colors[0] = puppet_target.attachment_view;
+    sg_begin_pass(&pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    renderer_draw_mesh(ctx, &ctx.renderer, puppet_position_buffer, puppet_uv_buffer, puppet_index_buffer,
+                       puppet_index_count, (sg_image)img, (sg_view)cached_view, white, (float)width, (float)height);
+    sg_end_pass();
+
+    renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
+    return true;
 }
 
 void ImageLayer::update(float dt, EngineContext& ctx) {
     (void)dt;
     tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
-    if (!is_fullscreen) {
-        renderEffectChain(ctx);
+    if (is_fullscreen) return;
+    if (has_puppet_mesh) {
+        if (renderPuppet(ctx)) {
+            renderEffectChain(ctx, (sg_image)puppet_target.image, (sg_view)puppet_target.texture_view);
+            return;
+        }
     }
+    renderEffectChain(ctx);
 }
 
 void ImageLayer::start() {

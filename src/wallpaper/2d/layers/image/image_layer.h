@@ -3,9 +3,11 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/puppet/mdl_parser.h"
 
 class EngineContext;
 
@@ -140,6 +142,10 @@ class ImageLayer : public Layer {
     };
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
+    void loadPuppet(const char* mdl_rel_path, EngineContext& ctx);
+    bool ensurePuppetTarget(int width, int height);
+    bool renderPuppet(EngineContext& ctx);
+    void updatePuppetPositions(int width, int height);
     void updateCachedView();
     bool ensureEffectTargets(sg_image source_image = {SG_INVALID_ID});
 
@@ -154,6 +160,18 @@ class ImageLayer : public Layer {
     sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, NamedRenderTarget> named_effect_targets;
     wallpaper_engine::ImageObjectDocument alpha_document;
+
+    // Puppet mesh: the parsed model, its rest/skinned positions and the
+    // off-screen target the mesh is drawn into before the effect chain runs.
+    wallpaper_engine::MdlModel puppet;
+    bool has_puppet_mesh = false;
+    GfxBuffer puppet_position_buffer;
+    GfxBuffer puppet_uv_buffer;
+    GfxBuffer puppet_index_buffer;
+    int puppet_index_count = 0;
+    std::vector<float> puppet_raw_positions;
+    std::vector<float> puppet_positions;
+    EffectTarget puppet_target;
 };
 
 #endif  // IMAGE_LAYER_H

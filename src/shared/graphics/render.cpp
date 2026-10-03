@@ -249,6 +249,60 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     r->pip_lines = sg_make_pipeline(&pip_desc);
 
+    const std::string mesh_vertex_source =
+        "#version 330\n"
+        "uniform mat4 mvp;\n"
+        "layout(location=0) in vec3 position;\n"
+        "layout(location=1) in vec2 texcoord0;\n"
+        "out vec2 uv;\n"
+        "void main() {\n"
+        "  gl_Position = mvp * vec4(position, 1.0);\n"
+        "  uv = texcoord0;\n"
+        "}\n";
+    const std::string mesh_fragment_source =
+        "#version 330\n"
+        "precision mediump float;\n"
+        "uniform sampler2D tex;\n"
+        "uniform vec4 tint;\n"
+        "in vec2 uv;\n"
+        "out vec4 frag_color;\n"
+        "void main() {\n"
+        "  frag_color = texture(tex, uv) * tint;\n"
+        "}\n";
+
+    sg_shader_desc mesh_shd_desc = {};
+    mesh_shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
+    mesh_shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
+    mesh_shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "mvp";
+    mesh_shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
+    mesh_shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_FRAGMENT;
+    mesh_shd_desc.uniform_blocks[1].size = sizeof(float) * 4;
+    mesh_shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "tint";
+    mesh_shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+    mesh_shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+    mesh_shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
+    mesh_shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    mesh_shd_desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+    mesh_shd_desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    mesh_shd_desc.texture_sampler_pairs[0].glsl_name = "tex";
+    mesh_shd_desc.texture_sampler_pairs[0].view_slot = 0;
+    mesh_shd_desc.texture_sampler_pairs[0].sampler_slot = 0;
+    sg_shader mesh_shd =
+        create_backend_shader(&mesh_shd_desc, mesh_vertex_source, mesh_fragment_source, "renderer-mesh");
+
+    sg_pipeline_desc mesh_pip_desc = {};
+    mesh_pip_desc.shader = mesh_shd;
+    mesh_pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT3;
+    mesh_pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
+    mesh_pip_desc.layout.attrs[1].buffer_index = 1;
+    mesh_pip_desc.index_type = SG_INDEXTYPE_UINT16;
+    mesh_pip_desc.colors[0].blend.enabled = true;
+    mesh_pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    mesh_pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    mesh_pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+    mesh_pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    r->pip_mesh = sg_make_pipeline(&mesh_pip_desc);
+
     for (int mode = 0; mode <= kLastWallpaperBlendMode; ++mode) {
         r->pip_image_composite[mode] = {};
     }
