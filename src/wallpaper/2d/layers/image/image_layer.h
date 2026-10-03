@@ -141,14 +141,6 @@ class ImageLayer : public Layer {
             has_rendered = false;
         }
     };
-    struct ScreenRect {
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        float rotation = 0.0f;
-    };
-    ScreenRect screenRect(EngineContext& ctx) const;
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void loadPuppet(const char* mdl_rel_path, EngineContext& ctx);
@@ -179,6 +171,17 @@ class ImageLayer : public Layer {
     std::map<std::string, NamedRenderTarget> named_effect_targets;
 
    protected:
+    struct ScreenRect {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float rotation = 0.0f;
+    };
+    // Sprite placement in screen pixels. Text layers override this to anchor
+    // the sprite to the alignment corner instead of the centre.
+    virtual ScreenRect screenRect(EngineContext& ctx) const;
+
     wallpaper_engine::ImageObjectDocument alpha_document;
 
    private:

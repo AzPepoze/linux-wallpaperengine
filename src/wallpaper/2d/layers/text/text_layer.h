@@ -19,6 +19,9 @@ class TextLayer : public ImageLayer {
 
     void update(float dt, EngineContext& ctx) override;
 
+   protected:
+    ScreenRect screenRect(EngineContext& ctx) const override;
+
    private:
     bool rebuild(EngineContext& ctx);
     bool rasterize(std::vector<uint32_t>& pixels, int& width, int& height, float& pixel_scale) const;

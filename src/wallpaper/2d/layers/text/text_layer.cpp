@@ -204,6 +204,31 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     return layer;
 }
 
+ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
+    ScreenRect rect = ImageLayer::screenRect(ctx);
+    // Wallpaper Engine anchors a text object at the corner selected by the
+    // alignment (e.g. the origin is the top-left of the text for left/top) and
+    // rotates around it. The base centres the sprite on the node, so offset it
+    // to put the alignment corner on the node instead.
+    float anchor_x = 0.0f;
+    float anchor_y = 0.0f;
+    if (config_.horizontal_align == "left")
+        anchor_x = -rect.width * 0.5f;
+    else if (config_.horizontal_align == "right")
+        anchor_x = rect.width * 0.5f;
+    if (config_.vertical_align == "top")
+        anchor_y = -rect.height * 0.5f;
+    else if (config_.vertical_align == "bottom")
+        anchor_y = rect.height * 0.5f;
+
+    if (anchor_x != 0.0f || anchor_y != 0.0f) {
+        const float angle = rect.rotation * (float)M_PI / 180.0f;
+        rect.x -= cosf(angle) * anchor_x - sinf(angle) * anchor_y;
+        rect.y -= sinf(angle) * anchor_x + cosf(angle) * anchor_y;
+    }
+    return rect;
+}
+
 void TextLayer::update(float dt, EngineContext& ctx) {
     if (script_ && script_->valid()) {
         script_timer_ += dt;
