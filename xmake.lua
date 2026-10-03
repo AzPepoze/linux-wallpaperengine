@@ -109,6 +109,16 @@ target("shader_tests")
     add_packages("sokol")
     add_files("tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp")
 
+-- Synthetic project detection checks. Not built by default; run with `xmake build project_tests`.
+target("project_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_packages("cjson")
+    add_includedirs("src")
+    add_files("tests/project_info_test.cpp", "src/wallpaper/project_info.cpp")
+
 task("check")
     set_menu {
         usage = "xmake check",

@@ -8,12 +8,9 @@
 
 #include "shared/assets/unpack.h"
 #include "shared/core/utils.h"
+#include "wallpaper/project_info.h"
 
 namespace {
-bool hasPkgExtension(const std::string& path) {
-    return path.size() >= 4 && path.compare(path.size() - 4, 4, ".pkg") == 0;
-}
-
 std::string packageFile(const WallpaperSource& source) {
     return source.is_pkg ? source.path : source.path + "/scene.pkg";
 }
@@ -35,7 +32,7 @@ WallpaperSource resolveWallpaperSource(const CliOptions& opts) {
         detect_default_wallpaper(detected, sizeof(detected));
         source.path = detected;
     }
-    if (!source.path.empty() && hasPkgExtension(source.path)) source.is_pkg = true;
+    if (!source.path.empty() && isPackageFile(source.path)) source.is_pkg = true;
     return source;
 }
 

@@ -22,6 +22,7 @@
 #include "sokol_time.h"
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/project_info.h"
 #include "wallpaper/wallpaper_manager.h"
 
 #if DEBUG_BUILD
@@ -97,7 +98,7 @@ static void applyCliToContext() {
 }
 
 static void loadInitialWallpaper() {
-    if (WallpaperManager::isVideoFile(ctx.wallpaper_path)) {
+    if (isVideoFile(ctx.wallpaper_path)) {
         wallpaper_mgr.load(ctx.wallpaper_path, ctx);
         return;
     }

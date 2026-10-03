@@ -6,7 +6,7 @@
 #include "shared/core/engine_context.h"
 #include "sokol_app.h"
 
-enum class WallpaperType { Scene2D, Scene3D, Video, Web };
+enum class WallpaperType { Scene2D, Video, Web };
 
 class Wallpaper {
    public:

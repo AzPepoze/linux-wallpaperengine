@@ -27,9 +27,6 @@ class WallpaperManager {
         return active_wallpaper_ != nullptr;
     }
 
-    static bool isVideoFile(const char* path);
-    static bool isHtmlFile(const char* path);
-
    private:
     std::unique_ptr<Wallpaper> active_wallpaper_;
 };
