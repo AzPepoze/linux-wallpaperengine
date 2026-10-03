@@ -26,6 +26,45 @@ if has_config("web") then
     add_requires("pkgconfig::Qt6WebEngineWidgets")
 end
 
+-- On by default when libwayland-client and wayland-scanner are installed. Draws the wallpaper
+-- on a wlr-layer-shell surface when --screen-root/--layer is given and a Wayland session is running.
+option("layer_shell")
+    set_showmenu(true)
+    set_description("Enable the Wayland wlr-layer-shell desktop wallpaper backend")
+    on_check(function (option)
+        import("lib.detect.find_tool")
+        import("lib.detect.find_package")
+        if find_tool("wayland-scanner") and find_package("pkgconfig::wayland-client") then
+            option:enable(true)
+        end
+    end)
+option_end()
+
+-- Generates the client protocol C glue with wayland-scanner at configure time into the build tree.
+local function generate_wayland_protocols(target)
+    local scanner = import("lib.detect.find_tool")("wayland-scanner")
+    local shared = os.iorunv("pkg-config", {"--variable=pkgdatadir", "wayland-protocols"}):trim()
+    local protocols = {
+        path.join(os.projectdir(), "third_party/wayland-protocols/wlr-layer-shell-unstable-v1.xml"),
+        path.join(shared, "stable/xdg-shell/xdg-shell.xml")
+    }
+    local outdir = path.join(target:autogendir(), "wayland")
+    os.mkdir(outdir)
+    for _, xml in ipairs(protocols) do
+        local name = path.basename(xml)
+        local header = path.join(outdir, name .. "-client-protocol.h")
+        local code = path.join(outdir, name .. "-protocol.c")
+        if not os.isfile(code) or os.mtime(xml) > os.mtime(code) then
+            os.vrunv(scanner.program, {"client-header", xml, header})
+            os.vrunv(scanner.program, {"private-code", xml, code})
+        end
+        target:add("files", code)
+    end
+    target:add("includedirs", outdir)
+end
+
+local layer_exclude = has_config("layer_shell") and "" or "|app/platform/wayland_layer/**.cpp"
+
 target("linux-wallpaperengine")
     set_kind("binary")
     set_targetdir("bin/$(mode)")
@@ -35,13 +74,19 @@ target("linux-wallpaperengine")
     add_includedirs("src", "/usr/include/libdrm", "/usr/include/shader-slang")
     add_syslinks("slang-compiler", "slang-rt", "vulkan", "X11", "Xcursor", "Xi", "avformat", "avcodec", "avutil", "swscale", "swresample", "va", "va-drm", "drm", "dl", "m", "pthread")
     add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
+    add_defines("LWE_LAYER_SHELL=" .. (has_config("layer_shell") and "1" or "0"))
+
+    if has_config("layer_shell") then
+        add_syslinks("wayland-client")
+        on_load(generate_wayland_protocols)
+    end
 
     if is_mode("debug", "asan", "ubsan") then
-        add_files("src/**.cpp|wallpaper/web/web_renderer_main.cpp")
+        add_files("src/**.cpp|wallpaper/web/web_renderer_main.cpp" .. layer_exclude)
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
-        add_files("src/**.cpp|ui/**.cpp|wallpaper/web/web_renderer_main.cpp")
+        add_files("src/**.cpp|ui/**.cpp|wallpaper/web/web_renderer_main.cpp" .. layer_exclude)
         add_defines("DEBUG_BUILD=0")
         set_symbols("hidden")
         set_optimize("fastest")
