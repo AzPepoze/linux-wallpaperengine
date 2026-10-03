@@ -51,6 +51,15 @@ target("tests")
         add_defines("DEBUG_BUILD=0")
     end
 
+-- Synthetic MDLV parser checks. Not built by default; run with `xmake build mdl_tests`.
+target("mdl_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_files("tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp")
+
 task("check")
     set_menu {
         usage = "xmake check",
