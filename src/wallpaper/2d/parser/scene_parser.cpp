@@ -324,6 +324,16 @@ SceneObjectDocument parseObject(const cJSON* object) {
     if (text) {
         // Scripted and user-bound text falls back to the authoring-time default in `value`.
         parseString(text, doc.text.text);
+        const cJSON* script = cJSON_GetObjectItemCaseSensitive(text, "script");
+        if (cJSON_IsString(script) && script->valuestring) doc.text.script = script->valuestring;
+        const cJSON* script_props = cJSON_GetObjectItemCaseSensitive(text, "scriptproperties");
+        if (cJSON_IsObject(script_props)) {
+            char* printed = cJSON_PrintUnformatted(script_props);
+            if (printed) {
+                doc.text.script_properties_json = printed;
+                free(printed);
+            }
+        }
     }
     parseString(cJSON_GetObjectItemCaseSensitive(object, "font"), doc.text.font);
     parseFloat(cJSON_GetObjectItemCaseSensitive(object, "pointsize"), doc.text.pointsize);

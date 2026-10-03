@@ -1,11 +1,13 @@
 #ifndef TEXT_LAYER_H
 #define TEXT_LAYER_H
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "text_parser.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
+#include "wallpaper/2d/script/scene_script.h"
 
 // Rasterises a text object into an RGBA8 texture and reuses ImageLayer's draw,
 // transform and effect handling.
@@ -25,6 +27,8 @@ class TextLayer : public ImageLayer {
     TextObjectConfig config_;
     std::string current_text_;
     std::string font_path_;
+    std::unique_ptr<SceneScript> script_;
+    float script_timer_ = 0.0f;
 };
 
 #endif  // TEXT_LAYER_H

@@ -13,6 +13,8 @@ add_requires("cjson")
 add_requires("stb")
 add_requires("miniaudio")
 add_requires("imgui", {optional = true})
+-- Embedded JS engine for Wallpaper Engine SceneScript (clocks, media titles, ...).
+add_requires("quickjs")
 
 -- Off by default: the core engine build has no Qt dependency. Enable with
 -- `xmake f --web=y` to build the QtWebEngine helper used by web wallpapers.
@@ -70,7 +72,7 @@ target("linux-wallpaperengine")
     set_targetdir("bin/$(mode)")
     set_rundir("$(projectdir)")
     set_warnings("all", "extra")
-    add_packages("sokol", "linmath.h", "vulkan-headers", "lz4", "cjson", "stb", "miniaudio")
+    add_packages("sokol", "linmath.h", "vulkan-headers", "lz4", "cjson", "stb", "miniaudio", "quickjs")
     add_includedirs("src", "/usr/include/libdrm", "/usr/include/shader-slang")
     add_syslinks("slang-compiler", "slang-rt", "vulkan", "X11", "Xcursor", "Xi", "avformat", "avcodec", "avutil", "swscale", "swresample", "va", "va-drm", "drm", "dl", "m", "pthread")
     add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
@@ -163,6 +165,17 @@ target("layer_tests")
     set_warnings("all", "extra")
     add_includedirs("src")
     add_files("tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp")
+
+-- SceneScript (QuickJS) runtime checks. Not built by default; run with `xmake build scene_script_tests`.
+target("scene_script_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_packages("quickjs")
+    add_files("tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+              "src/shared/core/logger.cpp")
 
 -- Synthetic MDLV parser checks. Not built by default; run with `xmake build mdl_tests`.
 target("mdl_tests")

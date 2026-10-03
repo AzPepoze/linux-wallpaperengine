@@ -190,12 +190,34 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     layer->tint[2] = config.color[2];
     layer->tint[3] = std::clamp(config.alpha, 0.0f, 1.0f);
     layer->rebuild(ctx);
+    if (!doc.text.script.empty()) {
+        layer->script_ = std::make_unique<SceneScript>();
+        if (layer->script_->load(doc.text.script, doc.text.script_properties_json)) {
+            // Evaluate on the first update so the live content replaces the
+            // authoring-time default right away.
+            layer->script_timer_ = 1.0f;
+            LOG_I("Text layer '%s': SceneScript loaded", config.name.c_str());
+        } else {
+            layer->script_.reset();
+        }
+    }
     LOG_I("Created text layer '%s' (font='%s', pointsize=%.1f)", config.name.c_str(), config.font.c_str(),
           config.pointsize);
     return layer;
 }
 
-void TextLayer::update(float /*dt*/, EngineContext& ctx) {
+void TextLayer::update(float dt, EngineContext& ctx) {
+    if (script_ && script_->valid()) {
+        script_timer_ += dt;
+        // Clocks tick on the second; a few evaluations per second is plenty.
+        if (script_timer_ >= 0.25f) {
+            script_timer_ = 0.0f;
+            std::string evaluated;
+            if (script_->update(current_text_, evaluated) && !evaluated.empty()) {
+                config_.text = evaluated;
+            }
+        }
+    }
     if (config_.text != current_text_) rebuild(ctx);
     tint[3] = std::clamp(config_.alpha, 0.0f, 1.0f) * evaluateImageAlpha(alpha_document, ctx.time);
     if (!is_fullscreen) renderEffectChain(ctx);
