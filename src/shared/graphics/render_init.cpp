@@ -245,6 +245,8 @@ void renderer_init(renderer_t* r, float w, float h) {
     r->pip_alpha = sg_make_pipeline(&pip_desc);
 
     // Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
+    // Fully transparent texels borrow the colour of nearby opaque ones, otherwise bilinear minification of the
+    // straight result mixes their black into every cut-out edge.
     const std::string unpremul_fragment_source =
         "#version 330\n"
         "precision mediump float;\n"
@@ -254,7 +256,21 @@ void renderer_init(renderer_t* r, float w, float h) {
         "out vec4 frag_color;\n"
         "void main() {\n"
         "  vec4 c = texture(tex, uv);\n"
-        "  if (c.a > 0.0) c.rgb = min(c.rgb / c.a, vec3(1.0));\n"
+        "  if (c.a > 0.0) {\n"
+        "    c.rgb = min(c.rgb / c.a, vec3(1.0));\n"
+        "  } else {\n"
+        "    vec2 texel = vec2(abs(dFdx(uv.x)), abs(dFdy(uv.y)));\n"
+        "    vec3 sum = vec3(0.0);\n"
+        "    float weight = 0.0;\n"
+        "    for (int y = -2; y <= 2; ++y) {\n"
+        "      for (int x = -2; x <= 2; ++x) {\n"
+        "        vec4 n = texture(tex, uv + vec2(float(x), float(y)) * texel);\n"
+        "        sum += n.rgb;\n"
+        "        weight += n.a;\n"
+        "      }\n"
+        "    }\n"
+        "    if (weight > 0.0) c.rgb = min(sum / weight, vec3(1.0));\n"
+        "  }\n"
         "  frag_color = c * tint;\n"
         "}\n";
     sg_pipeline_desc unpremul_desc = pip_desc;
