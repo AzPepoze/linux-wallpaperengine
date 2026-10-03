@@ -2,12 +2,14 @@
 
 #include <vulkan/vulkan.h>
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 struct GpuDeviceInfo {
     uint32_t index = 0;
+    std::array<uint8_t, VK_UUID_SIZE> device_uuid{};
     std::string name;
     std::string device_type;
     uint32_t vendor_id = 0;
@@ -35,7 +37,7 @@ class GpuDeviceManager {
     ~GpuDeviceManager();
 
     void probeDrmAndVaapi(GpuDeviceInfo& info);
-    void applyEnvironmentVars();
+    void applyEnvironmentVars(bool explicit_selection = false);
 
     VkInstance instance_ = VK_NULL_HANDLE;
     std::vector<GpuDeviceInfo> devices_;

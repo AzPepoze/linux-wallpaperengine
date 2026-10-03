@@ -197,7 +197,7 @@ static void cleanup(void) {
 
 static void selectRequestedGpu() {
     GpuDeviceManager::instance().init();
-    if (!cli.gpu.empty()) GpuDeviceManager::instance().selectGpu(cli.gpu.c_str());
+    if (!cli.gpu.empty() && !GpuDeviceManager::instance().selectGpu(cli.gpu.c_str())) exit(1);
     if (cli.list_gpus) {
         GpuDeviceManager::instance().printGpuList();
         exit(0);

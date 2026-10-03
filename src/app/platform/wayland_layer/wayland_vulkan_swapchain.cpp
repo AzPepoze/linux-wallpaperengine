@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/gpu_device_manager.h"
 
 namespace {
 constexpr uint64_t kAcquireTimeoutNs = 100ull * 1000 * 1000;
@@ -109,15 +110,22 @@ bool WaylandVulkanSwapchain::pickPhysicalDevice(wl_display* display) {
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance_, &count, devices.data());
     for (VkPhysicalDevice device : devices) {
-        VkPhysicalDeviceProperties props;
-        vkGetPhysicalDeviceProperties(device, &props);
+        VkPhysicalDeviceIDProperties identity = {};
+        identity.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+        VkPhysicalDeviceProperties2 properties = {};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &identity;
+        vkGetPhysicalDeviceProperties2(device, &properties);
+        const auto& selected = GpuDeviceManager::instance().getSelectedGpu();
+        if (!std::equal(selected.device_uuid.begin(), selected.device_uuid.end(), identity.deviceUUID)) continue;
+        const auto& props = properties.properties;
         if (props.apiVersion < VK_API_VERSION_1_3 || !hasDeviceExtensions(device)) continue;
         if (!findQueueFamily(device, display, queue_family_)) continue;
         physical_device_ = device;
         LOG_I("[LAYER] Vulkan device: %s", props.deviceName);
         return true;
     }
-    LOG_E("[LAYER] no Vulkan device can present to the Wayland surface");
+    LOG_E("[LAYER] selected GPU cannot present to the Wayland surface with the required Vulkan features");
     return false;
 }
 

@@ -146,6 +146,10 @@ void GpuDeviceManager::init() {
         VkPhysicalDevicePCIBusInfoPropertiesEXT pci_props = {};
         pci_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT;
 
+        VkPhysicalDeviceIDProperties identity = {};
+        identity.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+        pci_props.pNext = &identity;
+
         VkPhysicalDeviceProperties2 props2 = {};
         props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         props2.pNext = &pci_props;
@@ -165,6 +169,7 @@ void GpuDeviceManager::init() {
         info.vendor_id = props2.properties.vendorID;
         info.device_id = props2.properties.deviceID;
         info.physical_device = pdev;
+        std::copy(std::begin(identity.deviceUUID), std::end(identity.deviceUUID), info.device_uuid.begin());
 
         if (pci_props.pciDomain != 0 || pci_props.pciBus != 0 || pci_props.pciDevice != 0 ||
             pci_props.pciFunction != 0) {
@@ -190,20 +195,20 @@ void GpuDeviceManager::init() {
     applyEnvironmentVars();
 }
 
-void GpuDeviceManager::applyEnvironmentVars() {
+void GpuDeviceManager::applyEnvironmentVars(bool explicit_selection) {
     const auto& gpu = getSelectedGpu();
     if (gpu.pci_bus_id.empty() && gpu.drm_render_node.empty()) return;
 
     // MESA_VK_DEVICE_SELECT steers vulkan loader (radv, lavapipe) to the right physical device.
     // DRI_PRIME steers Mesa OpenGL/VA-API/video decode to the same DRM node.
     if (!gpu.pci_bus_id.empty()) {
-        setenv("MESA_VK_DEVICE_SELECT", gpu.pci_bus_id.c_str(), 0);
+        setenv("MESA_VK_DEVICE_SELECT", gpu.pci_bus_id.c_str(), explicit_selection ? 1 : 0);
         LOG_TAG_I(TAG, "Set MESA_VK_DEVICE_SELECT=%s", gpu.pci_bus_id.c_str());
     }
     if (!gpu.drm_render_node.empty()) {
         // DRI_PRIME accepts either the render node path or the PCI ID.
         const char* pci = gpu.pci_bus_id.empty() ? gpu.drm_render_node.c_str() : gpu.pci_bus_id.c_str();
-        setenv("DRI_PRIME", pci, 0);
+        setenv("DRI_PRIME", pci, explicit_selection ? 1 : 0);
         LOG_TAG_I(TAG, "Set DRI_PRIME=%s", pci);
     }
 }
@@ -219,7 +224,7 @@ bool GpuDeviceManager::selectGpu(const std::string& selector) {
     long index = strtol(selector.c_str(), &endptr, 10);
     if (*endptr == '\0' && index >= 0 && index < (long)devices_.size()) {
         selected_index_ = (int)index;
-        applyEnvironmentVars();
+        applyEnvironmentVars(true);
         return true;
     }
 
@@ -228,7 +233,7 @@ bool GpuDeviceManager::selectGpu(const std::string& selector) {
     for (size_t i = 0; i < devices_.size(); ++i) {
         if (!devices_[i].pci_bus_id.empty() && toLower(devices_[i].pci_bus_id).find(lower_sel) != std::string::npos) {
             selected_index_ = (int)i;
-            applyEnvironmentVars();
+            applyEnvironmentVars(true);
             return true;
         }
     }
@@ -236,7 +241,7 @@ bool GpuDeviceManager::selectGpu(const std::string& selector) {
     for (size_t i = 0; i < devices_.size(); ++i) {
         if (toLower(devices_[i].name).find(lower_sel) != std::string::npos) {
             selected_index_ = (int)i;
-            applyEnvironmentVars();
+            applyEnvironmentVars(true);
             return true;
         }
     }
