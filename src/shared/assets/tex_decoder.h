@@ -1,6 +1,7 @@
 #ifndef WALLPAPER_ENGINE_TEX_DECODER_H
 #define WALLPAPER_ENGINE_TEX_DECODER_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "decoded_image.h"
@@ -21,6 +22,9 @@ struct TextureMetadata {
 
 DecodedImage decodeTexture(const char* path, int image_index = 0);
 TextureMetadata inspectTextureMetadata(const char* path);
+
+// True when a raw .tex data block begins with an ISO-BMFF 'ftyp' box (embedded MP4 video).
+bool isVideoContainer(const uint8_t* data, size_t size);
 
 }  // namespace wallpaper_engine
 

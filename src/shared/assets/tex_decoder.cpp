@@ -270,6 +270,14 @@ DecodedImage decodeStandardImage(const char* path, int image_index) {
 
 }  // namespace
 
+bool isVideoContainer(const uint8_t* data, size_t size) {
+    if (!data || size < 8) return false;
+    if (std::memcmp(data + 4, "ftyp", 4) != 0) return false;
+    const uint32_t box_size = (static_cast<uint32_t>(data[0]) << 24) | (static_cast<uint32_t>(data[1]) << 16) |
+                              (static_cast<uint32_t>(data[2]) << 8) | static_cast<uint32_t>(data[3]);
+    return box_size >= 8 && box_size <= size;
+}
+
 TextureMetadata inspectTextureMetadata(const char* path) {
     TextureMetadata metadata;
     if (!path) return metadata;
@@ -424,6 +432,13 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             if (data_size > 0 && std::fread(data_block.data(), 1, data_size, file) != data_size) {
                 LOG_TAG_E(TAG, "Failed to read texture data: %s", path);
                 return {};
+            }
+
+            if (isVideoContainer(data_block.data(), data_block.size())) {
+                LOG_TAG_D(TAG, "Detected embedded MP4 payload in %s", path);
+                DecodedImage video_image;
+                video_image.is_video = true;
+                return video_image;
             }
 
             DecodedImage image;

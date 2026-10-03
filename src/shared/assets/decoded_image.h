@@ -24,6 +24,7 @@ struct DecodedImage {
     uint32_t data_size = 0;
     int channels = 0;
     PixelFormat format = PixelFormat::Unknown;
+    bool is_video = false;
 
     bool valid() const {
         return !pixels.empty() && width > 0 && height > 0 && format != PixelFormat::Unknown;

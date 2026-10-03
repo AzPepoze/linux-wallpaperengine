@@ -128,6 +128,11 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
 }
 
 GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, int image_index) const {
+    return resolveTextureInternal(name, out_path, image_index, true);
+}
+
+GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out_path, int image_index,
+                                              bool warn_on_failure) const {
     if (!name || name[0] == '\0') return {};
     if (strncmp(name, "_rt_", 4) == 0 || strstr(name, "/_rt_") != nullptr) return {};
 
@@ -146,7 +151,7 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
                     strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
         if (!is_video) {
             wallpaper_engine::DecodedImage image = wallpaper_engine::decodeTexture(abs_path, image_index);
-            if (image.valid()) {
+            if (!image.is_video && image.valid()) {
                 const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
                 if (pixel_format != SG_PIXELFORMAT_NONE) {
                     sg_image_desc desc = {};
@@ -198,7 +203,9 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
         }
     }
 
-    if (image_index == 0)
+    if (!warn_on_failure)
+        LOG_D("Texture candidate not resolved: %s", name);
+    else if (image_index == 0)
         LOG_W("Failed to resolve texture: %s", name);
     else
         LOG_D("Optional texture not found or index not present: %s (index %d)", name, image_index);
@@ -228,17 +235,19 @@ GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::str
                 const std::string texture_ref = tex_node->valuestring;
                 const bool material_rooted = texture_ref.rfind("materials/", 0) == 0 ||
                                              texture_ref.rfind("assets/", 0) == 0 || texture_ref[0] == '/';
-                if (material_rooted) img = resolveTexture(texture_ref.c_str(), out_path);
+                if (material_rooted) img = resolveTextureInternal(texture_ref.c_str(), out_path, 0, false);
 
                 if (img.id == SG_INVALID_ID) {
                     const std::string material_path = abs_path;
                     const size_t slash = material_path.rfind('/');
                     if (slash != std::string::npos) {
                         const std::string relative_to_material = material_path.substr(0, slash + 1) + texture_ref;
-                        img = resolveTexture(relative_to_material.c_str(), out_path);
+                        img = resolveTextureInternal(relative_to_material.c_str(), out_path, 0, false);
                     }
                 }
-                if (img.id == SG_INVALID_ID && !material_rooted) img = resolveTexture(texture_ref.c_str(), out_path);
+                if (img.id == SG_INVALID_ID && !material_rooted)
+                    img = resolveTextureInternal(texture_ref.c_str(), out_path, 0, false);
+                if (img.id == SG_INVALID_ID) LOG_W("Failed to resolve texture: %s", texture_ref.c_str());
             }
         }
     }

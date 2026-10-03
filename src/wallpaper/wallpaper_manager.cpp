@@ -12,6 +12,15 @@
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/video/video_wallpaper.h"
 
+namespace {
+void initAssetContext(const std::string& asset_root, EngineContext& ctx) {
+    strncpy(ctx.asset_root, asset_root.c_str(), sizeof(ctx.asset_root) - 1);
+    ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
+    ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+}
+
+}  // namespace
+
 bool WallpaperManager::isVideoFile(const char* path) {
     if (!path) return false;
     const char* ext = strrchr(path, '.');
@@ -32,9 +41,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
 
     if (isVideoFile(scene_directory.c_str()) && access(scene_directory.c_str(), F_OK) == 0) {
         clear();
-        strncpy(ctx.asset_root, scene_directory.c_str(), sizeof(ctx.asset_root) - 1);
-        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+        initAssetContext(scene_directory, ctx);
 
         auto video_wp = std::make_unique<VideoWallpaper>(ctx);
         if (video_wp->load(scene_directory, ctx)) {
@@ -47,9 +54,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     std::string scene_path = scene_directory + "/scene.json";
     if (access(scene_path.c_str(), F_OK) == 0) {
         clear();
-        strncpy(ctx.asset_root, scene_directory.c_str(), sizeof(ctx.asset_root) - 1);
-        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+        initAssetContext(scene_directory, ctx);
 
         auto scene_wp = std::make_unique<Scene2DWallpaper>(ctx);
         if (scene_wp->load(scene_path, ctx)) {
@@ -67,15 +72,27 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
             cJSON* root = cJSON_Parse(json_str);
             free(json_str);
             if (root) {
+                cJSON* type_item = cJSON_GetObjectItemCaseSensitive(root, "type");
+                if (cJSON_IsString(type_item) && type_item->valuestring && type_item->valuestring[0] != '\0') {
+                    if (strcasecmp(type_item->valuestring, "web") == 0) {
+                        LOG_TAG_E("WALLPAPER_MGR", "web wallpapers are not supported yet");
+                        cJSON_Delete(root);
+                        return false;
+                    }
+                    if (strcasecmp(type_item->valuestring, "scene") != 0 &&
+                        strcasecmp(type_item->valuestring, "video") != 0) {
+                        LOG_TAG_E("WALLPAPER_MGR", "Unsupported wallpaper type: %s", type_item->valuestring);
+                        cJSON_Delete(root);
+                        return false;
+                    }
+                }
                 cJSON* file_item = cJSON_GetObjectItemCaseSensitive(root, "file");
                 if (cJSON_IsString(file_item) && file_item->valuestring && file_item->valuestring[0] != '\0') {
                     std::string target_file = scene_directory + "/" + file_item->valuestring;
                     if (access(target_file.c_str(), F_OK) == 0) {
                         cJSON_Delete(root);
                         clear();
-                        strncpy(ctx.asset_root, scene_directory.c_str(), sizeof(ctx.asset_root) - 1);
-                        ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-                        ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+                        initAssetContext(scene_directory, ctx);
 
                         if (isVideoFile(target_file.c_str())) {
                             auto video_wp = std::make_unique<VideoWallpaper>(ctx);
@@ -106,9 +123,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
                 std::string video_path = scene_directory + "/" + entry->d_name;
                 closedir(dir);
                 clear();
-                strncpy(ctx.asset_root, scene_directory.c_str(), sizeof(ctx.asset_root) - 1);
-                ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-                ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+                initAssetContext(scene_directory, ctx);
 
                 auto video_wp = std::make_unique<VideoWallpaper>(ctx);
                 if (video_wp->load(video_path, ctx)) {

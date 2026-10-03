@@ -34,6 +34,22 @@ target("linux-wallpaperengine")
         set_strip("all")
     end
 
+-- Synthetic unit checks. Not built by default; run explicitly with `xmake build tests`.
+target("tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_packages("lz4", "stb")
+    add_includedirs("src")
+    add_files("tests/*.cpp", "src/shared/assets/tex_decoder.cpp", "src/shared/core/logger.cpp")
+
+    if is_mode("debug", "asan", "ubsan") then
+        add_defines("DEBUG_BUILD=1")
+    else
+        add_defines("DEBUG_BUILD=0")
+    end
+
 task("check")
     set_menu {
         usage = "xmake check",
