@@ -516,6 +516,16 @@ void AudioEngine::setStreamMuted(StreamHandle handle, bool muted) {
     if (stream->sound_ready) ma_sound_set_volume(&stream->sound, muted ? 0.0f : stream->volume);
 }
 
+void AudioEngine::setStreamPaused(StreamHandle handle, bool paused) {
+    if (handle == kInvalidStream || handle > impl->streams.size()) return;
+    auto& stream = impl->streams[handle - 1];
+    if (!stream || !stream->sound_ready) return;
+    if (paused)
+        ma_sound_stop(&stream->sound);
+    else
+        ma_sound_start(&stream->sound);
+}
+
 void AudioEngine::setStreamVolume(StreamHandle handle, float volume) {
     if (handle == kInvalidStream || handle > impl->streams.size()) return;
     auto& stream = impl->streams[handle - 1];

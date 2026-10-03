@@ -24,6 +24,7 @@ class AssetManager : public IAssetResolver {
     void updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers = {});
     void clearVideoTextures();
     void setVideoPlayback(float rate, float volume);
+    void setVideoPaused(bool paused);
     bool resolvePath(const char* rel_path, char* out_abs_path, int max_len) const override;
 
     // High-level resolvers
@@ -65,6 +66,7 @@ class AssetManager : public IAssetResolver {
     mutable std::vector<ActiveVideoTexture> video_textures;
     float video_rate_ = 1.0f;
     float video_volume_ = 1.0f;
+    bool video_paused_ = false;
 
     void addVideoTexture(const char* path, sg_image image, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
 

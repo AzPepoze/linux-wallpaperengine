@@ -40,6 +40,14 @@ void WallpaperManager::handleInput(const sapp_event* event, EngineContext& ctx) 
     }
 }
 
+void WallpaperManager::pause() {
+    if (active_wallpaper_) active_wallpaper_->pause();
+}
+
+void WallpaperManager::resume() {
+    if (active_wallpaper_) active_wallpaper_->resume();
+}
+
 void WallpaperManager::clear() {
     if (active_wallpaper_) {
         LOG_TAG_I("WALLPAPER_MGR", "Clearing active wallpaper instance...");

@@ -18,6 +18,8 @@ class WallpaperManager {
     void render(EngineContext& ctx);
     void onResize(float width, float height);
     void handleInput(const sapp_event* event, EngineContext& ctx);
+    void pause();
+    void resume();
     void clear();
 
     Wallpaper* getActiveWallpaper() const {

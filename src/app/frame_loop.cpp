@@ -133,10 +133,12 @@ void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& m
     } else if (e->type == SAPP_EVENTTYPE_RESIZED) {
         LOG_I("[APP] Window resized: window=%dx%d, framebuffer=%dx%d", e->window_width, e->window_height,
               e->framebuffer_width, e->framebuffer_height);
-    } else if (e->type == SAPP_EVENTTYPE_SUSPENDED) {
-        LOG_I("[APP] Application suspended");
-    } else if (e->type == SAPP_EVENTTYPE_RESUMED) {
-        LOG_I("[APP] Application resumed");
+    } else if (e->type == SAPP_EVENTTYPE_SUSPENDED || e->type == SAPP_EVENTTYPE_ICONIFIED) {
+        LOG_I("[APP] Application %s", e->type == SAPP_EVENTTYPE_SUSPENDED ? "suspended" : "iconified");
+        mgr.pause();
+    } else if (e->type == SAPP_EVENTTYPE_RESUMED || e->type == SAPP_EVENTTYPE_RESTORED) {
+        LOG_I("[APP] Application %s", e->type == SAPP_EVENTTYPE_RESUMED ? "resumed" : "restored");
+        mgr.resume();
     }
 
     mgr.handleInput(e, ctx);

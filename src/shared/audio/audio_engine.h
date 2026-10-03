@@ -38,6 +38,8 @@ class AudioEngine {
     void clearStream(StreamHandle handle);
     uint32_t streamQueuedFrames(StreamHandle handle) const;
     void setStreamMuted(StreamHandle handle, bool muted);
+    // Stops draining the queue so buffered audio resumes exactly where it paused.
+    void setStreamPaused(StreamHandle handle, bool paused);
     void setStreamVolume(StreamHandle handle, float volume);
 
     struct Spectrum {

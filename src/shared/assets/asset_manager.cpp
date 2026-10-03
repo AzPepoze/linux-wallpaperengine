@@ -56,6 +56,18 @@ void AssetManager::setVideoPlayback(float rate, float volume) {
     video_volume_ = std::clamp(volume, 0.0f, 1.0f);
 }
 
+void AssetManager::setVideoPaused(bool paused) {
+    if (video_paused_ == paused) return;
+    video_paused_ = paused;
+    for (ActiveVideoTexture& video : video_textures) {
+        if (paused)
+            video.decoder->pause();
+        else
+            video.decoder->resume();
+        AudioEngine::instance().setStreamPaused(video.audio_stream, paused);
+    }
+}
+
 void AssetManager::addVideoTexture(const char* path, sg_image image,
                                    std::unique_ptr<wallpaper_engine::VideoTexture> video) const {
     video_textures.push_back({});
@@ -94,6 +106,7 @@ const AssetManager::ActiveVideoTexture* AssetManager::findVideoTexture(const std
 }
 
 void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers) {
+    if (video_paused_) return;
     for (ActiveVideoTexture& video : video_textures) {
         if (!active_layers.empty()) {
             bool is_used_by_visible_layer = false;

@@ -5,13 +5,18 @@
 
 class VideoWallpaper : public Scene2DWallpaper {
    public:
-    explicit VideoWallpaper(EngineContext& ctx) : Scene2DWallpaper(ctx) {}
+    explicit VideoWallpaper(EngineContext& ctx) : Scene2DWallpaper(ctx), ctx_(ctx) {}
     ~VideoWallpaper() override = default;
 
     WallpaperType getType() const override {
         return WallpaperType::Video;
     }
     bool load(const std::string& path, EngineContext& ctx) override;
+    void pause() override;
+    void resume() override;
+
+   private:
+    EngineContext& ctx_;
 };
 
 #endif  // VIDEO_WALLPAPER_H
