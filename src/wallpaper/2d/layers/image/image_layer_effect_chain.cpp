@@ -59,6 +59,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     const sg_view layer_source_view = base_view;
     sg_image input_image = base_img;
     sg_view input_view = base_view;
+    // Passes that render into a named target do not advance the layer image that an explicit `previous` binding reads.
+    sg_image chain_image = base_img;
+    sg_view chain_view = base_view;
     int write_index = 0;
     bool rendered_any = false;
     int draw_order = 0;
@@ -141,6 +144,10 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 } else {
                     input_image = effect_targets[write_index].image;
                     input_view = effect_targets[write_index].texture_view;
+                    chain_image = input_image;
+                    chain_view = input_view;
+                    chain_image = input_image;
+                    chain_view = input_view;
                     write_index = 1 - write_index;
                 }
                 effect_output_image = input_image;
@@ -168,8 +175,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 sg_image binding_image = {SG_INVALID_ID};
                 sg_view binding_view = {SG_INVALID_ID};
                 if (binding == "previous") {
-                    binding_image = input_image;
-                    binding_view = input_view;
+                    binding_image = chain_image;
+                    binding_view = chain_view;
                 } else {
                     auto target = named_effect_targets.find(binding);
                     if (target != named_effect_targets.end()) {
@@ -295,9 +302,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                     in_b.slot = slot;
                     in_b.semantic_source = binding;
                     if (binding == "previous") {
-                        in_b.image_id = input_image.id;
-                        in_b.view_id = input_view.id;
-                        sg_image_desc d = sg_query_image_desc(input_image);
+                        in_b.image_id = chain_image.id;
+                        in_b.view_id = chain_view.id;
+                        sg_image_desc d = sg_query_image_desc(chain_image);
                         in_b.width = d.width;
                         in_b.height = d.height;
                         in_b.is_render_target = d.usage.color_attachment;
@@ -343,6 +350,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             } else {
                 input_image = effect_targets[write_index].image;
                 input_view = effect_targets[write_index].texture_view;
+                chain_image = input_image;
+                chain_view = input_view;
                 write_index = 1 - write_index;
             }
             effect_output_image = input_image;
