@@ -81,7 +81,9 @@ target("tests")
     set_warnings("all", "extra")
     add_packages("lz4", "stb")
     add_includedirs("src")
-    add_files("tests/tex_video_detect_test.cpp", "src/shared/assets/tex_decoder.cpp", "src/shared/core/logger.cpp")
+    add_files("tests/tex_video_detect_test.cpp", "src/shared/assets/tex_decoder.cpp",
+              "src/shared/assets/tex_format.cpp", "src/shared/assets/tex_header.cpp",
+              "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp")
 
     if is_mode("debug", "asan", "ubsan") then
         add_defines("DEBUG_BUILD=1")
