@@ -5,6 +5,7 @@
 #include <sys/prctl.h>
 
 #include "app/cli_options.h"
+#include "app/frame_limiter.h"
 #include "app/frame_loop.h"
 #include "app/package_extractor.h"
 #include "app/signals.h"
@@ -90,7 +91,10 @@ static void applyCliToContext() {
 
     ctx.debug.show_ui = DEBUG_BUILD && !cli.no_ui;
     ctx.debug.selected_object = -1;
-    ctx.scene.scaling_mode = cli.cover ? SCALING_COVER : SCALING_FIT;
+    ctx.scene.scaling_mode = cli.cover || cli.scaling == "fill" ? SCALING_COVER : SCALING_FIT;
+    if (cli.scaling == "stretch") LOG_W("--scaling stretch is not supported yet; using fit");
+    if (!cli.screen_root.empty() || !cli.layer.empty())
+        LOG_W("--screen-root/--layer: rendering into the desktop layer is not supported yet; running in a window");
     ctx.debug.particle_debug_bounds = cli.particle_debug_bounds;
     ctx.debug.particle_debug_velocity = cli.particle_debug_velocity;
     if (cli.particle_debug_velocity_scale > 0.0f)
@@ -122,7 +126,12 @@ static void init(void) {
     GpuDeviceManager::instance().init();
     logActiveGpu();
 
-    if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
+    const bool engine_from_cli =
+        !cli.assets_dir.empty() &&
+        engine_path_from_assets_dir(cli.assets_dir.c_str(), ctx.engine_path, sizeof(ctx.engine_path));
+    if (engine_from_cli) {
+        LOG_I("Using Wallpaper Engine assets from --assets-dir: %s", ctx.engine_path);
+    } else if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
         LOG_E("A Wallpaper Engine installation with its original assets is required");
         exit(EXIT_FAILURE);
     }
@@ -152,6 +161,7 @@ static void init(void) {
 
 static void frame(void) {
     runFrame(ctx, wallpaper_mgr);
+    limitFrameRate(cli.fps_limit);
 }
 
 static void event(const sapp_event* e) {

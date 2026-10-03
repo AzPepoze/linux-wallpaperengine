@@ -78,6 +78,16 @@ sudo pacman -S --needed clang cppcheck
 | Format source files                                  | `xmake format`                                                        |
 | Validate, build, and launch the debug effect sandbox | `xmake sandbox`                                                       |
 
+Launcher-compatible options (the wallpaper path may come first or last):
+
+| Option | Effect |
+| --- | --- |
+| `--assets-dir <path>` | Wallpaper Engine install root or its `assets/` directory |
+| `-f, --fps <n>` | Cap the frame rate |
+| `-s, --silent` | Disable audio |
+| `--scaling <default\|fit\|fill\|stretch>` | `fill` crops to cover, `fit` letterboxes (`stretch` currently behaves like `fit`) |
+| `--clamp <mode>`, `-r, --screen-root <output>`, `--layer <layer>` | Accepted; desktop-layer rendering is not implemented yet, so the app runs in a window |
+
 Build outputs are written to `bin/<mode>/`.
 
 ### Render Diagnostics (Debug Mode)

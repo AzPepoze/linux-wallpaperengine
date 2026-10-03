@@ -18,6 +18,12 @@ struct CliOptions {
     bool no_ui = false;
     DiagnosticOptions diagnostics;
     bool cover = false;
+    std::string assets_dir;
+    int fps_limit = 0;
+    std::string scaling;
+    std::string clamp;
+    std::string screen_root;
+    std::string layer;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.0f;

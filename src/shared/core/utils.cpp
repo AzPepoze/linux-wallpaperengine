@@ -39,6 +39,25 @@ char* read_file_to_string(const char* path) {
     return buf;
 }
 
+bool engine_path_from_assets_dir(const char* dir, char* out_path, size_t max_len) {
+    if (!dir || !dir[0]) return false;
+    std::string path = dir;
+    while (path.size() > 1 && path.back() == '/') path.pop_back();
+    if (hasEngineAssets(path.c_str())) {
+        copyPath(out_path, max_len, path.c_str());
+        return true;
+    }
+    const size_t slash = path.rfind('/');
+    if (slash != std::string::npos && path.compare(slash + 1, std::string::npos, "assets") == 0) {
+        const std::string root = path.substr(0, slash);
+        if (hasEngineAssets(root.c_str())) {
+            copyPath(out_path, max_len, root.c_str());
+            return true;
+        }
+    }
+    return false;
+}
+
 bool detect_engine_path(char* out_path, size_t max_len) {
     const char* env_path = getenv("WALLPAPER_ENGINE_PATH");
     if (hasEngineAssets(env_path)) {

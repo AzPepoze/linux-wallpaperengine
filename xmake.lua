@@ -91,6 +91,15 @@ target("tests")
         add_defines("DEBUG_BUILD=0")
     end
 
+-- Command-line scanning checks. Not built by default; run with `xmake build cli_tests`.
+target("cli_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_files("tests/cli_args_test.cpp", "src/app/cli_args.cpp")
+
 -- Synthetic MDLV parser checks. Not built by default; run with `xmake build mdl_tests`.
 target("mdl_tests")
     set_kind("binary")

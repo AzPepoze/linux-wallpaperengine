@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include <string>
+#include <vector>
 
+#include "app/cli_args.h"
 #include "shared/core/build_config.h"
 #include "sokol_args.h"
 
@@ -86,7 +88,16 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.final_only = hasDashedFlag("diagnose-final-only");
     opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
 #endif
-    opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled;
+    const std::vector<std::string> args(argv, argv + argc);
+    opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled ||
+                    cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    cli_args::optionValue(args, {"--assets-dir"}, opts.assets_dir);
+    cli_args::optionValue(args, {"--scaling"}, opts.scaling);
+    cli_args::optionValue(args, {"--clamp"}, opts.clamp);
+    cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
+    cli_args::optionValue(args, {"--layer"}, opts.layer);
+    std::string fps;
+    if (cli_args::optionValue(args, {"-f", "--fps"}, fps)) opts.fps_limit = atoi(fps.c_str());
     opts.cover = hasFlag("cover");
     opts.particle_debug_bounds = hasFlag("particle-debug-bounds") || hasFlag("particle-debug");
     opts.particle_debug_velocity = hasFlag("particle-debug-velocity") || hasFlag("particle-debug");
@@ -102,8 +113,8 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     if (!opts.sandbox && hasFlag("pkg")) {
         opts.wallpaper_arg = flagValue("pkg");
         opts.pkg_flag = true;
-    } else if (!opts.sandbox && argc > 1 && argv[argc - 1][0] != '-') {
-        opts.wallpaper_arg = argv[argc - 1];
+    } else if (!opts.sandbox) {
+        opts.wallpaper_arg = cli_args::positional(args);
     }
     sargs_shutdown();
     return opts;
