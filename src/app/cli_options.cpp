@@ -96,6 +96,10 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
+#if DEBUG_BUILD
+    cli_args::optionValue(args, {"--layer-size"}, opts.layer_size);
+    cli_args::optionValue(args, {"--layer-anchor"}, opts.layer_anchor);
+#endif
     std::string fps;
     if (cli_args::optionValue(args, {"-f", "--fps"}, fps)) opts.fps_limit = atoi(fps.c_str());
     opts.cover = hasFlag("cover");

@@ -37,6 +37,10 @@ int main() {
     const V keyValue = {"app", "pkg=/x.pkg", "/wp"};
     CHECK(cli_args::positional(keyValue) == "/wp");
 
+    const V layerDebug = {"app", "--layer-size", "320x180", "--layer-anchor", "top-left", "/wp"};
+    CHECK(cli_args::positional(layerDebug) == "/wp");
+    CHECK(cli_args::optionValue(layerDebug, {"--layer-size"}, value) && value == "320x180");
+
     if (failures == 0) std::printf("cli args checks passed\n");
     return failures == 0 ? 0 : 1;
 }

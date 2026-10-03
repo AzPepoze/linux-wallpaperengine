@@ -100,6 +100,15 @@ target("cli_tests")
     add_includedirs("src")
     add_files("tests/cli_args_test.cpp", "src/app/cli_args.cpp")
 
+-- Layer-shell option parsing checks. Not built by default; run with `xmake build layer_tests`.
+target("layer_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_files("tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp")
+
 -- Synthetic MDLV parser checks. Not built by default; run with `xmake build mdl_tests`.
 target("mdl_tests")
     set_kind("binary")

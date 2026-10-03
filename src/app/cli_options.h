@@ -24,6 +24,8 @@ struct CliOptions {
     std::string clamp;
     std::string screen_root;
     std::string layer;
+    std::string layer_size;
+    std::string layer_anchor;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.0f;
