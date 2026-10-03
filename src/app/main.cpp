@@ -35,10 +35,13 @@
 #include <signal.h>
 #include <sys/prctl.h>
 
+#include <atomic>
+
 #include "shared/graphics/backend/sokol/sokol_sync.h"
 
 namespace {
 WallpaperManager wallpaper_mgr;
+std::atomic<bool> g_terminating{false};
 
 void crash_signal_handler(int sig) {
     LOG_E("[CRASH] Fatal signal %d (%s) received", sig, (sig == SIGSEGV) ? "SIGSEGV" : "SIGABRT");
@@ -48,6 +51,7 @@ void crash_signal_handler(int sig) {
 
 void termination_signal_handler(int sig) {
     LOG_I("[SIGNAL] Caught signal %d (%s), requesting clean quit...", sig, (sig == SIGINT) ? "SIGINT" : "SIGTERM");
+    g_terminating.store(true, std::memory_order_relaxed);
     signal(sig, SIG_DFL);
     sapp_request_quit();
 }
@@ -101,9 +105,11 @@ static void init(void) {
     sg_desc s_desc = {};
     s_desc.environment = sglue_environment();
     s_desc.logger.func = slog_func;
-    s_desc.image_pool_size = 512;
-    s_desc.shader_pool_size = 128;
-    s_desc.pipeline_pool_size = 256;
+    s_desc.buffer_pool_size = 2048;
+    s_desc.image_pool_size = 2048;
+    s_desc.view_pool_size = 4096;
+    s_desc.shader_pool_size = 1024;
+    s_desc.pipeline_pool_size = 1024;
     s_desc.uniform_buffer_size = 64 * 1024 * 1024;
     s_desc.vulkan.descriptor_buffer_size = 64 * 1024 * 1024;
     s_desc.vulkan.stream_staging_buffer_size = 64 * 1024 * 1024;
@@ -295,6 +301,10 @@ static void event(const sapp_event* e) {
 static void cleanup(void) {
     LOG_I("[APP] Shutting down");
     lwe_vk_wait_idle();
+
+#if DEBUG_BUILD
+    RenderDiagnostics::instance().shutdown(g_terminating.load(std::memory_order_relaxed));
+#endif
 
     wallpaper_mgr.clear();
 

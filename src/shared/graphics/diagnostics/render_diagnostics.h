@@ -4,6 +4,7 @@
 #include <cjson/cJSON.h>
 #include <stdint.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <string>
@@ -90,6 +91,7 @@ class RenderDiagnostics {
     bool is_capturing_frame = false;
 
     void init(bool enabled = false);
+    void shutdown(bool cancel_pending = false);
     bool isEffectDisabled(int effect_index, const std::string& effect_path) const;
     void triggerCapture(uint64_t current_frame);
     void onFrameStart(uint64_t frame_index, EngineContext& ctx);
@@ -158,6 +160,7 @@ class RenderDiagnostics {
     std::vector<SceneStageSnapshot> scene_stage_snapshots_;
 
     std::thread worker_thread_;
+    std::atomic<bool> cancel_export_{false};
 };
 
 #endif  // RENDER_DIAGNOSTICS_H

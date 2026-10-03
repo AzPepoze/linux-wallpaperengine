@@ -92,7 +92,8 @@ std::string cleanEffectName(const std::string& effect_file, const std::string& s
     return sanitizeFilename(stem.empty() ? "effect" : stem);
 }
 
-void exportBundleAsync(DiagnosticExportPayload payload) {
+void exportBundleAsync(DiagnosticExportPayload payload, const std::atomic<bool>* cancel) {
+    auto cancelled = [cancel]() { return cancel && cancel->load(); };
     ensureDir(payload.output_dir);
 
     char frame_dir_buf[64];
@@ -126,6 +127,7 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
         std::string stage_dir = frame_dir + "/scene-stages";
         bool stage_dir_ready = false;
         for (const auto& stage : payload.stage_images) {
+            if (cancelled()) return;
             if (payload.final_only && stage.name != "post-bloom-final") continue;
             if (!stage_dir_ready) {
                 ensureDir(stage_dir);
@@ -148,6 +150,7 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
     int prev_h = payload.source_h;
 
     for (auto& item : payload.pass_images) {
+        if (cancelled()) return;
         if (!item.rgba_data.empty() && item.width > 0 && item.height > 0) {
             item.trace.image_stats = ImageStats::compute(item.rgba_data.data(), item.width, item.height);
             item.trace.has_image_stats = true;
@@ -208,6 +211,7 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
         payload.render_graph.addPass(item.trace);
     }
 
+    if (cancelled()) return;
     payload.render_graph.validate();
 
     cJSON* rg_json = payload.render_graph.toJson();
@@ -262,6 +266,7 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
     std::string shaders_base_dir = payload.output_dir + "/shaders";
     ensureDir(shaders_base_dir);
     for (const auto& dump : payload.shader_dumps) {
+        if (cancelled()) return;
         char pass_tag[256];
         std::string s_effect = cleanEffectName(dump.effect_file, dump.shader_name);
         snprintf(pass_tag, sizeof(pass_tag), "%02d_%s_pass-%d", dump.effect_index, s_effect.c_str(), dump.pass_index);
@@ -345,6 +350,13 @@ RenderDiagnostics& RenderDiagnostics::instance() {
 }
 
 RenderDiagnostics::~RenderDiagnostics() {
+    if (worker_thread_.joinable()) {
+        worker_thread_.join();
+    }
+}
+
+void RenderDiagnostics::shutdown(bool cancel_pending) {
+    if (cancel_pending) cancel_export_.store(true);
     if (worker_thread_.joinable()) {
         worker_thread_.join();
     }
@@ -527,7 +539,7 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     if (worker_thread_.joinable()) {
         worker_thread_.join();
     }
-    worker_thread_ = std::thread(exportBundleAsync, std::move(payload));
+    worker_thread_ = std::thread(exportBundleAsync, std::move(payload), &cancel_export_);
 
     if (config.exit_after_diagnose) {
         effect_log.info("Diagnostic capture finished, requesting clean quit");
