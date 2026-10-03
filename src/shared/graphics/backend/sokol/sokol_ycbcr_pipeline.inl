@@ -26,11 +26,16 @@ struct ZeroCopyState {
 };
 
 static ZeroCopyState s_zc;
+static bool s_zero_copy_video_supported = true;
 
 }  // namespace
 
+void gpu_set_zero_copy_video_supported(bool supported) {
+    s_zero_copy_video_supported = supported;
+}
+
 bool gpu_init_zero_copy_video(VideoImportCache& cache) {
-    if (!_sg.vk.dev || !_sg.vk.phys_dev) return false;
+    if (!s_zero_copy_video_supported || !_sg.vk.dev || !_sg.vk.phys_dev) return false;
 
     if (s_zc.ycbcr_conv == VK_NULL_HANDLE) {
         VkSamplerYcbcrConversionCreateInfo conv_info = {};
@@ -179,8 +184,8 @@ bool gpu_init_zero_copy_video(VideoImportCache& cache) {
         ms_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
         VkPipelineColorBlendAttachmentState cb_attach = {};
-        cb_attach.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-                                   VK_COLOR_COMPONENT_A_BIT;
+        cb_attach.colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         cb_attach.blendEnable = VK_FALSE;
 
         VkPipelineColorBlendStateCreateInfo cb_state = {};
@@ -208,8 +213,7 @@ bool gpu_init_zero_copy_video(VideoImportCache& cache) {
         pip_info.layout = s_zc.pip_layout;
         pip_info.renderPass = s_zc.render_pass;
 
-        VkResult pip_res =
-            vkCreateGraphicsPipelines(_sg.vk.dev, VK_NULL_HANDLE, 1, &pip_info, nullptr, &s_zc.pipeline);
+        VkResult pip_res = vkCreateGraphicsPipelines(_sg.vk.dev, VK_NULL_HANDLE, 1, &pip_info, nullptr, &s_zc.pipeline);
         vkDestroyShaderModule(_sg.vk.dev, vert_mod, nullptr);
         vkDestroyShaderModule(_sg.vk.dev, frag_mod, nullptr);
         if (pip_res != VK_SUCCESS) return false;

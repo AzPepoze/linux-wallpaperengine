@@ -31,6 +31,7 @@ bool VideoImportCache::init(VkDevice device, VkPhysicalDevice physical_device, V
 
 ImportedVideoSurface* VideoImportCache::get_or_import(VADisplay display, VASurfaceID surface_id, int width, int height,
                                                       ZeroCopyMetrics& zero_copy, PerformanceTiming& perf) {
+    if (device_ == VK_NULL_HANDLE || physical_device_ == VK_NULL_HANDLE) return nullptr;
     auto t_cache_start = std::chrono::steady_clock::now();
 
     auto it = cache_.find(surface_id);

@@ -179,9 +179,12 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
         texture->impl->frame_duration = (float)texture->impl->hw_decoder.get_nominal_frame_duration();
         texture->impl->scheduler.set_time_base_and_fps(texture->impl->hw_decoder.get_time_base(),
                                                        texture->impl->hw_decoder.get_fps());
-        gpu_init_zero_copy_video(texture->impl->import_cache);
-        LOG_TAG_I(TAG, "Decode path: VAAPI zero-copy: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
-                  texture->impl->video_height, 1.0f / texture->impl->frame_duration);
+        if (gpu_init_zero_copy_video(texture->impl->import_cache)) {
+            LOG_TAG_I(TAG, "Decode path: VAAPI zero-copy: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
+                      texture->impl->video_height, 1.0f / texture->impl->frame_duration);
+        } else {
+            texture->impl->disableZeroCopy("Vulkan video import initialization failed");
+        }
         return texture;
     }
     const std::string& reason = texture->impl->hw_decoder.fallback_reason();
@@ -313,7 +316,7 @@ const PerformanceTiming& VideoTexture::getTiming() const {
 bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, AVFrame*& out_av_frame) {
     out_surface = nullptr;
     out_av_frame = nullptr;
-    if (!impl->is_hw_active || !impl->is_playing || impl->is_paused) return false;
+    if (!impl->is_hw_active || impl->zero_copy_disabled || !impl->is_playing || impl->is_paused) return false;
 
     bool eof = false;
     av_frame_unref(impl->current_frame);

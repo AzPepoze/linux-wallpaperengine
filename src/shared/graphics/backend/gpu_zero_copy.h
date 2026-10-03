@@ -8,6 +8,9 @@
 class VideoImportCache;
 struct ImportedVideoSurface;
 
+// Custom Vulkan hosts must report whether the device enabled the video import extensions and YCbCr feature.
+void gpu_set_zero_copy_video_supported(bool supported);
+
 // Initializes Vulkan YCbCr conversion, immutable sampler, descriptor layout, and blit pipeline for VideoImportCache
 bool gpu_init_zero_copy_video(VideoImportCache& cache);
 

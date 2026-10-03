@@ -6,6 +6,7 @@
 
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/backend/gpu_zero_copy.h"
 
 namespace {
 constexpr uint64_t kAcquireTimeoutNs = 100ull * 1000 * 1000;
@@ -137,9 +138,34 @@ bool WaylandVulkanSwapchain::createDevice() {
     queue.queueCount = 1;
     queue.pQueuePriorities = &priority;
 
+    VkPhysicalDeviceVulkan11Features supported_vk11 = {};
+    supported_vk11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     VkPhysicalDeviceFeatures2 supported = {};
     supported.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    supported.pNext = &supported_vk11;
     vkGetPhysicalDeviceFeatures2(physical_device_, &supported);
+
+    uint32_t extension_count = 0;
+    vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, nullptr);
+    std::vector<VkExtensionProperties> available_extensions(extension_count);
+    vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, available_extensions.data());
+    std::vector<const char*> enabled_extensions(std::begin(kDeviceExtensions), std::end(kDeviceExtensions));
+    const char* const video_extensions[] = {VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+                                            VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
+                                            VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME};
+    const bool video_import_supported =
+        supported_vk11.samplerYcbcrConversion &&
+        std::all_of(std::begin(video_extensions), std::end(video_extensions), [&](const char* requested) {
+            return std::any_of(available_extensions.begin(), available_extensions.end(),
+                               [&](const VkExtensionProperties& extension) {
+                                   return strcmp(extension.extensionName, requested) == 0;
+                               });
+        });
+    if (video_import_supported) {
+        enabled_extensions.insert(enabled_extensions.end(), std::begin(video_extensions), std::end(video_extensions));
+    } else {
+        LOG_I("[LAYER] Vulkan DMA-BUF video import unavailable; video will use CPU transfer");
+    }
 
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptor_buffer = {};
     descriptor_buffer.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
@@ -148,9 +174,13 @@ bool WaylandVulkanSwapchain::createDevice() {
     dynamic_state.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
     dynamic_state.pNext = &descriptor_buffer;
     dynamic_state.extendedDynamicState = VK_TRUE;
+    VkPhysicalDeviceVulkan11Features vk11 = {};
+    vk11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    vk11.pNext = &dynamic_state;
+    vk11.samplerYcbcrConversion = video_import_supported ? VK_TRUE : VK_FALSE;
     VkPhysicalDeviceVulkan12Features vk12 = {};
     vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    vk12.pNext = &dynamic_state;
+    vk12.pNext = &vk11;
     vk12.bufferDeviceAddress = VK_TRUE;
     VkPhysicalDeviceVulkan13Features vk13 = {};
     vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -172,12 +202,13 @@ bool WaylandVulkanSwapchain::createDevice() {
     info.pNext = &required;
     info.queueCreateInfoCount = 1;
     info.pQueueCreateInfos = &queue;
-    info.enabledExtensionCount = static_cast<uint32_t>(std::size(kDeviceExtensions));
-    info.ppEnabledExtensionNames = kDeviceExtensions;
+    info.enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size());
+    info.ppEnabledExtensionNames = enabled_extensions.data();
     if (vkCreateDevice(physical_device_, &info, nullptr, &device_) != VK_SUCCESS) {
         LOG_E("[LAYER] vkCreateDevice failed");
         return false;
     }
+    gpu_set_zero_copy_video_supported(video_import_supported);
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
     return true;
 }
