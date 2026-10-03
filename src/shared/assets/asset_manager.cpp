@@ -49,6 +49,11 @@ void AssetManager::init(const char* ep, const char* wp) {
 }
 
 void AssetManager::clearVideoTextures() {
+    for (auto& video : video_textures) {
+        if (video.audio_stream != AudioEngine::kInvalidStream) {
+            AudioEngine::instance().destroyStream(video.audio_stream);
+        }
+    }
     video_textures.clear();
 }
 
@@ -79,7 +84,27 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
                     break;
                 }
             }
-            if (!is_used_by_visible_layer) continue;
+            if (!is_used_by_visible_layer) {
+                if (video.audio_stream != AudioEngine::kInvalidStream)
+                    AudioEngine::instance().clearStream(video.audio_stream);
+                continue;
+            }
+        }
+
+        if (video.audio && video.audio->hasAudio()) {
+            if (video.audio_stream == AudioEngine::kInvalidStream && AudioEngine::instance().isAvailable()) {
+                video.audio_stream = AudioEngine::instance().createStream(48000, 2);
+                if (video.audio_stream != AudioEngine::kInvalidStream)
+                    AudioEngine::instance().setStreamVolume(video.audio_stream, 1.0f);
+            }
+            if (video.audio_stream != AudioEngine::kInvalidStream) {
+                const uint32_t loops = video.decoder->loopCount();
+                if (loops != video.audio_loop_seen) {
+                    video.audio_loop_seen = loops;
+                    video.audio->restart(video.audio_stream);
+                }
+                video.audio->pump(video.audio_stream, 24000);
+            }
         }
 
         video.elapsed_seconds += elapsed_seconds;
@@ -185,7 +210,12 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                         if (video->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
                             gpu_blit_zero_copy_surface(*surface, gpu_image, (int)video->width(), (int)video->height());
                         }
-                        video_textures.push_back({abs_path, gpu_image, std::move(video)});
+                        video_textures.push_back({});
+                        ActiveVideoTexture& entry = video_textures.back();
+                        entry.path = abs_path;
+                        entry.image = gpu_image;
+                        entry.decoder = std::move(video);
+                        if (AudioEngine::instance().isAvailable()) entry.audio = VideoAudioStream::open(abs_path);
                         return GfxImage(gpu_image);
                     }
                 } else {
@@ -194,7 +224,12 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                         desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
                         const sg_image gpu_image = sg_make_image(&desc);
                         if (gpu_image.id != SG_INVALID_ID) {
-                            video_textures.push_back({abs_path, gpu_image, std::move(video)});
+                            video_textures.push_back({});
+                            ActiveVideoTexture& entry = video_textures.back();
+                            entry.path = abs_path;
+                            entry.image = gpu_image;
+                            entry.decoder = std::move(video);
+                            if (AudioEngine::instance().isAvailable()) entry.audio = VideoAudioStream::open(abs_path);
                             return GfxImage(gpu_image);
                         }
                     }

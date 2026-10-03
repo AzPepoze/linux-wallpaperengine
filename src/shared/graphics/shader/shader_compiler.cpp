@@ -156,6 +156,7 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     }
 
     std::string custom_uniform_names[SG_MAX_UNIFORMBLOCK_BINDSLOTS][SG_MAX_UNIFORMBLOCK_MEMBERS];
+    configureAudioSpectrumBlocks(compiled_vert_source, compiled_frag_source, shd_desc, result, next_uniform_slot);
     configureCustomUniformBlocks(uniforms, compiled_vert_source, compiled_frag_source, shd_desc, result,
                                  next_uniform_slot, custom_uniform_names);
 

@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "pass_loader.h"
+#include "shared/audio/audio_engine.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
@@ -407,6 +408,35 @@ void ShaderPass::init(EngineContext& ctx) {
         if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
             effect_log.warn("ShaderPass %s: g_Texture1 (mask) missing, using full white fallback", shader_name.c_str());
         }
+    }
+}
+
+void ShaderPass::applyAudioSpectrumBlocks() {
+    if (compiled.audio_spectrum_blocks.empty()) return;
+    const AudioEngine::Spectrum& spectrum = AudioEngine::instance().spectrum();
+    for (const CompiledAudioSpectrumBlock& block : compiled.audio_spectrum_blocks) {
+        if (block.slot < 0 || block.members.empty() || block.size_bytes == 0) continue;
+        std::vector<float> packed(block.size_bytes / sizeof(float), 0.0f);
+        size_t offset = 0;
+        for (const CompiledAudioSpectrumMember& member : block.members) {
+            const float* source = nullptr;
+            if (member.name == "g_AudioSpectrum16Left")
+                source = spectrum.bands16_left;
+            else if (member.name == "g_AudioSpectrum16Right")
+                source = spectrum.bands16_right;
+            else if (member.name == "g_AudioSpectrum32Left")
+                source = spectrum.bands32_left;
+            else if (member.name == "g_AudioSpectrum32Right")
+                source = spectrum.bands32_right;
+            else if (member.name == "g_AudioSpectrum64Left")
+                source = spectrum.bands64_left;
+            else if (member.name == "g_AudioSpectrum64Right")
+                source = spectrum.bands64_right;
+            for (int i = 0; i < member.count; ++i) packed[offset + (size_t)i * 4] = source ? source[i] : 0.0f;
+            offset += (size_t)member.count * 4;
+        }
+        sg_range range = {.ptr = packed.data(), .size = block.size_bytes};
+        sg_apply_uniforms(block.slot, &range);
     }
 }
 

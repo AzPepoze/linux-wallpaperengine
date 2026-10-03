@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "providers/asset_provider.h"
+#include "shared/assets/media/video_audio.h"
 #include "shared/assets/media/video_texture.h"
+#include "shared/audio/audio_engine.h"
 #include "shared/core/interfaces.h"
 #include "shared/graphics/gfx_resource.h"
 #include "sokol_gfx.h"
@@ -32,6 +34,9 @@ class AssetManager : public IAssetResolver {
         sg_image image = {};
         std::unique_ptr<wallpaper_engine::VideoTexture> decoder;
         float elapsed_seconds = 0.0f;
+        std::unique_ptr<VideoAudioStream> audio;
+        AudioEngine::StreamHandle audio_stream = AudioEngine::kInvalidStream;
+        uint32_t audio_loop_seen = 0;
     };
 
     const std::vector<ActiveVideoTexture>& getVideoTextures() const {

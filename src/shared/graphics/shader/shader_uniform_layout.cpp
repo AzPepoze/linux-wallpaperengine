@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <sstream>
 
 #include "shared/core/logger.h"
@@ -149,4 +150,77 @@ void configureCustomUniformBlocks(const std::map<std::string, std::vector<float>
     appendBlocks(vertex_uniforms, SG_SHADERSTAGE_VERTEX, vertex_source, shader_desc, result, next_uniform_slot, names);
     appendBlocks(fragment_uniforms, SG_SHADERSTAGE_FRAGMENT, fragment_source, shader_desc, result, next_uniform_slot,
                  names);
+}
+
+namespace {
+const char* const kAudioSpectrumNames[] = {"g_AudioSpectrum16Left", "g_AudioSpectrum16Right",
+                                           "g_AudioSpectrum32Left", "g_AudioSpectrum32Right",
+                                           "g_AudioSpectrum64Left", "g_AudioSpectrum64Right"};
+
+// Returns the declared element count of `uniform float name[count];` when present.
+bool findAudioSpectrumArray(const std::string& source, const std::string& name, int& count) {
+    for (size_t name_pos = 0; (name_pos = source.find(name, name_pos)) != std::string::npos;) {
+        const size_t name_end = name_pos + name.size();
+        if ((name_pos && isTokenChar(source[name_pos - 1])) ||
+            (name_end < source.size() && isTokenChar(source[name_end]))) {
+            name_pos = name_end;
+            continue;
+        }
+        const size_t line_start_raw = source.rfind('\n', name_pos);
+        const size_t line_start = line_start_raw == std::string::npos ? 0 : line_start_raw + 1;
+        const size_t line_end = source.find('\n', name_pos);
+        const size_t uniform_pos = source.find("uniform", line_start);
+        const size_t bracket = source.find('[', name_end);
+        const size_t close = bracket == std::string::npos ? std::string::npos : source.find(']', bracket);
+        const size_t semicolon = source.find(';', name_end);
+        if (uniform_pos == std::string::npos || uniform_pos > name_pos || bracket == std::string::npos ||
+            close == std::string::npos || (line_end != std::string::npos && bracket > line_end) ||
+            (semicolon != std::string::npos && close > semicolon)) {
+            name_pos = name_end;
+            continue;
+        }
+        count = atoi(source.substr(bracket + 1, close - bracket - 1).c_str());
+        return count > 0;
+    }
+    return false;
+}
+}  // namespace
+
+void configureAudioSpectrumBlocks(const std::string& vertex_source, const std::string& fragment_source,
+                                  sg_shader_desc& shader_desc, CompiledShader& result, int& next_uniform_slot) {
+    const std::pair<const std::string*, sg_shader_stage> stages[] = {
+        {&vertex_source, SG_SHADERSTAGE_VERTEX},
+        {&fragment_source, SG_SHADERSTAGE_FRAGMENT},
+    };
+
+    for (const auto& [source, stage] : stages) {
+        CompiledAudioSpectrumBlock block;
+        block.stage = stage;
+        for (const char* name : kAudioSpectrumNames) {
+            int count = 0;
+            if (findAudioSpectrumArray(*source, name, count)) {
+                block.members.push_back({name, count});
+                block.size_bytes += (uint32_t)count * 16u;
+            }
+        }
+        if (block.members.empty()) continue;
+        if (next_uniform_slot >= SG_MAX_UNIFORMBLOCK_BINDSLOTS) {
+            effect_log.warn("Audio spectrum block capacity exceeded; spectrum uniforms will not be bound");
+            continue;
+        }
+        block.slot = next_uniform_slot++;
+        result.audio_spectrum_blocks.push_back(std::move(block));
+    }
+
+    // Names live in `result`; fill the descriptor only after the vector has stopped growing.
+    for (const CompiledAudioSpectrumBlock& block : result.audio_spectrum_blocks) {
+        sg_shader_uniform_block& desc_block = shader_desc.uniform_blocks[block.slot];
+        desc_block.stage = block.stage;
+        desc_block.size = block.size_bytes;
+        for (size_t i = 0; i < block.members.size(); ++i) {
+            desc_block.glsl_uniforms[i].glsl_name = block.members[i].name.c_str();
+            desc_block.glsl_uniforms[i].type = SG_UNIFORMTYPE_FLOAT;
+            desc_block.glsl_uniforms[i].array_count = (uint16_t)block.members[i].count;
+        }
+    }
 }

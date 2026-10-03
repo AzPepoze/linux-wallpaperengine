@@ -12,7 +12,7 @@ Linux renderer for Wallpaper Engine projects.
 - Vulkan development libraries and a working Vulkan GPU driver
 - [Slang](https://github.com/shader-slang/slang) compiler/runtime libraries
 - X11 development libraries (`libX11`, `libXcursor`, `libXi`)
-- FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`)
+- FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`, `libswresample`)
 - VA-API development libraries (`libva`, `libva-drm`)
 - `libdrm`
 - A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
@@ -25,6 +25,7 @@ The following dependencies are fetched by xmake and normally do not need to be i
 - linmath.h
 - Vulkan-Headers
 - LZ4
+- miniaudio
 - cJSON
 - stb
 - Dear ImGui (debug builds only)
@@ -366,18 +367,16 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 ### Audio
 
-- [ ] Sound layers
-- [ ] Audio playback
-- [ ] MP3 playback
-- [ ] WAV playback
-- [ ] Loop playback
-- [ ] Single playback
-- [ ] Volume control
-- [ ] Play / pause / stop
-- [ ] System audio capture
-- [ ] Audio spectrum data
+- [x] Sound layers
+- [x] Audio playback (MP3 / WAV / OGG via miniaudio)
+- [x] Loop playback
+- [x] Video wallpaper audio
+- [x] Silent mode (`--no-audio` or `LWE_NO_AUDIO=1`)
+- [-] System audio capture and spectrum data (PulseAudio monitor; zeros when unavailable)
+- [-] Audio-responsive effects (spectrum uniforms bound; depends on effect compatibility)
+- [ ] Single playback mode / random playback mode
+- [ ] Volume control UI
 - [ ] Audio-responsive properties
-- [ ] Audio-responsive effects
 - [ ] Audio-responsive particles
 
 ### Media Integration

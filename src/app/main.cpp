@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "shared/assets/unpack.h"
+#include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/config.h"
 #include "shared/core/context.h"
@@ -96,6 +97,16 @@ static void init(void) {
         exit(EXIT_FAILURE);
     }
     ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
+
+    const char* no_audio_env = getenv("LWE_NO_AUDIO");
+    const bool audio_disabled = sargs_exists("no-audio") || sargs_exists("--no-audio") ||
+                                (no_audio_env && no_audio_env[0] && strcmp(no_audio_env, "0") != 0);
+    if (audio_disabled) {
+        LOG_TAG_I("AUDIO", "audio disabled");
+        AudioEngine::instance().setAudioDisabled(true);
+    } else {
+        AudioEngine::instance().init();
+    }
 #if DEBUG_BUILD
     const bool enable_diagnostics = sargs_exists("diagnose") || sargs_exists("--diagnose") ||
                                     sargs_exists("diagnostics") || sargs_exists("--diagnostics");
@@ -210,6 +221,7 @@ static void frame(void) {
                                              ctx.general.clear_color[2], ctx.general.clear_color[3]};
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
+    AudioEngine::instance().update(dt);
 
     ctx.asset_mgr.updateVideoTextures(dt, ctx.layers);
     parallax_update(ctx, dt, sapp_width(), sapp_height());
@@ -309,6 +321,8 @@ static void cleanup(void) {
     wallpaper_mgr.clear();
 
     ctx.asset_mgr.clearVideoTextures();
+
+    AudioEngine::instance().shutdown();
 
     renderer_cleanup(&ctx.renderer);
 

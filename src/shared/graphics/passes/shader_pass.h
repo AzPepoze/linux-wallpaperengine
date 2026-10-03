@@ -72,6 +72,7 @@ class ShaderPass {
             sg_range range = {.ptr = packed.data(), .size = packed.size() * sizeof(float)};
             sg_apply_uniforms(block.slot, &range);
         }
+        applyAudioSpectrumBlocks();
     }
 
     render_effect_pass_t getRenderPass(uint64_t frame_index = 0) {
@@ -103,6 +104,7 @@ class ShaderPass {
 #endif
 
    private:
+    void applyAudioSpectrumBlocks();
     std::string stored_vs_source;
     std::string stored_fs_source;
 };

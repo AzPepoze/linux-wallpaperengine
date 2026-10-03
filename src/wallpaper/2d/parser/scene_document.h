@@ -14,6 +14,13 @@ enum class SceneObjectKind {
     Image,
     Particle,
     Text,
+    Sound,
+};
+
+enum class SoundPlaybackMode {
+    Single,
+    Loop,
+    Random,
 };
 
 struct SceneNodeDocument {
@@ -74,6 +81,16 @@ struct TextObjectDocument {
     std::string vertical_align = "center";
 };
 
+struct SoundObjectDocument {
+    std::vector<std::string> sounds;
+    SoundPlaybackMode playback_mode = SoundPlaybackMode::Single;
+    float volume = 1.0f;
+    bool mute = false;
+    bool start_silent = false;
+    float min_time = 1.0f;
+    float max_time = 5.0f;
+};
+
 struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
     SceneNodeDocument node;
@@ -83,6 +100,7 @@ struct SceneObjectDocument {
     ImageObjectDocument image;
     ParticleObjectDocument particle;
     TextObjectDocument text;
+    SoundObjectDocument sound;
     std::vector<EffectInstanceDocument> effects;
 };
 

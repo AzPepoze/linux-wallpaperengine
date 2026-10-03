@@ -110,6 +110,9 @@ SceneNodeDocument parseNode(const cJSON* object) {
 }
 
 SceneObjectKind detectObjectKind(const cJSON* object) {
+    const cJSON* sound = cJSON_GetObjectItemCaseSensitive(object, "sound");
+    if (cJSON_IsArray(sound) || cJSON_IsString(sound)) return SceneObjectKind::Sound;
+
     const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
     if (cJSON_IsString(particle)) return SceneObjectKind::Particle;
 
@@ -312,6 +315,30 @@ SceneObjectDocument parseObject(const cJSON* object) {
     parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxwidth"), doc.text.maxwidth);
     parseString(cJSON_GetObjectItemCaseSensitive(object, "horizontalalign"), doc.text.horizontal_align);
     parseString(cJSON_GetObjectItemCaseSensitive(object, "verticalalign"), doc.text.vertical_align);
+
+    const cJSON* sound = cJSON_GetObjectItemCaseSensitive(object, "sound");
+    if (cJSON_IsArray(sound)) {
+        const cJSON* entry = nullptr;
+        cJSON_ArrayForEach(entry, sound) {
+            if (cJSON_IsString(entry) && entry->valuestring) doc.sound.sounds.emplace_back(entry->valuestring);
+        }
+    } else if (cJSON_IsString(sound) && sound->valuestring) {
+        doc.sound.sounds.emplace_back(sound->valuestring);
+    }
+    std::string playback_mode;
+    if (parseString(cJSON_GetObjectItemCaseSensitive(object, "playbackmode"), playback_mode)) {
+        if (playback_mode == "loop")
+            doc.sound.playback_mode = SoundPlaybackMode::Loop;
+        else if (playback_mode == "random")
+            doc.sound.playback_mode = SoundPlaybackMode::Random;
+        else
+            doc.sound.playback_mode = SoundPlaybackMode::Single;
+    }
+    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "volume"), doc.sound.volume);
+    doc.sound.mute = parseBool(cJSON_GetObjectItemCaseSensitive(object, "mute"), false);
+    doc.sound.start_silent = parseBool(cJSON_GetObjectItemCaseSensitive(object, "startsilent"), false);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "mintime"), doc.sound.min_time);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxtime"), doc.sound.max_time);
 
     const cJSON* effects = cJSON_GetObjectItemCaseSensitive(object, "effects");
     if (cJSON_IsArray(effects)) {

@@ -25,11 +25,24 @@ struct CompiledUniformBlock {
     std::vector<std::string> uniform_names;
 };
 
+struct CompiledAudioSpectrumMember {
+    std::string name;
+    int count = 0;
+};
+
+struct CompiledAudioSpectrumBlock {
+    int slot = -1;
+    sg_shader_stage stage = SG_SHADERSTAGE_NONE;
+    uint32_t size_bytes = 0;
+    std::vector<CompiledAudioSpectrumMember> members;
+};
+
 struct CompiledShader {
     GfxShader shader;
     GfxPipeline pipeline;
     ShaderVertexLayout vertex_layout = ShaderVertexLayout::Sprite2D;
     std::vector<CompiledUniformBlock> custom_uniform_blocks;
+    std::vector<CompiledAudioSpectrumBlock> audio_spectrum_blocks;
 };
 
 class ShaderCompiler {

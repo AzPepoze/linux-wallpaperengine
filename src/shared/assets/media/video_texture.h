@@ -28,6 +28,8 @@ class VideoTexture {
     bool isZeroCopy() const;
     const std::string& codecName() const;
     const std::string& containerName() const;
+    // Increments each time playback wraps to the start; used to resync audio.
+    uint32_t loopCount() const;
 
     void start();
     void stop();
