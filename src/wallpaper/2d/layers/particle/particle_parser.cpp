@@ -31,6 +31,7 @@ ParticleObjectConfig ParticleParser::parseObject(const wallpaper_engine::SceneOb
     config.particle_path = document.particle.particle;
     config.override_alpha = document.particle.override_alpha;
     config.override_rate = document.particle.override_rate;
+    config.override_size = document.particle.override_size;
     config.has_override_color = document.particle.has_override_color;
     config.override_color_is_legacy = document.particle.override_color_is_legacy;
     for (int i = 0; i < 3; ++i) config.override_color[i] = document.particle.override_color[i];
@@ -49,6 +50,8 @@ ParticleObjectConfig ParticleParser::parseObject(const cJSON* document) {
         const cJSON* rate = cJSON_GetObjectItemCaseSensitive(overrides, "rate");
         if (alpha) config.override_alpha = readFloat(alpha);
         if (rate) config.override_rate = readFloat(rate);
+        const cJSON* size = cJSON_GetObjectItemCaseSensitive(overrides, "size");
+        if (size) config.override_size = readFloat(size);
 
         const cJSON* color = cJSON_GetObjectItemCaseSensitive(overrides, "color");
         const cJSON* colorn = cJSON_GetObjectItemCaseSensitive(overrides, "colorn");

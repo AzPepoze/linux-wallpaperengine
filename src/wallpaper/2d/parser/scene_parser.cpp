@@ -306,6 +306,7 @@ SceneObjectDocument parseObject(const cJSON* object) {
     if (cJSON_IsObject(instance_override)) {
         parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "alpha"), doc.particle.override_alpha);
         parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "rate"), doc.particle.override_rate);
+        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "size"), doc.particle.override_size);
 
         const cJSON* color = cJSON_GetObjectItemCaseSensitive(instance_override, "color");
         const cJSON* colorn = cJSON_GetObjectItemCaseSensitive(instance_override, "colorn");

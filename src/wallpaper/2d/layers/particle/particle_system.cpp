@@ -119,7 +119,8 @@ void ParticleSystem::initParticleBuffers() {
 
 ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, EngineContext& ctx, float scene_width,
                                                float scene_height, float override_alpha, float override_rate,
-                                               const float* override_color, bool override_color_is_legacy) {
+                                               const float* override_color, bool override_color_is_legacy,
+                                               float override_size) {
     if (!particle_path || !particle_path[0]) return nullptr;
     char absolute_path[1024];
     if (!ctx.asset_mgr.resolvePath(particle_path, absolute_path, sizeof(absolute_path))) return nullptr;
@@ -136,6 +137,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
     particle_system->config_path = absolute_path;
     particle_system->override_alpha = override_alpha;
     particle_system->override_rate = override_rate;
+    particle_system->override_size = override_size;
     particle_system->override_color_is_legacy = override_color_is_legacy;
     if (override_color) {
         particle_system->has_override_color = true;
@@ -218,9 +220,10 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
     particle_system->initParticleBuffers();
 
     for (const ParticleObjectConfig& child : particle_system->config.children) {
-        ParticleSystem* child_system = createFromPath(
-            child.particle_path.c_str(), ctx, scene_width, scene_height, child.override_alpha, child.override_rate,
-            child.has_override_color ? child.override_color : nullptr, child.override_color_is_legacy);
+        ParticleSystem* child_system =
+            createFromPath(child.particle_path.c_str(), ctx, scene_width, scene_height, child.override_alpha,
+                           child.override_rate, child.has_override_color ? child.override_color : nullptr,
+                           child.override_color_is_legacy, child.override_size);
         if (child_system) particle_system->children.push_back(child_system);
     }
     for (float time = 0.0f; time < particle_system->config.start_time; time += 0.1f) particle_system->update(0.1f);
@@ -232,7 +235,7 @@ ParticleSystem* ParticleSystem::createFromJSON(cJSON* document, EngineContext& c
     const ParticleObjectConfig config = ParticleParser::parseObject(document);
     return createFromPath(config.particle_path.c_str(), ctx, scene_width, scene_height, config.override_alpha,
                           config.override_rate, config.has_override_color ? config.override_color : nullptr,
-                          config.override_color_is_legacy);
+                          config.override_color_is_legacy, config.override_size);
 }
 
 bool ParticleSystem::requiresSceneColor() const {

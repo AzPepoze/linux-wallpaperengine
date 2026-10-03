@@ -90,6 +90,8 @@ void ParticleSystem::spawnParticle() {
             particle.color[component] = authored_color * authored_color;
         }
     }
+    particle.size *= override_size;
+    particle.initial_size *= override_size;
     particle.base_position[0] = particle.position[0];
     particle.base_position[1] = particle.position[1];
     for (const ParticleOperatorConfig& particle_operator : config.operators) {
