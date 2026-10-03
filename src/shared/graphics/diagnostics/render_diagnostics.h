@@ -57,6 +57,7 @@ struct DiagnosticExportPayload {
     std::string wallpaper_path;
     std::string engine_path;
     bool has_deterministic_time = false;
+    bool final_only = false;
 
     // Raw memory captures
     bool has_source_image = false;

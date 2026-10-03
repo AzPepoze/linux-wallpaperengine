@@ -117,6 +117,9 @@ static void init(void) {
     ctx.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
 
     ctx.show_ui = DEBUG_BUILD;
+#if DEBUG_BUILD
+    if (sargs_exists("no-ui") || sargs_exists("--no-ui")) ctx.show_ui = false;
+#endif
     ctx.selected_object = -1;
     ctx.scaling_mode = sargs_exists("cover") ? SCALING_COVER : SCALING_FIT;
     ctx.particle_debug_bounds = sargs_exists("particle-debug-bounds") || sargs_exists("particle-debug");

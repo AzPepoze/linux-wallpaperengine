@@ -1,5 +1,6 @@
 #include "render_diagnostics.h"
 
+#include <sokol_app.h>
 #include <sokol_args.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -106,13 +107,15 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
     if (payload.has_source_image && !payload.source_rgba.empty()) {
         source_stats = ImageStats::compute(payload.source_rgba.data(), payload.source_w, payload.source_h);
         has_source_stats = true;
-        std::string src_path = frame_dir + "/source.png";
-        if (RenderDiagnostics::writePng(src_path, payload.source_w, payload.source_h, payload.source_rgba.data())) {
-            generated_files.push_back(std::string(frame_dir_buf) + "/source.png");
+        if (!payload.final_only) {
+            std::string src_path = frame_dir + "/source.png";
+            if (RenderDiagnostics::writePng(src_path, payload.source_w, payload.source_h, payload.source_rgba.data())) {
+                generated_files.push_back(std::string(frame_dir_buf) + "/source.png");
+            }
         }
     }
 
-    if (payload.has_final_image && !payload.final_rgba.empty()) {
+    if (!payload.final_only && payload.has_final_image && !payload.final_rgba.empty()) {
         std::string final_path = frame_dir + "/layer-final.png";
         if (RenderDiagnostics::writePng(final_path, payload.final_w, payload.final_h, payload.final_rgba.data())) {
             generated_files.push_back(std::string(frame_dir_buf) + "/layer-final.png");
@@ -121,8 +124,13 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
 
     if (!payload.stage_images.empty()) {
         std::string stage_dir = frame_dir + "/scene-stages";
-        ensureDir(stage_dir);
+        bool stage_dir_ready = false;
         for (const auto& stage : payload.stage_images) {
+            if (payload.final_only && stage.name != "post-bloom-final") continue;
+            if (!stage_dir_ready) {
+                ensureDir(stage_dir);
+                stage_dir_ready = true;
+            }
             char file_buf[256];
             std::string clean_stage = sanitizeFilename(stage.name);
             snprintf(file_buf, sizeof(file_buf), "%03d-%s.png", stage.stage_index, clean_stage.c_str());
@@ -163,26 +171,29 @@ void exportBundleAsync(DiagnosticExportPayload payload) {
                 item.trace.has_delta_from_source = true;
             }
 
-            std::string layer_clean = sanitizeFilename(item.trace.layer_name.empty() ? "layer" : item.trace.layer_name);
-            std::string effect_clean = cleanEffectName(item.trace.effect_file, item.trace.shader_name);
-            std::string shader_clean =
-                sanitizeFilename(item.trace.shader_name.empty() ? "shader" : item.trace.shader_name);
+            if (!payload.final_only) {
+                std::string layer_clean =
+                    sanitizeFilename(item.trace.layer_name.empty() ? "layer" : item.trace.layer_name);
+                std::string effect_clean = cleanEffectName(item.trace.effect_file, item.trace.shader_name);
+                std::string shader_clean =
+                    sanitizeFilename(item.trace.shader_name.empty() ? "shader" : item.trace.shader_name);
 
-            char eff_dir_buf[256];
-            snprintf(eff_dir_buf, sizeof(eff_dir_buf), "%02d_%s_%s", item.trace.draw_order, layer_clean.c_str(),
-                     effect_clean.c_str());
-            std::string pass_dir = frame_dir + "/" + eff_dir_buf;
-            ensureDir(pass_dir);
+                char eff_dir_buf[256];
+                snprintf(eff_dir_buf, sizeof(eff_dir_buf), "%02d_%s_%s", item.trace.draw_order, layer_clean.c_str(),
+                         effect_clean.c_str());
+                std::string pass_dir = frame_dir + "/" + eff_dir_buf;
+                ensureDir(pass_dir);
 
-            char pass_file_buf[256];
-            snprintf(pass_file_buf, sizeof(pass_file_buf), "pass-%02d-%s.png", item.trace.pass_index,
-                     shader_clean.c_str());
-            std::string pass_png_path = pass_dir + "/" + pass_file_buf;
+                char pass_file_buf[256];
+                snprintf(pass_file_buf, sizeof(pass_file_buf), "pass-%02d-%s.png", item.trace.pass_index,
+                         shader_clean.c_str());
+                std::string pass_png_path = pass_dir + "/" + pass_file_buf;
 
-            if (RenderDiagnostics::writePng(pass_png_path, item.width, item.height, item.rgba_data.data())) {
-                item.trace.captured_image_filename =
-                    std::string(frame_dir_buf) + "/" + eff_dir_buf + "/" + pass_file_buf;
-                generated_files.push_back(item.trace.captured_image_filename);
+                if (RenderDiagnostics::writePng(pass_png_path, item.width, item.height, item.rgba_data.data())) {
+                    item.trace.captured_image_filename =
+                        std::string(frame_dir_buf) + "/" + eff_dir_buf + "/" + pass_file_buf;
+                    generated_files.push_back(item.trace.captured_image_filename);
+                }
             }
 
             if (item.trace.render_target_name.empty()) {
@@ -392,6 +403,21 @@ void RenderDiagnostics::init(bool enabled) {
             config.disable_bloom = true;
             effect_log.info("Bisect: bloom rendering disabled");
         }
+        for (const char* key : {"--diagnose-final-only", "diagnose-final-only"}) {
+            if (sargs_exists(key)) {
+                config.final_only = true;
+                break;
+            }
+        }
+        if (config.final_only) {
+            effect_log.info("Diagnostic final-only mode: per-pass/per-stage PNG dumps disabled");
+        }
+        for (const char* key : {"--exit-after-diagnose", "exit-after-diagnose"}) {
+            if (sargs_exists(key)) {
+                config.exit_after_diagnose = true;
+                break;
+            }
+        }
         effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
                         (unsigned long long)config.target_frame);
     }
@@ -459,6 +485,7 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     payload.wallpaper_path = ctx.wallpaper_path;
     payload.engine_path = ctx.engine_path;
     payload.has_deterministic_time = config.has_deterministic_time;
+    payload.final_only = config.final_only;
 
     payload.has_source_image = has_source_image_;
     payload.source_rgba = std::move(source_rgba_);
@@ -501,6 +528,11 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
         worker_thread_.join();
     }
     worker_thread_ = std::thread(exportBundleAsync, std::move(payload));
+
+    if (config.exit_after_diagnose) {
+        effect_log.info("Diagnostic capture finished, requesting clean quit");
+        sapp_request_quit();
+    }
 }
 
 void RenderDiagnostics::registerShaderDump(const ShaderDump& dump) {
