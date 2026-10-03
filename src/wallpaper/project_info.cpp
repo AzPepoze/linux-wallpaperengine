@@ -47,6 +47,7 @@ bool applyProjectJson(const std::string& directory, ProjectInfo& info) {
     if (!root) return false;
 
     if (const char* title = jsonString(root, "title")) info.title = title;
+    info.video = parseVideoProperties(root);
     const char* type = jsonString(root, "type");
     const bool is_web = type && strcasecmp(type, "web") == 0;
     bool decided = false;
@@ -100,6 +101,7 @@ ProjectInfo ProjectInfo::detect(const std::string& path) {
         const bool decided = applyProjectJson(path, from_project);
         if (!has_scene && decided) return from_project;
         info.title = from_project.title;
+        info.video = from_project.video;
     }
     if (has_scene) {
         info.type = ProjectType::Scene;

@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "wallpaper/video/video_properties.h"
+
 enum class ProjectType { None, Scene, Video, Web, Unsupported };
 
 bool isVideoFile(const char* path);
@@ -17,6 +19,7 @@ struct ProjectInfo {
     std::string entry;
     std::string title;
     std::string type_name;
+    VideoProperties video;
 
     static ProjectInfo detect(const std::string& path);
 };

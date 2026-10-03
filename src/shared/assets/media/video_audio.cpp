@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "shared/assets/media/video_rate.h"
 #include "shared/core/logger.h"
 
 extern "C" {
@@ -98,6 +99,15 @@ struct VideoAudioStream::Impl {
     AVIOContext* io = nullptr;
     uint8_t* io_buffer = nullptr;
 
+    bool initResampler(uint32_t output_rate) {
+        AVChannelLayout out_layout;
+        av_channel_layout_default(&out_layout, kOutputChannels);
+        swr_free(&swr);
+        return swr_alloc_set_opts2(&swr, &out_layout, AV_SAMPLE_FMT_FLT, (int)output_rate, &codec->ch_layout,
+                                   codec->sample_fmt, codec->sample_rate, 0, nullptr) >= 0 &&
+               swr_init(swr) >= 0;
+    }
+
     ~Impl() {
         if (swr) swr_free(&swr);
         av_frame_free(&frame);
@@ -148,17 +158,12 @@ std::unique_ptr<VideoAudioStream> VideoAudioStream::open(const char* path) {
         return stream;
     }
 
-    AVChannelLayout out_layout;
-    av_channel_layout_default(&out_layout, kOutputChannels);
     if (stream->impl->codec->ch_layout.nb_channels == 0) {
         av_channel_layout_default(&stream->impl->codec->ch_layout, stream->impl->codec->ch_layout.nb_channels > 0
                                                                        ? stream->impl->codec->ch_layout.nb_channels
                                                                        : 1);
     }
-    if (swr_alloc_set_opts2(&stream->impl->swr, &out_layout, AV_SAMPLE_FMT_FLT, kOutputSampleRate,
-                            &stream->impl->codec->ch_layout, stream->impl->codec->sample_fmt,
-                            stream->impl->codec->sample_rate, 0, nullptr) < 0 ||
-        swr_init(stream->impl->swr) < 0) {
+    if (!stream->impl->initResampler(kOutputSampleRate)) {
         LOG_TAG_W(TAG, "Failed to set up audio resampler for: %s", path);
         return stream;
     }
@@ -176,6 +181,13 @@ std::unique_ptr<VideoAudioStream> VideoAudioStream::open(const char* path) {
 
 bool VideoAudioStream::hasAudio() const {
     return impl && impl->has_audio;
+}
+
+void VideoAudioStream::setRate(float rate) {
+    if (!impl || !impl->has_audio) return;
+    if (impl->initResampler(resampledAudioRate(kOutputSampleRate, rate))) return;
+    LOG_TAG_W(TAG, "Failed to apply playback rate to audio; disabling it");
+    impl->has_audio = false;
 }
 
 void VideoAudioStream::pump(AudioEngine::StreamHandle stream, uint32_t target_queued_frames) {

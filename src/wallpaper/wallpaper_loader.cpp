@@ -23,6 +23,13 @@ std::unique_ptr<Wallpaper> createWallpaper(ProjectType type, EngineContext& ctx)
             return nullptr;
     }
 }
+
+void applyVideoProperties(const VideoProperties& video, EngineContext& ctx) {
+    ctx.asset_mgr.setVideoPlayback(video.rate, video.volume);
+    // An explicit --cover on the command line keeps priority over the project's fit.
+    if (video.fit != VideoFit::Default && ctx.scaling_mode == SCALING_FIT)
+        ctx.scaling_mode = video.fit == VideoFit::Fill ? SCALING_COVER : SCALING_FIT;
+}
 }  // namespace
 
 bool WallpaperLoader::canLoad(const ProjectInfo& info) {
@@ -51,6 +58,7 @@ std::unique_ptr<Wallpaper> WallpaperLoader::load(const ProjectInfo& info, Engine
     ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
     ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
 
+    if (info.type == ProjectType::Video) applyVideoProperties(info.video, ctx);
     auto wallpaper = createWallpaper(info.type, ctx);
     if (!wallpaper) return nullptr;
     if (!wallpaper->load(info.entry, ctx)) {

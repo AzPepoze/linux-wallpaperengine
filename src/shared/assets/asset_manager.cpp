@@ -5,6 +5,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <algorithm>
+
+#include "shared/assets/media/video_rate.h"
 #include "shared/assets/tex_decoder.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
@@ -46,6 +49,23 @@ void AssetManager::init(const char* ep, const char* wp) {
     engine_provider = std::make_unique<EngineAssetProvider>(engine_path);
     wallpaper_provider = std::make_unique<WallpaperAssetProvider>(wallpaper_path);
     internal_provider = std::make_unique<InternalAssetProvider>();
+}
+
+void AssetManager::setVideoPlayback(float rate, float volume) {
+    video_rate_ = clampPlaybackRate(rate);
+    video_volume_ = std::clamp(volume, 0.0f, 1.0f);
+}
+
+void AssetManager::addVideoTexture(const char* path, sg_image image,
+                                   std::unique_ptr<wallpaper_engine::VideoTexture> video) const {
+    video_textures.push_back({});
+    ActiveVideoTexture& entry = video_textures.back();
+    entry.path = path;
+    entry.image = image;
+    entry.decoder = std::move(video);
+    if (!AudioEngine::instance().isAvailable()) return;
+    entry.audio = VideoAudioStream::open(path);
+    if (entry.audio) entry.audio->setRate(video_rate_);
 }
 
 void AssetManager::clearVideoTextures() {
@@ -95,7 +115,7 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
             if (video.audio_stream == AudioEngine::kInvalidStream && AudioEngine::instance().isAvailable()) {
                 video.audio_stream = AudioEngine::instance().createStream(48000, 2);
                 if (video.audio_stream != AudioEngine::kInvalidStream)
-                    AudioEngine::instance().setStreamVolume(video.audio_stream, 1.0f);
+                    AudioEngine::instance().setStreamVolume(video.audio_stream, video_volume_);
             }
             if (video.audio_stream != AudioEngine::kInvalidStream) {
                 const uint32_t loops = video.decoder->loopCount();
@@ -107,7 +127,7 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
             }
         }
 
-        video.elapsed_seconds += elapsed_seconds;
+        video.elapsed_seconds += elapsed_seconds * video_rate_;
         const float frame_dur = video.decoder->frameDuration();
         if (video.elapsed_seconds < frame_dur) continue;
 
@@ -210,12 +230,7 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                         if (video->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
                             gpu_blit_zero_copy_surface(*surface, gpu_image, (int)video->width(), (int)video->height());
                         }
-                        video_textures.push_back({});
-                        ActiveVideoTexture& entry = video_textures.back();
-                        entry.path = abs_path;
-                        entry.image = gpu_image;
-                        entry.decoder = std::move(video);
-                        if (AudioEngine::instance().isAvailable()) entry.audio = VideoAudioStream::open(abs_path);
+                        addVideoTexture(abs_path, gpu_image, std::move(video));
                         return GfxImage(gpu_image);
                     }
                 } else {
@@ -224,12 +239,7 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                         desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
                         const sg_image gpu_image = sg_make_image(&desc);
                         if (gpu_image.id != SG_INVALID_ID) {
-                            video_textures.push_back({});
-                            ActiveVideoTexture& entry = video_textures.back();
-                            entry.path = abs_path;
-                            entry.image = gpu_image;
-                            entry.decoder = std::move(video);
-                            if (AudioEngine::instance().isAvailable()) entry.audio = VideoAudioStream::open(abs_path);
+                            addVideoTexture(abs_path, gpu_image, std::move(video));
                             return GfxImage(gpu_image);
                         }
                     }

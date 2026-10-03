@@ -117,7 +117,18 @@ target("project_tests")
     set_warnings("all", "extra")
     add_packages("cjson")
     add_includedirs("src")
-    add_files("tests/project_info_test.cpp", "src/wallpaper/project_info.cpp")
+    add_files("tests/project_info_test.cpp", "src/wallpaper/project_info.cpp",
+              "src/wallpaper/video/video_properties.cpp")
+
+-- Synthetic video property and rate checks. Not built by default; run with `xmake build video_tests`.
+target("video_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_packages("cjson")
+    add_includedirs("src")
+    add_files("tests/video_test.cpp", "src/wallpaper/video/video_properties.cpp")
 
 task("check")
     set_menu {

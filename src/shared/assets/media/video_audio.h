@@ -17,6 +17,8 @@ class VideoAudioStream {
     static std::unique_ptr<VideoAudioStream> open(const char* path);
 
     bool hasAudio() const;
+    // Resamples so playback runs `rate` times faster (pitch follows speed); call before pumping.
+    void setRate(float rate);
 
     void pump(AudioEngine::StreamHandle stream, uint32_t target_queued_frames);
     void restart(AudioEngine::StreamHandle stream);
