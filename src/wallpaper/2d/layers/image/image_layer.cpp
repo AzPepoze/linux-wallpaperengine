@@ -43,14 +43,9 @@ void ImageLayer::updateCachedView() {
 void ImageLayer::update(float dt, EngineContext& ctx) {
     tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
     if (is_fullscreen || is_compose_region) return;
-    if (has_puppet_mesh) {
-        puppet_pose.advance(puppet_layers, dt);
-        if (renderPuppet(ctx)) {
-            renderEffectChain(ctx, (sg_image)puppet_straight.image, (sg_view)puppet_straight.texture_view);
-            return;
-        }
-    }
+    if (has_puppet_mesh) puppet_pose.advance(puppet_layers, dt);
     renderEffectChain(ctx);
+    puppet_resolved = has_puppet_mesh && renderPuppet(ctx);
 }
 
 void ImageLayer::start() {

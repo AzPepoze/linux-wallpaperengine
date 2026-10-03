@@ -49,12 +49,12 @@ void ImageLayer::draw(EngineContext& ctx) {
 
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
-    if (has_effect_output) {
-        draw_image = effect_output_image;
-        draw_view = effect_output_view;
-    } else if (has_puppet_mesh && puppet_straight.image.id != SG_INVALID_ID) {
+    if (puppet_resolved) {
         draw_image = puppet_straight.image;
         draw_view = puppet_straight.texture_view;
+    } else if (has_effect_output) {
+        draw_image = effect_output_image;
+        draw_view = effect_output_view;
     }
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
                          rect.rotation, tint, false, nullptr);
@@ -68,12 +68,12 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
     const ScreenRect rect = screenRect(ctx);
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
-    if (has_effect_output) {
-        draw_image = effect_output_image;
-        draw_view = effect_output_view;
-    } else if (has_puppet_mesh && puppet_straight.image.id != SG_INVALID_ID) {
+    if (puppet_resolved) {
         draw_image = puppet_straight.image;
         draw_view = puppet_straight.texture_view;
+    } else if (has_effect_output) {
+        draw_image = effect_output_image;
+        draw_view = effect_output_view;
     }
     renderer_draw_image_composite(ctx, &ctx.renderer, draw_image, draw_view, scene_view, rect.x, rect.y, rect.width,
                                   rect.height, rect.rotation, tint, color_blend_mode);

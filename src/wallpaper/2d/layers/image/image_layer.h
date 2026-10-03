@@ -175,6 +175,7 @@ class ImageLayer : public Layer {
     // off-screen target the mesh is drawn into before the effect chain runs.
     wallpaper_engine::MdlModel puppet;
     bool has_puppet_mesh = false;
+    bool puppet_resolved = false;
     GfxBuffer puppet_position_buffer;
     GfxBuffer puppet_uv_buffer;
     GfxBuffer puppet_index_buffer;

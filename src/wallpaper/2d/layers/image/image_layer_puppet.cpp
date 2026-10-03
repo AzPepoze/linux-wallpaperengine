@@ -127,6 +127,10 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
     if (cached_view.id == SG_INVALID_ID) updateCachedView();
     if (cached_view.id == SG_INVALID_ID) return false;
 
+    const bool has_effect_output = effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID;
+    const sg_image source_image = has_effect_output ? effect_output_image : (sg_image)img;
+    const sg_view source_view = has_effect_output ? effect_output_view : (sg_view)cached_view;
+
     const sg_image_desc material_desc = sg_query_image_desc(img);
     int width = (int)std::lround(size[0] > 0.0f ? size[0] : (float)material_desc.width);
     int height = (int)std::lround(size[1] > 0.0f ? size[1] : (float)material_desc.height);
@@ -148,7 +152,7 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_mesh(ctx, &ctx.renderer, puppet_position_buffer, puppet_uv_buffer, puppet_index_buffer,
-                       puppet_index_count, (sg_image)img, (sg_view)cached_view, white, (float)width, (float)height);
+                       puppet_index_count, source_image, source_view, white, (float)width, (float)height);
     sg_end_pass();
 
     sg_pass resolve_pass = {};
