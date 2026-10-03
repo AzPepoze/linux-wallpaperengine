@@ -11,6 +11,7 @@
 ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
+    bool attached = false;
     ScreenRect rect;
     rect.rotation = rotation;
     if (scene_object_id != 0 && ctx.scene.scene_tree) {
@@ -19,7 +20,16 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
             layer_scale[1] = node->scale[1];
             layer_scale[2] = node->scale[2];
             rect.rotation = node->angles[2];
-
+            if (!node->attachment.empty()) {
+                mat4x4 world;
+                if (ctx.scene.scene_tree->worldTransform(scene_object_id, world)) {
+                    attached = true;
+                    layer_scale[0] = std::hypot(world[0][0], world[0][1]);
+                    layer_scale[1] = std::hypot(world[1][0], world[1][1]);
+                    // Scene/bone space is Y-up; sprite rotation is in screen space.
+                    rect.rotation = -std::atan2(world[0][1], world[0][0]) * 180.0f / (float)M_PI;
+                }
+            }
         }
         ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
@@ -38,6 +48,15 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     rect.x = ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - rect.width * 0.5f;
     rect.y = ctx.scene.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
              rect.height * 0.5f;
+    if (attached) {
+        // renderer_draw_sprite rotates its unit quad around the top-left.
+        // Keep the transformed image centre fixed at the scene-node position.
+        const float angle = rect.rotation * (float)M_PI / 180.0f;
+        const float half_width = rect.width * 0.5f;
+        const float half_height = rect.height * 0.5f;
+        rect.x += half_width - (std::cos(angle) * half_width - std::sin(angle) * half_height);
+        rect.y += half_height - (std::sin(angle) * half_width + std::cos(angle) * half_height);
+    }
     return rect;
 }
 

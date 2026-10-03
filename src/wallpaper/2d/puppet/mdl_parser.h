@@ -71,12 +71,20 @@ struct MdlAnimationClip {
     std::vector<std::vector<MdlKeyframe>> tracks;
 };
 
+struct MdlAttachment {
+    uint16_t bone_index = 0;
+    std::string name;
+    // Column-major local transform from attachment space to the named bone.
+    float matrix[16] = {};
+};
+
 struct MdlModel {
     std::string version;
     std::string material;
     std::vector<MdlVertex> vertices;
     std::vector<MdlTriangle> triangles;
     std::vector<MdlBone> bones;
+    std::vector<MdlAttachment> attachments;
     std::vector<MdlAnimationClip> clips;
 };
 

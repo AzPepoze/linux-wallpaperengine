@@ -132,6 +132,40 @@ void PuppetPose::advance(std::vector<PuppetAnimationLayer>& layers, float dt) co
     }
 }
 
+void PuppetPose::attachmentTransforms(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                                      std::unordered_map<std::string, PuppetMatrix>& out) const {
+    out.clear();
+    if (model.attachments.empty()) return;
+
+    std::vector<MdlKeyframe> pose(model.bones.size());
+    bool seeded = false;
+    for (const PuppetAnimationLayer& layer : layers) {
+        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
+        if (!clip) continue;
+        if (!seeded) {
+            for (size_t b = 0; b < std::min(pose.size(), clip->tracks.size()); ++b) {
+                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
+            }
+            seeded = true;
+        }
+        accumulateLayer(*clip, layer, pose);
+    }
+
+    std::vector<PuppetMatrix> world(model.bones.size());
+    for (size_t i = 0; i < model.bones.size(); ++i) {
+        const PuppetMatrix local = seeded ? composeLocal(pose[i]) : bindLocal(model.bones[i]);
+        const uint32_t parent = model.bones[i].parent;
+        world[i] = parent < i ? multiply(world[parent], local) : local;
+    }
+
+    for (const MdlAttachment& attachment : model.attachments) {
+        if (attachment.bone_index >= world.size() || attachment.name.empty()) continue;
+        PuppetMatrix local;
+        for (int i = 0; i < 16; ++i) local.m[i] = attachment.matrix[i];
+        out[attachment.name] = multiply(world[attachment.bone_index], local);
+    }
+}
+
 void PuppetPose::computeBoneMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers) const {
     const size_t count = model.bones.size();
     std::vector<MdlKeyframe> pose(count);

@@ -14,6 +14,8 @@ struct SceneTreeNode {
     uint32_t id = 0;
     uint32_t parent_id = 0;
     std::string name;
+    std::string attachment;
+    std::unordered_map<std::string, std::array<float, 16>> attachment_transforms;
     std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};
     std::array<float, 3> angles = {0.0f, 0.0f, 0.0f};

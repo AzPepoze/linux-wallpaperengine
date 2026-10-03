@@ -27,6 +27,7 @@ struct SceneNodeDocument {
     bool valid = false;
     uint32_t id = 0;
     uint32_t parent_id = 0;
+    std::string attachment;
     std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};
     std::array<float, 3> angles = {0.0f, 0.0f, 0.0f};

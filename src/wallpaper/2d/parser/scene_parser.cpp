@@ -89,6 +89,7 @@ SceneNodeDocument parseNode(const cJSON* object) {
     if (cJSON_IsNumber(parent) && parent->valuedouble > 0.0) {
         out.parent_id = (uint32_t)parent->valuedouble;
     }
+    parseString(cJSON_GetObjectItemCaseSensitive(object, "attachment"), out.attachment);
 
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "origin"), out.origin.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "scale"), out.scale.data(), 3);

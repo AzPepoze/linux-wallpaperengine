@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -48,6 +49,18 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
     if (is_fullscreen || is_compose_region) return;
     if (has_puppet_mesh) puppet_pose.advance(puppet_layers, dt);
     updateAnimatedFrame(ctx);
+    if (has_puppet_mesh && scene_object_id != 0 && ctx.scene.scene_tree) {
+        if (SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
+            std::unordered_map<std::string, wallpaper_engine::PuppetMatrix> attachments;
+            puppet_pose.attachmentTransforms(puppet, puppet_layers, attachments);
+            node->attachment_transforms.clear();
+            for (const auto& [name, matrix] : attachments) {
+                std::array<float, 16> values;
+                for (size_t i = 0; i < values.size(); ++i) values[i] = matrix.m[i];
+                node->attachment_transforms.emplace(name, values);
+            }
+        }
+    }
     renderEffectChain(ctx);
     puppet_resolved = has_puppet_mesh && renderPuppet(ctx);
 }

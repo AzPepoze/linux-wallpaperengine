@@ -9,6 +9,8 @@
 
 void runPuppetPoseTests();
 int puppetPoseFailures();
+void runSceneAttachmentTests();
+int sceneAttachmentFailures();
 
 namespace {
 
@@ -26,6 +28,10 @@ void appendU32(std::vector<uint8_t>& out, uint32_t value) {
     out.push_back((uint8_t)((value >> 8) & 0xff));
     out.push_back((uint8_t)((value >> 16) & 0xff));
     out.push_back((uint8_t)((value >> 24) & 0xff));
+}
+
+void patchU32(std::vector<uint8_t>& out, size_t offset, uint32_t value) {
+    for (int i = 0; i < 4; ++i) out[offset + (size_t)i] = (uint8_t)((value >> (i * 8)) & 0xff);
 }
 
 void appendU16(std::vector<uint8_t>& out, uint16_t value) {
@@ -111,6 +117,23 @@ std::vector<uint8_t> makeMdl() {
     appendText(out, "root");  // bone name
     appendU8(out, 0);
 
+    // MDAT: one attachment on the root bone, translated by (3, 4, 0).
+    appendText(out, "MDAT0001");
+    appendU8(out, 0);
+    const size_t attachment_end_offset_pos = out.size();
+    appendU32(out, 0);
+    appendU16(out, 1);
+    appendU16(out, 0);
+    appendText(out, "socket");
+    appendU8(out, 0);
+    for (int i = 0; i < 16; ++i) {
+        float value = i % 5 == 0 ? 1.0f : 0.0f;
+        if (i == 12) value = 3.0f;
+        if (i == 13) value = 4.0f;
+        appendF32(out, value);
+    }
+    patchU32(out, attachment_end_offset_pos, (uint32_t)out.size());
+
     // MDLA: one clip, one bone track, keyframes for frame_count=1.
     appendText(out, "MDLA0006");
     appendU8(out, 0);
@@ -169,6 +192,14 @@ int main() {
         check(model.bones[0].bind_matrix[0] == 1.0f && model.bones[0].bind_matrix[1] == 0.0f, "bind matrix");
     }
 
+    check(model.attachments.size() == 1, "one attachment");
+    if (model.attachments.size() == 1) {
+        check(model.attachments[0].bone_index == 0 && model.attachments[0].name == "socket",
+              "attachment bone index and name");
+        check(model.attachments[0].matrix[12] == 3.0f && model.attachments[0].matrix[13] == 4.0f,
+              "attachment local matrix translation");
+    }
+
     check(model.clips.size() == 1, "one clip");
     if (model.clips.size() == 1) {
         const wallpaper_engine::MdlAnimationClip& clip = model.clips[0];
@@ -187,8 +218,9 @@ int main() {
     check(!wallpaper_engine::parseMdl(nullptr, 0, rejected), "null buffer rejected");
 
     runPuppetPoseTests();
-    if (g_failures + puppetPoseFailures() != 0) {
-        fprintf(stderr, "%d check(s) failed\n", g_failures + puppetPoseFailures());
+    runSceneAttachmentTests();
+    if (g_failures + puppetPoseFailures() + sceneAttachmentFailures() != 0) {
+        fprintf(stderr, "%d check(s) failed\n", g_failures + puppetPoseFailures() + sceneAttachmentFailures());
         return 1;
     }
     printf("mdl parser checks passed\n");

@@ -1,6 +1,8 @@
 #ifndef WALLPAPER_ENGINE_PUPPET_POSE_H
 #define WALLPAPER_ENGINE_PUPPET_POSE_H
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "wallpaper/2d/puppet/mdl_parser.h"
@@ -25,6 +27,8 @@ class PuppetPose {
    public:
     void init(const MdlModel& model);
     void advance(std::vector<PuppetAnimationLayer>& layers, float dt) const;
+    void attachmentTransforms(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                              std::unordered_map<std::string, PuppetMatrix>& out) const;
     // Writes skinned xyz positions for every vertex of the model.
     void skin(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers, std::vector<float>& out) const;
 

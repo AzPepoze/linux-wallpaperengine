@@ -91,6 +91,27 @@ bool parseBones(Reader& r, const uint8_t* data, size_t size, MdlModel& out) {
     return true;
 }
 
+bool parseAttachments(Reader& r, MdlModel& out) {
+    std::string header;
+    if (!r.cstring(header) || header.rfind("MDAT", 0) != 0) return false;
+    uint32_t end_offset = 0;
+    uint16_t count = 0;
+    if (!r.u32(end_offset) || !r.u16(count) || count > 4096) return false;
+    const size_t section_end = end_offset >= r.pos && end_offset <= r.size ? end_offset : r.size;
+    out.attachments.reserve(count);
+    for (uint16_t i = 0; i < count; ++i) {
+        MdlAttachment attachment;
+        if (!r.u16(attachment.bone_index) || !r.cstring(attachment.name) || attachment.name.empty()) return false;
+        for (float& value : attachment.matrix) {
+            if (!r.f32(value)) return false;
+        }
+        if (r.pos > section_end) return false;
+        out.attachments.push_back(std::move(attachment));
+    }
+    if (section_end >= r.pos) r.pos = section_end;
+    return true;
+}
+
 bool readKeyframes(Reader& r, std::vector<MdlKeyframe>& track, size_t count) {
     track.resize(count);
     for (MdlKeyframe& keyframe : track) {
@@ -290,6 +311,11 @@ bool parseMdl(const uint8_t* data, size_t size, MdlModel& out) {
     if (findTag(data, size, search_from, "MDLS", bones_offset)) {
         Reader bone_reader{data, size, bones_offset};
         parseBones(bone_reader, data, size, out);
+    }
+    size_t attachments_offset = 0;
+    if (findTag(data, size, search_from, "MDAT", attachments_offset)) {
+        Reader attachment_reader{data, size, attachments_offset};
+        parseAttachments(attachment_reader, out);
     }
     size_t anim_offset = 0;
     if (findTag(data, size, search_from, "MDLA", anim_offset)) {

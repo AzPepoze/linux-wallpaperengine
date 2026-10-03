@@ -4,6 +4,8 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <unordered_map>
+
 using namespace wallpaper_engine;
 
 namespace {
@@ -23,6 +25,13 @@ MdlModel makeModel() {
     bone.bind_matrix[0] = bone.bind_matrix[5] = bone.bind_matrix[10] = bone.bind_matrix[15] = 1.0f;
     bone.bind_matrix[12] = 100.0f;
     model.bones.push_back(bone);
+
+    MdlAttachment attachment;
+    attachment.bone_index = 0;
+    attachment.name = "socket";
+    attachment.matrix[0] = attachment.matrix[5] = attachment.matrix[10] = attachment.matrix[15] = 1.0f;
+    attachment.matrix[12] = 3.0f;
+    model.attachments.push_back(attachment);
 
     MdlVertex vertex;
     vertex.position[0] = 110.0f;
@@ -60,6 +69,13 @@ void runPuppetPoseTests() {
     pose.advance(layers, 0.5f);
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 160.0f) < 1e-3f, "half a second moves the bone by 50 units");
+    std::unordered_map<std::string, PuppetMatrix> attachments;
+    pose.attachmentTransforms(model, layers, attachments);
+    check(attachments.count("socket") == 1, "animated attachment is exposed by name");
+    if (attachments.count("socket")) {
+        check(fabsf(attachments["socket"].m[12] - 153.0f) < 1e-3f,
+              "attachment uses animated bone world transform plus its local transform");
+    }
 
     layers[0].visible = false;
     pose.skin(model, layers, out);

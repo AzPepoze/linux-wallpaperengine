@@ -114,10 +114,20 @@ bool SceneTree::worldTransform(uint32_t id, mat4x4 out) const {
 
     mat4x4 world;
     mat4x4_identity(world);
+    const SceneTreeNode* parent = nullptr;
     for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+        if (parent && !(*it)->attachment.empty()) {
+            const auto attachment = parent->attachment_transforms.find((*it)->attachment);
+            if (attachment != parent->attachment_transforms.end()) {
+                mat4x4 attachment_matrix;
+                memcpy(attachment_matrix, attachment->second.data(), sizeof(mat4x4));
+                mat4x4_mul(world, world, attachment_matrix);
+            }
+        }
         mat4x4 local;
         ::localTransform(**it, local);
         mat4x4_mul(world, world, local);
+        parent = *it;
     }
 
     memcpy(out, world, sizeof(mat4x4));

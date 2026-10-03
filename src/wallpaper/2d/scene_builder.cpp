@@ -72,6 +72,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         node.id = object.node.id;
         node.parent_id = object.node.parent_id;
         node.name = sceneTreeDisplayName(object);
+        node.attachment = object.node.attachment;
         node.origin = object.node.origin;
         node.scale = object.node.scale;
         node.angles = object.node.angles;

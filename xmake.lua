@@ -161,8 +161,9 @@ target("mdl_tests")
     set_targetdir("bin/$(mode)")
     set_warnings("all", "extra")
     add_includedirs("src")
+    add_packages("linmath.h")
     add_files("tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
-              "src/wallpaper/2d/puppet/puppet_pose.cpp")
+              "src/wallpaper/2d/puppet/puppet_pose.cpp", "src/wallpaper/2d/tree/scene_tree.cpp")
 
 -- Synthetic shader preprocessing checks. Not built by default; run with `xmake build shader_tests`.
 target("shader_tests")
