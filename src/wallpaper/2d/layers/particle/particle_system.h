@@ -45,6 +45,15 @@ struct Particle {
 class EngineContext;
 class ShaderPass;
 
+// Wallpaper Engine child particle systems are spawned under one of these
+// conditions (WE "Children" component).
+enum class ParticleSpawnType {
+    Static,       // one instance at the particle system origin
+    EventFollow,  // created per parent particle and follows it
+    EventSpawn,   // created when a parent particle spawns
+    EventDeath,   // created where a parent particle dies
+};
+
 class ParticleSystem {
    public:
     std::string name;
@@ -67,7 +76,12 @@ class ParticleSystem {
     bool use_perspective = false;
     // A child system is emitted from its parent's particles rather than from its
     // own emitter region; this tracks its accumulated emission time.
-    bool attached_to_parent = false;
+    ParticleSpawnType spawn_type = ParticleSpawnType::Static;
+    vec3 child_offset = {0, 0, 0};
+    vec3 child_angles = {0, 0, 0};
+    vec3 child_scale = {1, 1, 1};
+    int child_maxcount = 20;
+    float child_probability = 1.0f;
     float attached_emitter_timer = 0.0f;
 
     int spritesheet_cols = 0;

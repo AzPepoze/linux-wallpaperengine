@@ -14,6 +14,13 @@
 #define TAG "PARTICLE"
 
 namespace {
+ParticleSpawnType parseSpawnType(const std::string& type) {
+    if (type == "eventfollow") return ParticleSpawnType::EventFollow;
+    if (type == "eventspawn") return ParticleSpawnType::EventSpawn;
+    if (type == "eventdeath") return ParticleSpawnType::EventDeath;
+    return ParticleSpawnType::Static;
+}
+
 bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& ctx, bool fallback) {
     char absolute_path[1024];
     if (material_path.empty() ||
@@ -200,7 +207,14 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
                            child.override_rate, child.has_override_color ? child.override_color : nullptr,
                            child.override_color_is_legacy, child.override_size);
         if (child_system) {
-            child_system->attached_to_parent = true;
+            child_system->spawn_type = parseSpawnType(child.type);
+            for (int i = 0; i < 3; ++i) {
+                child_system->child_offset[i] = child.origin[i];
+                child_system->child_angles[i] = child.angles[i];
+                child_system->child_scale[i] = child.scale[i];
+            }
+            child_system->child_maxcount = child.maxcount;
+            child_system->child_probability = child.probability;
             particle_system->children.push_back(child_system);
         }
     }

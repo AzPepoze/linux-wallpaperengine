@@ -5,7 +5,7 @@
 
 void ParticleSystem::update(float dt) {
     global_time += dt;
-    if (!attached_to_parent) {
+    if (spawn_type == ParticleSpawnType::Static) {
         for (size_t emitter_index = 0; emitter_index < config.emitters.size(); ++emitter_index) {
             const float rate = config.emitters[emitter_index].rate * override_rate;
             if (rate > 0) {
@@ -22,6 +22,14 @@ void ParticleSystem::update(float dt) {
         Particle& particle = particles[index];
         particle.life -= dt;
         if (particle.life <= 0) {
+            // Event-death children are created where this particle died.
+            for (ParticleSystem* child : children) {
+                if (child->spawn_type != ParticleSpawnType::EventDeath) continue;
+                if (child->child_probability < 1.0f &&
+                    (float)rand() / (float)RAND_MAX > child->child_probability)
+                    continue;
+                child->spawnParticle(particle.position);
+            }
             particles[index] = particles.back();
             particles.pop_back();
             --index;
@@ -80,7 +88,7 @@ void ParticleSystem::update(float dt) {
         }
     }
     for (ParticleSystem* child : children) {
-        child->emitFromParents(*this, dt);
+        if (child->spawn_type == ParticleSpawnType::EventFollow) child->emitFromParents(*this, dt);
         child->update(dt);
     }
 }
@@ -99,6 +107,7 @@ void ParticleSystem::emitFromParents(const ParticleSystem& parent, float dt) {
     attached_emitter_timer += dt * rate * (float)parent.particles.size();
     while (attached_emitter_timer >= 1.0f) {
         attached_emitter_timer -= 1.0f;
+        if (child_probability < 1.0f && (float)rand() / (float)RAND_MAX > child_probability) continue;
         const size_t count = parent.particles.size();
         size_t index = (size_t)((float)rand() / (float)RAND_MAX * (float)count);
         if (index >= count) index = count - 1;

@@ -18,6 +18,16 @@ struct ParticleObjectConfig {
     vec3 override_color = {1.0f, 1.0f, 1.0f};
     bool has_override_color = false;
     bool override_color_is_legacy = false;
+
+    // Child particle system configuration (see the WE "Children" component):
+    // type is static | eventfollow | eventspawn | eventdeath.
+    std::string type = "static";
+    vec3 origin = {0.0f, 0.0f, 0.0f};
+    vec3 angles = {0.0f, 0.0f, 0.0f};
+    vec3 scale = {1.0f, 1.0f, 1.0f};
+    int maxcount = 20;
+    float probability = 1.0f;
+    int controlpoint_start_index = 0;
 };
 
 struct ParticleEmitterConfig {

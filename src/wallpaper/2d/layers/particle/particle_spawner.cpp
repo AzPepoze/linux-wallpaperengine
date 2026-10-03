@@ -45,6 +45,10 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
         particle.position[1] += parent_position[1];
         particle.position[2] += parent_position[2];
     }
+    // Child instance offset (WE "Children" component).
+    particle.position[0] += child_offset[0];
+    particle.position[1] += child_offset[1];
+    particle.position[2] += child_offset[2];
     for (const ParticleInitializerConfig& initializer : config.initializers) {
         if (initializer.type == "lifetimerandom") {
             particle.max_life =
@@ -98,6 +102,8 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
     }
     particle.size *= override_size;
     particle.initial_size *= override_size;
+    particle.size *= child_scale[0];
+    particle.initial_size *= child_scale[0];
     particle.base_position[0] = particle.position[0];
     particle.base_position[1] = particle.position[1];
     for (const ParticleOperatorConfig& particle_operator : config.operators) {
@@ -129,4 +135,11 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
         }
     }
     particles.push_back(particle);
+
+    // Event-spawn children are created where this particle spawned.
+    for (ParticleSystem* child : children) {
+        if (child->spawn_type != ParticleSpawnType::EventSpawn) continue;
+        if (child->child_probability < 1.0f && randomFloat() > child->child_probability) continue;
+        child->spawnParticle(particle.position);
+    }
 }

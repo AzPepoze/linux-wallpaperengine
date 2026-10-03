@@ -65,6 +65,20 @@ ParticleObjectConfig ParticleParser::parseObject(const cJSON* document) {
             config.override_color_is_legacy = false;
         }
     }
+    const cJSON* type = cJSON_GetObjectItemCaseSensitive(document, "type");
+    if (cJSON_IsString(type) && type->valuestring) config.type = type->valuestring;
+    const cJSON* origin = cJSON_GetObjectItemCaseSensitive(document, "origin");
+    if (origin) readVec3(origin, config.origin);
+    const cJSON* angles = cJSON_GetObjectItemCaseSensitive(document, "angles");
+    if (angles) readVec3(angles, config.angles);
+    const cJSON* scale = cJSON_GetObjectItemCaseSensitive(document, "scale");
+    if (scale) readVec3(scale, config.scale);
+    const cJSON* maxcount = cJSON_GetObjectItemCaseSensitive(document, "maxcount");
+    if (maxcount) config.maxcount = (int)readFloat(maxcount);
+    const cJSON* probability = cJSON_GetObjectItemCaseSensitive(document, "probability");
+    if (probability) config.probability = readFloat(probability);
+    const cJSON* controlpoint = cJSON_GetObjectItemCaseSensitive(document, "controlpointstartindex");
+    if (controlpoint) config.controlpoint_start_index = (int)readFloat(controlpoint);
     return config;
 }
 
