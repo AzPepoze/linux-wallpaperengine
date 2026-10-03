@@ -13,6 +13,7 @@ enum class SceneObjectKind {
     Unknown,
     Image,
     Particle,
+    Text,
 };
 
 struct SceneNodeDocument {
@@ -61,6 +62,18 @@ struct ParticleObjectDocument {
     bool override_color_is_legacy = false;
 };
 
+struct TextObjectDocument {
+    std::string text;
+    std::string font;
+    float pointsize = 12.0f;
+    std::array<float, 3> color = {1.0f, 1.0f, 1.0f};
+    float alpha = 1.0f;
+    std::array<float, 2> size = {0.0f, 0.0f};
+    float maxwidth = 0.0f;
+    std::string horizontal_align = "center";
+    std::string vertical_align = "center";
+};
+
 struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
     SceneNodeDocument node;
@@ -69,6 +82,7 @@ struct SceneObjectDocument {
 
     ImageObjectDocument image;
     ParticleObjectDocument particle;
+    TextObjectDocument text;
     std::vector<EffectInstanceDocument> effects;
 };
 

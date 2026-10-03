@@ -67,6 +67,15 @@ bool parseBool(const cJSON* raw, bool fallback = false) {
     return fallback;
 }
 
+bool parseString(const cJSON* raw, std::string& out) {
+    const cJSON* node = propertyValue(raw);
+    if (cJSON_IsString(node) && node->valuestring) {
+        out = node->valuestring;
+        return true;
+    }
+    return false;
+}
+
 SceneNodeDocument parseNode(const cJSON* object) {
     SceneNodeDocument out;
 
@@ -103,6 +112,9 @@ SceneNodeDocument parseNode(const cJSON* object) {
 SceneObjectKind detectObjectKind(const cJSON* object) {
     const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
     if (cJSON_IsString(particle)) return SceneObjectKind::Particle;
+
+    const cJSON* text = cJSON_GetObjectItemCaseSensitive(object, "text");
+    if (cJSON_IsString(text) || cJSON_IsObject(text)) return SceneObjectKind::Text;
 
     const cJSON* image = cJSON_GetObjectItemCaseSensitive(object, "image");
     const cJSON* model = cJSON_GetObjectItemCaseSensitive(object, "model");
@@ -286,6 +298,20 @@ SceneObjectDocument parseObject(const cJSON* object) {
             doc.particle.override_color_is_legacy = false;
         }
     }
+
+    const cJSON* text = cJSON_GetObjectItemCaseSensitive(object, "text");
+    if (text) {
+        // Scripted and user-bound text falls back to the authoring-time default in `value`.
+        parseString(text, doc.text.text);
+    }
+    parseString(cJSON_GetObjectItemCaseSensitive(object, "font"), doc.text.font);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "pointsize"), doc.text.pointsize);
+    parseVec(cJSON_GetObjectItemCaseSensitive(object, "color"), doc.text.color.data(), 3);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "alpha"), doc.text.alpha);
+    parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.text.size.data(), 2);
+    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxwidth"), doc.text.maxwidth);
+    parseString(cJSON_GetObjectItemCaseSensitive(object, "horizontalalign"), doc.text.horizontal_align);
+    parseString(cJSON_GetObjectItemCaseSensitive(object, "verticalalign"), doc.text.vertical_align);
 
     const cJSON* effects = cJSON_GetObjectItemCaseSensitive(object, "effects");
     if (cJSON_IsArray(effects)) {

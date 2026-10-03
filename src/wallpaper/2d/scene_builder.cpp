@@ -6,6 +6,7 @@
 #include "shared/core/task_pool.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
+#include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
 
 namespace {
@@ -16,6 +17,8 @@ const char* runtimeClassName(wallpaper_engine::SceneObjectKind kind) {
             return "ImageLayer";
         case wallpaper_engine::SceneObjectKind::Particle:
             return "ParticleLayer";
+        case wallpaper_engine::SceneObjectKind::Text:
+            return "TextLayer";
         default:
             return "SceneTreeNode";
     }
@@ -81,6 +84,8 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
             layer = ParticleLayer::createFromDocument(object, ctx);
         } else if (object.kind == wallpaper_engine::SceneObjectKind::Image) {
             layer = ImageLayer::createFromDocument(object, ctx);
+        } else if (object.kind == wallpaper_engine::SceneObjectKind::Text) {
+            layer = TextLayer::createFromDocument(object, ctx);
         }
         if (layer) out.layers.push_back(layer);
     }
