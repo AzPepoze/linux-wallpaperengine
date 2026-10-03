@@ -15,6 +15,7 @@ struct TextObjectConfig {
     float alpha = 1.0f;
     std::array<float, 2> size = {0.0f, 0.0f};
     float maxwidth = 0.0f;
+    int max_rows = 0;
     std::string horizontal_align = "center";
     std::string vertical_align = "center";
 };

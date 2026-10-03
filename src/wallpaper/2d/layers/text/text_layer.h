@@ -19,7 +19,7 @@ class TextLayer : public ImageLayer {
 
    private:
     bool rebuild(EngineContext& ctx);
-    bool rasterize(std::vector<uint32_t>& pixels, int& width, int& height) const;
+    bool rasterize(std::vector<uint32_t>& pixels, int& width, int& height, float& pixel_scale) const;
     bool resolveFontPath(EngineContext& ctx);
 
     TextObjectConfig config_;

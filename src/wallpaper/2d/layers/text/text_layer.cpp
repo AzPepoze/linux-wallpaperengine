@@ -18,7 +18,7 @@ namespace {
 // Wallpaper Engine point sizes are authored in design units at a fixed ratio.
 constexpr float kDesignUnitsPerPoint = 4.0f;
 // Supersampling factor of the generated glyph texture for crisp text.
-constexpr float kTexturePixelScale = 2.0f;
+constexpr float kMaxTexturePixelScale = 2.0f;
 constexpr int kMaxTextureSize = 4096;
 
 struct LoadedFont {
@@ -214,12 +214,17 @@ bool TextLayer::resolveFontPath(EngineContext& ctx) {
     return false;
 }
 
-bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height) const {
+bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height, float& pixel_scale) const {
     const LoadedFont* loaded = loadFont(font_path_);
     if (!loaded) return false;
     const stbtt_fontinfo& font = loaded->info;
 
-    const float font_px = std::max(1.0f, config_.pointsize * kDesignUnitsPerPoint * kTexturePixelScale);
+    // Keep large boxes under the texture size cap without changing their layout.
+    pixel_scale = kMaxTexturePixelScale;
+    const float largest_side = std::max(config_.size[0], config_.size[1]);
+    if (largest_side > 0.0f) pixel_scale = std::min(pixel_scale, (float)kMaxTextureSize / largest_side);
+
+    const float font_px = std::max(1.0f, config_.pointsize * kDesignUnitsPerPoint * pixel_scale);
     const float scale = stbtt_ScaleForMappingEmToPixels(&font, font_px);
     int ascent = 0;
     int descent = 0;
@@ -228,26 +233,21 @@ bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height
     const float ascent_px = ascent * scale;
     const float line_advance = (ascent - descent + line_gap) * scale;
 
-    float layout_width = config_.size[0] * kTexturePixelScale;
-    if (config_.maxwidth > 0.0f) {
-        const float max_width = config_.maxwidth * kTexturePixelScale;
-        layout_width = layout_width > 0.0f ? std::min(layout_width, max_width) : max_width;
-    }
-    if (layout_width <= 0.0f) layout_width = 1.0e9f;
+    // Without a width limit Wallpaper Engine only breaks lines at explicit newlines.
+    const float layout_width = config_.maxwidth > 0.0f ? config_.maxwidth * pixel_scale : 1.0e9f;
 
-    const std::vector<std::string> lines = layoutLines(font, scale, config_.text, layout_width);
+    std::vector<std::string> lines = layoutLines(font, scale, config_.text, layout_width);
     if (lines.empty()) return false;
+    if (config_.max_rows > 0 && lines.size() > (size_t)config_.max_rows) lines.resize((size_t)config_.max_rows);
 
     const float block_height = (float)lines.size() * line_advance;
     float natural_width = 0.0f;
     for (const auto& line : lines) natural_width = std::max(natural_width, measureText(font, scale, line));
 
-    width = std::clamp(
-        config_.size[0] > 0.0f ? (int)lroundf(config_.size[0] * kTexturePixelScale) : (int)ceilf(natural_width), 1,
-        kMaxTextureSize);
-    height = std::clamp(
-        config_.size[1] > 0.0f ? (int)lroundf(config_.size[1] * kTexturePixelScale) : (int)ceilf(block_height), 1,
-        kMaxTextureSize);
+    width = std::clamp(config_.size[0] > 0.0f ? (int)lroundf(config_.size[0] * pixel_scale) : (int)ceilf(natural_width),
+                       1, kMaxTextureSize);
+    height = std::clamp(config_.size[1] > 0.0f ? (int)lroundf(config_.size[1] * pixel_scale) : (int)ceilf(block_height),
+                        1, kMaxTextureSize);
 
     float start_y = (height - block_height) * 0.5f;
     if (config_.vertical_align == "top")
@@ -278,10 +278,11 @@ bool TextLayer::rebuild(EngineContext& ctx) {
     std::vector<uint32_t> pixels;
     int width = 0;
     int height = 0;
-    if (!rasterize(pixels, width, height) || pixels.empty()) return false;
+    float pixel_scale = 1.0f;
+    if (!rasterize(pixels, width, height, pixel_scale) || pixels.empty()) return false;
 
-    if (config_.size[0] <= 0.0f) size[0] = (float)width / kTexturePixelScale;
-    if (config_.size[1] <= 0.0f) size[1] = (float)height / kTexturePixelScale;
+    if (config_.size[0] <= 0.0f) size[0] = (float)width / pixel_scale;
+    if (config_.size[1] <= 0.0f) size[1] = (float)height / pixel_scale;
 
     sg_image_desc desc = {};
     desc.width = width;

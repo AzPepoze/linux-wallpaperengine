@@ -330,6 +330,10 @@ SceneObjectDocument parseObject(const cJSON* object) {
     parseFloat(cJSON_GetObjectItemCaseSensitive(object, "alpha"), doc.text.alpha);
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.text.size.data(), 2);
     parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxwidth"), doc.text.maxwidth);
+    doc.text.limit_width = parseBool(cJSON_GetObjectItemCaseSensitive(object, "limitwidth"), false);
+    doc.text.limit_rows = parseBool(cJSON_GetObjectItemCaseSensitive(object, "limitrows"), false);
+    float max_rows = 1.0f;
+    if (parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxrows"), max_rows)) doc.text.max_rows = (int)max_rows;
     parseString(cJSON_GetObjectItemCaseSensitive(object, "horizontalalign"), doc.text.horizontal_align);
     parseString(cJSON_GetObjectItemCaseSensitive(object, "verticalalign"), doc.text.vertical_align);
 
