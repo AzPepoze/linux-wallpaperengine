@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "wallpaper/2d/animation_curve.h"
+
 namespace wallpaper_engine {
 
 enum class SceneObjectKind {
@@ -51,10 +53,7 @@ struct AnimationLayerDocument {
 };
 
 struct ImageObjectDocument {
-    struct AlphaKey {
-        float frame = 0.0f;
-        float value = 1.0f;
-    };
+    using AlphaKey = CurveKeyframe;
     std::string image;
     std::string model;
     std::array<float, 2> size = {0.0f, 0.0f};

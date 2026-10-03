@@ -136,6 +136,16 @@ target("tests")
         add_defines("DEBUG_BUILD=0")
     end
 
+-- Alpha keyframe curve checks. Not built by default; run with `xmake build alpha_tests`.
+target("alpha_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_files("tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_curve.cpp",
+              "src/wallpaper/2d/animation_curve.cpp")
+
 -- Command-line scanning checks. Not built by default; run with `xmake build cli_tests`.
 target("cli_tests")
     set_kind("binary")

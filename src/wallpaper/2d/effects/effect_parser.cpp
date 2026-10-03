@@ -20,6 +20,13 @@ std::string normalizeUniformName(const std::string& name) {
     return normalized;
 }
 
+bool readScalarFloat(const cJSON* node, float& out) {
+    std::vector<float> values;
+    if (!EffectParser::readFloats(node, values) || values.empty()) return false;
+    out = values.front();
+    return true;
+}
+
 void readRenderTargetBindings(const cJSON* pass_config, EffectPassConfig& config) {
     const cJSON* target = cJSON_GetObjectItemCaseSensitive(pass_config, "target");
     if (cJSON_IsString(target) && target->valuestring) config.render_target_name = target->valuestring;
@@ -123,6 +130,39 @@ void EffectParser::readUniformValues(const cJSON* config, std::map<std::string, 
     readValuesObject(config ? cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues") : nullptr, uniforms);
 }
 
+void EffectParser::readAnimatedValues(const cJSON* config,
+                                      std::map<std::string, wallpaper_engine::AnimationCurve>& curves) {
+    const cJSON* values = config ? cJSON_GetObjectItemCaseSensitive(config, "constantshadervalues") : nullptr;
+    if (!cJSON_IsObject(values)) return;
+    cJSON* item;
+    cJSON_ArrayForEach(item, values) {
+        if (!item->string) continue;
+        const cJSON* animation = cJSON_GetObjectItemCaseSensitive(item, "animation");
+        if (!cJSON_IsObject(animation)) continue;
+        const cJSON* keys = cJSON_GetObjectItemCaseSensitive(animation, "c0");
+        if (!cJSON_IsArray(keys)) continue;
+
+        wallpaper_engine::AnimationCurve curve;
+        const cJSON* key = nullptr;
+        cJSON_ArrayForEach(key, keys) {
+            wallpaper_engine::CurveKeyframe frame;
+            if (!readScalarFloat(cJSON_GetObjectItemCaseSensitive(key, "frame"), frame.frame)) continue;
+            if (!readScalarFloat(cJSON_GetObjectItemCaseSensitive(key, "value"), frame.value)) continue;
+            curve.keys.push_back(frame);
+        }
+        if (curve.keys.empty()) continue;
+
+        const cJSON* options = cJSON_GetObjectItemCaseSensitive(animation, "options");
+        if (cJSON_IsObject(options)) {
+            readScalarFloat(cJSON_GetObjectItemCaseSensitive(options, "fps"), curve.fps);
+            readScalarFloat(cJSON_GetObjectItemCaseSensitive(options, "length"), curve.length);
+            const cJSON* mode = cJSON_GetObjectItemCaseSensitive(options, "mode");
+            if (cJSON_IsString(mode) && mode->valuestring) curve.mode = mode->valuestring;
+        }
+        curves[item->string] = std::move(curve);
+    }
+}
+
 EffectPassConfig EffectParser::buildPassConfig(const cJSON* material_config, const cJSON* pass_config,
                                                const cJSON* instance_config, int pass_index) {
     EffectPassConfig config;
@@ -135,12 +175,15 @@ EffectPassConfig EffectParser::buildPassConfig(const cJSON* material_config, con
         config.material_reference = material_reference->valuestring;
 
     readUniformValues(material, config.material_uniform_values);
+    readAnimatedValues(material, config.animated_uniforms);
     readCombos(material, config.material_combos);
     if (material != pass_config) {
         readUniformValues(pass_config, config.pass_uniform_values);
+        readAnimatedValues(pass_config, config.animated_uniforms);
         readCombos(pass_config, config.pass_combos);
     }
     readUniformValues(instance_config, config.instance_uniform_values);
+    readAnimatedValues(instance_config, config.animated_uniforms);
     readCombos(instance_config, config.instance_combos);
 
     config.uniform_values = config.material_uniform_values;
@@ -224,10 +267,12 @@ std::vector<ShaderUniformConfig> EffectParser::extractShaderUniforms(const std::
                     if (metadata) {
                         const cJSON* material = cJSON_GetObjectItemCaseSensitive(metadata, "material");
                         const cJSON* type = cJSON_GetObjectItemCaseSensitive(metadata, "type");
+                        const cJSON* combo = cJSON_GetObjectItemCaseSensitive(metadata, "combo");
                         const cJSON* defaults = cJSON_GetObjectItemCaseSensitive(metadata, "default");
                         if (cJSON_IsString(material) && material->valuestring)
                             config.material_name = material->valuestring;
                         if (cJSON_IsString(type) && type->valuestring) config.type = type->valuestring;
+                        if (cJSON_IsString(combo) && combo->valuestring) config.combo = combo->valuestring;
                         config.has_default =
                             readFloats(defaults, config.default_values) && !config.default_values.empty();
                         cJSON_Delete(metadata);

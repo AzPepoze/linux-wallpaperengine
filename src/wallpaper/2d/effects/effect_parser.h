@@ -7,10 +7,13 @@
 #include <string>
 #include <vector>
 
+#include "wallpaper/2d/animation_curve.h"
+
 struct ShaderUniformConfig {
     std::string name;
     std::string material_name;
     std::string type = "float";
+    std::string combo;
     std::vector<float> default_values;
     bool has_default = false;
 };
@@ -19,6 +22,7 @@ struct EffectPassConfig {
     std::string shader_path;
     std::string material_reference;
     std::map<std::string, std::vector<float>> uniform_values;
+    std::map<std::string, wallpaper_engine::AnimationCurve> animated_uniforms;
     std::map<std::string, int> combos;
     std::map<std::string, std::vector<float>> material_uniform_values;
     std::map<std::string, std::vector<float>> pass_uniform_values;
@@ -44,6 +48,8 @@ class EffectParser {
     static bool readInt(const cJSON* node, int& value);
     static void readCombos(const cJSON* config, std::map<std::string, int>& combos);
     static void readValuesObject(const cJSON* values, std::map<std::string, std::vector<float>>& uniforms);
+    static void readAnimatedValues(const cJSON* config,
+                                   std::map<std::string, wallpaper_engine::AnimationCurve>& curves);
     static void readUniformValues(const cJSON* config, std::map<std::string, std::vector<float>>& uniforms);
 
     static EffectPassConfig buildPassConfig(const cJSON* material_config, const cJSON* pass_config,

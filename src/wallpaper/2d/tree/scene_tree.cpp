@@ -10,11 +10,12 @@ namespace {
 
 void localTransform(const SceneTreeNode& node, mat4x4 out) {
     // Wallpaper Engine scene-node local transform order: T * Rz * Ry * Rx * S.
+    constexpr float kDegToRad = 0.01745329251994329577f;
     mat4x4_identity(out);
     mat4x4_translate_in_place(out, node.origin[0], node.origin[1], node.origin[2]);
-    mat4x4_rotate_Z(out, out, node.angles[2]);
-    mat4x4_rotate_Y(out, out, node.angles[1]);
-    mat4x4_rotate_X(out, out, node.angles[0]);
+    mat4x4_rotate_Z(out, out, node.angles[2] * kDegToRad);
+    mat4x4_rotate_Y(out, out, node.angles[1] * kDegToRad);
+    mat4x4_rotate_X(out, out, node.angles[0] * kDegToRad);
     mat4x4_scale_aniso(out, out, node.scale[0], node.scale[1], node.scale[2]);
 }
 

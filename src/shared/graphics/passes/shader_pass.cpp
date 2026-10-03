@@ -34,6 +34,19 @@ void setComboDefine(std::string& combo_defines, const std::string& name, int val
     combo_defines += "#define " + requested_name + " " + std::to_string(value) + "\n";
 }
 
+// Returns the texture slot (g_TextureN -> N) of the sampler marked with a
+// `"combo":"MASK"` annotation, or -1 when the shader has no such sampler.
+int findMaskTextureIndex(const std::string& source) {
+    const size_t pos = source.find("\"combo\":\"MASK\"");
+    if (pos == std::string::npos) return -1;
+    size_t line_start = source.rfind('\n', pos);
+    line_start = (line_start == std::string::npos) ? 0 : line_start + 1;
+    const std::string line = source.substr(line_start, pos - line_start);
+    const size_t tex = line.rfind("g_Texture");
+    if (tex == std::string::npos) return -1;
+    return std::atoi(line.c_str() + tex + 9);
+}
+
 }  // namespace
 
 ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx) {
@@ -63,6 +76,7 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     base_uniforms = parsed_config.material_uniform_values;
     pass_uniforms = parsed_config.pass_uniform_values;
     inst_uniforms = parsed_config.instance_uniform_values;
+    animated_uniforms = parsed_config.animated_uniforms;
     base_combos = parsed_config.material_combos;
     pass_combos = parsed_config.pass_combos;
     inst_combos = parsed_config.instance_combos;
@@ -177,6 +191,16 @@ void ShaderPass::init(EngineContext& ctx) {
     }
     uniforms = std::move(resolved_uniforms);
 
+    resolved_animations.clear();
+    for (const auto& [name, curve] : animated_uniforms) {
+        std::string resolved_name;
+        if (!EffectParser::resolveUniformName(name, shader_uniforms, resolved_name)) continue;
+        resolved_animations[resolved_name] = curve;
+        effect_log.debug("ShaderPass %s: animated constant '%s' -> '%s' (%zu keys, fps=%.0f, length=%.0f, mode=%s)",
+                         shader_name.c_str(), name.c_str(), resolved_name.c_str(), curve.keys.size(), curve.fps,
+                         curve.length, curve.mode.c_str());
+    }
+
     combo_defines = ShaderSourceProcessor::extractCombos((processed_vs + "\n" + processed_fs).c_str());
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
     if (is_depth_parallax) {
@@ -188,8 +212,17 @@ void ShaderPass::init(EngineContext& ctx) {
         setComboDefine(combo_defines, "TIMEOFFSET",
                        pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
     } else if (has_mask_texture_combo) {
-        setComboDefine(combo_defines, "MASK",
-                       !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
+        const int mask_index = findMaskTextureIndex(raw_fs);
+        bool has_mask = false;
+        if (mask_index <= 0) {
+            has_mask = !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID;
+        } else {
+            const size_t slot = static_cast<size_t>(mask_index - 1);
+            has_mask = slot < pass_textures.textures.size() && pass_textures.textures[slot].id != SG_INVALID_ID;
+        }
+        effect_log.debug("ShaderPass %s: MASK combo -> %d (mask sampler g_Texture%d, %zu textures bound)",
+                         shader_name.c_str(), has_mask, mask_index, pass_textures.textures.size());
+        setComboDefine(combo_defines, "MASK", has_mask);
     }
 
     if (is_depth_parallax) {
@@ -405,6 +438,18 @@ void ShaderPass::init(EngineContext& ctx) {
     } else if (is_waterwaves) {
         if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
             effect_log.warn("ShaderPass %s: g_Texture1 (mask) missing, using full white fallback", shader_name.c_str());
+        }
+    }
+}
+
+void ShaderPass::updateAnimatedUniforms(float time) {
+    for (const auto& [name, curve] : resolved_animations) {
+        const float value = evaluateCurve(curve.keys, curve.fps, curve.length, curve.mode, time);
+        auto it = uniforms.find(name);
+        if (it == uniforms.end() || it->second.empty()) {
+            uniforms[name] = {value};
+        } else if (it->second.size() == 1) {
+            it->second[0] = value;
         }
     }
 }

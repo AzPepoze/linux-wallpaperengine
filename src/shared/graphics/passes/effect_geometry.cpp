@@ -212,24 +212,57 @@ std::string compact(std::string value) {
 
 bool effectShaderUsesClipSpaceGeometry(const std::string& vertex_source, const char* shader_name) {
     const std::string active = activeShaderCode(vertex_source);
+    const std::string compacted = compact(active);
+
+    // Shaders often copy a_Position into a local before assigning gl_Position
+    // (e.g. `vec3 position = a_Position; gl_Position = mul(vec4(position, 1.0), mvp);`).
+    // Track those aliases so the assignment is still recognised as position-based.
+    std::vector<std::string> position_aliases;
+    size_t alias_search = 0;
+    while ((alias_search = active.find("a_Position", alias_search)) != std::string::npos) {
+        size_t equals = alias_search;
+        while (equals > 0 && std::isspace((unsigned char)active[equals - 1])) --equals;
+        if (equals == 0 || active[equals - 1] != '=') {
+            alias_search += 10;
+            continue;
+        }
+        size_t name_end = equals - 1;
+        while (name_end > 0 && std::isspace((unsigned char)active[name_end - 1])) --name_end;
+        size_t name_start = name_end;
+        while (name_start > 0 &&
+               (std::isalnum((unsigned char)active[name_start - 1]) || active[name_start - 1] == '_'))
+            --name_start;
+        if (name_end > name_start) position_aliases.push_back(active.substr(name_start, name_end - name_start));
+        alias_search += 10;
+    }
+
     bool clip_space = false;
     bool layer_space = false;
 
     size_t search = 0;
-    while ((search = active.find("gl_Position", search)) != std::string::npos) {
-        const size_t semicolon = active.find(';', search);
+    while ((search = compacted.find("gl_Position", search)) != std::string::npos) {
+        const size_t semicolon = compacted.find(';', search);
         if (semicolon == std::string::npos) break;
 
-        const std::string statement = compact(active.substr(search, semicolon - search + 1));
-        if (statement.find("a_Position") == std::string::npos) {
+        const std::string statement = compacted.substr(search, semicolon - search + 1);
+        bool uses_position = statement.find("a_Position") != std::string::npos;
+        if (!uses_position) {
+            for (const std::string& alias : position_aliases) {
+                if (statement.find(alias) != std::string::npos) {
+                    uses_position = true;
+                    break;
+                }
+            }
+        }
+        if (!uses_position) {
             search = semicolon + 1;
             continue;
         }
 
         if (statement.find("g_ModelViewProjectionMatrix") != std::string::npos) {
             layer_space = true;
-        } else if (statement.find("gl_Position=vec4(a_Position") != std::string::npos ||
-                   statement.find("gl_Position=float4(a_Position") != std::string::npos) {
+        } else if (statement.find("gl_Position=vec4(") != std::string::npos ||
+                   statement.find("gl_Position=float4(") != std::string::npos) {
             clip_space = true;
         }
         search = semicolon + 1;

@@ -138,7 +138,7 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
         sg_begin_pass(&extract_pass);
         renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
 
-        render_effect_pass_t pass_desc = bloom_pass_extract->getRenderPass(ctx.profiler.frame_index);
+        render_effect_pass_t pass_desc = bloom_pass_extract->getRenderPass(ctx.profiler.frame_index, ctx.time);
         renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current_target_index].image,
                              scene_targets[current_target_index].texture_view, 0.0f, 0.0f, (float)bloom_w,
                              (float)bloom_h, 0.0f, white, false, &pass_desc);
@@ -154,7 +154,7 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
         sg_begin_pass(&blur_v_pass);
         renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
 
-        render_effect_pass_t pass_desc = bloom_pass_blur_v->getRenderPass(ctx.profiler.frame_index);
+        render_effect_pass_t pass_desc = bloom_pass_blur_v->getRenderPass(ctx.profiler.frame_index, ctx.time);
         renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[0].image, bloom_targets[0].texture_view, 0.0f, 0.0f,
                              (float)bloom_w, (float)bloom_h, 0.0f, white, false, &pass_desc);
         sg_end_pass();
@@ -169,7 +169,7 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
         sg_begin_pass(&blur_h_pass);
         renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
 
-        render_effect_pass_t pass_desc = bloom_pass_blur_h->getRenderPass(ctx.profiler.frame_index);
+        render_effect_pass_t pass_desc = bloom_pass_blur_h->getRenderPass(ctx.profiler.frame_index, ctx.time);
         renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[1].image, bloom_targets[1].texture_view, 0.0f, 0.0f,
                              (float)bloom_w, (float)bloom_h, 0.0f, white, false, &pass_desc);
         sg_end_pass();
@@ -185,7 +185,7 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
         sg_begin_pass(&combine_pass);
         renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
 
-        render_effect_pass_t pass_desc = bloom_pass_combine->getRenderPass(ctx.profiler.frame_index);
+        render_effect_pass_t pass_desc = bloom_pass_combine->getRenderPass(ctx.profiler.frame_index, ctx.time);
         sg_view extra_views[] = {bloom_targets[0].texture_view};
         pass_desc.override_views = extra_views;
         pass_desc.num_override_views = 1;

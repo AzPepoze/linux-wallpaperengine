@@ -14,6 +14,8 @@ void check(bool condition, const char* what) {
 }
 }  // namespace
 
+void runSceneRotationTests();
+
 void runSceneAttachmentTests() {
     SceneTree tree;
     SceneTreeNode parent;
@@ -54,6 +56,29 @@ void runSceneAttachmentTests() {
     tree.addNode(parent);
     check(tree.worldPosition(2, position) && fabsf(position[0] - 2.0f) < 1e-4f && fabsf(position[1] - 26.0f) < 1e-4f,
           "attachment rotation transforms child translation before parent translation");
+
+    runSceneRotationTests();
+}
+
+void runSceneRotationTests() {
+    SceneTree tree;
+    SceneTreeNode root;
+    root.id = 10;
+    root.origin = {0.0f, 0.0f, 0.0f};
+    root.angles = {0.0f, 0.0f, 90.0f};
+    tree.addNode(root);
+
+    SceneTreeNode child;
+    child.id = 11;
+    child.parent_id = 10;
+    child.origin = {1.0f, 0.0f, 0.0f};
+    tree.addNode(child);
+    tree.rebuildHierarchy();
+
+    float position[3] = {};
+    check(tree.worldPosition(11, position), "rotated node world position resolves");
+    check(fabsf(position[0]) < 1e-4f && fabsf(position[1] - 1.0f) < 1e-4f,
+          "scene node angles are degrees: 90 rotates (1,0) to (0,1)");
 }
 
 int sceneAttachmentFailures() {

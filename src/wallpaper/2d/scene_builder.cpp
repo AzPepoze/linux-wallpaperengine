@@ -1,5 +1,7 @@
 #include "scene_builder.h"
 
+#include <math.h>
+
 #include <string>
 
 #include "shared/core/logger.h"
@@ -76,6 +78,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         node.origin = object.node.origin;
         node.scale = object.node.scale;
         node.angles = object.node.angles;
+        for (float& angle : node.angles) angle *= (float)(180.0 / M_PI);
         node.parallax_depth = object.node.parallax_depth;
         node.propagate_to_children = object.node.propagate_to_children;
         out.scene_tree->addNode(node);

@@ -1,5 +1,7 @@
 #include "layer.h"
 
+#include <math.h>
+
 void Layer::initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
     if (doc.node.valid && doc.node.id > 0) {
         scene_object_id = doc.node.id;
@@ -12,7 +14,7 @@ void Layer::initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, E
     scale[0] = doc.node.scale[0];
     scale[1] = doc.node.scale[1];
     scale[2] = doc.node.scale[2];
-    rotation = doc.node.angles[2];
+    rotation = doc.node.angles[2] * (float)(180.0 / M_PI);
     parallax[0] = doc.node.parallax_depth[0];
     parallax[1] = doc.node.parallax_depth[1];
 

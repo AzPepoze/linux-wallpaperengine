@@ -12,6 +12,7 @@
 
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "wallpaper/2d/alpha_curve.h"
 
 namespace {
 
@@ -180,6 +181,7 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     TextObjectConfig config = TextParser::parse(doc);
     TextLayer* layer = new TextLayer(config.name.c_str());
     layer->initFromDocument(doc, ctx);
+    layer->alpha_document = doc.image;
     layer->config_ = config;
     layer->size[0] = doc.text.size[0];
     layer->size[1] = doc.text.size[1];
@@ -195,7 +197,7 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
 
 void TextLayer::update(float /*dt*/, EngineContext& ctx) {
     if (config_.text != current_text_) rebuild(ctx);
-    tint[3] = std::clamp(config_.alpha, 0.0f, 1.0f);
+    tint[3] = std::clamp(config_.alpha, 0.0f, 1.0f) * evaluateImageAlpha(alpha_document, ctx.time);
     if (!is_fullscreen) renderEffectChain(ctx);
 }
 

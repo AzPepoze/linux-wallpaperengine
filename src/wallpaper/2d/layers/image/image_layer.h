@@ -177,8 +177,11 @@ class ImageLayer : public Layer {
     sg_image effect_output_image = {SG_INVALID_ID};
     sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, NamedRenderTarget> named_effect_targets;
+
+   protected:
     wallpaper_engine::ImageObjectDocument alpha_document;
 
+   private:
     // Puppet mesh: the parsed model, its rest/skinned positions and the
     // off-screen target the mesh is drawn into before the effect chain runs.
     wallpaper_engine::MdlModel puppet;

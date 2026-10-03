@@ -161,7 +161,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             }
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index);
+            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index, ctx.time);
 
             sg_image shader_input_image = input_image;
             sg_view shader_input_view = input_view;

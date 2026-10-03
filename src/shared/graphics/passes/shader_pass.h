@@ -14,6 +14,7 @@
 #include "shared/graphics/render.h"
 #include "shared/graphics/shader/shader_compiler.h"
 #include "sokol_gfx.h"
+#include "wallpaper/2d/animation_curve.h"
 
 class EngineContext;
 
@@ -39,6 +40,7 @@ class ShaderPass {
     std::map<std::string, std::vector<float>> base_uniforms;
     std::map<std::string, std::vector<float>> pass_uniforms;
     std::map<std::string, std::vector<float>> inst_uniforms;
+    std::map<std::string, wallpaper_engine::AnimationCurve> animated_uniforms;
     std::map<std::string, int> base_combos;
     std::map<std::string, int> pass_combos;
     std::map<std::string, int> inst_combos;
@@ -52,10 +54,8 @@ class ShaderPass {
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
     uint64_t current_frame = 0;
-
     void applyCompiledUniforms() {
-        for (const auto& block : compiled.custom_uniform_blocks) {
-            if (block.slot < 0 || block.uniform_names.empty()) continue;
+        for (const auto& block : compiled.custom_uniform_blocks) {            if (block.slot < 0 || block.uniform_names.empty()) continue;
 
             std::vector<float> packed(block.uniform_names.size() * 4, 0.0f);
             for (size_t i = 0; i < block.uniform_names.size(); ++i) {
@@ -72,8 +72,9 @@ class ShaderPass {
         applyAudioSpectrumBlocks();
     }
 
-    render_effect_pass_t getRenderPass(uint64_t frame_index = 0) {
+    render_effect_pass_t getRenderPass(uint64_t frame_index = 0, float time = 0.0f) {
         current_frame = frame_index;
+        updateAnimatedUniforms(time);
         if (!geometry_classified) {
             is_fullscreen_quad = effectShaderUsesClipSpaceGeometry(stored_vs_source, shader_name.c_str());
             geometry_classified = true;
@@ -100,8 +101,10 @@ class ShaderPass {
 
    private:
     void applyAudioSpectrumBlocks();
+    void updateAnimatedUniforms(float time);
     std::string stored_vs_source;
     std::string stored_fs_source;
+    std::map<std::string, wallpaper_engine::AnimationCurve> resolved_animations;
 };
 
 #endif  // SHADER_PASS_H
