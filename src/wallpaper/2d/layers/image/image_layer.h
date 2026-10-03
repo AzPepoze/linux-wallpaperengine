@@ -45,10 +45,6 @@ class ImageLayer : public Layer {
         return !path.empty() && (path == p || path.find(p) != std::string::npos);
     }
 
-#if DEBUG_BUILD
-    void showInspector(EngineContext& ctx) override;
-#endif
-
     wallpaper_engine::VideoTexture* bound_video_decoder = nullptr;
 
    private:

@@ -10,7 +10,6 @@
 
 #include "effect_geometry.h"
 #include "pass_textures.h"
-#include "shared/core/build_config.h"
 #include "shared/graphics/gfx_resource.h"
 #include "shared/graphics/render.h"
 #include "shared/graphics/shader/shader_compiler.h"
@@ -48,9 +47,7 @@ class ShaderPass {
     ~ShaderPass() = default;
 
     void init(EngineContext& ctx);
-#if DEBUG_BUILD
     void rebuildWithDebugMode(int mode, EngineContext& ctx);
-#endif
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
 
@@ -98,10 +95,8 @@ class ShaderPass {
         return r;
     }
 
-#if DEBUG_BUILD
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
-#endif
 
    private:
     void applyAudioSpectrumBlocks();

@@ -4,7 +4,6 @@
 
 #include <string>
 
-#include "image_layer.h"
 #include "imgui.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
@@ -12,6 +11,7 @@
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
 #include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {

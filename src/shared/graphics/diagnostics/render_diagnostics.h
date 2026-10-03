@@ -14,6 +14,7 @@
 #include "diagnostic_config.h"
 #include "image_stats.h"
 #include "render_graph.h"
+#include "render_observer.h"
 #include "sokol_gfx.h"
 #include "uniform_provenance.h"
 
@@ -80,7 +81,7 @@ struct DiagnosticExportPayload {
 
 class EngineContext;
 
-class RenderDiagnostics {
+class RenderDiagnostics : public IRenderObserver {
    public:
     static RenderDiagnostics& instance();
 
@@ -92,25 +93,37 @@ class RenderDiagnostics {
 
     void init(bool enabled = false);
     void shutdown(bool cancel_pending = false);
-    bool isEffectDisabled(int effect_index, const std::string& effect_path) const;
+    bool isEffectDisabled(int effect_index, const std::string& effect_path) const override;
     void triggerCapture(uint64_t current_frame);
     void onFrameStart(uint64_t frame_index, EngineContext& ctx);
     void onFrameEnd(uint64_t frame_index, EngineContext& ctx);
 
     // Provenance and shader registration
-    void registerShaderDump(const ShaderDump& dump);
-    void registerUniformProvenance(const PassUniformProvenance& prov);
+    void registerShaderDump(const ShaderDump& dump) override;
+    void registerUniformProvenance(const PassUniformProvenance& prov) override;
 
     // Per-pass and image tracing
-    void onSourceImage(int effect_index, sg_image img, int width, int height);
-    void recordPass(PassTraceEntry trace, sg_image out_img);
-    void onLayerFinalImage(int effect_index, sg_image img, int width, int height);
-    void recordSceneStage(const std::string& stage_name, sg_image img, sg_view texture_view, sg_view attachment_view);
+    void onSourceImage(int effect_index, sg_image img, int width, int height) override;
+    void recordPass(PassTraceEntry trace, sg_image out_img) override;
+    void onLayerFinalImage(int effect_index, sg_image img, int width, int height) override;
+    void recordSceneStage(const std::string& stage_name, sg_image img, sg_view texture_view,
+                          sg_view attachment_view) override;
+    std::string overrideFragmentSource(const std::string& shader_name, const std::string& fs_source, int view_mode,
+                                       int step) const override;
+    bool isCapturingFrame() const override {
+        return is_capturing_frame;
+    }
+    bool isTracingPasses() const override {
+        return config.enabled;
+    }
+    bool isCollectingShaderInfo() const override {
+        return true;
+    }
 
     // Pass isolation helpers
-    bool isEffectIsolated(int effect_index, const std::string& effect_path) const;
-    bool isPassDisabled(int pass_index) const;
-    bool shouldStopAfterPass(int pass_index) const;
+    bool isEffectIsolated(int effect_index, const std::string& effect_path) const override;
+    bool isPassDisabled(int pass_index) const override;
+    bool shouldStopAfterPass(int pass_index) const override;
     int getForcedOutputSlot() const;
     bool shouldCapturePassImage(int effect_index, int pass_index) const;
 

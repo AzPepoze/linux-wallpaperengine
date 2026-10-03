@@ -5,6 +5,7 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/passes/pass_loader.h"
 #include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
@@ -326,11 +327,8 @@ void Scene2DRuntime::drawOffscreen() {
 
     int layer_index = 0;
     auto capture_layer_result = [&](Layer* layer, bool raw_layer) {
-        (void)raw_layer;
-        (void)layer_index;
-#if DEBUG_BUILD
-        RenderDiagnostics& diagnostics = RenderDiagnostics::instance();
-        if (!diagnostics.is_capturing_frame) return;
+        IRenderObserver& diagnostics = renderObserver();
+        if (!diagnostics.isCapturingFrame()) return;
 
         sg_image_desc image_desc = {};
         image_desc.usage.color_attachment = true;
@@ -379,9 +377,6 @@ void Scene2DRuntime::drawOffscreen() {
         }
         diagnostics.recordSceneStage(stage_name, snapshot, snapshot_texture, snapshot_attachment);
         if (!raw_layer) ++layer_index;
-#else
-        (void)layer;
-#endif
     };
 
     auto draw_layer = [&](Layer* layer) {
@@ -468,12 +463,11 @@ void Scene2DRuntime::drawOffscreen() {
     }
 
     current = renderBloom(current, width, height);
-#if DEBUG_BUILD
     // The layer snapshots stop before post-processing; capture one final post-bloom
     // stage so diagnostics represent what present() sends to the swapchain.
     {
-        RenderDiagnostics& diagnostics = RenderDiagnostics::instance();
-        if (diagnostics.is_capturing_frame) {
+        IRenderObserver& diagnostics = renderObserver();
+        if (diagnostics.isCapturingFrame()) {
             sg_image_desc image_desc = {};
             image_desc.usage.color_attachment = true;
             image_desc.width = width;
@@ -507,7 +501,6 @@ void Scene2DRuntime::drawOffscreen() {
             }
         }
     }
-#endif
     scene_output_index = current;
 }
 

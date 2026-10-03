@@ -5,13 +5,13 @@
 #include <string>
 
 #include "imgui.h"
-#include "particle_layer.h"
-#include "particle_system.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/shader/shader_compiler.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
+#include "wallpaper/2d/layers/particle/particle_system.h"
 
 namespace {
 

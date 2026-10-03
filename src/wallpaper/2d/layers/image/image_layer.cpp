@@ -9,11 +9,12 @@
 #include <vector>
 
 #include "image_parser.h"
-#include "shared/core/build_config.h"
 #include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/graphics/backend/gpu_debug_labels.h"
+#include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/render.h"
 #include "wallpaper/2d/alpha_curve.h"
 #include "wallpaper/2d/tree/scene_tree.h"
@@ -64,11 +65,6 @@ void ImageLayer::updateCachedView() {
     }
 }
 
-#if DEBUG_BUILD
-#include "shared/graphics/backend/gpu_debug_labels.h"
-#include "shared/graphics/diagnostics/render_diagnostics.h"
-#endif
-
 void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
     effect_output_image = {SG_INVALID_ID};
     effect_output_view = {SG_INVALID_ID};
@@ -87,9 +83,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     }
     if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(base_img)) return;
 
-#if DEBUG_BUILD
-    RenderDiagnostics& diag = RenderDiagnostics::instance();
-#endif
+    IRenderObserver& diag = renderObserver();
 
     bool any_effect_solo = false;
     for (auto effect : effects) {
@@ -105,10 +99,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     sg_view input_view = base_view;
     int write_index = 0;
     bool rendered_any = false;
-#if DEBUG_BUILD
     int draw_order = 0;
     diag.onSourceImage(0, input_image, effect_target_width, effect_target_height);
-#endif
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
@@ -118,10 +110,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         auto effect = effects[eff_idx];
         if (!effect) continue;
         if (!effect->visible || (any_effect_solo && !effect->solo)) continue;
-#if DEBUG_BUILD
         if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
         if (diag.isEffectDisabled(eff_idx, effect->file_path)) continue;
-#endif
 
         for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
             auto pass = effect->passes[pass_idx];
@@ -145,7 +135,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 named_target = &target;
             }
 
-#if DEBUG_BUILD
             if (diag.isPassDisabled(pass_idx)) {
                 if (named_target) {
                     // Copy-through input to named target so downstream passes don't sample uninitialized buffer
@@ -163,7 +152,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 }
                 continue;
             }
-#endif
 
             const sg_image output_image =
                 named_target ? named_target->currentWrite().image : effect_targets[write_index].image;
@@ -304,9 +292,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
             sg_end_pass();
 
-#if DEBUG_BUILD
             sg_image out_img = output_image;
-            if (diag.config.enabled) {
+            if (diag.isTracingPasses()) {
                 PassTraceEntry trace;
                 trace.frame_number = ctx.profiler.frame_index;
                 trace.layer_name = this->name.empty() ? ("Layer_" + std::to_string(scene_object_id)) : this->name;
@@ -386,7 +373,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 gpu_set_image_debug_label(out_img, (pass->shader_name + " Target").c_str());
                 diag.recordPass(trace, out_img);
             }
-#endif
 
             if (named_target) {
                 named_target->swap();
@@ -401,11 +387,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             effect_output_view = input_view;
             rendered_any = true;
 
-#if DEBUG_BUILD
             if (diag.shouldStopAfterPass(pass_idx)) {
                 break;
             }
-#endif
         }
     }
 
@@ -414,9 +398,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         effect_output_image = {SG_INVALID_ID};
         effect_output_view = {SG_INVALID_ID};
     } else {
-#if DEBUG_BUILD
         diag.onLayerFinalImage(0, effect_output_image, effect_target_width, effect_target_height);
-#endif
     }
 }
 
@@ -658,13 +640,3 @@ void ImageLayer::resume() {
 bool ImageLayer::requiresSceneColor() const {
     return copy_background || color_blend_mode != 0;
 }
-
-#if DEBUG_BUILD
-#include "image_inspector.h"
-
-void ImageLayer::showInspector(EngineContext& ctx) {
-    showGeneralInspector(ctx);
-    Inspector::showImageLayerInspector(ctx, *this);
-    showEffectsInspector(ctx);
-}
-#endif

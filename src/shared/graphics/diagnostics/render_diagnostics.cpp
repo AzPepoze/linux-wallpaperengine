@@ -18,6 +18,7 @@
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
 #include "shared/graphics/backend/gpu_readback.h"
+#include "shared/graphics/shader/shader_compiler.h"
 
 namespace fs = std::filesystem;
 
@@ -443,6 +444,11 @@ bool RenderDiagnostics::isEffectDisabled(int effect_index, const std::string& ef
         if (effect_path.find(needle) != std::string::npos) return true;
     }
     return false;
+}
+
+std::string RenderDiagnostics::overrideFragmentSource(const std::string& shader_name, const std::string& fs_source,
+                                                      int view_mode, int step) const {
+    return ShaderCompiler::applyDebugStep(shader_name, ShaderCompiler::applyDebugMode(fs_source, view_mode), step);
 }
 
 void RenderDiagnostics::triggerCapture(uint64_t current_frame) {

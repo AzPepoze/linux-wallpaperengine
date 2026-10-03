@@ -8,10 +8,6 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
-#if DEBUG_BUILD
-#include "particle_inspector.h"
-#endif
-
 ParticleLayer::ParticleLayer(const char* name, ParticleSystem* ps) : Layer(name), ps(ps) {}
 
 ParticleLayer::~ParticleLayer() {
@@ -109,11 +105,3 @@ bool ParticleLayer::requiresSceneColor() const {
 void ParticleLayer::setSceneColorView(sg_view view) {
     if (ps) ps->setSceneColorView(view);
 }
-
-#if DEBUG_BUILD
-void ParticleLayer::showInspector(EngineContext& ctx) {
-    showGeneralInspector(ctx);
-    Inspector::showParticleLayerInspector(ctx, *this);
-    showEffectsInspector(ctx);
-}
-#endif

@@ -9,6 +9,7 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/shader/shader_processor.h"
 #include "wallpaper/2d/effects/effect_parser.h"
 
@@ -210,10 +211,7 @@ void ShaderPass::init(EngineContext& ctx) {
     stored_vs_source = full_vs;
     stored_fs_source = full_fs;
 
-#if DEBUG_BUILD
-    full_fs = ShaderCompiler::applyDebugMode(full_fs, debug_view_mode);
-    full_fs = ShaderCompiler::applyDebugStep(shader_name, full_fs, debug_step);
-#endif
+    full_fs = renderObserver().overrideFragmentSource(shader_name, full_fs, debug_view_mode, debug_step);
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
 
@@ -229,166 +227,166 @@ void ShaderPass::init(EngineContext& ctx) {
 
     pass_textures.buildCachedViews();
 
-#if DEBUG_BUILD
-    PassUniformProvenance prov;
-    prov.effect_file = effect_file;
-    prov.pass_index = pass_index;
-    prov.shader_name = shader_name;
+    if (renderObserver().isCollectingShaderInfo()) {
+        PassUniformProvenance prov;
+        prov.effect_file = effect_file;
+        prov.pass_index = pass_index;
+        prov.shader_name = shader_name;
 
-    for (const auto& meta : shader_uniforms) {
-        UniformProvenanceEntry entry;
-        entry.shader_name = meta.name;
-        entry.authored_name = meta.material_name;
-        entry.resolved_name = meta.name;
-        entry.type = meta.type;
+        for (const auto& meta : shader_uniforms) {
+            UniformProvenanceEntry entry;
+            entry.shader_name = meta.name;
+            entry.authored_name = meta.material_name;
+            entry.resolved_name = meta.name;
+            entry.type = meta.type;
 
-        UniformResolutionStep step_def;
-        step_def.source = ProvenanceSource::ShaderMetadataDefault;
-        step_def.source_name = "shader_metadata_default";
-        step_def.present = meta.has_default;
-        step_def.values = meta.default_values;
-        step_def.applied = false;
-        entry.resolution.push_back(step_def);
+            UniformResolutionStep step_def;
+            step_def.source = ProvenanceSource::ShaderMetadataDefault;
+            step_def.source_name = "shader_metadata_default";
+            step_def.present = meta.has_default;
+            step_def.values = meta.default_values;
+            step_def.applied = false;
+            entry.resolution.push_back(step_def);
 
-        bool found_base = false;
-        std::vector<float> base_val;
-        for (const auto& [b_name, b_val] : base_uniforms) {
-            std::string res;
-            if (EffectParser::resolveUniformName(b_name, {meta}, res) && res == meta.name) {
-                found_base = true;
-                base_val = b_val;
-                break;
+            bool found_base = false;
+            std::vector<float> base_val;
+            for (const auto& [b_name, b_val] : base_uniforms) {
+                std::string res;
+                if (EffectParser::resolveUniformName(b_name, {meta}, res) && res == meta.name) {
+                    found_base = true;
+                    base_val = b_val;
+                    break;
+                }
             }
-        }
-        UniformResolutionStep step_base;
-        step_base.source = ProvenanceSource::MaterialConstant;
-        step_base.source_name = "material_constant";
-        step_base.present = found_base;
-        step_base.values = base_val;
-        entry.resolution.push_back(step_base);
+            UniformResolutionStep step_base;
+            step_base.source = ProvenanceSource::MaterialConstant;
+            step_base.source_name = "material_constant";
+            step_base.present = found_base;
+            step_base.values = base_val;
+            entry.resolution.push_back(step_base);
 
-        bool found_pass = false;
-        std::vector<float> pass_val;
-        for (const auto& [p_name, p_val] : pass_uniforms) {
-            std::string res;
-            if (EffectParser::resolveUniformName(p_name, {meta}, res) && res == meta.name) {
-                found_pass = true;
-                pass_val = p_val;
-                break;
+            bool found_pass = false;
+            std::vector<float> pass_val;
+            for (const auto& [p_name, p_val] : pass_uniforms) {
+                std::string res;
+                if (EffectParser::resolveUniformName(p_name, {meta}, res) && res == meta.name) {
+                    found_pass = true;
+                    pass_val = p_val;
+                    break;
+                }
             }
-        }
-        UniformResolutionStep step_pass;
-        step_pass.source = ProvenanceSource::EffectPassOverride;
-        step_pass.source_name = "effect_pass_override";
-        step_pass.present = found_pass;
-        step_pass.values = pass_val;
-        entry.resolution.push_back(step_pass);
+            UniformResolutionStep step_pass;
+            step_pass.source = ProvenanceSource::EffectPassOverride;
+            step_pass.source_name = "effect_pass_override";
+            step_pass.present = found_pass;
+            step_pass.values = pass_val;
+            entry.resolution.push_back(step_pass);
 
-        bool found_inst = false;
-        std::vector<float> inst_val;
-        for (const auto& [i_name, i_val] : inst_uniforms) {
-            std::string res;
-            if (EffectParser::resolveUniformName(i_name, {meta}, res) && res == meta.name) {
-                found_inst = true;
-                inst_val = i_val;
-                break;
+            bool found_inst = false;
+            std::vector<float> inst_val;
+            for (const auto& [i_name, i_val] : inst_uniforms) {
+                std::string res;
+                if (EffectParser::resolveUniformName(i_name, {meta}, res) && res == meta.name) {
+                    found_inst = true;
+                    inst_val = i_val;
+                    break;
+                }
             }
-        }
-        UniformResolutionStep step_inst;
-        step_inst.source = ProvenanceSource::InstanceOverride;
-        step_inst.source_name = "instance_override";
-        step_inst.present = found_inst;
-        step_inst.values = inst_val;
-        entry.resolution.push_back(step_inst);
+            UniformResolutionStep step_inst;
+            step_inst.source = ProvenanceSource::InstanceOverride;
+            step_inst.source_name = "instance_override";
+            step_inst.present = found_inst;
+            step_inst.values = inst_val;
+            entry.resolution.push_back(step_inst);
 
-        entry.resolution[0].applied = meta.has_default && !found_base && !found_pass && !found_inst;
+            entry.resolution[0].applied = meta.has_default && !found_base && !found_pass && !found_inst;
 
-        auto final_it = uniforms.find(meta.name);
-        if (final_it != uniforms.end()) {
-            entry.final_value = final_it->second;
-            if (found_inst) {
-                entry.final_source = ProvenanceSource::InstanceOverride;
-                entry.resolution.back().applied = true;
-            } else if (found_pass) {
-                entry.final_source = ProvenanceSource::EffectPassOverride;
-                entry.resolution[2].applied = true;
-            } else if (found_base) {
-                entry.final_source = ProvenanceSource::MaterialConstant;
-                entry.resolution[1].applied = true;
+            auto final_it = uniforms.find(meta.name);
+            if (final_it != uniforms.end()) {
+                entry.final_value = final_it->second;
+                if (found_inst) {
+                    entry.final_source = ProvenanceSource::InstanceOverride;
+                    entry.resolution.back().applied = true;
+                } else if (found_pass) {
+                    entry.final_source = ProvenanceSource::EffectPassOverride;
+                    entry.resolution[2].applied = true;
+                } else if (found_base) {
+                    entry.final_source = ProvenanceSource::MaterialConstant;
+                    entry.resolution[1].applied = true;
+                } else {
+                    entry.final_source =
+                        meta.has_default ? ProvenanceSource::ShaderMetadataDefault : ProvenanceSource::RuntimeBuiltin;
+                }
             } else {
-                entry.final_source =
-                    meta.has_default ? ProvenanceSource::ShaderMetadataDefault : ProvenanceSource::RuntimeBuiltin;
+                entry.final_source = ProvenanceSource::Unresolved;
             }
-        } else {
-            entry.final_source = ProvenanceSource::Unresolved;
+
+            prov.uniforms[meta.name] = entry;
         }
 
-        prov.uniforms[meta.name] = entry;
+        for (const auto& [c_name, c_val] : combos) {
+            ComboProvenanceEntry c_entry;
+            c_entry.name = c_name;
+            c_entry.final_value = c_val;
+
+            if (base_combos.count(c_name)) {
+                ComboResolutionStep s;
+                s.source = ProvenanceSource::MaterialConstant;
+                s.source_name = "material_constant";
+                s.present = true;
+                s.value = base_combos.at(c_name);
+                c_entry.resolution.push_back(s);
+            }
+            if (pass_combos.count(c_name)) {
+                ComboResolutionStep s;
+                s.source = ProvenanceSource::EffectPassOverride;
+                s.source_name = "effect_pass_override";
+                s.present = true;
+                s.value = pass_combos.at(c_name);
+                c_entry.resolution.push_back(s);
+            }
+            if (inst_combos.count(c_name)) {
+                ComboResolutionStep s;
+                s.source = ProvenanceSource::InstanceOverride;
+                s.source_name = "instance_override";
+                s.present = true;
+                s.value = inst_combos.at(c_name);
+                c_entry.resolution.push_back(s);
+            }
+
+            if (inst_combos.count(c_name)) {
+                c_entry.final_source = ProvenanceSource::InstanceOverride;
+                if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
+            } else if (pass_combos.count(c_name)) {
+                c_entry.final_source = ProvenanceSource::EffectPassOverride;
+                if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
+            } else if (base_combos.count(c_name)) {
+                c_entry.final_source = ProvenanceSource::MaterialConstant;
+                if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
+            } else {
+                c_entry.final_source = ProvenanceSource::RuntimeInferred;
+            }
+
+            prov.combos[c_name] = c_entry;
+        }
+
+        ShaderDump dump;
+        dump.effect_index = effect_index;
+        dump.pass_index = pass_index;
+        dump.shader_name = shader_name;
+        dump.effect_file = effect_file;
+        dump.original_vs = raw_vs;
+        dump.original_fs = raw_fs;
+        dump.processed_vs = processed_vs;
+        dump.processed_fs = processed_fs;
+        dump.final_vs = full_vs;
+        dump.final_fs = full_fs;
+        dump.combos = combos;
+        dump.uniforms = uniforms;
+
+        renderObserver().registerShaderDump(dump);
+        renderObserver().registerUniformProvenance(prov);
     }
-
-    for (const auto& [c_name, c_val] : combos) {
-        ComboProvenanceEntry c_entry;
-        c_entry.name = c_name;
-        c_entry.final_value = c_val;
-
-        if (base_combos.count(c_name)) {
-            ComboResolutionStep s;
-            s.source = ProvenanceSource::MaterialConstant;
-            s.source_name = "material_constant";
-            s.present = true;
-            s.value = base_combos.at(c_name);
-            c_entry.resolution.push_back(s);
-        }
-        if (pass_combos.count(c_name)) {
-            ComboResolutionStep s;
-            s.source = ProvenanceSource::EffectPassOverride;
-            s.source_name = "effect_pass_override";
-            s.present = true;
-            s.value = pass_combos.at(c_name);
-            c_entry.resolution.push_back(s);
-        }
-        if (inst_combos.count(c_name)) {
-            ComboResolutionStep s;
-            s.source = ProvenanceSource::InstanceOverride;
-            s.source_name = "instance_override";
-            s.present = true;
-            s.value = inst_combos.at(c_name);
-            c_entry.resolution.push_back(s);
-        }
-
-        if (inst_combos.count(c_name)) {
-            c_entry.final_source = ProvenanceSource::InstanceOverride;
-            if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
-        } else if (pass_combos.count(c_name)) {
-            c_entry.final_source = ProvenanceSource::EffectPassOverride;
-            if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
-        } else if (base_combos.count(c_name)) {
-            c_entry.final_source = ProvenanceSource::MaterialConstant;
-            if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
-        } else {
-            c_entry.final_source = ProvenanceSource::RuntimeInferred;
-        }
-
-        prov.combos[c_name] = c_entry;
-    }
-
-    ShaderDump dump;
-    dump.effect_index = effect_index;
-    dump.pass_index = pass_index;
-    dump.shader_name = shader_name;
-    dump.effect_file = effect_file;
-    dump.original_vs = raw_vs;
-    dump.original_fs = raw_fs;
-    dump.processed_vs = processed_vs;
-    dump.processed_fs = processed_fs;
-    dump.final_vs = full_vs;
-    dump.final_fs = full_fs;
-    dump.combos = combos;
-    dump.uniforms = uniforms;
-
-    RenderDiagnostics::instance().registerShaderDump(dump);
-    RenderDiagnostics::instance().registerUniformProvenance(prov);
-#endif
 
     if (compiled.pipeline.id == SG_INVALID_ID) {
         effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped",
@@ -460,10 +458,8 @@ bool ShaderPass::resolveDepth(const char* source_texture_path, EngineContext& ct
     return resolved;
 }
 
-#if DEBUG_BUILD
 void ShaderPass::rebuildWithDebugMode(int mode, EngineContext& ctx) {
     debug_view_mode = mode;
     compiled = {};
     init(ctx);
 }
-#endif
