@@ -125,7 +125,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
         for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
             auto pass = effect->passes[pass_idx];
-            if (!pass || !pass->enabled || pass->compiled.pipeline.id == SG_INVALID_ID) continue;
+            if (!pass || !pass->enabled) continue;
 
             if (pass->shader_name.find("depthparallax") != std::string::npos && !path.empty() &&
                 strstr(path.c_str(), ".tex")) {
@@ -169,6 +169,35 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 named_target ? named_target->currentWrite().image : effect_targets[write_index].image;
             const sg_view output_attachment = named_target ? named_target->currentWrite().attachment_view
                                                            : effect_targets[write_index].attachment_view;
+
+            if (pass->compiled.pipeline.id == SG_INVALID_ID) {
+                // A pass that never compiled must still forward its input so later
+                // passes (and the final layer draw) do not read uninitialised targets.
+                sg_pass copy_pass = {};
+                copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+                copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+                copy_pass.attachments.colors[0] = output_attachment;
+                sg_begin_pass(&copy_pass);
+                renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+                float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+                renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
+                                     (float)target_height, 0.0f, full_white, false, nullptr);
+                sg_end_pass();
+
+                if (named_target) {
+                    named_target->swap();
+                    input_image = named_target->currentRead().image;
+                    input_view = named_target->currentRead().texture_view;
+                } else {
+                    input_image = effect_targets[write_index].image;
+                    input_view = effect_targets[write_index].texture_view;
+                    write_index = 1 - write_index;
+                }
+                effect_output_image = input_image;
+                effect_output_view = input_view;
+                rendered_any = true;
+                continue;
+            }
 
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index);

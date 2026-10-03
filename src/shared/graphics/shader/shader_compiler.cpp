@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "shader_backend.h"
+#include "shader_processor.h"
 #include "shader_uniform_layout.h"
 #include "shared/core/config.h"
 #include "shared/core/logger.h"
@@ -89,6 +90,8 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
+    ShaderSourceProcessor::normalizePreprocessor(compiled_vert_source);
+    ShaderSourceProcessor::normalizePreprocessor(compiled_frag_source);
     result.vertex_layout = usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
                                                                           : ShaderVertexLayout::Sprite2D;
 

@@ -4,6 +4,7 @@
 #include <slang.h>
 
 #include <atomic>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -130,11 +131,22 @@ void emit_sampler_adapter(std::string& declarations, sg_image_type type, bool& e
 void remove_uniform_declaration(std::string& source, const char* name) {
     if (!name || !name[0]) return;
 
+    const auto is_token_char = [](char c) { return std::isalnum((unsigned char)c) || c == '_'; };
     size_t search_pos = 0;
     const size_t name_len = std::strlen(name);
     while (true) {
         const size_t name_pos = source.find(name, search_pos);
         if (name_pos == std::string::npos) break;
+
+        const size_t name_end = name_pos + name_len;
+        // Names that merely share a prefix (g_PointerPosition vs
+        // g_PointerPositionLast) must not match, otherwise an unrelated
+        // declaration is erased and the uniform becomes undefined.
+        if ((name_pos > 0 && is_token_char(source[name_pos - 1])) ||
+            (name_end < source.size() && is_token_char(source[name_end]))) {
+            search_pos = name_end;
+            continue;
+        }
 
         const size_t previous_newline = source.rfind('\n', name_pos);
         const size_t line_start = previous_newline == std::string::npos ? 0 : previous_newline + 1;

@@ -176,7 +176,7 @@ void ShaderPass::init(EngineContext& ctx) {
     }
     uniforms = std::move(resolved_uniforms);
 
-    combo_defines = ShaderSourceProcessor::extractCombos(processed_fs.c_str());
+    combo_defines = ShaderSourceProcessor::extractCombos((processed_vs + "\n" + processed_fs).c_str());
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
     if (is_depth_parallax) {
         setComboDefine(combo_defines, "MASK",

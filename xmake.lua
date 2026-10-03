@@ -81,7 +81,7 @@ target("tests")
     set_warnings("all", "extra")
     add_packages("lz4", "stb")
     add_includedirs("src")
-    add_files("tests/*.cpp", "src/shared/assets/tex_decoder.cpp", "src/shared/core/logger.cpp")
+    add_files("tests/tex_video_detect_test.cpp", "src/shared/assets/tex_decoder.cpp", "src/shared/core/logger.cpp")
 
     if is_mode("debug", "asan", "ubsan") then
         add_defines("DEBUG_BUILD=1")
@@ -98,6 +98,16 @@ target("mdl_tests")
     add_includedirs("src")
     add_files("tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
               "src/wallpaper/2d/puppet/puppet_pose.cpp")
+
+-- Synthetic shader preprocessing checks. Not built by default; run with `xmake build shader_tests`.
+target("shader_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_packages("sokol")
+    add_files("tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp")
 
 task("check")
     set_menu {

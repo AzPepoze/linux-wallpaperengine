@@ -10,6 +10,8 @@ class ShaderSourceProcessor {
    public:
     static std::string processShaderSource(const std::string& source, const char* sourcePath,
                                            const IAssetResolver& assets, bool isVertex);
+    static void normalizePreprocessor(std::string& source);
+    static void rewriteGlslCompatibility(std::string& source);
     static std::string extractCombos(const char* fsSource);
     static std::map<int, std::string> extractTextureLabels(const char* fsSource);
     static std::string buildShaderPrefix();
