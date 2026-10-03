@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <cmath>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -38,6 +39,48 @@ void appendBE32(std::vector<uint8_t>& out, uint32_t value) {
 
 void appendText(std::vector<uint8_t>& out, const char* text) {
     out.insert(out.end(), text, text + strlen(text));
+}
+
+void appendF32(std::vector<uint8_t>& out, float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    appendU32(out, bits);
+}
+
+std::vector<uint8_t> makeAtlasTex(bool animated) {
+    std::vector<uint8_t> out;
+    appendText(out, "TEXV0005");
+    out.push_back(0);
+    appendText(out, "TEXI0001");
+    out.push_back(0);
+    appendU32(out, 0);
+    appendU32(out, animated ? 4 : 0);
+    appendU32(out, 8);
+    appendU32(out, 32);
+    appendU32(out, 8);
+    appendU32(out, 32);
+    appendU32(out, 0);
+    appendText(out, "TEXB0001");
+    out.push_back(0);
+    appendU32(out, animated ? 2 : 1);
+    for (int i = 0; i < (animated ? 2 : 1); ++i) appendU32(out, 0);  // no mip payload needed for metadata
+    if (!animated) return out;
+    appendText(out, "TEXS0003");
+    out.push_back(0);
+    appendU32(out, 3);
+    appendU32(out, 8);
+    appendU32(out, 32);
+    for (int i = 0; i < 3; ++i) {
+        appendU32(out, i == 2 ? 1 : 0);
+        appendF32(out, i == 1 ? 0.5f : 0.25f);
+        appendF32(out, 0);
+        appendF32(out, 0);
+        appendF32(out, 8);
+        appendF32(out, 0);
+        appendF32(out, 0);
+        appendF32(out, 32);
+    }
+    return out;
 }
 
 std::vector<uint8_t> makeFtypPayload() {
@@ -101,6 +144,62 @@ std::string writeTempTex(const std::vector<uint8_t>& bytes) {
 }  // namespace
 
 int main() {
+    for (bool animated : {false, true}) {
+        const std::string path = writeTempTex(makeAtlasTex(animated));
+        const auto metadata = wallpaper_engine::inspectTextureMetadata(path.c_str());
+        check(metadata.valid && metadata.width == 8 && metadata.height == 32, "tall texture dimensions retained");
+        if (!animated) {
+            check(metadata.animation_frames.empty() && metadata.spritesheet_frames == 0,
+                  "static tall texture is not an animation atlas");
+        } else {
+            check(metadata.animation_frames.size() == 3, "multi-page TEXS timeline retained despite one cell per page");
+            const auto* a = wallpaper_engine::textureFrameAtTime(metadata, 0.0f);
+            const auto* b = wallpaper_engine::textureFrameAtTime(metadata, 0.25f);
+            const auto* c = wallpaper_engine::textureFrameAtTime(metadata, 0.75f);
+            check(a && a->image_index == 0 && a->width == 8 && a->height == 32, "first frame rectangle retained");
+            check(b && b == &metadata.animation_frames[1], "nonuniform frame durations respected");
+            check(c && c->image_index == 1, "timeline advances to second texture page");
+            check(wallpaper_engine::textureFrameAtTime(metadata, 1.0f) == a, "timeline loops at total duration");
+            check(wallpaper_engine::textureFrameAtTime(metadata, -0.25f) == c, "negative time wraps safely");
+        }
+        unlink(path.c_str());
+    }
+
+    {
+        auto bytes = makeAtlasTex(true);
+        // A stock particle sheet can advertise a uniform grid even when one
+        // animation rectangle lies outside it. Preserve grid sampling while
+        // rejecting that rectangle timeline.
+        const size_t frame_start = bytes.size() - 3 * 32;
+        for (int i = 0; i < 3; ++i) {
+            const float height = 8.0f;
+            memcpy(bytes.data() + frame_start + i * 32 + 28, &height, sizeof(height));
+        }
+        const float invalid_y = 40.0f;
+        memcpy(bytes.data() + frame_start + 32 + 12, &invalid_y, sizeof(invalid_y));
+        const auto path = writeTempTex(bytes);
+        const auto metadata = wallpaper_engine::inspectTextureMetadata(path.c_str());
+        check(metadata.animation_frames.empty(), "invalid rectangle timeline rejected");
+        check(metadata.spritesheet_cols == 1 && metadata.spritesheet_rows == 4 && metadata.spritesheet_frames == 3,
+              "particle grid survives inconsistent rectangle timeline");
+        unlink(path.c_str());
+    }
+
+    for (float overshoot : {0.004f, 1.0f}) {
+        auto bytes = makeAtlasTex(true);
+        // Frame width follows index,
+        // duration, x and y. Model fractional exporter rounding at an edge.
+        const size_t frame_start = bytes.size() - 3 * 32;
+        const float width = 8.0f + overshoot;
+        memcpy(bytes.data() + frame_start + 16, &width, sizeof(width));
+        const auto path = writeTempTex(bytes);
+        const auto metadata = wallpaper_engine::inspectTextureMetadata(path.c_str());
+        check((!metadata.animation_frames.empty()) == (overshoot < 0.01f),
+              "fractional atlas edge rounding accepted, out-of-bounds frame rejected");
+        if (!metadata.animation_frames.empty())
+            check(metadata.animation_frames[0].width == 8.0f, "edge rounding clipped to texture bounds");
+        unlink(path.c_str());
+    }
     const std::vector<uint8_t> ftyp = makeFtypPayload();
     check(wallpaper_engine::isVideoContainer(ftyp.data(), ftyp.size()), "ftyp payload detected as video");
 

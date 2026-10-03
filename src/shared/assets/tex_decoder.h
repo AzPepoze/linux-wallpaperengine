@@ -8,6 +8,15 @@
 
 namespace wallpaper_engine {
 
+struct TextureAnimationFrame {
+    uint32_t image_index = 0;
+    float duration = 0.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+};
+
 struct TextureMetadata {
     bool valid = false;
     uint32_t width = 0;
@@ -18,10 +27,12 @@ struct TextureMetadata {
     uint32_t spritesheet_rows = 0;
     uint32_t spritesheet_frames = 0;
     float spritesheet_duration = 0.0f;
+    std::vector<TextureAnimationFrame> animation_frames;
 };
 
 DecodedImage decodeTexture(const char* path, int image_index = 0);
 TextureMetadata inspectTextureMetadata(const char* path);
+const TextureAnimationFrame* textureFrameAtTime(const TextureMetadata& metadata, float seconds);
 
 // True when a raw .tex data block begins with an ISO-BMFF 'ftyp' box (embedded MP4 video).
 bool isVideoContainer(const uint8_t* data, size_t size);

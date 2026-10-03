@@ -118,6 +118,7 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     if (std::strncmp(animation_magic, "TEXS000", 7) != 0) return metadata;
 
     const uint32_t frame_count = readU32(file);
+    if (frame_count == 0 || frame_count > 1000000) return metadata;
     if (std::strcmp(animation_magic, "TEXS0003") == 0) {
         readU32(file);  // GIF width
         readU32(file);  // GIF height
@@ -125,34 +126,68 @@ TextureMetadata inspectTextureMetadata(const char* path) {
 
     float first_frame_width = 0.0f;
     float first_frame_height = 0.0f;
-    float total_duration = 0.0f;
+    double total_duration = 0.0;
+    std::vector<TextureAnimationFrame> frames;
+    frames.reserve(frame_count);
     for (uint32_t frame = 0; frame < frame_count; ++frame) {
-        readU32(file);  // image/frame number
-        total_duration += readF32(file);
+        TextureAnimationFrame entry;
+        entry.image_index = readU32(file);
+        entry.duration = readF32(file);
+        total_duration += entry.duration;
         if (std::strcmp(animation_magic, "TEXS0001") == 0) {
-            readU32(file);  // x
-            readU32(file);  // y
+            entry.x = (float)readU32(file);
+            entry.y = (float)readU32(file);
             const float frame_width = static_cast<float>(readU32(file));
             readU32(file);
             readU32(file);
             const float frame_height = static_cast<float>(readU32(file));
+            entry.width = frame_width;
+            entry.height = frame_height;
             if (frame == 0) {
                 first_frame_width = frame_width;
                 first_frame_height = frame_height;
             }
         } else {
-            readF32(file);  // x
-            readF32(file);  // y
+            entry.x = readF32(file);
+            entry.y = readF32(file);
             const float frame_width = readF32(file);
             readF32(file);  // width2
             readF32(file);  // height2
             const float frame_height = readF32(file);
+            entry.width = frame_width;
+            entry.height = frame_height;
             if (frame == 0) {
                 first_frame_width = frame_width;
                 first_frame_height = frame_height;
             }
         }
+        if (frame == 0 && first_frame_width > 0.0f && first_frame_height > 0.0f && std::isfinite(first_frame_width) &&
+            std::isfinite(first_frame_height)) {
+            const auto cols = (uint32_t)std::lround(header.image_width / first_frame_width);
+            const auto rows = (uint32_t)std::lround(header.image_height / first_frame_height);
+            // Particle shaders consume a uniform grid, independent of the image
+            // animation rectangle table. Some stock leaf atlases have inconsistent
+            // rectangles but still supply the correct grid cell dimensions.
+            if (cols > 0 && rows > 0 && (uint64_t)cols * rows >= frame_count) {
+                metadata.spritesheet_cols = cols;
+                metadata.spritesheet_rows = rows;
+                metadata.spritesheet_frames = frame_count;
+            }
+        }
+        if (entry.image_index >= header.image_count || !std::isfinite(entry.duration) || entry.duration <= 0.0f ||
+            !std::isfinite(entry.x) || !std::isfinite(entry.y) || !std::isfinite(entry.width) ||
+            !std::isfinite(entry.height) || entry.x < 0.0f || entry.y < 0.0f || entry.width <= 0.0f ||
+            entry.height <= 0.0f || entry.x + entry.width > header.image_width + 0.01f ||
+            entry.y + entry.height > header.image_height + 0.01f)
+            return metadata;
+        // Exported fractional grids can overshoot the edge by a few thousandths
+        // of a pixel (for example six 85.334px cells in a 512px leaf atlas).
+        entry.width = std::min(entry.width, (float)header.image_width - entry.x);
+        entry.height = std::min(entry.height, (float)header.image_height - entry.y);
+        frames.push_back(entry);
     }
+    metadata.animation_frames = std::move(frames);
+    metadata.spritesheet_duration = total_duration;
 
     if (frame_count > 0 && first_frame_width > 0.0f && first_frame_height > 0.0f && header.image_width > 0 &&
         header.image_height > 0) {
@@ -169,6 +204,22 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     }
 
     return metadata;
+}
+
+const TextureAnimationFrame* textureFrameAtTime(const TextureMetadata& metadata, float seconds) {
+    if (metadata.animation_frames.empty() || metadata.spritesheet_duration <= 0.0f || !std::isfinite(seconds))
+        return nullptr;
+    // Accumulate in double precision so short frame durations do not drift at
+    // page boundaries in long animations.
+    double duration = 0.0;
+    for (const auto& frame : metadata.animation_frames) duration += frame.duration;
+    double phase = std::fmod((double)seconds, duration);
+    if (phase < 0.0) phase += duration;
+    for (const auto& frame : metadata.animation_frames) {
+        if (phase < frame.duration) return &frame;
+        phase -= frame.duration;
+    }
+    return &metadata.animation_frames.back();
 }
 
 }  // namespace wallpaper_engine
