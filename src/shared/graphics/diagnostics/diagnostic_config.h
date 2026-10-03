@@ -6,6 +6,15 @@
 #include <string>
 #include <vector>
 
+struct DiagnosticOptions {
+    bool enabled = false;
+    std::string disable_effects;
+    bool disable_particles = false;
+    bool disable_bloom = false;
+    bool final_only = false;
+    bool exit_after_diagnose = false;
+};
+
 struct DiagnosticConfig {
     bool enabled = true;
     std::string output_dir = "./diagnostics";

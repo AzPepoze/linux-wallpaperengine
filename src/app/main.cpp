@@ -130,7 +130,7 @@ static void init(void) {
 
     initAudio();
 #if DEBUG_BUILD
-    RenderDiagnostics::instance().init(cli.diagnose);
+    RenderDiagnostics::instance().init(cli.diagnostics);
 #endif
     initGraphics();
 #if DEBUG_BUILD

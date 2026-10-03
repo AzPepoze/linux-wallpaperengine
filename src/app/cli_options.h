@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "shared/graphics/diagnostics/diagnostic_config.h"
+
 struct CliOptions {
     std::string wallpaper_arg;
     bool pkg_flag = false;
@@ -14,7 +16,7 @@ struct CliOptions {
     bool list_gpus = false;
     bool no_audio = false;
     bool no_ui = false;
-    bool diagnose = false;
+    DiagnosticOptions diagnostics;
     bool cover = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;

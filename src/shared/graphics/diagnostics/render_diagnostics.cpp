@@ -363,77 +363,42 @@ void RenderDiagnostics::shutdown(bool cancel_pending) {
     }
 }
 
-void RenderDiagnostics::init(bool enabled) {
-    config.enabled = enabled;
+void RenderDiagnostics::init(const DiagnosticOptions& options) {
+    config.enabled = options.enabled;
     config.target_frame = 100;
     config.capture_pass_images = true;
-    if (enabled) {
-        // This sokol_args version stores keys with leading dashes and needs '=' for values,
-        // so probe both spellings.
-        std::string list;
-        for (const char* key : {"--disable-effects", "disable-effects", "--disable_effects", "disable_effects"}) {
-            if (sargs_exists(key)) {
-                list = sargs_value_def(key, "");
-                break;
-            }
+    if (!options.enabled) return;
+
+    size_t start = 0;
+    const std::string& list = options.disable_effects;
+    while (start < list.size()) {
+        const size_t comma = list.find(',', start);
+        std::string item = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+        const size_t first = item.find_first_not_of(" \t");
+        const size_t last = item.find_last_not_of(" \t");
+        item = first == std::string::npos ? "" : item.substr(first, last - first + 1);
+        if (!item.empty()) {
+            config.disable_effect_paths.push_back(item);
+            effect_log.info("Bisect: disabling effects matching \"%s\"", item.c_str());
         }
-        if (!list.empty() && list.front() == '=') list.erase(list.begin());
-        if (!list.empty()) {
-            size_t start = 0;
-            while (start <= list.size()) {
-                size_t comma = list.find(',', start);
-                std::string item = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
-                while (!item.empty() && (item.front() == ' ' || item.front() == '\t')) item.erase(item.begin());
-                while (!item.empty() && (item.back() == ' ' || item.back() == '\t')) item.pop_back();
-                if (!item.empty()) {
-                    config.disable_effect_paths.push_back(item);
-                    effect_log.info("Bisect: disabling effects matching \"%s\"", item.c_str());
-                }
-                if (comma == std::string::npos) break;
-                start = comma + 1;
-            }
-        }
-        bool no_particles = false;
-        for (const char* key :
-             {"--disable-particles", "disable-particles", "--disable_particles", "disable_particles"}) {
-            if (sargs_exists(key)) {
-                no_particles = true;
-                break;
-            }
-        }
-        if (no_particles) {
-            config.disable_particles = true;
-            effect_log.info("Bisect: particle rendering disabled");
-        }
-        bool no_bloom = false;
-        for (const char* key : {"--disable-bloom", "disable-bloom", "--disable_bloom", "disable_bloom"}) {
-            if (sargs_exists(key)) {
-                no_bloom = true;
-                break;
-            }
-        }
-        if (no_bloom) {
-            config.disable_bloom = true;
-            effect_log.info("Bisect: bloom rendering disabled");
-        }
-        for (const char* key : {"--diagnose-final-only", "diagnose-final-only"}) {
-            if (sargs_exists(key)) {
-                config.final_only = true;
-                break;
-            }
-        }
-        if (config.final_only) {
-            effect_log.info("Diagnostic final-only mode: per-pass/per-stage PNG dumps disabled");
-        }
-        for (const char* key : {"--exit-after-diagnose", "exit-after-diagnose"}) {
-            if (sargs_exists(key)) {
-                config.exit_after_diagnose = true;
-                break;
-            }
-        }
-        effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
-                        (unsigned long long)config.target_frame);
+        if (comma == std::string::npos) break;
+        start = comma + 1;
     }
+    if (options.disable_particles) {
+        config.disable_particles = true;
+        effect_log.info("Bisect: particle rendering disabled");
+    }
+    if (options.disable_bloom) {
+        config.disable_bloom = true;
+        effect_log.info("Bisect: bloom rendering disabled");
+    }
+    if (options.final_only) {
+        config.final_only = true;
+        effect_log.info("Diagnostic final-only mode: per-pass/per-stage PNG dumps disabled");
+    }
+    config.exit_after_diagnose = options.exit_after_diagnose;
+    effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
+                    (unsigned long long)config.target_frame);
 }
 
 bool RenderDiagnostics::isEffectDisabled(int effect_index, const std::string& effect_path) const {

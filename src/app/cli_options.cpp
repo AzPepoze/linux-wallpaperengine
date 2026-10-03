@@ -37,6 +37,29 @@ std::string flagValue(const char* name) {
     return value ? value : "";
 }
 
+#if DEBUG_BUILD
+// This sokol_args version keeps leading dashes in keys and prefixes values with '=', so probe every spelling.
+bool hasAnySpelling(const char* name) {
+    const std::string dashed = std::string("--") + name;
+    std::string underscored = name;
+    for (char& c : underscored)
+        if (c == '-') c = '_';
+    return sargs_exists(name) || sargs_exists(dashed.c_str()) || sargs_exists(underscored.c_str()) ||
+           sargs_exists(("--" + underscored).c_str());
+}
+
+std::string valueAnySpelling(const char* name) {
+    const std::string dashed = std::string("--") + name;
+    for (const char* key : {name, dashed.c_str()}) {
+        if (!sargs_exists(key)) continue;
+        std::string value = sargs_value_def(key, "");
+        if (!value.empty() && value.front() == '=') value.erase(value.begin());
+        return value;
+    }
+    return "";
+}
+#endif
+
 bool envEnabled(const char* name) {
     const char* value = getenv(name);
     return value && value[0] && strcmp(value, "0") != 0;
@@ -56,7 +79,12 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 #if DEBUG_BUILD
     opts.sandbox = hasDashedFlag("sandbox");
     opts.no_ui = hasDashedFlag("no-ui");
-    opts.diagnose = hasDashedFlag("diagnose") || hasDashedFlag("diagnostics");
+    opts.diagnostics.enabled = hasDashedFlag("diagnose") || hasDashedFlag("diagnostics");
+    opts.diagnostics.disable_effects = valueAnySpelling("disable-effects");
+    opts.diagnostics.disable_particles = hasAnySpelling("disable-particles");
+    opts.diagnostics.disable_bloom = hasAnySpelling("disable-bloom");
+    opts.diagnostics.final_only = hasDashedFlag("diagnose-final-only");
+    opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
 #endif
     opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO");
     opts.cover = hasFlag("cover");

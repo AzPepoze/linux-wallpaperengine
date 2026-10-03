@@ -91,7 +91,7 @@ class RenderDiagnostics : public IRenderObserver {
     }
     bool is_capturing_frame = false;
 
-    void init(bool enabled = false);
+    void init(const DiagnosticOptions& options = {});
     void shutdown(bool cancel_pending = false);
     bool isEffectDisabled(int effect_index, const std::string& effect_path) const override;
     void triggerCapture(uint64_t current_frame);
