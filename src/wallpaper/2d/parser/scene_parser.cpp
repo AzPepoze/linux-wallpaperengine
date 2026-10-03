@@ -224,6 +224,21 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
           out.general.zoom, out.general.bloom.enabled ? "enabled" : "disabled");
 }
 
+void parseAnimationLayers(const cJSON* array, std::vector<AnimationLayerDocument>& out) {
+    const cJSON* entry = nullptr;
+    cJSON_ArrayForEach(entry, array) {
+        float animation = 0.0f;
+        if (!parseFloat(cJSON_GetObjectItemCaseSensitive(entry, "animation"), animation)) continue;
+        AnimationLayerDocument layer;
+        layer.animation = (uint32_t)animation;
+        parseFloat(cJSON_GetObjectItemCaseSensitive(entry, "rate"), layer.rate);
+        parseFloat(cJSON_GetObjectItemCaseSensitive(entry, "blend"), layer.blend);
+        layer.additive = parseBool(cJSON_GetObjectItemCaseSensitive(entry, "additive"), false);
+        layer.visible = parseBool(cJSON_GetObjectItemCaseSensitive(entry, "visible"), true);
+        out.push_back(layer);
+    }
+}
+
 SceneObjectDocument parseObject(const cJSON* object) {
     SceneObjectDocument doc;
     doc.kind = detectObjectKind(object);
@@ -280,6 +295,7 @@ SceneObjectDocument parseObject(const cJSON* object) {
     if (cJSON_IsNumber(color_blend_mode)) doc.image.color_blend_mode = (int)color_blend_mode->valuedouble;
     doc.image.solid = parseBool(cJSON_GetObjectItemCaseSensitive(object, "solid"), false);
     doc.image.copy_background = parseBool(cJSON_GetObjectItemCaseSensitive(object, "copybackground"), false);
+    parseAnimationLayers(cJSON_GetObjectItemCaseSensitive(object, "animationlayers"), doc.image.animation_layers);
 
     const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
     if (cJSON_IsString(particle) && particle->valuestring) {

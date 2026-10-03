@@ -493,17 +493,14 @@ void ImageLayer::loadPuppet(const char* mdl_rel_path, EngineContext& ctx) {
     has_puppet_mesh = !puppet.vertices.empty() && !puppet.triangles.empty();
     if (!has_puppet_mesh) return;
 
-    puppet_raw_positions.resize(puppet.vertices.size() * 3);
     std::vector<float> uvs;
     uvs.reserve(puppet.vertices.size() * 2);
-    for (size_t i = 0; i < puppet.vertices.size(); ++i) {
-        const wallpaper_engine::MdlVertex& vertex = puppet.vertices[i];
-        puppet_raw_positions[i * 3 + 0] = vertex.position[0];
-        puppet_raw_positions[i * 3 + 1] = vertex.position[1];
-        puppet_raw_positions[i * 3 + 2] = vertex.position[2];
+    for (const wallpaper_engine::MdlVertex& vertex : puppet.vertices) {
         uvs.push_back(vertex.uv[0]);
         uvs.push_back(vertex.uv[1]);
     }
+    puppet_pose.init(puppet);
+    setPuppetLayers();
 
     sg_buffer_desc uv_desc = {};
     uv_desc.usage.vertex_buffer = true;
@@ -524,12 +521,25 @@ void ImageLayer::loadPuppet(const char* mdl_rel_path, EngineContext& ctx) {
     puppet_index_count = (int)indices.size();
 
     sg_buffer_desc position_desc = {};
-    position_desc.size = puppet_raw_positions.size() * sizeof(float);
+    position_desc.size = puppet.vertices.size() * 3 * sizeof(float);
     position_desc.usage.vertex_buffer = true;
     position_desc.usage.stream_update = true;
     puppet_position_buffer = sg_make_buffer(&position_desc);
     LOG_TAG_I("PUPPET", "Loaded puppet mesh %s (%zu vertices, %zu triangles, %zu bones)", mdl_rel_path,
               puppet.vertices.size(), puppet.triangles.size(), puppet.bones.size());
+}
+
+void ImageLayer::setPuppetLayers() {
+    puppet_layers.clear();
+    for (const wallpaper_engine::AnimationLayerDocument& entry : alpha_document.animation_layers) {
+        wallpaper_engine::PuppetAnimationLayer layer;
+        layer.animation_id = entry.animation;
+        layer.rate = entry.rate;
+        layer.blend = entry.blend;
+        layer.additive = entry.additive;
+        layer.visible = entry.visible;
+        puppet_layers.push_back(layer);
+    }
 }
 
 bool ImageLayer::ensurePuppetTarget(int width, int height) {
@@ -540,15 +550,14 @@ bool ImageLayer::ensurePuppetTarget(int width, int height) {
 }
 
 void ImageLayer::updatePuppetPositions(int width, int height) {
-    const size_t count = puppet.vertices.size();
-    puppet_positions.resize(count * 3);
+    puppet_pose.skin(puppet, puppet_layers, puppet_skinned);
+    puppet_positions.resize(puppet_skinned.size());
     const float center_x = (float)width * 0.5f;
     const float center_y = (float)height * 0.5f;
-    for (size_t i = 0; i < count; ++i) {
-        const wallpaper_engine::MdlVertex& vertex = puppet.vertices[i];
-        puppet_positions[i * 3 + 0] = center_x + vertex.position[0];
-        puppet_positions[i * 3 + 1] = center_y - vertex.position[1];
-        puppet_positions[i * 3 + 2] = 0.0f;
+    for (size_t i = 0; i < puppet_skinned.size(); i += 3) {
+        puppet_positions[i + 0] = center_x + puppet_skinned[i + 0];
+        puppet_positions[i + 1] = center_y - puppet_skinned[i + 1];
+        puppet_positions[i + 2] = 0.0f;
     }
     if (puppet_position_buffer.id == SG_INVALID_ID) return;
     sg_range range = {puppet_positions.data(), puppet_positions.size() * sizeof(float)};
@@ -589,10 +598,10 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
 }
 
 void ImageLayer::update(float dt, EngineContext& ctx) {
-    (void)dt;
     tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
     if (is_fullscreen) return;
     if (has_puppet_mesh) {
+        puppet_pose.advance(puppet_layers, dt);
         if (renderPuppet(ctx)) {
             renderEffectChain(ctx, (sg_image)puppet_target.image, (sg_view)puppet_target.texture_view);
             return;

@@ -7,6 +7,9 @@
 
 #include <vector>
 
+void runPuppetPoseTests();
+int puppetPoseFailures();
+
 namespace {
 
 int g_failures = 0;
@@ -183,8 +186,9 @@ int main() {
     check(!wallpaper_engine::parseMdl(junk, sizeof(junk), rejected), "short buffer rejected");
     check(!wallpaper_engine::parseMdl(nullptr, 0, rejected), "null buffer rejected");
 
-    if (g_failures != 0) {
-        fprintf(stderr, "%d check(s) failed\n", g_failures);
+    runPuppetPoseTests();
+    if (g_failures + puppetPoseFailures() != 0) {
+        fprintf(stderr, "%d check(s) failed\n", g_failures + puppetPoseFailures());
         return 1;
     }
     printf("mdl parser checks passed\n");

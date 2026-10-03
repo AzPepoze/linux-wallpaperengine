@@ -91,6 +91,28 @@ bool parseBones(Reader& r, const uint8_t* data, size_t size, MdlModel& out) {
     return true;
 }
 
+bool readKeyframes(Reader& r, std::vector<MdlKeyframe>& track, size_t count) {
+    track.resize(count);
+    for (MdlKeyframe& keyframe : track) {
+        if (!r.f32(keyframe.translation[0]) || !r.f32(keyframe.translation[1]) || !r.f32(keyframe.translation[2]) ||
+            !r.f32(keyframe.rotation[0]) || !r.f32(keyframe.rotation[1]) || !r.f32(keyframe.rotation[2]) ||
+            !r.f32(keyframe.scale[0]) || !r.f32(keyframe.scale[1]) || !r.f32(keyframe.scale[2])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Real clips carry a few more equally sized tracks than the declared count.
+void skipExtraTracks(Reader& r, size_t keyframe_bytes) {
+    while (r.pos + 8 + keyframe_bytes <= r.size) {
+        uint32_t declared = 0;
+        memcpy(&declared, r.data + r.pos + 4, 4);
+        if (declared != keyframe_bytes) return;
+        r.pos += 8 + keyframe_bytes;
+    }
+}
+
 bool parseClip(Reader& r, uint32_t id, MdlAnimationClip& clip) {
     clip.id = id;
     uint32_t reserved = 0;
@@ -112,16 +134,9 @@ bool parseClip(Reader& r, uint32_t id, MdlAnimationClip& clip) {
         uint32_t keyframe_bytes = 0;
         if (!r.u32(track_reserved) || !r.u32(keyframe_bytes)) return false;
         if (keyframe_bytes != expected_bytes || r.pos + keyframe_bytes > r.size) return false;
-        std::vector<MdlKeyframe>& track = clip.tracks[t];
-        track.resize((size_t)clip.frame_count + 1);
-        for (MdlKeyframe& keyframe : track) {
-            if (!r.f32(keyframe.translation[0]) || !r.f32(keyframe.translation[1]) || !r.f32(keyframe.translation[2]) ||
-                !r.f32(keyframe.rotation[0]) || !r.f32(keyframe.rotation[1]) || !r.f32(keyframe.rotation[2]) ||
-                !r.f32(keyframe.scale[0]) || !r.f32(keyframe.scale[1]) || !r.f32(keyframe.scale[2])) {
-                return false;
-            }
-        }
+        if (!readKeyframes(r, clip.tracks[t], (size_t)clip.frame_count + 1)) return false;
     }
+    skipExtraTracks(r, expected_bytes);
     return true;
 }
 

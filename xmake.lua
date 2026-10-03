@@ -58,7 +58,8 @@ target("mdl_tests")
     set_targetdir("bin/$(mode)")
     set_warnings("all", "extra")
     add_includedirs("src")
-    add_files("tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp")
+    add_files("tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
+              "src/wallpaper/2d/puppet/puppet_pose.cpp")
 
 task("check")
     set_menu {

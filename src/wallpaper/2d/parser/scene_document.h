@@ -41,6 +41,14 @@ struct EffectInstanceDocument {
     std::string instance_config_json;
 };
 
+struct AnimationLayerDocument {
+    uint32_t animation = 0;
+    float rate = 1.0f;
+    float blend = 1.0f;
+    bool additive = false;
+    bool visible = true;
+};
+
 struct ImageObjectDocument {
     struct AlphaKey {
         float frame = 0.0f;
@@ -58,6 +66,7 @@ struct ImageObjectDocument {
     int color_blend_mode = 0;
     bool solid = false;
     bool copy_background = false;
+    std::vector<AnimationLayerDocument> animation_layers;
 };
 
 struct ParticleObjectDocument {

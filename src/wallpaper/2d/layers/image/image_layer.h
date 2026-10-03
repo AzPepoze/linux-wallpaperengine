@@ -7,7 +7,9 @@
 
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/parser/scene_document.h"
 #include "wallpaper/2d/puppet/mdl_parser.h"
+#include "wallpaper/2d/puppet/puppet_pose.h"
 
 class EngineContext;
 
@@ -143,6 +145,7 @@ class ImageLayer : public Layer {
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void loadPuppet(const char* mdl_rel_path, EngineContext& ctx);
+    void setPuppetLayers();
     bool ensurePuppetTarget(int width, int height);
     bool renderPuppet(EngineContext& ctx);
     void updatePuppetPositions(int width, int height);
@@ -169,9 +172,11 @@ class ImageLayer : public Layer {
     GfxBuffer puppet_uv_buffer;
     GfxBuffer puppet_index_buffer;
     int puppet_index_count = 0;
-    std::vector<float> puppet_raw_positions;
+    std::vector<float> puppet_skinned;
     std::vector<float> puppet_positions;
     EffectTarget puppet_target;
+    wallpaper_engine::PuppetPose puppet_pose;
+    std::vector<wallpaper_engine::PuppetAnimationLayer> puppet_layers;
 };
 
 #endif  // IMAGE_LAYER_H
