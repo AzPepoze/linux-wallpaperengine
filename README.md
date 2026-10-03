@@ -93,7 +93,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 ### Wallpaper Types
 
 - [-] Scene wallpapers
-- [x] Video wallpapers
+- [x] Video wallpapers (no audio yet)
 - [ ] Web wallpapers
 - [ ] Application wallpapers
 
@@ -105,8 +105,8 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [ ] Sound layers
 - [ ] Light layers
 - [ ] 3D model layers
-- [ ] Composition layers
-- [ ] Fullscreen / effect layers
+- [-] Composition layers
+- [-] Fullscreen / effect layers
 - [-] Layer hierarchy
 - [x] Layer visibility
 - [x] Layer position
@@ -138,72 +138,33 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 ### Image Effects
 
-#### Animation Effects
+> "Works" means the shader compiles and the pass executes; pixel-exact output is not guaranteed.
 
-- [ ] Foliage Sway
-- [ ] Iris Movement
-- [ ] Pulse
-- [ ] Cloud Motion
-- [ ] Scroll
-- [ ] Shake
-- [ ] Spin
-- [ ] Swing
-- [ ] Twirl
-- [ ] Water Flow
-- [ ] Water Ripple
-- [x] Water Waves
+#### Working
 
-#### Blur Effects
-
-- [ ] Blur
-- [ ] Blur Precise
-- [ ] Motion Blur
-- [ ] Radial Blur
-
-#### Interactive Effects
-
-- [ ] Cursor Ripple
-- [ ] Advanced Fluid Simulation
+- [x] Water Waves, Water Flow, Water Ripple
+- [x] Shake, Foliage Sway, Iris Movement, Scroll
+- [x] Opacity, Tint, Color Key, Blend, Blend Gradient
+- [x] Blur, Blur Precise, Motion Blur
+- [x] Light Shafts, God Rays, Shine
 - [x] Depth Parallax
-- [ ] X-Ray
+- [x] VHS, Skew, Film Grain, Perspective, Reflection, Chromatic Aberration, Twirl, Spin, Clouds, Fisheye, Local Contrast, Refraction, Swing, Shimmer, Nitro, Edge Detection, Transform
 
-#### Colorization Effects
+#### Known failing
 
-- [ ] Blend
-- [ ] Blend Gradient
-- [ ] Chromatic Aberration
-- [ ] Clouds
-- [ ] Color Key
-- [ ] Film Grain
-- [ ] Glitter
-- [ ] Shimmer
-- [ ] Fire
-- [ ] Light Shafts
-- [ ] Nitro
-- [ ] Opacity
-- [ ] Reflection
-- [ ] Tint
-- [ ] VHS
+- [ ] Pulse (some shader variants)
+- [ ] Cloud Motion
+- [ ] Cursor Ripple
 - [ ] Water Caustics
+- [ ] Workshop effects with GLSL constructs Slang rejects (audio bars, hue shift, auto sway, clipping mask, pixelate, and others)
 
-#### Distortion Effects
+#### Untested
 
-- [ ] Fisheye
-- [ ] Perspective
-- [ ] Refraction
-- [ ] Skew
-- [ ] Transform
-
-#### Enhancement Effects
-
-- [ ] Edge Detection
-- [ ] God Rays
-- [ ] Local Contrast
-- [ ] Shine
+- [ ] Radial Blur, X-Ray, Glitter, Fire, Advanced Fluid Simulation
 
 #### Effect Runtime
 
-- [-] Generic Wallpaper Engine shader effects
+- [-] Generic Wallpaper Engine shader effects (GLSL to Slang translation)
 - [x] Effect chains
 - [x] Multiple effect passes
 - [x] Effect masks
@@ -211,7 +172,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [x] Constant shader values
 - [x] Shader combo defines
 - [-] Wallpaper Engine material support
-- [ ] Full built-in effect compatibility
+- [ ] Named render targets (`_rt_FullFrameBuffer`, `_rt_*FrameBuffer`, `_rt_imageLayerComposite_*`)
 - [ ] Custom effect compatibility
 
 ### Bloom & HDR
