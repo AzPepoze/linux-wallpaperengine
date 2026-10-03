@@ -35,19 +35,19 @@ std::string g_sandbox_status;
 SandboxPreviewRect g_sandbox_preview_rect;
 
 int findLayerIndex(const EngineContext& ctx, uint32_t scene_object_id) {
-    for (int index = 0; index < (int)ctx.layers.size(); ++index) {
-        if (ctx.layers[index]->scene_object_id == scene_object_id) return index;
+    for (int index = 0; index < (int)ctx.scene.layers.size(); ++index) {
+        if (ctx.scene.layers[index]->scene_object_id == scene_object_id) return index;
     }
     return -1;
 }
 
 void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
     const int layer_index = findLayerIndex(ctx, node.id);
-    const bool is_selected = layer_index >= 0 && ctx.selected_object == layer_index;
+    const bool is_selected = layer_index >= 0 && ctx.debug.selected_object == layer_index;
     const bool is_leaf = node.children.empty();
     std::string node_name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
-    if (layer_index >= 0 && layer_index < (int)ctx.layers.size()) {
-        const Layer* layer = ctx.layers[layer_index];
+    if (layer_index >= 0 && layer_index < (int)ctx.scene.layers.size()) {
+        const Layer* layer = ctx.scene.layers[layer_index];
         if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
             if (il->is_fullscreen)
                 node_name += " [FS PostProcess]";
@@ -75,19 +75,19 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
 
     ImGui::PushID((int)node.id);
     if (layer_index >= 0) {
-        UiWidgets::drawVisibilitySoloControls(*ctx.layers[layer_index], "Toggle layer visibility", "Solo layer");
+        UiWidgets::drawVisibilitySoloControls(*ctx.scene.layers[layer_index], "Toggle layer visibility", "Solo layer");
         ImGui::SameLine();
     }
     const bool open = ImGui::TreeNodeEx(node_name.c_str(), flags);
     if (layer_index >= 0 && ImGui::IsItemClicked()) {
-        ctx.selected_object = layer_index;
-        if (ImGui::GetIO().KeyCtrl) ctx.layers[layer_index]->setSolo(!ctx.layers[layer_index]->solo);
+        ctx.debug.selected_object = layer_index;
+        if (ImGui::GetIO().KeyCtrl) ctx.scene.layers[layer_index]->setSolo(!ctx.scene.layers[layer_index]->solo);
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scene node %u", node.id);
 
     if (open && !is_leaf) {
         for (uint32_t child_id : node.children) {
-            const SceneTreeNode* child = ctx.scene_tree->find(child_id);
+            const SceneTreeNode* child = ctx.scene.scene_tree->find(child_id);
             if (child) drawSceneNode(ctx, *child);
         }
         ImGui::TreePop();
@@ -106,37 +106,38 @@ void drawHierarchyPanel(EngineContext& ctx) {
     const float available_w = ImGui::GetContentRegionAvail().x;
     const float selectable_w = available_w - isolate_btn_w - ImGui::GetStyle().ItemSpacing.x;
 
-    if (ImGui::Selectable("Global Settings", ctx.selected_object == -1, 0,
+    if (ImGui::Selectable("Global Settings", ctx.debug.selected_object == -1, 0,
                           ImVec2(selectable_w > 40.0f ? selectable_w : 0.0f, 0))) {
-        ctx.selected_object = -1;
+        ctx.debug.selected_object = -1;
     }
     ImGui::SameLine();
-    if (ctx.test_mode) {
+    if (ctx.debug.test_mode) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.9f, 1.0f));
     }
-    if (ImGui::Button(ctx.test_mode ? "Isolate: ON" : "Isolate", ImVec2(isolate_btn_w, 0))) {
-        ctx.test_mode = !ctx.test_mode;
+    if (ImGui::Button(ctx.debug.test_mode ? "Isolate: ON" : "Isolate", ImVec2(isolate_btn_w, 0))) {
+        ctx.debug.test_mode = !ctx.debug.test_mode;
     }
-    if (ctx.test_mode) {
+    if (ctx.debug.test_mode) {
         ImGui::PopStyleColor();
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Render only the selected layer");
 
     ImGui::Separator();
-    if (ctx.scene_tree && ctx.scene_tree->size() > 0) {
-        for (uint32_t root_id : ctx.scene_tree->rootIds()) {
-            const SceneTreeNode* root = ctx.scene_tree->find(root_id);
+    if (ctx.scene.scene_tree && ctx.scene.scene_tree->size() > 0) {
+        for (uint32_t root_id : ctx.scene.scene_tree->rootIds()) {
+            const SceneTreeNode* root = ctx.scene.scene_tree->find(root_id);
             if (root) drawSceneNode(ctx, *root);
         }
         return;
     }
 
-    for (int index = 0; index < (int)ctx.layers.size(); ++index) {
-        Layer* layer = ctx.layers[index];
+    for (int index = 0; index < (int)ctx.scene.layers.size(); ++index) {
+        Layer* layer = ctx.scene.layers[index];
         ImGui::PushID(index);
         UiWidgets::drawVisibilitySoloControls(*layer, "Toggle layer visibility", "Solo layer");
         ImGui::SameLine();
-        if (ImGui::Selectable(layer->name.c_str(), ctx.selected_object == index)) ctx.selected_object = index;
+        if (ImGui::Selectable(layer->name.c_str(), ctx.debug.selected_object == index))
+            ctx.debug.selected_object = index;
         ImGui::PopID();
     }
 }
@@ -148,13 +149,13 @@ void drawInspectorPanel(EngineContext& ctx) {
     ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "[ %.1f FPS | %.1f ms ]", fps, ctx.profiler.frame_avg_ms);
     ImGui::Separator();
 
-    if (ctx.selected_object == -1) {
+    if (ctx.debug.selected_object == -1) {
         Inspector::GlobalInspector::show(ctx);
         return;
     }
 
-    if (ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
-        Layer* layer = ctx.layers[ctx.selected_object];
+    if (ctx.debug.selected_object >= 0 && ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        Layer* layer = ctx.scene.layers[ctx.debug.selected_object];
         ImGui::Text("Selected: %s", layer->name.c_str());
         ImGui::Separator();
         Inspector::showLayer(ctx, *layer);
@@ -277,8 +278,8 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
         ImGui::PopStyleColor(3);
     }
 
-    if (ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
-        ctx.layers[ctx.selected_object]->drawDebug(ctx);
+    if (ctx.debug.selected_object >= 0 && ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        ctx.scene.layers[ctx.debug.selected_object]->drawDebug(ctx);
     }
 }
 
@@ -343,7 +344,7 @@ void Debugger::draw(EngineContext& ctx) {
     frame_desc.dpi_scale = sapp_dpi_scale();
     simgui_new_frame(&frame_desc);
 
-    if (ctx.show_ui) {
+    if (ctx.debug.show_ui) {
         if (ctx.runtime_mode == RuntimeMode::Sandbox) {
             drawSandbox(ctx);
         } else {

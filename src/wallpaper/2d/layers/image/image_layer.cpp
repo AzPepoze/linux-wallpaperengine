@@ -479,16 +479,16 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     if (is_fullscreen) {
         copy_background = true;
         if (size[0] <= 0.0f || size[1] <= 0.0f) {
-            size[0] = ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f;
-            size[1] = ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f;
+            size[0] = ctx.scene.scene_w > 0.0f ? ctx.scene.scene_w : 3840.0f;
+            size[1] = ctx.scene.scene_h > 0.0f ? ctx.scene.scene_h : 2160.0f;
         }
     }
     if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer"))) {
         solid_layer = true;
-        const int width =
-            std::max(1, (int)std::lround(size[0] > 0.0f ? size[0] : (ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f)));
-        const int height =
-            std::max(1, (int)std::lround(size[1] > 0.0f ? size[1] : (ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f)));
+        const int width = std::max(
+            1, (int)std::lround(size[0] > 0.0f ? size[0] : (ctx.scene.scene_w > 0.0f ? ctx.scene.scene_w : 3840.0f)));
+        const int height = std::max(
+            1, (int)std::lround(size[1] > 0.0f ? size[1] : (ctx.scene.scene_h > 0.0f ? ctx.scene.scene_h : 2160.0f)));
         std::vector<uint32_t> pixels((size_t)width * (size_t)height, 0xFFFFFFFFu);
         sg_image_desc image_desc = {};
         image_desc.width = width;

@@ -39,6 +39,61 @@ struct profiler_stats_t {
     float sample_interval = 0.040f;  // 40ms per point (~25 Hz) -> ~5.1s continuous visible timeline
 };
 
+struct InputState {
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    bool mouse_position_valid = false;
+};
+
+struct ParallaxState {
+    float pointer_x = 0.5f;
+    float pointer_y = 0.5f;
+    // Centered shader-space offset. renderer_draw_sprite converts this to
+    // g_ParallaxPosition by applying *0.5 + 0.5.
+    float smooth_x = 0.0f;
+    float smooth_y = 0.0f;
+    bool enabled = false;
+    float amount = 0.0f;
+    float delay = 0.1f;
+    float mouse_influence = 0.0f;
+};
+
+struct CameraShakeState {
+    bool enabled = false;
+    float amplitude = 0.0f;
+    float speed = 0.0f;
+    float roughness = 0.0f;
+    // Scene-space camera translation, calculated once per frame.
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+struct SceneState {
+    wallpaper_engine::SceneCameraDocument camera = {};
+    wallpaper_engine::SceneGeneralDocument general = {};
+
+    std::vector<Layer*> layers;
+    SceneTree* scene_tree = nullptr;
+
+    float scene_w = 1920.0f;
+    float scene_h = 1080.0f;
+    float render_scale = 1.0f;
+    float offset_x = 0.0f;
+    float offset_y = 0.0f;
+    float perspective_override_fov = 0.0f;
+    scaling_mode_t scaling_mode = SCALING_FIT;
+};
+
+struct DebugState {
+    int selected_object = -1;
+    bool show_ui = true;
+    bool test_mode = false;
+    bool particle_debug_bounds = false;
+    bool particle_debug_velocity = false;
+    float particle_debug_velocity_scale = 0.05f;
+    int particle_debug_max_particles = 128;
+};
+
 struct EngineContext {
     sg_pass_action pass_action = {};
     char wallpaper_path[512] = {};
@@ -52,49 +107,12 @@ struct EngineContext {
     AssetManager asset_mgr = {};
     profiler_stats_t profiler = {};
 
-    wallpaper_engine::SceneCameraDocument camera = {};
-    wallpaper_engine::SceneGeneralDocument general = {};
-
-    std::vector<Layer*> layers;
-    SceneTree* scene_tree = nullptr;
-
-    float scene_w = 1920.0f;
-    float scene_h = 1080.0f;
-    float render_scale = 1.0f;
-    float offset_x = 0.0f;
-    float offset_y = 0.0f;
-
-    float mouse_x = 0.0f;
-    float mouse_y = 0.0f;
-    bool mouse_position_valid = false;
-    float parallax_pointer_x = 0.5f;
-    float parallax_pointer_y = 0.5f;
-    // Centered shader-space offset. renderer_draw_sprite converts this to
-    // g_ParallaxPosition by applying *0.5 + 0.5.
-    float parallax_smooth_x = 0.0f;
-    float parallax_smooth_y = 0.0f;
-    bool camera_parallax_enabled = false;
-    float camera_parallax_amount = 0.0f;
-    float camera_parallax_delay = 0.1f;
-    float camera_parallax_mouse_influence = 0.0f;
-    bool camera_shake_enabled = false;
-    float camera_shake_amplitude = 0.0f;
-    float camera_shake_speed = 0.0f;
-    float camera_shake_roughness = 0.0f;
-    // Scene-space camera translation, calculated once per frame.
-    float camera_shake_x = 0.0f;
-    float camera_shake_y = 0.0f;
-    float perspective_override_fov = 0.0f;
+    InputState input;
+    SceneState scene;
+    ParallaxState parallax;
+    CameraShakeState shake;
+    DebugState debug;
     float time = 0.0f;
-
-    scaling_mode_t scaling_mode = SCALING_FIT;
-    int selected_object = -1;
-    bool show_ui = true;
-    bool test_mode = false;
-    bool particle_debug_bounds = false;
-    bool particle_debug_velocity = false;
-    float particle_debug_velocity_scale = 0.05f;
-    int particle_debug_max_particles = 128;
 };
 
 #endif  // ENGINE_CONTEXT_H

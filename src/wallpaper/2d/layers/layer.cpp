@@ -40,7 +40,8 @@ void Layer::showGeneralInspector(EngineContext& ctx) {
         setSolo(is_solo);
     }
 
-    SceneTreeNode* node = (scene_object_id != 0 && ctx.scene_tree) ? ctx.scene_tree->find(scene_object_id) : nullptr;
+    SceneTreeNode* node =
+        (scene_object_id != 0 && ctx.scene.scene_tree) ? ctx.scene.scene_tree->find(scene_object_id) : nullptr;
 
     float* pos_ptr = node ? node->origin.data() : (float*)origin;
     if (ImGui::DragFloat3("Position", pos_ptr, 1.0f)) {

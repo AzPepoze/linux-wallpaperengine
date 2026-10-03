@@ -35,14 +35,15 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
 
     // Inspector edits are intentionally runtime-only. Rebuild the clear pass
     // every frame so direct and offscreen composition see the same live state.
-    ctx.pass_action.colors[0].load_action = ctx.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
-    ctx.pass_action.colors[0].clear_value = {ctx.general.clear_color[0], ctx.general.clear_color[1],
-                                             ctx.general.clear_color[2], ctx.general.clear_color[3]};
+    ctx.pass_action.colors[0].load_action =
+        ctx.scene.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
+    ctx.pass_action.colors[0].clear_value = {ctx.scene.general.clear_color[0], ctx.scene.general.clear_color[1],
+                                             ctx.scene.general.clear_color[2], ctx.scene.general.clear_color[3]};
     float dt = (float)sapp_frame_duration();
     ctx.time += dt;
     AudioEngine::instance().update(dt);
 
-    ctx.asset_mgr.updateVideoTextures(dt, ctx.layers);
+    ctx.asset_mgr.updateVideoTextures(dt, ctx.scene.layers);
     parallax_update(ctx, dt, sapp_width(), sapp_height());
     mgr.update(dt, ctx);
 }
@@ -125,9 +126,9 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
 void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& mgr) {
     if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
-        ctx.mouse_x = e->mouse_x;
-        ctx.mouse_y = e->mouse_y;
-        ctx.mouse_position_valid = true;
+        ctx.input.mouse_x = e->mouse_x;
+        ctx.input.mouse_y = e->mouse_y;
+        ctx.input.mouse_position_valid = true;
     } else if (e->type == SAPP_EVENTTYPE_QUIT_REQUESTED) {
         LOG_I("[APP] Received quit request from window/system");
     } else if (e->type == SAPP_EVENTTYPE_RESIZED) {
@@ -145,7 +146,7 @@ void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& m
 
 #if DEBUG_BUILD
     if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) {
-        ctx.show_ui = !ctx.show_ui;
+        ctx.debug.show_ui = !ctx.debug.show_ui;
         return;
     }
     if (simgui_handle_event(e)) return;

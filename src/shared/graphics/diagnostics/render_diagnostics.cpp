@@ -491,9 +491,9 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     payload.output_dir = config.output_dir;
     payload.frame_index = frame_index;
     payload.time = ctx.time;
-    payload.scene_w = ctx.scene_w;
-    payload.scene_h = ctx.scene_h;
-    payload.render_scale = ctx.render_scale;
+    payload.scene_w = ctx.scene.scene_w;
+    payload.scene_h = ctx.scene.scene_h;
+    payload.render_scale = ctx.scene.render_scale;
     payload.wallpaper_path = ctx.wallpaper_path;
     payload.engine_path = ctx.engine_path;
     payload.has_deterministic_time = config.has_deterministic_time;

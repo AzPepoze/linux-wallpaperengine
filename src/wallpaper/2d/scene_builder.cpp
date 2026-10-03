@@ -58,11 +58,11 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     out.camera_shake_speed = document.general.camera_shake_speed;
     out.camera_shake_roughness = document.general.camera_shake_roughness;
 
-    ctx.camera = document.camera;
-    ctx.general = document.general;
-    ctx.scene_w = out.design_width;
-    ctx.scene_h = out.design_height;
-    ctx.perspective_override_fov = document.general.perspective_override_fov;
+    ctx.scene.camera = document.camera;
+    ctx.scene.general = document.general;
+    ctx.scene.scene_w = out.design_width;
+    ctx.scene.scene_h = out.design_height;
+    ctx.scene.perspective_override_fov = document.general.perspective_override_fov;
 
     out.scene_tree = new SceneTree();
     for (const auto& object : document.objects) {
@@ -139,8 +139,8 @@ ParsedScene SceneBuilder::buildImageScene(const char* label, GfxImage image, flo
     out.clear_color[2] = 0.0f;
     out.clear_color[3] = 1.0f;
 
-    ctx.scene_w = width;
-    ctx.scene_h = height;
+    ctx.scene.scene_w = width;
+    ctx.scene.scene_h = height;
 
     auto* layer = new ImageLayer(label, std::move(image));
     layer->path = path ? path : "";

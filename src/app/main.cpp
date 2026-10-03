@@ -88,13 +88,14 @@ static void applyCliToContext() {
     ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
     ctx.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
 
-    ctx.show_ui = DEBUG_BUILD && !cli.no_ui;
-    ctx.selected_object = -1;
-    ctx.scaling_mode = cli.cover ? SCALING_COVER : SCALING_FIT;
-    ctx.particle_debug_bounds = cli.particle_debug_bounds;
-    ctx.particle_debug_velocity = cli.particle_debug_velocity;
-    if (cli.particle_debug_velocity_scale > 0.0f) ctx.particle_debug_velocity_scale = cli.particle_debug_velocity_scale;
-    if (cli.particle_debug_max_particles > 0) ctx.particle_debug_max_particles = cli.particle_debug_max_particles;
+    ctx.debug.show_ui = DEBUG_BUILD && !cli.no_ui;
+    ctx.debug.selected_object = -1;
+    ctx.scene.scaling_mode = cli.cover ? SCALING_COVER : SCALING_FIT;
+    ctx.debug.particle_debug_bounds = cli.particle_debug_bounds;
+    ctx.debug.particle_debug_velocity = cli.particle_debug_velocity;
+    if (cli.particle_debug_velocity_scale > 0.0f)
+        ctx.debug.particle_debug_velocity_scale = cli.particle_debug_velocity_scale;
+    if (cli.particle_debug_max_particles > 0) ctx.debug.particle_debug_max_particles = cli.particle_debug_max_particles;
 }
 
 static void loadInitialWallpaper() {

@@ -16,15 +16,15 @@ float smooth(float value) {
 }
 
 void camera_shake_update(EngineContext& ctx) {
-    ctx.camera_shake_x = 0.0f;
-    ctx.camera_shake_y = 0.0f;
-    if (!ctx.camera_shake_enabled || ctx.camera_shake_amplitude <= 0.0f || ctx.camera_shake_speed <= 0.0f) return;
+    ctx.shake.x = 0.0f;
+    ctx.shake.y = 0.0f;
+    if (!ctx.shake.enabled || ctx.shake.amplitude <= 0.0f || ctx.shake.speed <= 0.0f) return;
 
-    const float roughness = std::max(0.0f, std::min(2.0f, ctx.camera_shake_roughness));
+    const float roughness = std::max(0.0f, std::min(2.0f, ctx.shake.roughness));
     const float grow = std::max(0.0f, roughness - 1.0f);
     const float grow_squared = grow * grow;
     constexpr float pi = 3.14159265358979323846f;
-    const float beat_position = std::max(0.0f, ctx.time * ctx.camera_shake_speed * 2.0f) / (pi * 0.5f);
+    const float beat_position = std::max(0.0f, ctx.time * ctx.shake.speed * 2.0f) / (pi * 0.5f);
     const int beat = (int)floorf(beat_position);
     const float local = beat_position - (float)beat;
 
@@ -52,9 +52,9 @@ void camera_shake_update(EngineContext& ctx) {
     }
     const float amount = smooth(local);
     const float bend = sinf(local * pi) * (0.09f + grow_squared * 0.04f) * delta_length;
-    const float scale = ctx.camera_shake_amplitude * std::min(ctx.scene_w, ctx.scene_h) * 0.01f;
-    ctx.camera_shake_x = (ax * (1.0f - amount) + bx * amount + curve_x * bend) * scale;
-    ctx.camera_shake_y = (ay * (1.0f - amount) + by * amount + curve_y * bend) * scale;
+    const float scale = ctx.shake.amplitude * std::min(ctx.scene.scene_w, ctx.scene.scene_h) * 0.01f;
+    ctx.shake.x = (ax * (1.0f - amount) + bx * amount + curve_x * bend) * scale;
+    ctx.shake.y = (ay * (1.0f - amount) + by * amount + curve_y * bend) * scale;
 }
 
 }  // namespace
@@ -63,64 +63,64 @@ void parallax_update(EngineContext& ctx, float dt, int viewport_width, int viewp
     float target_x = 0.5f;
     float target_y = 0.5f;
 
-    if (ctx.camera_parallax_enabled && ctx.mouse_position_valid && viewport_width > 0 && viewport_height > 0) {
-        target_x = clamp01(ctx.mouse_x / (float)viewport_width);
-        target_y = clamp01(ctx.mouse_y / (float)viewport_height);
+    if (ctx.parallax.enabled && ctx.input.mouse_position_valid && viewport_width > 0 && viewport_height > 0) {
+        target_x = clamp01(ctx.input.mouse_x / (float)viewport_width);
+        target_y = clamp01(ctx.input.mouse_y / (float)viewport_height);
     }
 
     float response = 1.0f;
-    if (ctx.camera_parallax_delay > 0.0f) {
-        response = dt > 0.0f ? clamp01(dt / ctx.camera_parallax_delay) : 0.0f;
+    if (ctx.parallax.delay > 0.0f) {
+        response = dt > 0.0f ? clamp01(dt / ctx.parallax.delay) : 0.0f;
     }
 
-    ctx.parallax_pointer_x += (target_x - ctx.parallax_pointer_x) * response;
-    ctx.parallax_pointer_y += (target_y - ctx.parallax_pointer_y) * response;
+    ctx.parallax.pointer_x += (target_x - ctx.parallax.pointer_x) * response;
+    ctx.parallax.pointer_y += (target_y - ctx.parallax.pointer_y) * response;
 
     const parallax_position_t shader_position = parallax_shader_position(ctx);
-    ctx.parallax_smooth_x = (shader_position.x - 0.5f) * 2.0f;
-    ctx.parallax_smooth_y = (shader_position.y - 0.5f) * 2.0f;
+    ctx.parallax.smooth_x = (shader_position.x - 0.5f) * 2.0f;
+    ctx.parallax.smooth_y = (shader_position.y - 0.5f) * 2.0f;
     camera_shake_update(ctx);
 }
 
 parallax_offset_t parallax_layer_offset(const EngineContext& ctx, uint32_t scene_object_id,
                                         const float fallback_origin[3], const float fallback_depth[2]) {
     parallax_offset_t result = {};
-    result.x = ctx.camera_shake_x;
-    result.y = ctx.camera_shake_y;
-    if (!ctx.camera_parallax_enabled || ctx.camera_parallax_amount == 0.0f) return result;
-    if (ctx.scene_w <= 0.0f || ctx.scene_h <= 0.0f) return result;
+    result.x = ctx.shake.x;
+    result.y = ctx.shake.y;
+    if (!ctx.parallax.enabled || ctx.parallax.amount == 0.0f) return result;
+    if (ctx.scene.scene_w <= 0.0f || ctx.scene.scene_h <= 0.0f) return result;
 
     float node_position[3] = {fallback_origin[0], fallback_origin[1], fallback_origin[2]};
     const float* depth = fallback_depth;
 
-    if (ctx.scene_tree) {
-        if (const SceneTreeNode* resolved = ctx.scene_tree->resolveParallaxNode(scene_object_id)) {
+    if (ctx.scene.scene_tree) {
+        if (const SceneTreeNode* resolved = ctx.scene.scene_tree->resolveParallaxNode(scene_object_id)) {
             depth = resolved->parallax_depth.data();
-            ctx.scene_tree->worldPosition(resolved->id, node_position);
+            ctx.scene.scene_tree->worldPosition(resolved->id, node_position);
         }
     }
 
     if (depth[0] == 0.0f && depth[1] == 0.0f) return result;
 
-    const float camera_x = ctx.scene_w * 0.5f;
-    const float camera_y = ctx.scene_h * 0.5f;
+    const float camera_x = ctx.scene.scene_w * 0.5f;
+    const float camera_y = ctx.scene.scene_h * 0.5f;
 
-    const float mouse_x = (0.5f - ctx.parallax_pointer_x) * ctx.scene_w * ctx.camera_parallax_mouse_influence;
-    const float mouse_y = (ctx.parallax_pointer_y - 0.5f) * ctx.scene_h * ctx.camera_parallax_mouse_influence;
+    const float mouse_x = (0.5f - ctx.parallax.pointer_x) * ctx.scene.scene_w * ctx.parallax.mouse_influence;
+    const float mouse_y = (ctx.parallax.pointer_y - 0.5f) * ctx.scene.scene_h * ctx.parallax.mouse_influence;
 
-    result.x = ctx.camera_shake_x + (node_position[0] - camera_x + mouse_x) * depth[0] * ctx.camera_parallax_amount;
-    result.y = ctx.camera_shake_y + (node_position[1] - camera_y + mouse_y) * depth[1] * ctx.camera_parallax_amount;
+    result.x = ctx.shake.x + (node_position[0] - camera_x + mouse_x) * depth[0] * ctx.parallax.amount;
+    result.y = ctx.shake.y + (node_position[1] - camera_y + mouse_y) * depth[1] * ctx.parallax.amount;
     return result;
 }
 
 parallax_position_t parallax_shader_position(const EngineContext& ctx) {
     parallax_position_t result = {};
-    if (!ctx.camera_parallax_enabled) return result;
+    if (!ctx.parallax.enabled) return result;
 
-    const float centered_x = ctx.parallax_pointer_x - 0.5f;
-    const float centered_y = ctx.parallax_pointer_y - 0.5f;
+    const float centered_x = ctx.parallax.pointer_x - 0.5f;
+    const float centered_y = ctx.parallax.pointer_y - 0.5f;
 
-    result.x = 0.5f + centered_x * ctx.camera_parallax_mouse_influence;
-    result.y = 0.5f - centered_y * ctx.camera_parallax_mouse_influence;
+    result.x = 0.5f + centered_x * ctx.parallax.mouse_influence;
+    result.y = 0.5f - centered_y * ctx.parallax.mouse_influence;
     return result;
 }

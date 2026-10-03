@@ -139,25 +139,28 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
     }
 
     SceneTreeNode* node =
-        (il.scene_object_id != 0 && ctx.scene_tree) ? ctx.scene_tree->find(il.scene_object_id) : nullptr;
+        (il.scene_object_id != 0 && ctx.scene.scene_tree) ? ctx.scene.scene_tree->find(il.scene_object_id) : nullptr;
 
     float layer_scale[3] = {node ? node->scale[0] : il.scale[0], node ? node->scale[1] : il.scale[1],
                             node ? node->scale[2] : il.scale[2]};
     float layer_origin[3] = {node ? node->origin[0] : il.origin[0], node ? node->origin[1] : il.origin[1],
                              node ? node->origin[2] : il.origin[2]};
     float layer_rotation = node ? node->angles[2] : il.rotation;
-    if (il.scene_object_id != 0 && ctx.scene_tree) {
-        ctx.scene_tree->worldPosition(il.scene_object_id, layer_origin);
+    if (il.scene_object_id != 0 && ctx.scene.scene_tree) {
+        ctx.scene.scene_tree->worldPosition(il.scene_object_id, layer_origin);
     }
 
-    const float rendered_w = il.size[0] * layer_scale[0] * ctx.render_scale;
-    const float rendered_h = il.size[1] * layer_scale[1] * ctx.render_scale;
-    const float scene_h =
-        ctx.scene_h > 0.0f ? ctx.scene_h : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+    const float rendered_w = il.size[0] * layer_scale[0] * ctx.scene.render_scale;
+    const float rendered_h = il.size[1] * layer_scale[1] * ctx.scene.render_scale;
+    const float scene_h = ctx.scene.scene_h > 0.0f
+                              ? ctx.scene.scene_h
+                              : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
     const parallax_offset_t camera_offset = parallax_layer_offset(ctx, il.scene_object_id, layer_origin, il.parallax);
-    const float rendered_x = ctx.offset_x + (layer_origin[0] + camera_offset.x) * ctx.render_scale - rendered_w * 0.5f;
-    const float rendered_y =
-        ctx.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.render_scale - rendered_h * 0.5f;
+    const float rendered_x =
+        ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - rendered_w * 0.5f;
+    const float rendered_y = ctx.scene.offset_y +
+                             (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
+                             rendered_h * 0.5f;
 
     if (ImGui::CollapsingHeader("Resolution & Viewport Bounds", ImGuiTreeNodeFlags_DefaultOpen)) {
         sg_image_desc src_desc = (il.img.id != SG_INVALID_ID) ? sg_query_image_desc(il.img) : sg_image_desc{};
@@ -167,8 +170,9 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
         ImGui::Text("Rendered Bounds:  [x: %.1f, y: %.1f, w: %.1f, h: %.1f]", rendered_x, rendered_y, rendered_w,
                     rendered_h);
         ImGui::Text("Viewport Window:  %.0f x %.0f px", ctx.renderer.view_width, ctx.renderer.view_height);
-        ImGui::Text("Design Canvas:    %.0f x %.0f px (Scale: %.3fx)", ctx.scene_w, ctx.scene_h, ctx.render_scale);
-        ImGui::Text("Screen Padding:   (Offset X: %.1f px, Offset Y: %.1f px)", ctx.offset_x, ctx.offset_y);
+        ImGui::Text("Design Canvas:    %.0f x %.0f px (Scale: %.3fx)", ctx.scene.scene_w, ctx.scene.scene_h,
+                    ctx.scene.render_scale);
+        ImGui::Text("Screen Padding:   (Offset X: %.1f px, Offset Y: %.1f px)", ctx.scene.offset_x, ctx.scene.offset_y);
     }
 
     const auto* video = ctx.asset_mgr.findVideoTexture(il.img);

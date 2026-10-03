@@ -27,8 +27,8 @@ std::unique_ptr<Wallpaper> createWallpaper(ProjectType type, EngineContext& ctx)
 void applyVideoProperties(const VideoProperties& video, EngineContext& ctx) {
     ctx.asset_mgr.setVideoPlayback(video.rate, video.volume);
     // An explicit --cover on the command line keeps priority over the project's fit.
-    if (video.fit != VideoFit::Default && ctx.scaling_mode == SCALING_FIT)
-        ctx.scaling_mode = video.fit == VideoFit::Fill ? SCALING_COVER : SCALING_FIT;
+    if (video.fit != VideoFit::Default && ctx.scene.scaling_mode == SCALING_FIT)
+        ctx.scene.scaling_mode = video.fit == VideoFit::Fill ? SCALING_COVER : SCALING_FIT;
 }
 }  // namespace
 

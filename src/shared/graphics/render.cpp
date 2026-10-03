@@ -352,8 +352,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin_uniforms_t builtin = {};
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));
         mat4x4_invert(builtin.mvp_inverse, mvp);
-        builtin.parallax_pos[0] = ctx.parallax_smooth_x * 0.5f + 0.5f;
-        builtin.parallax_pos[1] = ctx.parallax_smooth_y * 0.5f + 0.5f;
+        builtin.parallax_pos[0] = ctx.parallax.smooth_x * 0.5f + 0.5f;
+        builtin.parallax_pos[1] = ctx.parallax.smooth_y * 0.5f + 0.5f;
         builtin.time = ctx.time;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
@@ -361,19 +361,19 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.texel_size[1] = r->view_height > 0.0f ? 1.0f / r->view_height : 0.0f;
         builtin.pointer_position[0] = 0.5f;
         builtin.pointer_position[1] = 0.5f;
-        if (ctx.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
-            builtin.pointer_position[0] = std::max(0.0f, std::min(1.0f, ctx.mouse_x / r->view_width));
-            builtin.pointer_position[1] = std::max(0.0f, std::min(1.0f, ctx.mouse_y / r->view_height));
+        if (ctx.input.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
+            builtin.pointer_position[0] = std::max(0.0f, std::min(1.0f, ctx.input.mouse_x / r->view_width));
+            builtin.pointer_position[1] = std::max(0.0f, std::min(1.0f, ctx.input.mouse_y / r->view_height));
         }
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
-        builtin.light_ambient_color[0] = ctx.general.ambient_color[0];
-        builtin.light_ambient_color[1] = ctx.general.ambient_color[1];
-        builtin.light_ambient_color[2] = ctx.general.ambient_color[2];
+        builtin.light_ambient_color[0] = ctx.scene.general.ambient_color[0];
+        builtin.light_ambient_color[1] = ctx.scene.general.ambient_color[1];
+        builtin.light_ambient_color[2] = ctx.scene.general.ambient_color[2];
         builtin.light_ambient_color[3] = 1.0f;
-        builtin.light_skylight_color[0] = ctx.general.skylight_color[0];
-        builtin.light_skylight_color[1] = ctx.general.skylight_color[1];
-        builtin.light_skylight_color[2] = ctx.general.skylight_color[2];
+        builtin.light_skylight_color[0] = ctx.scene.general.skylight_color[0];
+        builtin.light_skylight_color[1] = ctx.scene.general.skylight_color[1];
+        builtin.light_skylight_color[2] = ctx.scene.general.skylight_color[2];
         builtin.light_skylight_color[3] = 1.0f;
 
         // Slot 0 is always the current effect input view.

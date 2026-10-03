@@ -65,16 +65,16 @@ void Scene2DRuntime::destroyBloomPipelines() {
 
 void Scene2DRuntime::initBloomPipelines() {
     destroyBloomPipelines();
-    const bool hdr = ctx.general.hdr;
+    const bool hdr = ctx.scene.general.hdr;
     if (hdr) {
-        const float threshold = ctx.general.bloom.hdr_threshold;
-        const float knee = threshold * ctx.general.bloom.hdr_feather;
-        const float scatter = ctx.general.bloom.hdr_scatter > 0.0f ? ctx.general.bloom.hdr_scatter : 1.0f;
+        const float threshold = ctx.scene.general.bloom.hdr_threshold;
+        const float knee = threshold * ctx.scene.general.bloom.hdr_feather;
+        const float scatter = ctx.scene.general.bloom.hdr_scatter > 0.0f ? ctx.scene.general.bloom.hdr_scatter : 1.0f;
 
         bloom_pass_extract = createBloomPass(
             "materials/util/hdr_downsample_bloom.json",
             {
-                {"bloomstrength", {ctx.general.bloom.hdr_strength}},
+                {"bloomstrength", {ctx.scene.general.bloom.hdr_strength}},
                 {"blend", {threshold, threshold - knee, 2.0f * knee, knee > 0.0f ? 0.25f / knee : 0.0f}},
                 {"bloomtint", {1.0f, 1.0f, 1.0f}},
             },
@@ -85,8 +85,8 @@ void Scene2DRuntime::initBloomPipelines() {
     } else {
         bloom_pass_extract = createBloomPass("materials/util/downsample_quarter_bloom.json",
                                              {
-                                                 {"bloomstrength", {ctx.general.bloom.strength}},
-                                                 {"bloomthreshold", {ctx.general.bloom.threshold}},
+                                                 {"bloomstrength", {ctx.scene.general.bloom.strength}},
+                                                 {"bloomthreshold", {ctx.scene.general.bloom.threshold}},
                                                  {"bloomtint", {1.0f, 1.0f, 1.0f}},
                                              },
                                              ctx);
@@ -97,33 +97,36 @@ void Scene2DRuntime::initBloomPipelines() {
 }
 
 void Scene2DRuntime::update(float dt) {
-    if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
-        ctx.layers[ctx.selected_object]->update(dt, ctx);
+    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
+        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        ctx.scene.layers[ctx.debug.selected_object]->update(dt, ctx);
         return;
     }
-    for (auto layer : ctx.layers) layer->update(dt, ctx);
+    for (auto layer : ctx.scene.layers) layer->update(dt, ctx);
 }
 
 bool Scene2DRuntime::requiresOffscreenComposition() const {
     if (!RenderDiagnostics::instance().getConfig().disable_bloom) {
-        const float bloom_strength = ctx.general.hdr ? ctx.general.bloom.hdr_strength : ctx.general.bloom.strength;
-        if (ctx.general.bloom.enabled && bloom_strength > 0.0f) return true;
+        const float bloom_strength =
+            ctx.scene.general.hdr ? ctx.scene.general.bloom.hdr_strength : ctx.scene.general.bloom.strength;
+        if (ctx.scene.general.bloom.enabled && bloom_strength > 0.0f) return true;
     }
 
-    if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
-        const auto* particle = dynamic_cast<const ParticleLayer*>(ctx.layers[ctx.selected_object]);
+    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
+        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        const auto* particle = dynamic_cast<const ParticleLayer*>(ctx.scene.layers[ctx.debug.selected_object]);
         return particle && particle->requiresSceneColor();
     }
 
     bool any_solo = false;
-    for (const auto* layer : ctx.layers) {
+    for (const auto* layer : ctx.scene.layers) {
         if (layer->solo) {
             any_solo = true;
             break;
         }
     }
 
-    for (const auto* layer : ctx.layers) {
+    for (const auto* layer : ctx.scene.layers) {
         if ((any_solo && !layer->solo) || (!any_solo && !layer->visible)) continue;
         const auto* particle = dynamic_cast<const ParticleLayer*>(layer);
         if (particle && particle->requiresSceneColor()) return true;
@@ -134,7 +137,7 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
 }
 
 sg_pixel_format Scene2DRuntime::compositionPixelFormat() const {
-    if (!ctx.general.hdr) return SG_PIXELFORMAT_RGBA8;
+    if (!ctx.scene.general.hdr) return SG_PIXELFORMAT_RGBA8;
     // Float attachment preserves HDR bloom energy; drivers without it fail creation and retry RGBA8.
     return SG_PIXELFORMAT_RGBA16F;
 }
@@ -185,9 +188,9 @@ bool Scene2DRuntime::ensureBloomTargets(int width, int height) {
 
 int Scene2DRuntime::renderBloom(int current_target_index, int width, int height) {
     if (RenderDiagnostics::instance().getConfig().disable_bloom) return current_target_index;
-    const bool hdr = ctx.general.hdr;
-    const float strength = hdr ? ctx.general.bloom.hdr_strength : ctx.general.bloom.strength;
-    if (!ctx.general.bloom.enabled || strength <= 0.0f) return current_target_index;
+    const bool hdr = ctx.scene.general.hdr;
+    const float strength = hdr ? ctx.scene.general.bloom.hdr_strength : ctx.scene.general.bloom.strength;
+    if (!ctx.scene.general.bloom.enabled || strength <= 0.0f) return current_target_index;
     if (!bloom_pass_extract || !bloom_pass_blur_v || !bloom_pass_blur_h || !bloom_pass_combine) {
         initBloomPipelines();
     }
@@ -276,18 +279,19 @@ void Scene2DRuntime::drawDirect() {
         sg_apply_scissor_rect(output_x, output_y, output_width, output_height, true);
     }
 
-    if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
-        ctx.layers[ctx.selected_object]->draw(ctx);
+    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
+        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        ctx.scene.layers[ctx.debug.selected_object]->draw(ctx);
     } else {
         bool any_solo = false;
-        for (auto layer : ctx.layers) {
+        for (auto layer : ctx.scene.layers) {
             if (layer->solo) {
                 any_solo = true;
                 break;
             }
         }
 
-        for (auto layer : ctx.layers) {
+        for (auto layer : ctx.scene.layers) {
             if (any_solo) {
                 if (layer->solo) layer->draw(ctx);
             } else if (layer->visible) {
@@ -446,17 +450,18 @@ void Scene2DRuntime::drawOffscreen() {
         capture_layer_result(layer, false);
     };
 
-    if (ctx.test_mode && ctx.selected_object >= 0 && ctx.selected_object < (int)ctx.layers.size()) {
-        draw_layer(ctx.layers[ctx.selected_object]);
+    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
+        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        draw_layer(ctx.scene.layers[ctx.debug.selected_object]);
     } else {
         bool any_solo = false;
-        for (auto layer : ctx.layers) {
+        for (auto layer : ctx.scene.layers) {
             if (layer->solo) {
                 any_solo = true;
                 break;
             }
         }
-        for (auto layer : ctx.layers) {
+        for (auto layer : ctx.scene.layers) {
             if ((any_solo && !layer->solo) || (!any_solo && !layer->visible)) continue;
             draw_layer(layer);
         }
@@ -516,8 +521,8 @@ void Scene2DRuntime::draw() {
 }
 
 void Scene2DRuntime::drawParticleDiagnostics() {
-    if (!ctx.particle_debug_bounds && !ctx.particle_debug_velocity) return;
-    for (Layer* layer : ctx.layers) {
+    if (!ctx.debug.particle_debug_bounds && !ctx.debug.particle_debug_velocity) return;
+    for (Layer* layer : ctx.scene.layers) {
         if (!layer->visible) continue;
         if (auto* particle = dynamic_cast<ParticleLayer*>(layer)) particle->drawDebug(ctx);
     }
@@ -555,21 +560,21 @@ void Scene2DRuntime::updateViewport() {
     float sh = output_height > 0 ? (float)output_height : (float)sapp_height();
     renderer_update_viewport(&ctx.renderer, sw, sh);
 
-    if (ctx.scene_w == 0 || ctx.scene_h == 0) return;
+    if (ctx.scene.scene_w == 0 || ctx.scene.scene_h == 0) return;
 
-    float aspect_scene = ctx.scene_w / ctx.scene_h;
+    float aspect_scene = ctx.scene.scene_w / ctx.scene.scene_h;
     float aspect_window = sw / sh;
 
-    if (ctx.scaling_mode == SCALING_FIT) {
-        ctx.render_scale = aspect_window > aspect_scene ? sh / ctx.scene_h : sw / ctx.scene_w;
+    if (ctx.scene.scaling_mode == SCALING_FIT) {
+        ctx.scene.render_scale = aspect_window > aspect_scene ? sh / ctx.scene.scene_h : sw / ctx.scene.scene_w;
     } else {
-        ctx.render_scale = aspect_window > aspect_scene ? sw / ctx.scene_w : sh / ctx.scene_h;
+        ctx.scene.render_scale = aspect_window > aspect_scene ? sw / ctx.scene.scene_w : sh / ctx.scene.scene_h;
     }
     // Zoom is part of the authored camera transform, not an editor-only hint.
-    ctx.render_scale *= std::max(ctx.general.zoom, 0.001f);
+    ctx.scene.render_scale *= std::max(ctx.scene.general.zoom, 0.001f);
 
-    ctx.offset_x = (sw - ctx.scene_w * ctx.render_scale) * 0.5f;
-    ctx.offset_y = (sh - ctx.scene_h * ctx.render_scale) * 0.5f;
+    ctx.scene.offset_x = (sw - ctx.scene.scene_w * ctx.scene.render_scale) * 0.5f;
+    ctx.scene.offset_y = (sh - ctx.scene.scene_h * ctx.scene.render_scale) * 0.5f;
 }
 
 void Scene2DRuntime::setOutputViewport(int x, int y, int width, int height) {
@@ -587,13 +592,13 @@ void Scene2DRuntime::resetOutputViewport() {
 }
 
 void Scene2DRuntime::clearScene() {
-    LOG_TAG_I("SCENE_2D", "Destroying %zu scene layers...", ctx.layers.size());
-    for (auto layer : ctx.layers) delete layer;
-    ctx.layers.clear();
-    delete ctx.scene_tree;
-    ctx.scene_tree = nullptr;
-    ctx.selected_object = -1;
-    ctx.test_mode = false;
+    LOG_TAG_I("SCENE_2D", "Destroying %zu scene layers...", ctx.scene.layers.size());
+    for (auto layer : ctx.scene.layers) delete layer;
+    ctx.scene.layers.clear();
+    delete ctx.scene.scene_tree;
+    ctx.scene.scene_tree = nullptr;
+    ctx.debug.selected_object = -1;
+    ctx.debug.test_mode = false;
     LOG_TAG_I("SCENE_2D", "Scene layers destroyed.");
 }
 

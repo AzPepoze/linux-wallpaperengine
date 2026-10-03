@@ -17,21 +17,21 @@ bool Scene2DWallpaper::applyParsedScene(ParsedScene parsed, EngineContext& ctx) 
         return false;
     }
 
-    ctx.camera = parsed.camera;
-    ctx.general = parsed.general;
-    ctx.layers = std::move(parsed.layers);
-    ctx.scene_tree = parsed.scene_tree;
-    ctx.scene_w = parsed.design_width;
-    ctx.scene_h = parsed.design_height;
-    ctx.camera_parallax_enabled = parsed.general.camera_parallax_enabled;
-    ctx.camera_parallax_amount = parsed.general.camera_parallax_amount;
-    ctx.camera_parallax_delay = parsed.general.camera_parallax_delay;
-    ctx.camera_parallax_mouse_influence = parsed.general.camera_parallax_mouse_influence;
-    ctx.camera_shake_enabled = parsed.general.camera_shake_enabled;
-    ctx.camera_shake_amplitude = parsed.general.camera_shake_amplitude;
-    ctx.camera_shake_speed = parsed.general.camera_shake_speed;
-    ctx.camera_shake_roughness = parsed.general.camera_shake_roughness;
-    ctx.perspective_override_fov = parsed.general.perspective_override_fov;
+    ctx.scene.camera = parsed.camera;
+    ctx.scene.general = parsed.general;
+    ctx.scene.layers = std::move(parsed.layers);
+    ctx.scene.scene_tree = parsed.scene_tree;
+    ctx.scene.scene_w = parsed.design_width;
+    ctx.scene.scene_h = parsed.design_height;
+    ctx.parallax.enabled = parsed.general.camera_parallax_enabled;
+    ctx.parallax.amount = parsed.general.camera_parallax_amount;
+    ctx.parallax.delay = parsed.general.camera_parallax_delay;
+    ctx.parallax.mouse_influence = parsed.general.camera_parallax_mouse_influence;
+    ctx.shake.enabled = parsed.general.camera_shake_enabled;
+    ctx.shake.amplitude = parsed.general.camera_shake_amplitude;
+    ctx.shake.speed = parsed.general.camera_shake_speed;
+    ctx.shake.roughness = parsed.general.camera_shake_roughness;
+    ctx.scene.perspective_override_fov = parsed.general.perspective_override_fov;
 
     if (parsed.general.has_clear_color && parsed.general.clear_enabled) {
         ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
