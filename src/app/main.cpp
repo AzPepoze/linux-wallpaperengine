@@ -252,6 +252,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         ctx.runtime_mode == RuntimeMode::Sandbox ? "Linux Wallpaper Engine Sandbox" : "Linux Wallpaper Engine";
     desc.icon.sokol_default = true;
     desc.logger.func = slog_func;
+    desc.enable_clipboard = true;
     return desc;
 }
 

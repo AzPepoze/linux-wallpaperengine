@@ -23,6 +23,18 @@ void GlobalInspector::show(EngineContext& ctx) {
 
     ImGui::Separator();
     ImGui::TextDisabled("Wallpaper Path");
+    static double copied_until = 0.0;
+    ImGui::SameLine();
+    ImGui::BeginDisabled(ctx.wallpaper_path[0] == '\0');
+    if (ImGui::SmallButton("Copy")) {
+        ImGui::SetClipboardText(ctx.wallpaper_path);
+        copied_until = ImGui::GetTime() + 1.5;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::GetTime() < copied_until) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Copied!");
+    }
     ImGui::TextWrapped("%s", ctx.wallpaper_path[0] != '\0' ? ctx.wallpaper_path : "(none)");
 
     if (ImGui::CollapsingHeader("Camera & Optics", ImGuiTreeNodeFlags_DefaultOpen)) {
