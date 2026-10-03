@@ -68,6 +68,41 @@ void AssetManager::setVideoPaused(bool paused) {
     }
 }
 
+// The image starts black so nothing uninitialised shows before the first decoded frame arrives.
+sg_image AssetManager::makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video) const {
+    sg_image_desc desc = {};
+    desc.width = (int)video->width();
+    desc.height = (int)video->height();
+    desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+    desc.usage.color_attachment = true;
+    desc.usage.stream_update = true;
+
+    std::vector<uint8_t> pixels;
+    bool has_frame = false;
+    if (!video->isZeroCopy()) {
+        has_frame = video->decodeNextFrame(pixels) && !pixels.empty();
+        if (!has_frame) pixels.assign((size_t)desc.width * desc.height * 4, 0);
+        desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
+    }
+    const sg_image image = sg_make_image(&desc);
+    if (image.id == SG_INVALID_ID) return image;
+
+    if (video->isZeroCopy()) {
+        ImportedVideoSurface* surface = nullptr;
+        AVFrame* av_frame = nullptr;
+        if (video->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
+            gpu_blit_zero_copy_surface(*surface, image, desc.width, desc.height);
+        } else {
+            pixels.assign((size_t)desc.width * desc.height * 4, 0);
+            sg_image_data black = {};
+            black.mip_levels[0] = {pixels.data(), pixels.size()};
+            sg_update_image(image, &black);
+        }
+    }
+    addVideoTexture(path, image, std::move(video));
+    return image;
+}
+
 void AssetManager::addVideoTexture(const char* path, sg_image image,
                                    std::unique_ptr<wallpaper_engine::VideoTexture> video) const {
     video_textures.push_back({});
@@ -226,37 +261,10 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             for (const ActiveVideoTexture& video : video_textures) {
                 if (video.path == abs_path) return GfxImage(video.image);
             }
-            std::unique_ptr<wallpaper_engine::VideoTexture> video = wallpaper_engine::VideoTexture::open(abs_path);
+            auto video = wallpaper_engine::VideoTexture::open(abs_path);
             if (video) {
-                sg_image_desc desc = {};
-                desc.width = (int)video->width();
-                desc.height = (int)video->height();
-                desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-                desc.usage.color_attachment = true;
-                desc.usage.stream_update = true;
-
-                if (video->isZeroCopy()) {
-                    const sg_image gpu_image = sg_make_image(&desc);
-                    if (gpu_image.id != SG_INVALID_ID) {
-                        ImportedVideoSurface* surface = nullptr;
-                        AVFrame* av_frame = nullptr;
-                        if (video->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
-                            gpu_blit_zero_copy_surface(*surface, gpu_image, (int)video->width(), (int)video->height());
-                        }
-                        addVideoTexture(abs_path, gpu_image, std::move(video));
-                        return GfxImage(gpu_image);
-                    }
-                } else {
-                    std::vector<uint8_t> pixels;
-                    if (video->decodeNextFrame(pixels)) {
-                        desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
-                        const sg_image gpu_image = sg_make_image(&desc);
-                        if (gpu_image.id != SG_INVALID_ID) {
-                            addVideoTexture(abs_path, gpu_image, std::move(video));
-                            return GfxImage(gpu_image);
-                        }
-                    }
-                }
+                const sg_image image = makeVideoImage(abs_path, std::move(video));
+                if (image.id != SG_INVALID_ID) return GfxImage(image);
             }
         }
     }

@@ -42,6 +42,7 @@ int64_t VideoDecoder::seekMemory(void* opaque, int64_t offset, int whence) {
 
 bool VideoDecoder::openFile(const char* path, ZeroCopyMetrics& zero_copy, const std::string& drm_render_node) {
     close();
+    fallback_reason_.clear();
     int result = avformat_open_input(&format_ctx_, path, nullptr, nullptr);
     if (result < 0) {
         char err[AV_ERROR_MAX_STRING_SIZE] = {};
@@ -55,6 +56,7 @@ bool VideoDecoder::openFile(const char* path, ZeroCopyMetrics& zero_copy, const 
 bool VideoDecoder::openMemory(const std::vector<uint8_t>& memory_data, ZeroCopyMetrics& zero_copy,
                               const std::string& drm_render_node) {
     close();
+    fallback_reason_.clear();
     if (memory_data.empty()) return false;
 
     memory_input_.bytes = memory_data;
@@ -130,7 +132,8 @@ bool VideoDecoder::initDecoder(ZeroCopyMetrics& zero_copy, const std::string& cu
         result = av_hwdevice_ctx_create(&hw_device_ctx_, AV_HWDEVICE_TYPE_VAAPI, "/dev/dri/renderD128", nullptr, 0);
     }
     if (result < 0) {
-        LOG_TAG_E(TAG, "VAAPI device creation failed on all candidate render nodes");
+        fallback_reason_ = "VAAPI device creation failed on all candidate render nodes";
+        LOG_TAG_W(TAG, "%s", fallback_reason_.c_str());
         close();
         return false;
     }
@@ -145,7 +148,8 @@ bool VideoDecoder::initDecoder(ZeroCopyMetrics& zero_copy, const std::string& cu
 
     result = avcodec_parameters_to_context(decoder_ctx_, stream->codecpar);
     if (result < 0 || (result = avcodec_open2(decoder_ctx_, codec, nullptr)) < 0) {
-        LOG_TAG_E(TAG, "avcodec_open2 failed for VAAPI decoder");
+        fallback_reason_ = "avcodec_open2 failed for the VAAPI decoder";
+        LOG_TAG_W(TAG, "%s", fallback_reason_.c_str());
         close();
         return false;
     }
@@ -183,15 +187,9 @@ bool VideoDecoder::receive_frame(AVFrame* out_frame, bool& out_eof, ZeroCopyMetr
         perf.decode_submit_cpu_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
         if (ret == 0) {
-            if (out_frame->format == AV_PIX_FMT_VAAPI) {
-                ++zero_copy.vaapi_frames_decoded;
-                ++stats.frames_decoded;
-                return true;
-            } else {
-                LOG_TAG_W(TAG, "Non-VAAPI frame received format: %d", out_frame->format);
-                av_frame_unref(out_frame);
-                return false;
-            }
+            if (out_frame->format == AV_PIX_FMT_VAAPI) ++zero_copy.vaapi_frames_decoded;
+            ++stats.frames_decoded;
+            return true;
         }
         if (ret == AVERROR_EOF) {
             out_eof = true;

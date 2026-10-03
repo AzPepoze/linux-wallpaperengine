@@ -68,6 +68,7 @@ class AssetManager : public IAssetResolver {
     float video_volume_ = 1.0f;
     bool video_paused_ = false;
 
+    sg_image makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
     void addVideoTexture(const char* path, sg_image image, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
 
     GfxImage resolveTextureInternal(const char* name, std::string* out_path, int image_index,

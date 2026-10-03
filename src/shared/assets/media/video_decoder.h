@@ -51,6 +51,10 @@ class VideoDecoder {
     const std::string& get_container_name() const {
         return container_name_;
     }
+    // Why the last open failed when software decoding is the expected fallback; empty otherwise.
+    const std::string& fallback_reason() const {
+        return fallback_reason_;
+    }
 
    private:
     struct MemoryInput {
@@ -80,4 +84,5 @@ class VideoDecoder {
     VADisplay va_display_ = nullptr;
     std::string codec_name_;
     std::string container_name_;
+    std::string fallback_reason_;
 };

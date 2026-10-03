@@ -95,6 +95,7 @@ struct VideoTexture::Impl {
     PerformanceTiming perf;
 
     bool is_hw_active = false;
+    bool zero_copy_disabled = false;
     bool is_playing = true;
     bool is_paused = false;
     uint32_t loop_count = 0;
@@ -112,6 +113,27 @@ struct VideoTexture::Impl {
     uint32_t video_width = 0;
     uint32_t video_height = 0;
     float frame_duration = 1.0f / 30.0f;
+
+    void disableZeroCopy(const char* reason) {
+        if (zero_copy_disabled) return;
+        zero_copy_disabled = true;
+        LOG_TAG_I(TAG, "Decode path: VAAPI hardware decode with CPU copy (%s)", reason);
+    }
+
+    bool convertToRgba(const AVFrame* frame, std::vector<uint8_t>& output) {
+        ++zero_copy.sws_scale_calls;
+        sw_scaler =
+            sws_getCachedContext(sw_scaler, frame->width, frame->height, (AVPixelFormat)frame->format, frame->width,
+                                 frame->height, AV_PIX_FMT_RGBA, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+        if (!sw_scaler) return false;
+        const size_t bytes = (size_t)frame->width * frame->height * 4;
+        output.resize(bytes);
+        zero_copy.cpu_rgba_bytes += bytes;
+        uint8_t* destination[] = {output.data()};
+        int stride[] = {frame->width * 4};
+        sws_scale(sw_scaler, frame->data, frame->linesize, 0, frame->height, destination, stride);
+        return true;
+    }
 
     Impl() {
         current_frame = av_frame_alloc();
@@ -158,10 +180,13 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
         texture->impl->scheduler.set_time_base_and_fps(texture->impl->hw_decoder.get_time_base(),
                                                        texture->impl->hw_decoder.get_fps());
         gpu_init_zero_copy_video(texture->impl->import_cache);
-        LOG_TAG_I(TAG, "Hardware Zero-Copy VideoTexture opened: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
+        LOG_TAG_I(TAG, "Decode path: VAAPI zero-copy: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
                   texture->impl->video_height, 1.0f / texture->impl->frame_duration);
         return texture;
     }
+    const std::string& reason = texture->impl->hw_decoder.fallback_reason();
+    LOG_TAG_I(TAG, "VAAPI unavailable (%s); falling back to software decode",
+              reason.empty() ? "could not open the file with VAAPI" : reason.c_str());
 
     texture->impl->sw_format = avformat_alloc_context();
     if (!texture->impl->sw_format) return nullptr;
@@ -185,6 +210,7 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
     AVStream* stream = texture->impl->sw_format->streams[stream_index];
     const AVCodec* decoder = avcodec_find_decoder(stream->codecpar->codec_id);
     texture->impl->sw_codec = decoder ? avcodec_alloc_context3(decoder) : nullptr;
+    if (texture->impl->sw_codec) texture->impl->sw_codec->thread_count = 0;
     if (!texture->impl->sw_codec || avcodec_parameters_to_context(texture->impl->sw_codec, stream->codecpar) < 0 ||
         avcodec_open2(texture->impl->sw_codec, decoder, nullptr) < 0)
         return nullptr;
@@ -199,7 +225,7 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
         texture->impl->video_height == 0)
         return nullptr;
 
-    LOG_TAG_I(TAG, "Software VideoTexture opened: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
+    LOG_TAG_I(TAG, "Decode path: software: %s (%ux%u, %.2f FPS)", path, texture->impl->video_width,
               texture->impl->video_height, 1.0f / texture->impl->frame_duration);
     return texture;
 }
@@ -221,7 +247,7 @@ double VideoTexture::fps() const {
     return impl->frame_duration > 0.0f ? (1.0 / (double)impl->frame_duration) : 30.0;
 }
 bool VideoTexture::isZeroCopy() const {
-    return impl->is_hw_active;
+    return impl->is_hw_active && !impl->zero_copy_disabled;
 }
 const std::string& VideoTexture::codecName() const {
     static const std::string kEmpty = "";
@@ -301,30 +327,32 @@ bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, A
         return false;
     }
 
-    if (impl->current_frame->format == AV_PIX_FMT_VAAPI) {
-        VASurfaceID surface_id = (VASurfaceID)(uintptr_t)impl->current_frame->data[3];
-        VADisplay va_disp = impl->hw_decoder.get_va_display();
-
-        auto t_sync_start = std::chrono::steady_clock::now();
-        vaSyncSurface(va_disp, surface_id);
-        auto t_sync_end = std::chrono::steady_clock::now();
-        impl->perf.va_sync_cpu_ms = std::chrono::duration<double, std::milli>(t_sync_end - t_sync_start).count();
-
-        out_surface = impl->import_cache.get_or_import(va_disp, surface_id, (int)impl->video_width,
-                                                       (int)impl->video_height, impl->zero_copy, impl->perf);
-        if (!out_surface) {
-            LOG_TAG_W(TAG,
-                      "Zero-copy DMA-BUF import failed (surface 0x%x) — "
-                      "cross-adapter import unsupported or modifier rejected; falling back to CPU decode",
-                      surface_id);
-            return false;
-        }
-
-        out_av_frame = impl->current_frame;
-        return true;
+    if (impl->current_frame->format != AV_PIX_FMT_VAAPI) {
+        impl->disableZeroCopy("decoder produced software frames");
+        return false;
     }
 
-    return false;
+    VASurfaceID surface_id = (VASurfaceID)(uintptr_t)impl->current_frame->data[3];
+    VADisplay va_disp = impl->hw_decoder.get_va_display();
+
+    auto t_sync_start = std::chrono::steady_clock::now();
+    vaSyncSurface(va_disp, surface_id);
+    auto t_sync_end = std::chrono::steady_clock::now();
+    impl->perf.va_sync_cpu_ms = std::chrono::duration<double, std::milli>(t_sync_end - t_sync_start).count();
+
+    out_surface = impl->import_cache.get_or_import(va_disp, surface_id, (int)impl->video_width, (int)impl->video_height,
+                                                   impl->zero_copy, impl->perf);
+    if (!out_surface) {
+        LOG_TAG_W(TAG,
+                  "Zero-copy DMA-BUF import failed (surface 0x%x) — "
+                  "cross-adapter import unsupported or modifier rejected",
+                  surface_id);
+        impl->disableZeroCopy("DMA-BUF import failed");
+        return false;
+    }
+
+    out_av_frame = impl->current_frame;
+    return true;
 }
 
 bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
@@ -341,55 +369,27 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
             }
             return false;
         }
-        if (impl->current_frame->format == AV_PIX_FMT_VAAPI) {
-            VASurfaceID surface_id = (VASurfaceID)(uintptr_t)impl->current_frame->data[3];
-            VADisplay va_disp = impl->hw_decoder.get_va_display();
-            vaSyncSurface(va_disp, surface_id);
+        if (impl->current_frame->format != AV_PIX_FMT_VAAPI) return impl->convertToRgba(impl->current_frame, output);
 
-            if (!impl->sw_frame) impl->sw_frame = av_frame_alloc();
-            av_frame_unref(impl->sw_frame);
-            if (av_hwframe_transfer_data(impl->sw_frame, impl->current_frame, 0) >= 0) {
-                ++impl->zero_copy.sws_scale_calls;
-                impl->sw_scaler = sws_getCachedContext(impl->sw_scaler, impl->sw_frame->width, impl->sw_frame->height,
-                                                       (AVPixelFormat)impl->sw_frame->format, impl->sw_frame->width,
-                                                       impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_FAST_BILINEAR,
-                                                       nullptr, nullptr, nullptr);
-                if (impl->sw_scaler) {
-                    size_t bytes = (size_t)impl->sw_frame->width * impl->sw_frame->height * 4;
-                    output.resize(bytes);
-                    impl->zero_copy.cpu_rgba_bytes += bytes;
-                    uint8_t* dest[] = {output.data()};
-                    int stride[] = {impl->sw_frame->width * 4};
-                    sws_scale(impl->sw_scaler, impl->sw_frame->data, impl->sw_frame->linesize, 0,
-                              impl->sw_frame->height, dest, stride);
-                    return true;
-                }
-            }
-            LOG_TAG_W(TAG, "HW frame CPU transfer failed for VA surface 0x%x — skipping frame", surface_id);
+        VASurfaceID surface_id = (VASurfaceID)(uintptr_t)impl->current_frame->data[3];
+        vaSyncSurface(impl->hw_decoder.get_va_display(), surface_id);
+
+        if (!impl->sw_frame) impl->sw_frame = av_frame_alloc();
+        av_frame_unref(impl->sw_frame);
+        if (av_hwframe_transfer_data(impl->sw_frame, impl->current_frame, 0) >= 0 &&
+            impl->convertToRgba(impl->sw_frame, output))
             return true;
-        }
+        LOG_TAG_W(TAG, "HW frame CPU transfer failed for VA surface 0x%x — skipping frame", surface_id);
+        return true;
     }
 
     if (!impl->sw_codec || !impl->sw_format) return false;
+    int loops_without_frame = 0;
     for (;;) {
         const int received = avcodec_receive_frame(impl->sw_codec, impl->sw_frame);
-        if (received == 0) {
-            ++impl->zero_copy.sws_scale_calls;
-            impl->sw_scaler = sws_getCachedContext(impl->sw_scaler, impl->sw_frame->width, impl->sw_frame->height,
-                                                   (AVPixelFormat)impl->sw_frame->format, impl->sw_frame->width,
-                                                   impl->sw_frame->height, AV_PIX_FMT_RGBA, SWS_FAST_BILINEAR, nullptr,
-                                                   nullptr, nullptr);
-            if (!impl->sw_scaler) return false;
-            size_t bytes = (size_t)impl->sw_frame->width * impl->sw_frame->height * 4;
-            output.resize(bytes);
-            impl->zero_copy.cpu_rgba_bytes += bytes;
-            uint8_t* destination[] = {output.data()};
-            int stride[] = {impl->sw_frame->width * 4};
-            sws_scale(impl->sw_scaler, impl->sw_frame->data, impl->sw_frame->linesize, 0, impl->sw_frame->height,
-                      destination, stride);
-            return true;
-        }
+        if (received == 0) return impl->convertToRgba(impl->sw_frame, output);
         if (av_read_frame(impl->sw_format, impl->sw_packet) < 0) {
+            if (++loops_without_frame > 1) return false;
             av_seek_frame(impl->sw_format, impl->sw_stream_index, 0, AVSEEK_FLAG_BACKWARD);
             avcodec_flush_buffers(impl->sw_codec);
             ++impl->loop_count;
