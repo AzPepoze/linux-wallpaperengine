@@ -22,6 +22,9 @@
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
 ImageLayer::~ImageLayer() {
+    animated_frame.reset();
+    animation_page_view = {};
+    animation_page = {};
     for (auto& target : effect_targets) {
         target.reset();
     }
@@ -44,6 +47,7 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
     tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
     if (is_fullscreen || is_compose_region) return;
     if (has_puppet_mesh) puppet_pose.advance(puppet_layers, dt);
+    updateAnimatedFrame(ctx);
     renderEffectChain(ctx);
     puppet_resolved = has_puppet_mesh && renderPuppet(ctx);
 }

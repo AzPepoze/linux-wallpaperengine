@@ -30,8 +30,12 @@ bool isCompositeRenderTarget(const std::string& name) {
 void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
     effect_output_image = {SG_INVALID_ID};
     effect_output_view = {SG_INVALID_ID};
-    sg_image base_img = src_img.id != SG_INVALID_ID ? src_img : (sg_image)img;
-    sg_view base_view = src_view.id != SG_INVALID_ID ? src_view : (sg_view)cached_view;
+    sg_image base_img = src_img.id != SG_INVALID_ID
+                            ? src_img
+                            : (current_texture_frame ? (sg_image)animated_frame.image : (sg_image)img);
+    sg_view base_view = src_view.id != SG_INVALID_ID
+                            ? src_view
+                            : (current_texture_frame ? (sg_view)animated_frame.texture_view : (sg_view)cached_view);
     if (effects.empty() || base_img.id == SG_INVALID_ID) return;
     if (base_view.id == SG_INVALID_ID) {
         if (src_img.id != SG_INVALID_ID) {

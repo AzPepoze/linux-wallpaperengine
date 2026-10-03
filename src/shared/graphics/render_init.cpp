@@ -243,6 +243,9 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
     pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     r->pip_alpha = sg_make_pipeline(&pip_desc);
+    pip_desc.colors[0].blend.enabled = false;
+    r->pip_copy = sg_make_pipeline(&pip_desc);
+    pip_desc.colors[0].blend.enabled = true;
 
     // Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
     // Fully transparent texels borrow the colour of nearby opaque ones, otherwise bilinear minification of the
@@ -368,6 +371,7 @@ void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
 
 void renderer_cleanup(renderer_t* r) {
     r->pip_alpha = {};
+    r->pip_copy = {};
     r->pip_add = {};
     r->pip_unpremul = {};
     r->pip_lines = {};

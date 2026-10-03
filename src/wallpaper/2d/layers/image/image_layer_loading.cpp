@@ -50,6 +50,13 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
         }
     }
 
+    if (!layer->path.empty() && !layer->bound_video_decoder) {
+        layer->texture_metadata = wallpaper_engine::inspectTextureMetadata(layer->path.c_str());
+        if (config.width == 0.0f && !layer->texture_metadata.animation_frames.empty()) {
+            layer->size[0] = layer->texture_metadata.animation_frames.front().width;
+            layer->size[1] = layer->texture_metadata.animation_frames.front().height;
+        }
+    }
     return layer;
 }
 

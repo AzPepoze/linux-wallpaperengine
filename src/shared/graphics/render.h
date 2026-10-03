@@ -36,6 +36,7 @@ typedef struct {
 
 struct renderer_t {
     GfxPipeline pip_alpha;
+    GfxPipeline pip_copy;
     GfxPipeline pip_add;
     GfxPipeline pip_unpremul;
     GfxPipeline pip_lines;
@@ -102,7 +103,8 @@ static_assert(sizeof(particle_builtin_uniforms_t) % 16 == 0,
 
 #ifdef __cplusplus
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
-                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);
+                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass,
+                          bool replace = false);
 void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
                                   int index_count, sg_image main_image, sg_view main_view,
                                   const render_effect_pass_t* pass, const builtin_uniforms_t& builtins,

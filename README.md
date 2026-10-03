@@ -142,6 +142,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [-] Parent transforms
 - [-] Layer blending
 - [ ] Layer attachments
+- [-] TEXS texture animations (frame rectangles, durations, and multiple atlas pages; script playback control is not implemented)
 
 ### Camera & Parallax
 

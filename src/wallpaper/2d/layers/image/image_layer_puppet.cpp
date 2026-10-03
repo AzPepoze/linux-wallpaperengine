@@ -128,8 +128,12 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
     if (cached_view.id == SG_INVALID_ID) return false;
 
     const bool has_effect_output = effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID;
-    const sg_image source_image = has_effect_output ? effect_output_image : (sg_image)img;
-    const sg_view source_view = has_effect_output ? effect_output_view : (sg_view)cached_view;
+    const sg_image source_image = has_effect_output
+                                      ? effect_output_image
+                                      : (current_texture_frame ? (sg_image)animated_frame.image : (sg_image)img);
+    const sg_view source_view =
+        has_effect_output ? effect_output_view
+                          : (current_texture_frame ? (sg_view)animated_frame.texture_view : (sg_view)cached_view);
 
     const sg_image_desc material_desc = sg_query_image_desc(img);
     int width = (int)std::lround(size[0] > 0.0f ? size[0] : (float)material_desc.width);

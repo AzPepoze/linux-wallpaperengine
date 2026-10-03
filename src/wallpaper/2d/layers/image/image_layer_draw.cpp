@@ -19,6 +19,7 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
             layer_scale[1] = node->scale[1];
             layer_scale[2] = node->scale[2];
             rect.rotation = node->angles[2];
+
         }
         ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
@@ -47,8 +48,8 @@ void ImageLayer::draw(EngineContext& ctx) {
 
     const ScreenRect rect = screenRect(ctx);
 
-    sg_image draw_image = img;
-    sg_view draw_view = cached_view;
+    sg_image draw_image = current_texture_frame ? (sg_image)animated_frame.image : (sg_image)img;
+    sg_view draw_view = current_texture_frame ? (sg_view)animated_frame.texture_view : (sg_view)cached_view;
     if (puppet_resolved) {
         draw_image = puppet_straight.image;
         draw_view = puppet_straight.texture_view;
@@ -66,8 +67,8 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
     if (img.id != SG_INVALID_ID && cached_view.id == SG_INVALID_ID) updateCachedView();
 
     const ScreenRect rect = screenRect(ctx);
-    sg_image draw_image = img;
-    sg_view draw_view = cached_view;
+    sg_image draw_image = current_texture_frame ? (sg_image)animated_frame.image : (sg_image)img;
+    sg_view draw_view = current_texture_frame ? (sg_view)animated_frame.texture_view : (sg_view)cached_view;
     if (puppet_resolved) {
         draw_image = puppet_straight.image;
         draw_view = puppet_straight.texture_view;

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "shared/assets/tex_decoder.h"
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/parser/scene_document.h"
@@ -156,6 +157,7 @@ class ImageLayer : public Layer {
     bool renderPuppet(EngineContext& ctx);
     void updatePuppetPositions(int width, int height);
     void updateCachedView();
+    void updateAnimatedFrame(EngineContext& ctx);
     bool ensureEffectTargets(sg_image source_image = {SG_INVALID_ID});
 
    public:
@@ -164,6 +166,12 @@ class ImageLayer : public Layer {
    private:
     EffectTarget effect_targets[2];
     EffectTarget region_source;
+    EffectTarget animated_frame;
+    wallpaper_engine::TextureMetadata texture_metadata;
+    GfxImage animation_page;
+    GfxView animation_page_view;
+    uint32_t animation_page_index = 0;
+    const wallpaper_engine::TextureAnimationFrame* current_texture_frame = nullptr;
     int effect_target_width = 0;
     int effect_target_height = 0;
     sg_image effect_output_image = {SG_INVALID_ID};

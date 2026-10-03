@@ -19,7 +19,8 @@ using render_internal::kFirstWallpaperBlendMode;
 using render_internal::kLastWallpaperBlendMode;
 
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
-                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass) {
+                          float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass,
+                          bool replace) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -143,10 +144,10 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         sg_range fragment_range = {.ptr = fragment_uniforms, .size = sizeof(fragment_uniforms)};
         sg_apply_uniforms(2, &fragment_range);
     } else {
-        sg_pipeline target_pipeline = additive ? r->pip_add : r->pip_alpha;
+        sg_pipeline target_pipeline = replace ? r->pip_copy : (additive ? r->pip_add : r->pip_alpha);
         if (target_pipeline.id == SG_INVALID_ID) {
             LOG_TAG_E("RENDER", "renderer_draw_sprite: default sprite pipeline %s is invalid (id=0)!",
-                      additive ? "pip_add" : "pip_alpha");
+                      replace ? "pip_copy" : (additive ? "pip_add" : "pip_alpha"));
             return;
         }
         r->bind.views[0] = main_view;
