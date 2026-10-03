@@ -24,6 +24,10 @@ struct DiagnosticConfig {
     int capture_pass_index = -1;
     bool capture_pass_images = true;
 
+    bool final_only = false;
+
+    bool exit_after_diagnose = false;
+
     // Bisection controls (CLI-driven): substring matches against effect path.
     // "*" or "all" disables everything matching that hook.
     std::vector<std::string> disable_effect_paths;

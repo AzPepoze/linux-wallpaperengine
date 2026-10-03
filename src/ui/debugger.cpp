@@ -343,32 +343,34 @@ void Debugger::draw(EngineContext& ctx) {
     frame_desc.dpi_scale = sapp_dpi_scale();
     simgui_new_frame(&frame_desc);
 
-    if (ctx.runtime_mode == RuntimeMode::Sandbox) {
-        drawSandbox(ctx);
-    } else if (ctx.show_ui) {
-        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2((float)sapp_width(), (float)sapp_height()), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                                       ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
-                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-        ImGui::Begin("DebugWorkspace", nullptr, flags);
-        drawSceneTab(ctx);
-        ImGui::End();
-
-        if (g_logs_open) {
-            const float max_width = std::max(360.0f, (float)sapp_width() - 32.0f);
-            const float max_height = std::max(240.0f, (float)sapp_height() - 32.0f);
-            const ImVec2 log_window_size(std::min(720.0f, max_width), std::min(420.0f, max_height));
-            ImGui::SetNextWindowPos(ImVec2(((float)sapp_width() - log_window_size.x) * 0.5f,
-                                           ((float)sapp_height() - log_window_size.y) * 0.5f),
-                                    ImGuiCond_Appearing);
-            ImGui::SetNextWindowSize(log_window_size, ImGuiCond_Appearing);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 240.0f), ImVec2(max_width, max_height));
-            if (ImGui::Begin("Logs", &g_logs_open)) {
-                drawLogsTab();
-            }
+    if (ctx.show_ui) {
+        if (ctx.runtime_mode == RuntimeMode::Sandbox) {
+            drawSandbox(ctx);
+        } else {
+            ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2((float)sapp_width(), (float)sapp_height()), ImGuiCond_Always);
+            ImGui::SetNextWindowBgAlpha(0.0f);
+            const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                           ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
+                                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+            ImGui::Begin("DebugWorkspace", nullptr, flags);
+            drawSceneTab(ctx);
             ImGui::End();
+
+            if (g_logs_open) {
+                const float max_width = std::max(360.0f, (float)sapp_width() - 32.0f);
+                const float max_height = std::max(240.0f, (float)sapp_height() - 32.0f);
+                const ImVec2 log_window_size(std::min(720.0f, max_width), std::min(420.0f, max_height));
+                ImGui::SetNextWindowPos(ImVec2(((float)sapp_width() - log_window_size.x) * 0.5f,
+                                               ((float)sapp_height() - log_window_size.y) * 0.5f),
+                                        ImGuiCond_Appearing);
+                ImGui::SetNextWindowSize(log_window_size, ImGuiCond_Appearing);
+                ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 240.0f), ImVec2(max_width, max_height));
+                if (ImGui::Begin("Logs", &g_logs_open)) {
+                    drawLogsTab();
+                }
+                ImGui::End();
+            }
         }
     }
     simgui_render();
