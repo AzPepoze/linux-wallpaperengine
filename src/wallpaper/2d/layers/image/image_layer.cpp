@@ -16,6 +16,15 @@
 #include "wallpaper/2d/alpha_curve.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
+namespace {
+bool isCompositeRenderTarget(const std::string& name) {
+    if (name.rfind("_rt_", 0) != 0) return false;
+    if (name == "_rt_FullFrameBuffer") return true;
+    if (name.rfind("_rt_imageLayerComposite_", 0) == 0) return true;
+    return name.find("FrameBuffer") != std::string::npos;
+}
+}  // namespace
+
 ImageLayer::ImageLayer(const char* name, GfxImage img) : Layer(name), img(std::move(img)) {}
 
 ImageLayer::~ImageLayer() {
@@ -159,38 +168,34 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             bool has_overrides = false;
             for (const auto& [slot, binding] : pass->render_texture_bindings) {
                 if (slot < 0 || slot > 11) continue;
+                sg_image binding_image = {SG_INVALID_ID};
+                sg_view binding_view = {SG_INVALID_ID};
                 if (binding == "previous") {
-                    if (slot == 0) {
-                        shader_input_image = input_image;
-                        shader_input_view = input_view;
-                    } else {
-                        override_images[slot - 1] = input_image;
-                        override_views[slot - 1] = input_view;
-                    }
-                    has_overrides = true;
-                } else if (binding == "_rt_FullFrameBuffer") {
-                    if (slot == 0) {
-                        shader_input_image = layer_source_image;
-                        shader_input_view = layer_source_view;
-                    } else {
-                        override_images[slot - 1] = layer_source_image;
-                        override_views[slot - 1] = layer_source_view;
-                    }
-                    has_overrides = true;
+                    binding_image = input_image;
+                    binding_view = input_view;
                 } else {
                     auto target = named_effect_targets.find(binding);
-                    if (target == named_effect_targets.end()) continue;
-                    const auto& read_buf = target->second.currentRead();
-                    if (read_buf.image.id == SG_INVALID_ID) continue;
-                    if (slot == 0) {
-                        shader_input_image = read_buf.image;
-                        shader_input_view = read_buf.texture_view;
+                    if (target != named_effect_targets.end()) {
+                        const auto& read_buf = target->second.currentRead();
+                        binding_image = read_buf.image;
+                        binding_view = read_buf.texture_view;
+                    } else if (isCompositeRenderTarget(binding)) {
+                        // Unwritten composite targets read as the accumulated scene image.
+                        binding_image = layer_source_image;
+                        binding_view = layer_source_view;
                     } else {
-                        override_images[slot - 1] = read_buf.image;
-                        override_views[slot - 1] = read_buf.texture_view;
+                        continue;
                     }
-                    has_overrides = true;
                 }
+                if (binding_image.id == SG_INVALID_ID) continue;
+                if (slot == 0) {
+                    shader_input_image = binding_image;
+                    shader_input_view = binding_view;
+                } else {
+                    override_images[slot - 1] = binding_image;
+                    override_views[slot - 1] = binding_view;
+                }
+                has_overrides = true;
             }
 
             bool has_alias = false;
@@ -300,13 +305,23 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                         in_b.width = d.width;
                         in_b.height = d.height;
                         in_b.is_render_target = d.usage.color_attachment;
-                    } else if (binding == "_rt_FullFrameBuffer") {
-                        in_b.image_id = layer_source_image.id;
-                        in_b.view_id = layer_source_view.id;
-                        sg_image_desc d = sg_query_image_desc(layer_source_image);
-                        in_b.width = d.width;
-                        in_b.height = d.height;
-                        in_b.is_render_target = d.usage.color_attachment;
+                    } else if (isCompositeRenderTarget(binding)) {
+                        if (auto target_it = named_effect_targets.find(binding);
+                            target_it != named_effect_targets.end()) {
+                            const auto& read_buf = target_it->second.currentRead();
+                            in_b.image_id = read_buf.image.id;
+                            in_b.view_id = read_buf.texture_view.id;
+                            in_b.width = read_buf.width;
+                            in_b.height = read_buf.height;
+                            in_b.is_render_target = true;
+                        } else {
+                            in_b.image_id = layer_source_image.id;
+                            in_b.view_id = layer_source_view.id;
+                            sg_image_desc d = sg_query_image_desc(layer_source_image);
+                            in_b.width = d.width;
+                            in_b.height = d.height;
+                            in_b.is_render_target = d.usage.color_attachment;
+                        }
                     } else {
                         auto target_it = named_effect_targets.find(binding);
                         if (target_it != named_effect_targets.end()) {
@@ -421,7 +436,7 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
             size[1] = ctx.scene_h > 0.0f ? ctx.scene_h : 2160.0f;
         }
     }
-    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer")) || is_fullscreen) {
+    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "solidlayer"))) {
         solid_layer = true;
         const int width =
             std::max(1, (int)std::lround(size[0] > 0.0f ? size[0] : (ctx.scene_w > 0.0f ? ctx.scene_w : 3840.0f)));
