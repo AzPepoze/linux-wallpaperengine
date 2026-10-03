@@ -7,6 +7,9 @@
 #include "app/cli_options.h"
 #include "app/frame_limiter.h"
 #include "app/frame_loop.h"
+#if LWE_LAYER_SHELL
+#include "app/platform/wayland_layer/layer_app.h"
+#endif
 #include "app/package_extractor.h"
 #include "app/signals.h"
 #include "shared/audio/audio_engine.h"
@@ -40,6 +43,7 @@ WallpaperSource wallpaper_source;
 }  // namespace
 
 static EngineContext ctx;
+static bool layer_active = false;
 
 #if DEBUG_BUILD
 static bool loadSandboxPreviewScene(const char* scene_path) {
@@ -94,8 +98,7 @@ static void applyCliToContext() {
     ctx.debug.selected_object = -1;
     ctx.scene.scaling_mode = cli.cover || cli.scaling == "fill" ? SCALING_COVER : SCALING_FIT;
     if (cli.scaling == "stretch") LOG_W("--scaling stretch is not supported yet; using fit");
-    if (!cli.screen_root.empty() || !cli.layer.empty())
-        LOG_W("--screen-root/--layer: rendering into the desktop layer is not supported yet; running in a window");
+    if (layer_active) ctx.debug.show_ui = false;
     ctx.debug.particle_debug_bounds = cli.particle_debug_bounds;
     ctx.debug.particle_debug_velocity = cli.particle_debug_velocity;
     if (cli.particle_debug_velocity_scale > 0.0f)
@@ -201,6 +204,29 @@ static void selectRequestedGpu() {
     }
 }
 
+static bool wantsDesktopLayer() {
+    return !cli.screen_root.empty() || !cli.layer.empty();
+}
+
+#if LWE_LAYER_SHELL
+static void runDesktopLayerIfPossible() {
+    if (!wantsDesktopLayer() || cli.sandbox) return;
+    std::unique_ptr<LayerApp> app = LayerApp::create(cli);
+    if (!app) {
+        LOG_W("[LAYER] desktop layer unavailable; running in a window");
+        return;
+    }
+    layer_active = true;
+    const int code = app->run({init, frame, event, cleanup});
+    app.reset();
+    exit(code);
+}
+#else
+static void runDesktopLayerIfPossible() {
+    if (wantsDesktopLayer()) LOG_W("--screen-root/--layer need a build with --layer_shell=y; running in a window");
+}
+#endif
+
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
@@ -212,6 +238,8 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     ctx.is_pkg = wallpaper_source.is_pkg;
 
     if (cli.extract_only && !wallpaper_source.path.empty()) exit(runExtractOnly(wallpaper_source, cli));
+
+    runDesktopLayerIfPossible();
 
     sapp_desc desc = {};
     desc.init_cb = init;
