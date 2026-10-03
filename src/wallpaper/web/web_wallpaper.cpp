@@ -20,6 +20,7 @@
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/graphics/backend/surface.h"
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/scene_builder.h"
 #include "wallpaper/web/web_ipc.h"
@@ -95,8 +96,8 @@ WebWallpaper::~WebWallpaper() {
 bool WebWallpaper::load(const std::string& path, EngineContext& ctx) {
     clear();
 
-    const uint32_t width = static_cast<uint32_t>(std::max(16, sapp_width()));
-    const uint32_t height = static_cast<uint32_t>(std::max(16, sapp_height()));
+    const uint32_t width = static_cast<uint32_t>(std::max(16, surface::width()));
+    const uint32_t height = static_cast<uint32_t>(std::max(16, surface::height()));
     const std::string properties = buildUserProperties(path);
 
     const size_t size = sizeof(WebFrameBuffer) + static_cast<size_t>(width) * height * 4;
@@ -285,8 +286,8 @@ void WebWallpaper::handleInput(const sapp_event* event, EngineContext& ctx) {
             return;
     }
 
-    const float window_w = static_cast<float>(std::max(1, sapp_width()));
-    const float window_h = static_cast<float>(std::max(1, sapp_height()));
+    const float window_w = static_cast<float>(std::max(1, surface::width()));
+    const float window_h = static_cast<float>(std::max(1, surface::height()));
     msg.x = event->mouse_x / window_w;
     msg.y = event->mouse_y / window_h;
     msg.modifiers = event->modifiers;

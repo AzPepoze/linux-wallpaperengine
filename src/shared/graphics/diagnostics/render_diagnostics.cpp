@@ -19,6 +19,7 @@
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
 #include "shared/graphics/backend/gpu_readback.h"
+#include "shared/graphics/backend/surface.h"
 #include "shared/graphics/shader/shader_compiler.h"
 
 namespace fs = std::filesystem;
@@ -194,7 +195,7 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
 
     if (config.exit_after_diagnose) {
         effect_log.info("Diagnostic capture finished, requesting clean quit");
-        sapp_request_quit();
+        surface::requestQuit();
     }
 }
 

@@ -16,6 +16,7 @@
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/backend/sokol/sokol_sync.h"
+#include "shared/graphics/backend/surface.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
@@ -72,7 +73,7 @@ static void initAudio() {
 
 static void initGraphics() {
     sg_desc s_desc = {};
-    s_desc.environment = sglue_environment();
+    s_desc.environment = surface::environment();
     s_desc.logger.func = slog_func;
     s_desc.buffer_pool_size = 2048;
     s_desc.image_pool_size = 2048;

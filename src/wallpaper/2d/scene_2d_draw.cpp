@@ -3,6 +3,7 @@
 #include "scene_2d.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/graphics/backend/surface.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/passes/pass_loader.h"
@@ -44,14 +45,14 @@ void Scene2DRuntime::drawDirect() {
     }
 
     if (has_output_viewport) {
-        sg_apply_viewport(0, 0, sapp_width(), sapp_height(), true);
-        sg_apply_scissor_rect(0, 0, sapp_width(), sapp_height(), true);
+        sg_apply_viewport(0, 0, surface::width(), surface::height(), true);
+        sg_apply_scissor_rect(0, 0, surface::width(), surface::height(), true);
     }
 }
 
 void Scene2DRuntime::drawOffscreen() {
-    const int width = output_width > 0 ? output_width : sapp_width();
-    const int height = output_height > 0 ? output_height : sapp_height();
+    const int width = output_width > 0 ? output_width : surface::width();
+    const int height = output_height > 0 ? output_height : surface::height();
     if (!ensureSceneTargets(width, height)) {
         scene_output_index = -1;
         return;

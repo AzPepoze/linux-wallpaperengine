@@ -1,5 +1,7 @@
 #include "debugger.h"
 
+#include "shared/graphics/backend/surface.h"
+
 #if DEBUG_BUILD
 
 #include <algorithm>
@@ -285,7 +287,7 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
 
 void Debugger::drawSandbox(EngineContext& ctx) {
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2((float)sapp_width(), (float)sapp_height()), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2((float)surface::width(), (float)surface::height()), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.0f);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                                    ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
@@ -322,7 +324,7 @@ void Debugger::drawSandbox(EngineContext& ctx) {
     ImGui::BeginChild("SandboxPreview", ImVec2(0.0f, 0.0f), true);
     const ImVec2 preview_position = ImGui::GetWindowPos();
     const ImVec2 preview_size = ImGui::GetWindowSize();
-    const float dpi_scale = sapp_dpi_scale();
+    const float dpi_scale = surface::dpiScale();
     g_sandbox_preview_rect = {
         static_cast<int>(preview_position.x * dpi_scale), static_cast<int>(preview_position.y * dpi_scale),
         static_cast<int>(preview_size.x * dpi_scale), static_cast<int>(preview_size.y * dpi_scale)};
@@ -338,10 +340,10 @@ void Debugger::drawSandbox(EngineContext& ctx) {
 
 void Debugger::draw(EngineContext& ctx) {
     simgui_frame_desc_t frame_desc = {};
-    frame_desc.width = sapp_width();
-    frame_desc.height = sapp_height();
-    frame_desc.delta_time = (float)sapp_frame_duration();
-    frame_desc.dpi_scale = sapp_dpi_scale();
+    frame_desc.width = surface::width();
+    frame_desc.height = surface::height();
+    frame_desc.delta_time = (float)surface::frameDuration();
+    frame_desc.dpi_scale = surface::dpiScale();
     simgui_new_frame(&frame_desc);
 
     if (ctx.debug.show_ui) {
@@ -349,7 +351,7 @@ void Debugger::draw(EngineContext& ctx) {
             drawSandbox(ctx);
         } else {
             ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2((float)sapp_width(), (float)sapp_height()), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2((float)surface::width(), (float)surface::height()), ImGuiCond_Always);
             ImGui::SetNextWindowBgAlpha(0.0f);
             const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                                            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
@@ -359,11 +361,11 @@ void Debugger::draw(EngineContext& ctx) {
             ImGui::End();
 
             if (g_logs_open) {
-                const float max_width = std::max(360.0f, (float)sapp_width() - 32.0f);
-                const float max_height = std::max(240.0f, (float)sapp_height() - 32.0f);
+                const float max_width = std::max(360.0f, (float)surface::width() - 32.0f);
+                const float max_height = std::max(240.0f, (float)surface::height() - 32.0f);
                 const ImVec2 log_window_size(std::min(720.0f, max_width), std::min(420.0f, max_height));
-                ImGui::SetNextWindowPos(ImVec2(((float)sapp_width() - log_window_size.x) * 0.5f,
-                                               ((float)sapp_height() - log_window_size.y) * 0.5f),
+                ImGui::SetNextWindowPos(ImVec2(((float)surface::width() - log_window_size.x) * 0.5f,
+                                               ((float)surface::height() - log_window_size.y) * 0.5f),
                                         ImGuiCond_Appearing);
                 ImGui::SetNextWindowSize(log_window_size, ImGuiCond_Appearing);
                 ImGui::SetNextWindowSizeConstraints(ImVec2(360.0f, 240.0f), ImVec2(max_width, max_height));

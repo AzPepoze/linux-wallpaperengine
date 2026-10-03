@@ -3,6 +3,7 @@
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/surface.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_time.h"
@@ -39,12 +40,12 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
         ctx.scene.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
     ctx.pass_action.colors[0].clear_value = {ctx.scene.general.clear_color[0], ctx.scene.general.clear_color[1],
                                              ctx.scene.general.clear_color[2], ctx.scene.general.clear_color[3]};
-    float dt = (float)sapp_frame_duration();
+    float dt = (float)surface::frameDuration();
     ctx.time += dt;
     AudioEngine::instance().update(dt);
 
     ctx.asset_mgr.updateVideoTextures(dt, ctx.scene.layers);
-    parallax_update(ctx, dt, sapp_width(), sapp_height());
+    parallax_update(ctx, dt, surface::width(), surface::height());
     mgr.update(dt, ctx);
 }
 
@@ -97,7 +98,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
-    pass.swapchain = sglue_swapchain();
+    pass.swapchain = surface::acquireSwapchain();
     sg_begin_pass(&pass);
 
     if (offscreen_composition && runtime)

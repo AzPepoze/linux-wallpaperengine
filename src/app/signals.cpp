@@ -5,6 +5,7 @@
 #include <atomic>
 
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/surface.h"
 #include "sokol_app.h"
 
 namespace {
@@ -20,7 +21,7 @@ void terminationSignalHandler(int sig) {
     LOG_I("[SIGNAL] Caught signal %d (%s), requesting clean quit...", sig, (sig == SIGINT) ? "SIGINT" : "SIGTERM");
     g_terminating.store(true, std::memory_order_relaxed);
     signal(sig, SIG_DFL);
-    sapp_request_quit();
+    surface::requestQuit();
 }
 }  // namespace
 

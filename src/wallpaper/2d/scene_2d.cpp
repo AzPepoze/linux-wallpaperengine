@@ -4,6 +4,7 @@
 
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/graphics/backend/surface.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/passes/pass_loader.h"
@@ -17,7 +18,7 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 void Scene2DRuntime::init() {
-    renderer_init(&ctx.renderer, (float)sapp_width(), (float)sapp_height());
+    renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height());
     // DO NOT EDIT: must precompile all blend pipelines here to prevent GPU context loss mid-render (crash fix)
     renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
 }
@@ -116,8 +117,8 @@ void Scene2DRuntime::present() {
     if (target.image.id == SG_INVALID_ID || target.texture_view.id == SG_INVALID_ID) return;
 
     const bool has_output_viewport = output_width > 0 && output_height > 0;
-    const int width = has_output_viewport ? output_width : sapp_width();
-    const int height = has_output_viewport ? output_height : sapp_height();
+    const int width = has_output_viewport ? output_width : surface::width();
+    const int height = has_output_viewport ? output_height : surface::height();
     if (has_output_viewport) {
         sg_apply_viewport(output_x, output_y, width, height, true);
         sg_apply_scissor_rect(output_x, output_y, width, height, true);
@@ -132,14 +133,14 @@ void Scene2DRuntime::present() {
                          0.0f, white, false, nullptr);
 
     if (has_output_viewport) {
-        sg_apply_viewport(0, 0, sapp_width(), sapp_height(), true);
-        sg_apply_scissor_rect(0, 0, sapp_width(), sapp_height(), true);
+        sg_apply_viewport(0, 0, surface::width(), surface::height(), true);
+        sg_apply_scissor_rect(0, 0, surface::width(), surface::height(), true);
     }
 }
 
 void Scene2DRuntime::updateViewport() {
-    float sw = output_width > 0 ? (float)output_width : (float)sapp_width();
-    float sh = output_height > 0 ? (float)output_height : (float)sapp_height();
+    float sw = output_width > 0 ? (float)output_width : (float)surface::width();
+    float sh = output_height > 0 ? (float)output_height : (float)surface::height();
     renderer_update_viewport(&ctx.renderer, sw, sh);
 
     if (ctx.scene.scene_w == 0 || ctx.scene.scene_h == 0) return;
