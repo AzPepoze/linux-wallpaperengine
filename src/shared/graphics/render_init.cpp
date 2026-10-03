@@ -371,6 +371,7 @@ void renderer_cleanup(renderer_t* r) {
     r->pip_add = {};
     r->pip_unpremul = {};
     r->pip_lines = {};
+    r->pip_mesh = {};
     for (auto& pipeline : r->pip_image_composite) pipeline = {};
     for (auto& shader : r->shd_image_composite) shader = {};
     r->vertex_buffer = {};
