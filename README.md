@@ -378,7 +378,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [x] Audio playback (MP3 / WAV / OGG via miniaudio)
 - [x] Loop playback
 - [x] Video wallpaper audio
-- [x] Silent mode (`--no-audio` or `LWE_NO_AUDIO=1`)
+- [x] Silent mode (`--no-audio` or `LWE_NO_AUDIO=1`; debug runs with `--no-ui` or `--diagnose` are always silent)
 - [-] System audio capture and spectrum data (PulseAudio monitor; zeros when unavailable)
 - [-] Audio-responsive effects (spectrum uniforms bound; depends on effect compatibility)
 - [ ] Single playback mode / random playback mode

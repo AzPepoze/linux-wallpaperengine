@@ -86,7 +86,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.final_only = hasDashedFlag("diagnose-final-only");
     opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
 #endif
-    opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO");
+    opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled;
     opts.cover = hasFlag("cover");
     opts.particle_debug_bounds = hasFlag("particle-debug-bounds") || hasFlag("particle-debug");
     opts.particle_debug_velocity = hasFlag("particle-debug-velocity") || hasFlag("particle-debug");
