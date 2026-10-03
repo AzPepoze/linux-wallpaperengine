@@ -57,6 +57,9 @@ class AssetManager : public IAssetResolver {
     std::unique_ptr<InternalAssetProvider> internal_provider;
 
     mutable std::vector<ActiveVideoTexture> video_textures;
+
+    GfxImage resolveTextureInternal(const char* name, std::string* out_path, int image_index,
+                                    bool warn_on_failure) const;
 };
 
 #endif  // ASSET_MANAGER_H
