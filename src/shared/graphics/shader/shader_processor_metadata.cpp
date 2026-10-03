@@ -1,0 +1,134 @@
+#include <stdlib.h>
+#include <string.h>
+
+#include <sstream>
+
+#include "shader_processor.h"
+
+std::string ShaderSourceProcessor::extractCombos(const char* fsSource) {
+    std::string combo_defines;
+    const char* p = fsSource;
+    while (p && *p) {
+        const char* line_end = strchr(p, '\n');
+        std::string line = line_end ? std::string(p, line_end - p) : std::string(p);
+
+        size_t combo_pos = line.find("// [COMBO]");
+        if (combo_pos != std::string::npos) {
+            size_t combo_key = line.find("\"combo\"", combo_pos);
+            size_t default_key = line.find("\"default\"", combo_pos);
+            if (combo_key != std::string::npos && default_key != std::string::npos) {
+                size_t colon_combo = line.find(':', combo_key);
+                size_t q1 = (colon_combo != std::string::npos) ? line.find('\"', colon_combo) : std::string::npos;
+                size_t q2 = (q1 != std::string::npos) ? line.find('\"', q1 + 1) : std::string::npos;
+                size_t colon_def = line.find(':', default_key);
+
+                if (q1 != std::string::npos && q2 != std::string::npos && colon_def != std::string::npos) {
+                    std::string define_name = line.substr(q1 + 1, q2 - q1 - 1);
+                    int default_val = atoi(line.c_str() + colon_def + 1);
+                    if (!define_name.empty() &&
+                        combo_defines.find("#define " + define_name + " ") == std::string::npos) {
+                        combo_defines += "#define " + define_name + " " + std::to_string(default_val) + "\n";
+                    }
+                }
+            }
+        }
+        p = line_end ? line_end + 1 : nullptr;
+    }
+    return combo_defines;
+}
+
+std::map<int, std::string> ShaderSourceProcessor::extractTextureLabels(const char* fsSource) {
+    std::map<int, std::string> labels;
+    const char* p = fsSource;
+    while (p && *p) {
+        const char* line_end = strchr(p, '\n');
+        std::string line = line_end ? std::string(p, line_end - p) : std::string(p);
+
+        size_t tex_pos = line.find("g_Texture");
+        size_t comment_pos = line.find("//");
+
+        if (tex_pos != std::string::npos && comment_pos != std::string::npos && comment_pos > tex_pos) {
+            int slot = atoi(line.c_str() + tex_pos + 9);
+            std::string label;
+
+            size_t json_start = line.find('{', comment_pos);
+            size_t label_key = line.find("\"label\"", comment_pos);
+            if (json_start != std::string::npos && label_key != std::string::npos) {
+                size_t colon = line.find(':', label_key);
+                size_t quote1 = line.find('\"', colon);
+                size_t quote2 = line.find('\"', quote1 + 1);
+                if (quote1 != std::string::npos && quote2 != std::string::npos) {
+                    label = line.substr(quote1 + 1, quote2 - quote1 - 1);
+                }
+            } else {
+                size_t b_open = line.find('[', comment_pos);
+                size_t b_close = line.find(']', b_open);
+                if (b_open != std::string::npos && b_close != std::string::npos) {
+                    label = line.substr(b_open + 1, b_close - b_open - 1);
+                }
+            }
+
+            if (!label.empty()) {
+                if (label == "ui_editor_properties_water_normal")
+                    label = "Water Normal";
+                else if (label == "ui_editor_properties_opacity_mask")
+                    label = "Opacity Mask";
+                else if (label == "ui_editor_properties_specular")
+                    label = "Specular";
+                else if (label.find("ui_editor_properties_") == 0) {
+                    label = label.substr(21);
+                    for (size_t i = 0; i < label.length(); i++) {
+                        if (label[i] == '_') label[i] = ' ';
+                        if (i == 0 || label[i - 1] == ' ') label[i] = (char)toupper((unsigned char)label[i]);
+                    }
+                }
+                labels[slot] = label;
+            }
+        }
+        p = line_end ? line_end + 1 : nullptr;
+    }
+    return labels;
+}
+
+std::string ShaderSourceProcessor::buildShaderPrefix() {
+    return "#version 330\n"
+           "#define HLSL 0\n"
+           "#define GLSL 1\n"
+           "#define float2 vec2\n"
+           "#define float3 vec3\n"
+           "#define float4 vec4\n"
+           "#define int2 ivec2\n"
+           "#define int3 ivec3\n"
+           "#define int4 ivec4\n"
+           "#define uint2 uvec2\n"
+           "#define uint3 uvec3\n"
+           "#define uint4 uvec4\n"
+           "#define bool2 bvec2\n"
+           "#define bool3 bvec3\n"
+           "#define bool4 bvec4\n"
+           "#define float2x2 mat2\n"
+           "#define float3x3 mat3\n"
+           "#define float4x4 mat4\n"
+           "#define mul(v, m) ((m) * (v))\n"
+           "#define texSample2D(s, uv) texture(s, uv)\n"
+           "#define texSample2DLod(s, uv, lod) textureLod(s, uv, lod)\n"
+           "#define texSample2DGrad(s, uv, dx, dy) textureGrad(s, uv, dx, dy)\n"
+           "#define texture2D(s, uv) texture(s, uv)\n"
+           "#define texture2DLod(s, uv, lod) textureLod(s, uv, lod)\n"
+           "#define CAST2(x) vec2(x)\n"
+           "#define CAST3(x) vec3(x)\n"
+           "#define CAST4(x) vec4(x)\n"
+           "#define CAST3X3(x) mat3(x)\n"
+           "#define saturate(x) clamp(x, 0.0, 1.0)\n"
+           "#define lerp mix\n"
+           "#define frac fract\n"
+           "#define ddx dFdx\n"
+           "#define ddy dFdy\n"
+           "#define atan2(y, x) atan(y, x)\n"
+           "#define lowp\n"
+           "#define mediump\n"
+           "#define highp\n"
+           "float dot(vec4 a, vec3 b) { return dot(a.xyz, b); }\n"
+           "float dot(vec3 a, vec4 b) { return dot(a, b.xyz); }\n"
+           "uniform vec4 tint;\n";
+}

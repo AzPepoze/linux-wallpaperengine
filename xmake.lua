@@ -107,7 +107,11 @@ target("shader_tests")
     set_warnings("all", "extra")
     add_includedirs("src")
     add_packages("sokol")
-    add_files("tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp")
+    add_files("tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp",
+              "src/shared/graphics/shader/shader_processor_metadata.cpp",
+              "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
+              "src/shared/graphics/shader/shader_vector_rewrite.cpp",
+              "src/shared/graphics/shader/shader_swizzle_rewrite.cpp")
 
 -- Synthetic project detection checks. Not built by default; run with `xmake build project_tests`.
 target("project_tests")
