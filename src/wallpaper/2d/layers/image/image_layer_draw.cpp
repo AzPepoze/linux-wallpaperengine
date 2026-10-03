@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cmath>
+
 #include "image_layer.h"
 #include "shared/core/context.h"
 #include "shared/core/engine_context.h"
@@ -5,44 +8,44 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
-void ImageLayer::draw(EngineContext& ctx) {
-    const bool has_effect_output = effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID;
-    if (img.id == SG_INVALID_ID && !has_effect_output) return;
-    if (img.id != SG_INVALID_ID && cached_view.id == SG_INVALID_ID) updateCachedView();
-
+ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
-    float layer_rotation = rotation;
+    ScreenRect rect;
+    rect.rotation = rotation;
     if (scene_object_id != 0 && ctx.scene.scene_tree) {
         if (const SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
             layer_scale[0] = node->scale[0];
             layer_scale[1] = node->scale[1];
             layer_scale[2] = node->scale[2];
-            layer_rotation = node->angles[2];
+            rect.rotation = node->angles[2];
         }
         ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
-    float x = 0.0f;
-    float y = 0.0f;
-    float width = 0.0f;
-    float height = 0.0f;
     if (is_fullscreen) {
-        x = 0.0f;
-        y = 0.0f;
-        width = ctx.renderer.view_width;
-        height = ctx.renderer.view_height;
-    } else {
-        const float scene_h = ctx.scene.scene_h > 0.0f
-                                  ? ctx.scene.scene_h
-                                  : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
-        width = size[0] * layer_scale[0] * ctx.scene.render_scale;
-        height = size[1] * layer_scale[1] * ctx.scene.render_scale;
-        const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
-        x = ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - width * 0.5f;
-        y = ctx.scene.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
-            height * 0.5f;
+        rect.width = ctx.renderer.view_width;
+        rect.height = ctx.renderer.view_height;
+        return rect;
     }
+    const float scene_h = ctx.scene.scene_h > 0.0f
+                              ? ctx.scene.scene_h
+                              : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
+    rect.width = size[0] * layer_scale[0] * ctx.scene.render_scale;
+    rect.height = size[1] * layer_scale[1] * ctx.scene.render_scale;
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
+    rect.x = ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - rect.width * 0.5f;
+    rect.y = ctx.scene.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
+             rect.height * 0.5f;
+    return rect;
+}
+
+void ImageLayer::draw(EngineContext& ctx) {
+    const bool has_effect_output = effect_output_image.id != SG_INVALID_ID && effect_output_view.id != SG_INVALID_ID;
+    if (img.id == SG_INVALID_ID && !has_effect_output) return;
+    if (img.id != SG_INVALID_ID && cached_view.id == SG_INVALID_ID) updateCachedView();
+
+    const ScreenRect rect = screenRect(ctx);
 
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
@@ -53,8 +56,8 @@ void ImageLayer::draw(EngineContext& ctx) {
         draw_image = puppet_target.image;
         draw_view = puppet_target.texture_view;
     }
-    renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, x, y, width, height, layer_rotation, tint, false,
-                         nullptr);
+    renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
+                         rect.rotation, tint, false, nullptr);
 }
 
 void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
@@ -62,38 +65,7 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
     if (img.id == SG_INVALID_ID && !has_effect_output) return;
     if (img.id != SG_INVALID_ID && cached_view.id == SG_INVALID_ID) updateCachedView();
 
-    float layer_scale[3] = {scale[0], scale[1], scale[2]};
-    float layer_origin[3] = {origin[0], origin[1], origin[2]};
-    float layer_rotation = rotation;
-    if (scene_object_id != 0 && ctx.scene.scene_tree) {
-        if (const SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
-            layer_scale[0] = node->scale[0];
-            layer_scale[1] = node->scale[1];
-            layer_scale[2] = node->scale[2];
-            layer_rotation = node->angles[2];
-        }
-        ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
-    }
-    float x = 0.0f;
-    float y = 0.0f;
-    float width = 0.0f;
-    float height = 0.0f;
-    if (is_fullscreen) {
-        x = 0.0f;
-        y = 0.0f;
-        width = ctx.renderer.view_width;
-        height = ctx.renderer.view_height;
-    } else {
-        const float scene_h = ctx.scene.scene_h > 0.0f
-                                  ? ctx.scene.scene_h
-                                  : (ctx.renderer.view_height > 0.0f ? ctx.renderer.view_height : 2160.0f);
-        width = size[0] * layer_scale[0] * ctx.scene.render_scale;
-        height = size[1] * layer_scale[1] * ctx.scene.render_scale;
-        const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
-        x = ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - width * 0.5f;
-        y = ctx.scene.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
-            height * 0.5f;
-    }
+    const ScreenRect rect = screenRect(ctx);
     sg_image draw_image = img;
     sg_view draw_view = cached_view;
     if (has_effect_output) {
@@ -103,8 +75,34 @@ void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {
         draw_image = puppet_target.image;
         draw_view = puppet_target.texture_view;
     }
-    renderer_draw_image_composite(ctx, &ctx.renderer, draw_image, draw_view, scene_view, x, y, width, height,
-                                  layer_rotation, tint, color_blend_mode);
+    renderer_draw_image_composite(ctx, &ctx.renderer, draw_image, draw_view, scene_view, rect.x, rect.y, rect.width,
+                                  rect.height, rect.rotation, tint, color_blend_mode);
+}
+
+void ImageLayer::renderRegionEffectChain(EngineContext& ctx, sg_image scene_image, sg_view scene_view) {
+    const ScreenRect rect = screenRect(ctx);
+    const int width = std::max(1, (int)std::lround(rect.width));
+    const int height = std::max(1, (int)std::lround(rect.height));
+    if (region_source.width != width || region_source.height != height) {
+        if (!region_source.create(width, height)) return;
+    }
+
+    const float saved_view_width = ctx.renderer.view_width;
+    const float saved_view_height = ctx.renderer.view_height;
+    sg_pass crop_pass = {};
+    crop_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    crop_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+    crop_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+    crop_pass.attachments.colors[0] = region_source.attachment_view;
+    sg_begin_pass(&crop_pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    renderer_draw_sprite(ctx, &ctx.renderer, scene_image, scene_view, -rect.x, -rect.y, saved_view_width,
+                         saved_view_height, 0.0f, white, false, nullptr);
+    sg_end_pass();
+    renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
+
+    renderEffectChain(ctx, region_source.image, region_source.texture_view);
 }
 
 void ImageLayer::drawDebug(EngineContext& ctx) {

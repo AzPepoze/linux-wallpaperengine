@@ -70,12 +70,19 @@ void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     free(json_str);
     if (!mdl_json) return;
     cJSON* mat_ref = cJSON_GetObjectItemCaseSensitive(mdl_json, "material");
-    is_fullscreen = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "fullscreen")) ||
-                    cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "passthrough")) ||
-                    strstr(mdl_rel_path, "fullscreenlayer") != nullptr ||
-                    strstr(mdl_rel_path, "composelayer") != nullptr;
-    if (is_fullscreen) {
+    const bool is_compose = strstr(mdl_rel_path, "composelayer") != nullptr;
+    const float scene_w = ctx.scene.scene_w > 0.0f ? ctx.scene.scene_w : 3840.0f;
+    const float scene_h = ctx.scene.scene_h > 0.0f ? ctx.scene.scene_h : 2160.0f;
+    // A compose layer smaller than the scene only post-processes its own rectangle.
+    is_compose_region =
+        is_compose && size[0] > 0.0f && size[1] > 0.0f && (size[0] < scene_w * 0.99f || size[1] < scene_h * 0.99f);
+    is_fullscreen = !is_compose_region && (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "fullscreen")) ||
+                                           cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(mdl_json, "passthrough")) ||
+                                           strstr(mdl_rel_path, "fullscreenlayer") != nullptr || is_compose);
+    if (is_fullscreen || is_compose_region) {
         copy_background = true;
+    }
+    if (is_fullscreen) {
         if (size[0] <= 0.0f || size[1] <= 0.0f) {
             size[0] = ctx.scene.scene_w > 0.0f ? ctx.scene.scene_w : 3840.0f;
             size[1] = ctx.scene.scene_h > 0.0f ? ctx.scene.scene_h : 2160.0f;

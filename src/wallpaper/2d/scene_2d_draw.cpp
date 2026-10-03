@@ -153,6 +153,8 @@ void Scene2DRuntime::drawOffscreen() {
         if (image && image->requiresSceneColor()) {
             if (image->is_fullscreen && !image->effects.empty()) {
                 image->renderEffectChain(ctx, scene_targets[current].image, scene_targets[current].texture_view);
+            } else if (image->is_compose_region && !image->effects.empty()) {
+                image->renderRegionEffectChain(ctx, scene_targets[current].image, scene_targets[current].texture_view);
             }
             capture_layer_result(layer, true);
             const int next = 1 - current;

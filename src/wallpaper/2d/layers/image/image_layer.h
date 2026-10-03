@@ -19,6 +19,7 @@ class ImageLayer : public Layer {
     GfxView cached_view;
     bool solid_layer = false;
     bool is_fullscreen = false;
+    bool is_compose_region = false;
     bool copy_background = false;
     int color_blend_mode = 0;
 
@@ -32,6 +33,7 @@ class ImageLayer : public Layer {
     void drawDebug(EngineContext& ctx) override;
     bool requiresSceneColor() const;
     void drawComposite(EngineContext& ctx, sg_view scene_view);
+    void renderRegionEffectChain(EngineContext& ctx, sg_image scene_image, sg_view scene_view);
 
     void start() override;
     void stop() override;
@@ -138,6 +140,14 @@ class ImageLayer : public Layer {
             has_rendered = false;
         }
     };
+    struct ScreenRect {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float rotation = 0.0f;
+    };
+    ScreenRect screenRect(EngineContext& ctx) const;
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
     void loadPuppet(const char* mdl_rel_path, EngineContext& ctx);
@@ -153,6 +163,7 @@ class ImageLayer : public Layer {
 
    private:
     EffectTarget effect_targets[2];
+    EffectTarget region_source;
     int effect_target_width = 0;
     int effect_target_height = 0;
     sg_image effect_output_image = {SG_INVALID_ID};
