@@ -86,6 +86,7 @@ struct SceneState {
 
 struct DebugState {
     int selected_object = -1;
+    uint32_t selected_node_id = 0;
     bool show_ui = true;
     bool test_mode = false;
     bool particle_debug_bounds = false;

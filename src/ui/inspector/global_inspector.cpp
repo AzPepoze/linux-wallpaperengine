@@ -21,6 +21,10 @@ void GlobalInspector::show(EngineContext& ctx) {
     ImGui::Text("FPS: %.1f | Frame Time: %.2f ms", ImGui::GetIO().Framerate,
                 1000.0f / (ImGui::GetIO().Framerate > 0.0f ? ImGui::GetIO().Framerate : 60.0f));
 
+    ImGui::Separator();
+    ImGui::TextDisabled("Wallpaper Path");
+    ImGui::TextWrapped("%s", ctx.wallpaper_path[0] != '\0' ? ctx.wallpaper_path : "(none)");
+
     if (ImGui::CollapsingHeader("Camera & Optics", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputFloat3("Eye Position", ctx.scene.camera.eye.data());
         ImGui::InputFloat3("Center LookAt", ctx.scene.camera.center.data());
