@@ -215,7 +215,12 @@ void selectFirstPreview(EngineContext& ctx) {
 void Debugger::init() {
     simgui_desc_t desc = {};
     desc.logger.func = slog_func;
+    desc.disable_set_mouse_cursor = surface::hasProvider();
     simgui_setup(&desc);
+    if (surface::hasProvider()) {
+        ImGui::GetPlatformIO().Platform_SetClipboardTextFn = nullptr;
+        ImGui::GetPlatformIO().Platform_GetClipboardTextFn = nullptr;
+    }
 }
 
 void Debugger::startSandbox(EngineContext& ctx, SandboxProjectLoader loader) {

@@ -12,6 +12,10 @@ void setProvider(SurfaceProvider* provider) {
     g_provider = provider;
 }
 
+bool hasProvider() {
+    return g_provider != nullptr;
+}
+
 int width() {
     return g_provider ? g_provider->width() : sapp_width();
 }

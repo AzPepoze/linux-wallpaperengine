@@ -6,7 +6,7 @@
 // Presentation surface seen by the renderer. Defaults to the sokol_app window;
 // a platform backend (e.g. the Wayland layer surface) can install a provider.
 class SurfaceProvider {
-public:
+   public:
     virtual ~SurfaceProvider() = default;
     virtual int width() const = 0;
     virtual int height() const = 0;
@@ -19,6 +19,7 @@ public:
 
 namespace surface {
 void setProvider(SurfaceProvider* provider);
+bool hasProvider();
 int width();
 int height();
 float dpiScale();
