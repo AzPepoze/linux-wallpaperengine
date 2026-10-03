@@ -31,6 +31,8 @@ struct ParsedScene {
 class SceneBuilder {
    public:
     static ParsedScene buildFromDocument(const wallpaper_engine::SceneDocument& document, EngineContext& ctx);
+    static ParsedScene buildImageScene(const char* label, GfxImage image, float width, float height, scene_type_t type,
+                                       const char* path, EngineContext& ctx);
     static ParsedScene buildVideoScene(const char* video_path, EngineContext& ctx);
     static ParsedScene load(const char* scene_json_path, EngineContext& ctx);
 };

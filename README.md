@@ -15,6 +15,7 @@ Linux renderer for Wallpaper Engine projects.
 - FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`, `libswresample`)
 - VA-API development libraries (`libva`, `libva-drm`)
 - `libdrm`
+- Optional, for web wallpapers (`xmake f --web=y`): Qt6 WebEngine (`qt6-webengine`)
 - A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
 
 ### Dependencies managed by xmake
@@ -47,6 +48,12 @@ sudo pacman -S --needed \
 ```
 
 A Vulkan driver for your GPU is also required, for example `vulkan-radeon`, `vulkan-intel`, or the appropriate NVIDIA driver.
+
+Optional, for web wallpapers:
+
+```bash
+sudo pacman -S --needed qt6-webengine
+```
 
 For development checks:
 
@@ -95,7 +102,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 - [-] Scene wallpapers
 - [x] Video wallpapers (no audio yet)
-- [ ] Web wallpapers
+- [-] Web wallpapers (experimental, build with `xmake f --web=y`)
 - [ ] Application wallpapers
 
 ### Scene Layers & Assets
@@ -486,15 +493,15 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 ### Web Wallpapers
 
-- [ ] HTML
-- [ ] CSS
-- [ ] JavaScript
-- [ ] Local web assets
-- [ ] Web user properties
+- [x] HTML
+- [x] CSS
+- [x] JavaScript
+- [x] Local web assets
+- [-] Web user properties (project defaults only)
 - [ ] File properties
 - [ ] Directory properties
-- [ ] Audio visualization API
-- [ ] Media integration API
+- [-] Audio visualization API (silence only)
+- [-] Media integration API (no-op listeners)
 - [ ] RGB API
 - [ ] User-configurable FPS API
 - [ ] Web video playback

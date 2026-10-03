@@ -113,27 +113,43 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     const float w = desc.width > 0 ? (float)desc.width : 1920.0f;
     const float h = desc.height > 0 ? (float)desc.height : 1080.0f;
 
+    ParsedScene out = buildImageScene("[VideoLayer] Video Wallpaper", std::move(img), w, h, SCENE_TYPE_VIDEO,
+                                      resolved_path.empty() ? video_path : resolved_path.c_str(), ctx);
+
+    auto* layer = out.layers.empty() ? nullptr : static_cast<ImageLayer*>(out.layers.front());
+    if (layer) {
+        const auto* v = ctx.asset_mgr.findVideoTexture(layer->img);
+        if (!v && !layer->path.empty()) v = ctx.asset_mgr.findVideoTexture(layer->path);
+        if (v && v->decoder) layer->bound_video_decoder = v->decoder.get();
+
+        LOG_I("Built video wallpaper scene (%ux%u): %s", (uint32_t)w, (uint32_t)h, layer->path.c_str());
+    }
+    return out;
+}
+
+ParsedScene SceneBuilder::buildImageScene(const char* label, GfxImage image, float width, float height,
+                                          scene_type_t type, const char* path, EngineContext& ctx) {
     ParsedScene out;
-    out.type = SCENE_TYPE_VIDEO;
-    out.design_width = w;
-    out.design_height = h;
+    out.type = type;
+    out.design_width = width;
+    out.design_height = height;
     out.has_clear_color = true;
     out.clear_color[0] = 0.0f;
     out.clear_color[1] = 0.0f;
     out.clear_color[2] = 0.0f;
     out.clear_color[3] = 1.0f;
 
-    ctx.scene_w = w;
-    ctx.scene_h = h;
+    ctx.scene_w = width;
+    ctx.scene_h = height;
 
-    auto* layer = new ImageLayer("Video Layer", std::move(img));
-    layer->path = resolved_path.empty() ? video_path : resolved_path;
+    auto* layer = new ImageLayer(label, std::move(image));
+    layer->path = path ? path : "";
     layer->scene_object_id = 1;
     layer->visible = true;
-    layer->size[0] = w;
-    layer->size[1] = h;
-    layer->origin[0] = w * 0.5f;
-    layer->origin[1] = h * 0.5f;
+    layer->size[0] = width;
+    layer->size[1] = height;
+    layer->origin[0] = width * 0.5f;
+    layer->origin[1] = height * 0.5f;
     layer->origin[2] = 0.0f;
     layer->scale[0] = 1.0f;
     layer->scale[1] = 1.0f;
@@ -147,18 +163,14 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     view_desc.texture.image = layer->img;
     layer->cached_view = sg_make_view(&view_desc);
 
-    const auto* v = ctx.asset_mgr.findVideoTexture(layer->img);
-    if (!v && !layer->path.empty()) v = ctx.asset_mgr.findVideoTexture(layer->path);
-    if (v && v->decoder) layer->bound_video_decoder = v->decoder.get();
-
     out.layers.push_back(layer);
 
     out.scene_tree = new SceneTree();
     SceneTreeNode node;
     node.id = 1;
     node.parent_id = 0;
-    node.name = "[VideoLayer] Video Wallpaper";
-    node.origin = {w * 0.5f, h * 0.5f, 0.0f};
+    node.name = label;
+    node.origin = {width * 0.5f, height * 0.5f, 0.0f};
     node.scale = {1.0f, 1.0f, 1.0f};
     node.angles = {0.0f, 0.0f, 0.0f};
     node.parallax_depth = {0.0f, 0.0f};
@@ -166,6 +178,5 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     out.scene_tree->addNode(node);
     out.scene_tree->rebuildHierarchy();
 
-    LOG_I("Built video wallpaper scene (%ux%u): %s", (uint32_t)w, (uint32_t)h, layer->path.c_str());
     return out;
 }

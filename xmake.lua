@@ -14,6 +14,18 @@ add_requires("stb")
 add_requires("miniaudio")
 add_requires("imgui", {optional = true})
 
+-- Off by default: the core engine build has no Qt dependency. Enable with
+-- `xmake f --web=y` to build the QtWebEngine helper used by web wallpapers.
+option("web")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable Qt6 WebEngine web wallpaper rendering")
+option_end()
+
+if has_config("web") then
+    add_requires("pkgconfig::Qt6WebEngineWidgets")
+end
+
 target("linux-wallpaperengine")
     set_kind("binary")
     set_targetdir("bin/$(mode)")
@@ -22,18 +34,44 @@ target("linux-wallpaperengine")
     add_packages("sokol", "linmath.h", "vulkan-headers", "lz4", "cjson", "stb", "miniaudio")
     add_includedirs("src", "/usr/include/libdrm", "/usr/include/shader-slang")
     add_syslinks("slang-compiler", "slang-rt", "vulkan", "X11", "Xcursor", "Xi", "avformat", "avcodec", "avutil", "swscale", "swresample", "va", "va-drm", "drm", "dl", "m", "pthread")
+    add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
 
     if is_mode("debug", "asan", "ubsan") then
-        add_files("src/**.cpp")
+        add_files("src/**.cpp|wallpaper/web/web_renderer_main.cpp")
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
-        add_files("src/**.cpp|ui/**.cpp")
+        add_files("src/**.cpp|ui/**.cpp|wallpaper/web/web_renderer_main.cpp")
         add_defines("DEBUG_BUILD=0")
         set_symbols("hidden")
         set_optimize("fastest")
         set_strip("all")
     end
+
+-- Optional out-of-process QtWebEngine renderer for web wallpapers. Kept in a
+-- separate target so Qt headers and warning flags never touch the core build.
+if has_config("web") then
+    target("linux-wallpaperengine-webrender")
+        set_kind("binary")
+        set_targetdir("bin/$(mode)")
+        set_rundir("$(projectdir)")
+        add_files("src/wallpaper/web/web_renderer_main.cpp")
+        add_includedirs("src")
+        add_packages("pkgconfig::Qt6WebEngineWidgets")
+        add_syslinks("pthread", "dl")
+        -- Recent GCC emits copy relocations against Qt's protected
+        -- staticMetaObject symbols; a PIC object avoids them.
+        add_cxflags("-fPIC")
+        add_ldflags("-pie")
+        if is_mode("debug", "asan", "ubsan") then
+            add_defines("DEBUG_BUILD=1")
+        else
+            add_defines("DEBUG_BUILD=0")
+            set_optimize("fastest")
+            set_strip("all")
+        end
+    target_end()
+end
 
 -- Synthetic unit checks. Not built by default; run explicitly with `xmake build tests`.
 target("tests")

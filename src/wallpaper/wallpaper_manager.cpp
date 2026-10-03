@@ -7,10 +7,12 @@
 
 #include <cstring>
 
+#include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/video/video_wallpaper.h"
+#include "wallpaper/web/web_wallpaper.h"
 
 namespace {
 void initAssetContext(const std::string& asset_root, EngineContext& ctx) {
@@ -73,13 +75,17 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
             free(json_str);
             if (root) {
                 cJSON* type_item = cJSON_GetObjectItemCaseSensitive(root, "type");
+                bool is_web = false;
                 if (cJSON_IsString(type_item) && type_item->valuestring && type_item->valuestring[0] != '\0') {
-                    if (strcasecmp(type_item->valuestring, "web") == 0) {
-                        LOG_TAG_E("WALLPAPER_MGR", "web wallpapers are not supported yet");
+                    is_web = strcasecmp(type_item->valuestring, "web") == 0;
+                    if (is_web) {
+#if !LWE_WEB
+                        LOG_TAG_E("WALLPAPER_MGR", "built without web support (xmake f --web=y)");
                         cJSON_Delete(root);
                         return false;
+#endif
                     }
-                    if (strcasecmp(type_item->valuestring, "scene") != 0 &&
+                    if (!is_web && strcasecmp(type_item->valuestring, "scene") != 0 &&
                         strcasecmp(type_item->valuestring, "video") != 0) {
                         LOG_TAG_E("WALLPAPER_MGR", "Unsupported wallpaper type: %s", type_item->valuestring);
                         cJSON_Delete(root);
@@ -94,6 +100,16 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
                         clear();
                         initAssetContext(scene_directory, ctx);
 
+#if LWE_WEB
+                        if (is_web) {
+                            auto web_wp = std::make_unique<WebWallpaper>(ctx);
+                            if (web_wp->load(target_file, ctx)) {
+                                active_wallpaper_ = std::move(web_wp);
+                                return true;
+                            }
+                            return false;
+                        }
+#endif
                         if (isVideoFile(target_file.c_str())) {
                             auto video_wp = std::make_unique<VideoWallpaper>(ctx);
                             if (video_wp->load(target_file, ctx)) {
