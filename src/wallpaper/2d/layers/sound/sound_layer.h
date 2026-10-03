@@ -20,10 +20,12 @@ class SoundLayer : public Layer {
     void draw(EngineContext&) override {}
     void start() override;
     void stop() override;
+    void setVisible(bool v) override;
 
    private:
     void playCurrent();
     void advance();
+    void applyVolume();
 
     wallpaper_engine::SoundObjectDocument doc;
     std::vector<std::string> paths;
