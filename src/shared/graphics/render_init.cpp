@@ -282,6 +282,29 @@ void renderer_init(renderer_t* r, float w, float h) {
     unpremul_desc.colors[0].blend = {};
     r->pip_unpremul = sg_make_pipeline(&unpremul_desc);
 
+    // Present pass: gentle highlight roll-off so additive HDR effects do not
+    // hard-clip to flat white. Identity below the knee, asymptotes to 1 above.
+    const std::string present_fragment_source =
+        "#version 330\n"
+        "precision mediump float;\n"
+        "uniform sampler2D tex;\n"
+        "uniform vec4 tint;\n"
+        "in vec2 uv;\n"
+        "out vec4 frag_color;\n"
+        "void main() {\n"
+        "  vec4 c = texture(tex, uv) * tint;\n"
+        "  vec3 x = max(c.rgb, vec3(0.0));\n"
+        "  const float knee = 0.75;\n"
+        "  const float range = 1.0 - knee;\n"
+        "  vec3 rolled = knee + range * (vec3(1.0) - exp(-max(x - knee, vec3(0.0)) / range));\n"
+        "  x = mix(x, rolled, step(vec3(knee), x));\n"
+        "  frag_color = vec4(x, c.a);\n"
+        "}\n";
+    sg_pipeline_desc present_desc = pip_desc;
+    present_desc.shader = create_backend_shader(&shd_desc, vertex_source, present_fragment_source, "renderer-present");
+    present_desc.colors[0].blend = {};
+    r->pip_present = sg_make_pipeline(&present_desc);
+
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
     r->pip_add = sg_make_pipeline(&pip_desc);
@@ -374,6 +397,7 @@ void renderer_cleanup(renderer_t* r) {
     r->pip_copy = {};
     r->pip_add = {};
     r->pip_unpremul = {};
+    r->pip_present = {};
     r->pip_lines = {};
     r->pip_mesh = {};
     for (auto& pipeline : r->pip_image_composite) pipeline = {};

@@ -205,6 +205,32 @@ void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float wid
     r->bind.index_buffer = r->index_buffer;
 }
 
+void renderer_present(renderer_t* r, sg_view source_view, float width, float height) {
+    if (r->pip_present.id == SG_INVALID_ID || source_view.id == SG_INVALID_ID) return;
+    mat4x4 proj, model, mvp;
+    mat4x4_ortho(proj, 0, width, height, 0, -1.0f, 1.0f);
+    mat4x4_identity(model);
+    mat4x4_scale_aniso(model, model, width, height, 1.0f);
+    mat4x4_mul(mvp, proj, model);
+
+    for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; ++i) r->bind.samplers[i] = r->smp_clamp;
+    r->bind.views[0] = source_view;
+    for (int i = 1; i < 12; ++i) r->bind.views[i] = r->black_view;
+    sg_apply_pipeline(r->pip_present);
+    sg_range mvp_range = SG_RANGE(mvp);
+    sg_apply_uniforms(0, &mvp_range);
+    const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    sg_range tint_range = {.ptr = white, .size = sizeof(white)};
+    sg_apply_uniforms(1, &tint_range);
+    sg_apply_bindings(&r->bind);
+    sg_draw(0, 6, 1);
+    r->draw_calls++;
+
+    for (int i = 0; i < 12; i++) r->bind.views[i] = (sg_view){SG_INVALID_ID};
+    r->bind.vertex_buffers[0] = r->vertex_buffer;
+    r->bind.index_buffer = r->index_buffer;
+}
+
 void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image image, sg_view image_view,
                                    sg_view scene_view, float x, float y, float width, float height, float rotation,
                                    float tint[4], int blend_mode) {

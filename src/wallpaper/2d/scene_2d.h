@@ -83,6 +83,7 @@ class Scene2DRuntime {
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];
     int scene_output_index = -1;
+    bool float_composition_available_ = true;
     class ShaderPass* bloom_pass_extract = nullptr;
     class ShaderPass* bloom_pass_blur_v = nullptr;
     class ShaderPass* bloom_pass_blur_h = nullptr;

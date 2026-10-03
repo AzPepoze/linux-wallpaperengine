@@ -67,9 +67,9 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
 }
 
 sg_pixel_format Scene2DRuntime::compositionPixelFormat() const {
-    if (!ctx.scene.general.hdr) return SG_PIXELFORMAT_RGBA8;
-    // Float attachment preserves HDR bloom energy; drivers without it fail creation and retry RGBA8.
-    return SG_PIXELFORMAT_RGBA16F;
+    // Float composition preserves additive HDR energy (lens flares, glows); the
+    // present pass rolls the highlights off instead of clipping them to white.
+    return float_composition_available_ ? SG_PIXELFORMAT_RGBA16F : SG_PIXELFORMAT_RGBA8;
 }
 
 bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
@@ -89,6 +89,16 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
         !scene_targets[1].create(width, height, requested_format)) {
         scene_targets[0].reset();
         scene_targets[1].reset();
+        // Drivers without a float attachment fall back to the LDR format.
+        if (requested_format == SG_PIXELFORMAT_RGBA16F) {
+            float_composition_available_ = false;
+            if (scene_targets[0].create(width, height, SG_PIXELFORMAT_RGBA8) &&
+                scene_targets[1].create(width, height, SG_PIXELFORMAT_RGBA8)) {
+                return true;
+            }
+            scene_targets[0].reset();
+            scene_targets[1].reset();
+        }
         return false;
     }
     return true;
@@ -128,9 +138,7 @@ void Scene2DRuntime::present() {
     }
 
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    renderer_draw_sprite(ctx, &ctx.renderer, target.image, target.texture_view, 0.0f, 0.0f, (float)width, (float)height,
-                         0.0f, white, false, nullptr);
+    renderer_present(&ctx.renderer, target.texture_view, (float)width, (float)height);
 
     if (has_output_viewport) {
         sg_apply_viewport(0, 0, surface::width(), surface::height(), true);

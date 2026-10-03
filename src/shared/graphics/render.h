@@ -39,6 +39,7 @@ struct renderer_t {
     GfxPipeline pip_copy;
     GfxPipeline pip_add;
     GfxPipeline pip_unpremul;
+    GfxPipeline pip_present;
     GfxPipeline pip_lines;
     GfxPipeline pip_mesh;
     GfxPipeline pip_image_composite[31];
@@ -113,6 +114,11 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 // buffers, tinted by the material texture and mapped into a width x height
 // top-left pixel space.
 void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float width, float height);
+
+// Presents the composed scene to the current target, applying a gentle
+// highlight roll-off so additive effects (lens flares, glows) do not hard-clip
+// to flat white. Values at or below the knee pass through unchanged.
+void renderer_present(renderer_t* r, sg_view source_view, float width, float height);
 
 void renderer_draw_mesh(EngineContext& ctx, renderer_t* r, sg_buffer position_buffer, sg_buffer uv_buffer,
                         sg_buffer index_buffer, int index_count, sg_image image, sg_view main_view, const float tint[4],
