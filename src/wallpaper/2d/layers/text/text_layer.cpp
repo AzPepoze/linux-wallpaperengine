@@ -193,9 +193,7 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     if (!doc.text.script.empty()) {
         layer->script_ = std::make_unique<SceneScript>();
         if (layer->script_->load(doc.text.script, doc.text.script_properties_json)) {
-            // Evaluate on the first update so the live content replaces the
-            // authoring-time default right away.
-            layer->script_timer_ = 1.0f;
+            layer->script_timer_ = 1.0f;  // evaluate on the first update
             LOG_I("Text layer '%s': SceneScript loaded", config.name.c_str());
         } else {
             layer->script_.reset();
@@ -209,8 +207,7 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
 void TextLayer::update(float dt, EngineContext& ctx) {
     if (script_ && script_->valid()) {
         script_timer_ += dt;
-        // Clocks tick on the second; a few evaluations per second is plenty.
-        if (script_timer_ >= 0.25f) {
+        if (script_timer_ >= 0.25f) {  // a few evaluations per second
             script_timer_ = 0.0f;
             std::string evaluated;
             if (script_->update(current_text_, evaluated) && !evaluated.empty()) {

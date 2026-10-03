@@ -81,9 +81,7 @@ struct ParticleObjectDocument {
 
 struct TextObjectDocument {
     std::string text;
-    // Wallpaper Engine SceneScript for this text (ES module source). Empty when
-    // the text is static. `script_properties_json` holds the raw
-    // `scriptproperties` object so the runtime can apply user/author overrides.
+    // SceneScript source (ES module) and the raw `scriptproperties` overrides.
     std::string script;
     std::string script_properties_json;
     std::string font;

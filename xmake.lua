@@ -13,7 +13,7 @@ add_requires("cjson")
 add_requires("stb")
 add_requires("miniaudio")
 add_requires("imgui", {optional = true})
--- Embedded JS engine for Wallpaper Engine SceneScript (clocks, media titles, ...).
+-- SceneScript (clock/date text) runs on an embedded QuickJS engine.
 add_requires("quickjs")
 
 -- Off by default: the core engine build has no Qt dependency. Enable with

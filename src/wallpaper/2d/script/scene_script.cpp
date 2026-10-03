@@ -9,8 +9,7 @@
 #define TAG "SCRIPT"
 
 namespace {
-// Wallpaper Engine property builder + the globals text scripts expect. The
-// builder records each declared property's default; `finish()` returns the
+// WE property builder + globals text scripts expect; `finish()` yields the
 // object a script stores as `scriptProperties`.
 constexpr const char* kPrelude = R"JS(
 var __lweScriptProperties = {};
@@ -40,8 +39,8 @@ function createScriptProperties() {
 }
 )JS";
 
-// Merges the scene's `scriptproperties` over the script-declared defaults,
-// unwrapping the `{ user, value }` form WE uses for user-bound properties.
+// Merges `scriptproperties` over the script defaults, unwrapping WE's
+// `{ user, value }` form.
 constexpr const char* kMergeOverrides =
     "if (typeof scriptProperties === 'object' && scriptProperties !== null && typeof __lweOverrides === 'object') {\n"
     "  Object.keys(__lweOverrides).forEach(function (key) {\n"
@@ -51,8 +50,7 @@ constexpr const char* kMergeOverrides =
     "  });\n"
     "}\n";
 
-// Removes the ES module `export` keywords so the script evaluates in the global
-// scope, where `update` / `mediaPropertiesChanged` can be called directly.
+// Drops the ES module `export` keywords so the script runs in global scope.
 std::string stripModuleSyntax(const std::string& source) {
     std::string out;
     out.reserve(source.size());
@@ -90,7 +88,9 @@ SceneScript::~SceneScript() {
     if (impl_->runtime) JS_FreeRuntime(impl_->runtime);
 }
 
-bool SceneScript::valid() const { return impl_ && impl_->context != nullptr && impl_->has_update; }
+bool SceneScript::valid() const {
+    return impl_ && impl_->context != nullptr && impl_->has_update;
+}
 
 bool SceneScript::load(const std::string& source, const std::string& script_properties_json) {
     if (source.empty() || !impl_ || impl_->context) return false;
