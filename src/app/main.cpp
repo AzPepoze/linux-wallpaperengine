@@ -1,30 +1,27 @@
 #define SOKOL_VULKAN
-#include <cjson/cJSON.h>
-#include <dirent.h>
-#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include <sys/prctl.h>
 
-#include "shared/assets/unpack.h"
+#include "app/cli_options.h"
+#include "app/frame_loop.h"
+#include "app/package_extractor.h"
+#include "app/signals.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
-#include "shared/core/config.h"
 #include "shared/core/context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/backend/sokol/sokol_sync.h"
 #include "sokol_app.h"
-#include "sokol_args.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_log.h"
 #include "sokol_time.h"
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
-#include "wallpaper/video/video_wallpaper.h"
 #include "wallpaper/wallpaper_manager.h"
 
 #if DEBUG_BUILD
@@ -33,29 +30,10 @@
 #include "util/sokol_imgui.h"
 #endif
 
-#include <signal.h>
-#include <sys/prctl.h>
-
-#include <atomic>
-
-#include "shared/graphics/backend/sokol/sokol_sync.h"
-
 namespace {
 WallpaperManager wallpaper_mgr;
-std::atomic<bool> g_terminating{false};
-
-void crash_signal_handler(int sig) {
-    LOG_E("[CRASH] Fatal signal %d (%s) received", sig, (sig == SIGSEGV) ? "SIGSEGV" : "SIGABRT");
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
-
-void termination_signal_handler(int sig) {
-    LOG_I("[SIGNAL] Caught signal %d (%s), requesting clean quit...", sig, (sig == SIGINT) ? "SIGINT" : "SIGTERM");
-    g_terminating.store(true, std::memory_order_relaxed);
-    signal(sig, SIG_DFL);
-    sapp_request_quit();
-}
+CliOptions cli;
+WallpaperSource wallpaper_source;
 }  // namespace
 
 static EngineContext ctx;
@@ -73,46 +51,24 @@ static bool loadSandboxPreviewScene(const char* scene_path) {
 }
 #endif
 
-static void init(void) {
-    logger_init(LOG_LEVEL_DEBUG);
-#if DEBUG_BUILD
-    // Distinguish this test binary in kernel GPU-fault logs ("comm" field)
-    // from other concurrently running wallpaper engine instances.
-    prctl(PR_SET_NAME, "lwe-debug-repo", 0, 0, 0);
-#endif
-    signal(SIGSEGV, crash_signal_handler);
-    signal(SIGABRT, crash_signal_handler);
-    signal(SIGINT, termination_signal_handler);
-    signal(SIGTERM, termination_signal_handler);
-    stm_setup();
-    GpuDeviceManager::instance().init();
+static void logActiveGpu() {
     const auto& active_gpu = GpuDeviceManager::instance().getSelectedGpu();
     LOG_I("[GPU] Active GPU [%u]: %s (%s, PCI: %s, DRM: %s, VA-API: %s)", active_gpu.index, active_gpu.name.c_str(),
           active_gpu.device_type.c_str(), active_gpu.pci_bus_id.empty() ? "N/A" : active_gpu.pci_bus_id.c_str(),
           active_gpu.drm_render_node.empty() ? "N/A" : active_gpu.drm_render_node.c_str(),
           active_gpu.vaapi_supported ? "Supported" : "N/A");
+}
 
-    if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
-        LOG_E("A Wallpaper Engine installation with its original assets is required");
-        exit(EXIT_FAILURE);
-    }
-    ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
-
-    const char* no_audio_env = getenv("LWE_NO_AUDIO");
-    const bool audio_disabled = sargs_exists("no-audio") || sargs_exists("--no-audio") ||
-                                (no_audio_env && no_audio_env[0] && strcmp(no_audio_env, "0") != 0);
-    if (audio_disabled) {
+static void initAudio() {
+    if (cli.no_audio) {
         LOG_TAG_I("AUDIO", "audio disabled");
         AudioEngine::instance().setAudioDisabled(true);
     } else {
         AudioEngine::instance().init();
     }
-#if DEBUG_BUILD
-    const bool enable_diagnostics = sargs_exists("diagnose") || sargs_exists("--diagnose") ||
-                                    sargs_exists("diagnostics") || sargs_exists("--diagnostics");
-    RenderDiagnostics::instance().init(enable_diagnostics);
-#endif
+}
 
+static void initGraphics() {
     sg_desc s_desc = {};
     s_desc.environment = sglue_environment();
     s_desc.logger.func = slog_func;
@@ -125,30 +81,60 @@ static void init(void) {
     s_desc.vulkan.descriptor_buffer_size = 64 * 1024 * 1024;
     s_desc.vulkan.stream_staging_buffer_size = 64 * 1024 * 1024;
     sg_setup(&s_desc);
+}
 
-#if DEBUG_BUILD
-    Debugger::init();
-#endif
-
+static void applyCliToContext() {
     ctx.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
     ctx.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
 
-    ctx.show_ui = DEBUG_BUILD;
-#if DEBUG_BUILD
-    if (sargs_exists("no-ui") || sargs_exists("--no-ui")) ctx.show_ui = false;
-#endif
+    ctx.show_ui = DEBUG_BUILD && !cli.no_ui;
     ctx.selected_object = -1;
-    ctx.scaling_mode = sargs_exists("cover") ? SCALING_COVER : SCALING_FIT;
-    ctx.particle_debug_bounds = sargs_exists("particle-debug-bounds") || sargs_exists("particle-debug");
-    ctx.particle_debug_velocity = sargs_exists("particle-debug-velocity") || sargs_exists("particle-debug");
-    if (sargs_exists("particle-debug-velocity-scale")) {
-        const float value = (float)atof(sargs_value("particle-debug-velocity-scale"));
-        if (value > 0.0f) ctx.particle_debug_velocity_scale = value;
+    ctx.scaling_mode = cli.cover ? SCALING_COVER : SCALING_FIT;
+    ctx.particle_debug_bounds = cli.particle_debug_bounds;
+    ctx.particle_debug_velocity = cli.particle_debug_velocity;
+    if (cli.particle_debug_velocity_scale > 0.0f) ctx.particle_debug_velocity_scale = cli.particle_debug_velocity_scale;
+    if (cli.particle_debug_max_particles > 0) ctx.particle_debug_max_particles = cli.particle_debug_max_particles;
+}
+
+static void loadInitialWallpaper() {
+    if (WallpaperManager::isVideoFile(ctx.wallpaper_path)) {
+        wallpaper_mgr.load(ctx.wallpaper_path, ctx);
+        return;
     }
-    if (sargs_exists("particle-debug-max-particles")) {
-        const int value = atoi(sargs_value("particle-debug-max-particles"));
-        if (value > 0) ctx.particle_debug_max_particles = value;
+    strcpy(ctx.asset_root, "extracted");
+    ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
+    const std::string asset_root = prepareAssetRoot(wallpaper_source);
+    strncpy(ctx.asset_root, asset_root.c_str(), sizeof(ctx.asset_root) - 1);
+    wallpaper_mgr.load(ctx.asset_root, ctx);
+}
+
+static void init(void) {
+    logger_init(LOG_LEVEL_DEBUG);
+#if DEBUG_BUILD
+    // Distinguish this test binary in kernel GPU-fault logs ("comm" field)
+    // from other concurrently running wallpaper engine instances.
+    prctl(PR_SET_NAME, "lwe-debug-repo", 0, 0, 0);
+#endif
+    installSignalHandlers();
+    stm_setup();
+    GpuDeviceManager::instance().init();
+    logActiveGpu();
+
+    if (!detect_engine_path(ctx.engine_path, sizeof(ctx.engine_path))) {
+        LOG_E("A Wallpaper Engine installation with its original assets is required");
+        exit(EXIT_FAILURE);
     }
+    ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
+
+    initAudio();
+#if DEBUG_BUILD
+    RenderDiagnostics::instance().init(cli.diagnose);
+#endif
+    initGraphics();
+#if DEBUG_BUILD
+    Debugger::init();
+#endif
+    applyCliToContext();
 
 #if DEBUG_BUILD
     if (ctx.runtime_mode == RuntimeMode::Sandbox) {
@@ -158,156 +144,16 @@ static void init(void) {
     }
 #endif
 
-    if (ctx.wallpaper_path[0] != '\0') {
-        if (WallpaperManager::isVideoFile(ctx.wallpaper_path)) {
-            wallpaper_mgr.load(ctx.wallpaper_path, ctx);
-        } else {
-            mkdir("extracted", 0755);
-            strcpy(ctx.asset_root, "extracted");
-            ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
-
-            if (ctx.is_pkg)
-                extract_pkg(ctx.wallpaper_path, "extracted");
-            else {
-                char pkg_file[1024];
-                snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
-                if (access(pkg_file, F_OK) == 0)
-                    extract_pkg(pkg_file, "extracted");
-                else {
-                    strncpy(ctx.asset_root, ctx.wallpaper_path, sizeof(ctx.asset_root) - 1);
-                    ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-                }
-            }
-            wallpaper_mgr.load(ctx.asset_root, ctx);
-        }
-    }
+    if (ctx.wallpaper_path[0] != '\0') loadInitialWallpaper();
     LOG_I("Linux Wallpaper Engine Initialized");
 }
 
 static void frame(void) {
-#if DEBUG_BUILD
-    const uint64_t frame_start = stm_now();
-#endif
-    ctx.renderer.draw_calls = 0;
-
-#if DEBUG_BUILD
-    RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
-    const uint64_t update_start = stm_now();
-#endif
-
-    Scene2DRuntime* runtime = nullptr;
-    if (auto* s2d = dynamic_cast<Scene2DWallpaper*>(wallpaper_mgr.getActiveWallpaper())) {
-        runtime = s2d->getRuntime();
-    }
-
-#if DEBUG_BUILD
-    if (ctx.runtime_mode == RuntimeMode::Sandbox && runtime) {
-        const SandboxPreviewRect preview_rect = Debugger::sandboxPreviewRect();
-        if (preview_rect.width > 0 && preview_rect.height > 0) {
-            runtime->setOutputViewport(preview_rect.x, preview_rect.y, preview_rect.width, preview_rect.height);
-        } else {
-            runtime->resetOutputViewport();
-        }
-    }
-#endif
-    if (runtime) {
-        runtime->updateViewport();
-    }
-
-    // Inspector edits are intentionally runtime-only. Rebuild the clear pass
-    // every frame so direct and offscreen composition see the same live state.
-    ctx.pass_action.colors[0].load_action = ctx.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
-    ctx.pass_action.colors[0].clear_value = {ctx.general.clear_color[0], ctx.general.clear_color[1],
-                                             ctx.general.clear_color[2], ctx.general.clear_color[3]};
-    float dt = (float)sapp_frame_duration();
-    ctx.time += dt;
-    AudioEngine::instance().update(dt);
-
-    ctx.asset_mgr.updateVideoTextures(dt, ctx.layers);
-    parallax_update(ctx, dt, sapp_width(), sapp_height());
-    wallpaper_mgr.update(dt, ctx);
-
-#if DEBUG_BUILD
-    ctx.profiler.update_ms = stm_ms(stm_since(update_start));
-    const uint64_t render_start = stm_now();
-#endif
-
-    const bool offscreen_composition = runtime ? runtime->requiresOffscreenComposition() : false;
-    if (offscreen_composition && runtime) runtime->draw();
-
-    sg_pass pass = {};
-    pass.action = ctx.pass_action;
-    pass.swapchain = sglue_swapchain();
-    sg_begin_pass(&pass);
-
-    if (offscreen_composition && runtime)
-        runtime->present();
-    else if (runtime)
-        runtime->draw();
-
-    if (runtime) runtime->drawParticleDiagnostics();
-
-#if DEBUG_BUILD
-    ctx.profiler.render_ms = stm_ms(stm_since(render_start));
-
-    const uint64_t ui_start = stm_now();
-    Debugger::draw(ctx);
-    ctx.profiler.ui_ms = stm_ms(stm_since(ui_start));
-#endif
-
-    sg_end_pass();
-    sg_commit();
-
-#if DEBUG_BUILD
-    RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);
-    ctx.profiler.frame_ms = stm_ms(stm_since(frame_start));
-    ctx.profiler.draw_calls = ctx.renderer.draw_calls;
-    ctx.profiler.frame_index++;
-
-    if (ctx.profiler.frame_index == 1) {
-        ctx.profiler.frame_avg_ms = ctx.profiler.frame_ms;
-    } else {
-        ctx.profiler.frame_avg_ms += (ctx.profiler.frame_ms - ctx.profiler.frame_avg_ms) * 0.05;
-    }
-    if (ctx.profiler.frame_ms > ctx.profiler.frame_peak_ms) ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
-
-    ctx.profiler.sample_timer += ctx.profiler.frame_ms * 0.001;
-    if (ctx.profiler.sample_timer >= ctx.profiler.sample_interval) {
-        ctx.profiler.sample_timer = 0.0;
-        ctx.profiler.frame_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.frame_ms);
-        ctx.profiler.update_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.update_ms);
-        ctx.profiler.render_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.render_ms);
-        ctx.profiler.ui_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.ui_ms);
-        ctx.profiler.history_offset = (ctx.profiler.history_offset + 1) % profiler_stats_t::HISTORY_SIZE;
-    }
-#endif
+    runFrame(ctx, wallpaper_mgr);
 }
 
 static void event(const sapp_event* e) {
-    if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
-        ctx.mouse_x = e->mouse_x;
-        ctx.mouse_y = e->mouse_y;
-        ctx.mouse_position_valid = true;
-    } else if (e->type == SAPP_EVENTTYPE_QUIT_REQUESTED) {
-        LOG_I("[APP] Received quit request from window/system");
-    } else if (e->type == SAPP_EVENTTYPE_RESIZED) {
-        LOG_I("[APP] Window resized: window=%dx%d, framebuffer=%dx%d", e->window_width, e->window_height,
-              e->framebuffer_width, e->framebuffer_height);
-    } else if (e->type == SAPP_EVENTTYPE_SUSPENDED) {
-        LOG_I("[APP] Application suspended");
-    } else if (e->type == SAPP_EVENTTYPE_RESUMED) {
-        LOG_I("[APP] Application resumed");
-    }
-
-    wallpaper_mgr.handleInput(e, ctx);
-
-#if DEBUG_BUILD
-    if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) {
-        ctx.show_ui = !ctx.show_ui;
-        return;
-    }
-    if (simgui_handle_event(e)) return;
-#endif
+    handleAppEvent(e, ctx, wallpaper_mgr);
 }
 
 static void cleanup(void) {
@@ -315,23 +161,17 @@ static void cleanup(void) {
     lwe_vk_wait_idle();
 
 #if DEBUG_BUILD
-    RenderDiagnostics::instance().shutdown(g_terminating.load(std::memory_order_relaxed));
+    RenderDiagnostics::instance().shutdown(terminationRequested());
 #endif
 
     wallpaper_mgr.clear();
-
     ctx.asset_mgr.clearVideoTextures();
-
     AudioEngine::instance().shutdown();
-
     renderer_cleanup(&ctx.renderer);
 
 #if DEBUG_BUILD
     simgui_shutdown();
-#else
 #endif
-
-    sargs_shutdown();
 
     lwe_vk_wait_idle();
     sg_shutdown();
@@ -339,85 +179,26 @@ static void cleanup(void) {
     LOG_I("[APP] Shutdown complete");
 }
 
-extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
-    logger_init(LOG_LEVEL_DEBUG);
-    sargs_desc a_desc = {};
-    a_desc.argc = argc;
-    a_desc.argv = argv;
-    a_desc.max_args = 64;
-    sargs_setup(&a_desc);
-
+static void selectRequestedGpu() {
     GpuDeviceManager::instance().init();
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--gpu") == 0 || strcmp(argv[i], "-gpu") == 0) {
-            if (i + 1 < argc) GpuDeviceManager::instance().selectGpu(argv[i + 1]);
-        } else if (strncmp(argv[i], "--gpu=", 6) == 0) {
-            GpuDeviceManager::instance().selectGpu(argv[i] + 6);
-        }
-    }
-
-    if (sargs_exists("gpu") && sargs_value("gpu")) {
-        GpuDeviceManager::instance().selectGpu(sargs_value("gpu"));
-    }
-
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--list-gpus") == 0 || strcmp(argv[i], "-list-gpus") == 0) {
-            GpuDeviceManager::instance().printGpuList();
-            exit(0);
-        }
-    }
-    if (sargs_exists("list-gpus") || sargs_exists("--list-gpus")) {
+    if (!cli.gpu.empty()) GpuDeviceManager::instance().selectGpu(cli.gpu.c_str());
+    if (cli.list_gpus) {
         GpuDeviceManager::instance().printGpuList();
         exit(0);
     }
+}
 
-#if DEBUG_BUILD
-    if (sargs_exists("sandbox") || sargs_exists("--sandbox")) ctx.runtime_mode = RuntimeMode::Sandbox;
-#endif
+extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
+    logger_init(LOG_LEVEL_DEBUG);
+    cli = CliOptions::parse(argc, argv);
+    selectRequestedGpu();
 
-    if (ctx.runtime_mode != RuntimeMode::Sandbox && sargs_exists("pkg")) {
-        strncpy(ctx.wallpaper_path, sargs_value("pkg"), sizeof(ctx.wallpaper_path) - 1);
-        ctx.is_pkg = true;
-    } else if (ctx.runtime_mode != RuntimeMode::Sandbox && argc > 1 && argv[argc - 1][0] != '-') {
-        strncpy(ctx.wallpaper_path, argv[argc - 1], sizeof(ctx.wallpaper_path) - 1);
-    } else if (ctx.runtime_mode != RuntimeMode::Sandbox) {
-        detect_default_wallpaper(ctx.wallpaper_path, sizeof(ctx.wallpaper_path));
-    }
+    if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
+    wallpaper_source = resolveWallpaperSource(cli);
+    strncpy(ctx.wallpaper_path, wallpaper_source.path.c_str(), sizeof(ctx.wallpaper_path) - 1);
+    ctx.is_pkg = wallpaper_source.is_pkg;
 
-    if (ctx.wallpaper_path[0] != '\0' && !ctx.is_pkg) {
-        size_t len = strlen(ctx.wallpaper_path);
-        if (len >= 4 && strcmp(ctx.wallpaper_path + len - 4, ".pkg") == 0) ctx.is_pkg = true;
-    }
-
-    const bool extract_only = sargs_exists("extract-only") || sargs_exists("--extract-only");
-    if (extract_only && ctx.wallpaper_path[0] != '\0') {
-        char out_dir[1024] = {};
-        if (sargs_exists("extract-dir")) {
-            strncpy(out_dir, sargs_value("extract-dir"), sizeof(out_dir) - 1);
-        } else {
-            char wp_copy[1024];
-            strncpy(wp_copy, ctx.wallpaper_path, sizeof(wp_copy) - 1);
-            const char* wp_name = basename(wp_copy);
-            snprintf(out_dir, sizeof(out_dir), "extracted/%s", wp_name);
-        }
-        mkdir("extracted", 0755);
-        mkdir(out_dir, 0755);
-
-        char pkg_file[1024];
-        if (ctx.is_pkg) {
-            strncpy(pkg_file, ctx.wallpaper_path, sizeof(pkg_file) - 1);
-        } else {
-            snprintf(pkg_file, sizeof(pkg_file), "%s/scene.pkg", ctx.wallpaper_path);
-        }
-
-        if (access(pkg_file, F_OK) == 0) {
-            const bool ok = extract_pkg(pkg_file, out_dir);
-            exit(ok ? EXIT_SUCCESS : EXIT_FAILURE);
-        } else {
-            fprintf(stderr, "extract-only: no scene.pkg found at %s\n", pkg_file);
-            exit(EXIT_FAILURE);
-        }
-    }
+    if (cli.extract_only && !wallpaper_source.path.empty()) exit(runExtractOnly(wallpaper_source, cli));
 
     sapp_desc desc = {};
     desc.init_cb = init;

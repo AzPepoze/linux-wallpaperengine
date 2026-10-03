@@ -1,0 +1,151 @@
+#include "app/frame_loop.h"
+
+#include "shared/audio/audio_engine.h"
+#include "shared/core/build_config.h"
+#include "shared/core/logger.h"
+#include "sokol_gfx.h"
+#include "sokol_glue.h"
+#include "sokol_time.h"
+#include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/scene_2d_wallpaper.h"
+
+#if DEBUG_BUILD
+#include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "ui/debugger.h"
+#include "util/sokol_imgui.h"
+#endif
+
+static Scene2DRuntime* activeRuntime(WallpaperManager& mgr) {
+    auto* s2d = dynamic_cast<Scene2DWallpaper*>(mgr.getActiveWallpaper());
+    return s2d ? s2d->getRuntime() : nullptr;
+}
+
+static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntime* runtime) {
+#if DEBUG_BUILD
+    if (ctx.runtime_mode == RuntimeMode::Sandbox && runtime) {
+        const SandboxPreviewRect preview_rect = Debugger::sandboxPreviewRect();
+        if (preview_rect.width > 0 && preview_rect.height > 0) {
+            runtime->setOutputViewport(preview_rect.x, preview_rect.y, preview_rect.width, preview_rect.height);
+        } else {
+            runtime->resetOutputViewport();
+        }
+    }
+#endif
+    if (runtime) runtime->updateViewport();
+
+    // Inspector edits are intentionally runtime-only. Rebuild the clear pass
+    // every frame so direct and offscreen composition see the same live state.
+    ctx.pass_action.colors[0].load_action = ctx.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
+    ctx.pass_action.colors[0].clear_value = {ctx.general.clear_color[0], ctx.general.clear_color[1],
+                                             ctx.general.clear_color[2], ctx.general.clear_color[3]};
+    float dt = (float)sapp_frame_duration();
+    ctx.time += dt;
+    AudioEngine::instance().update(dt);
+
+    ctx.asset_mgr.updateVideoTextures(dt, ctx.layers);
+    parallax_update(ctx, dt, sapp_width(), sapp_height());
+    mgr.update(dt, ctx);
+}
+
+#if DEBUG_BUILD
+static void recordFrameProfile(EngineContext& ctx, uint64_t frame_start) {
+    ctx.profiler.frame_ms = stm_ms(stm_since(frame_start));
+    ctx.profiler.draw_calls = ctx.renderer.draw_calls;
+    ctx.profiler.frame_index++;
+
+    if (ctx.profiler.frame_index == 1) {
+        ctx.profiler.frame_avg_ms = ctx.profiler.frame_ms;
+    } else {
+        ctx.profiler.frame_avg_ms += (ctx.profiler.frame_ms - ctx.profiler.frame_avg_ms) * 0.05;
+    }
+    if (ctx.profiler.frame_ms > ctx.profiler.frame_peak_ms) ctx.profiler.frame_peak_ms = ctx.profiler.frame_ms;
+
+    ctx.profiler.sample_timer += ctx.profiler.frame_ms * 0.001;
+    if (ctx.profiler.sample_timer >= ctx.profiler.sample_interval) {
+        ctx.profiler.sample_timer = 0.0;
+        ctx.profiler.frame_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.frame_ms);
+        ctx.profiler.update_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.update_ms);
+        ctx.profiler.render_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.render_ms);
+        ctx.profiler.ui_history[ctx.profiler.history_offset] = static_cast<float>(ctx.profiler.ui_ms);
+        ctx.profiler.history_offset = (ctx.profiler.history_offset + 1) % profiler_stats_t::HISTORY_SIZE;
+    }
+}
+#endif
+
+void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
+#if DEBUG_BUILD
+    const uint64_t frame_start = stm_now();
+#endif
+    ctx.renderer.draw_calls = 0;
+
+#if DEBUG_BUILD
+    RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
+    const uint64_t update_start = stm_now();
+#endif
+
+    Scene2DRuntime* runtime = activeRuntime(mgr);
+    updateFrame(ctx, mgr, runtime);
+
+#if DEBUG_BUILD
+    ctx.profiler.update_ms = stm_ms(stm_since(update_start));
+    const uint64_t render_start = stm_now();
+#endif
+
+    const bool offscreen_composition = runtime ? runtime->requiresOffscreenComposition() : false;
+    if (offscreen_composition && runtime) runtime->draw();
+
+    sg_pass pass = {};
+    pass.action = ctx.pass_action;
+    pass.swapchain = sglue_swapchain();
+    sg_begin_pass(&pass);
+
+    if (offscreen_composition && runtime)
+        runtime->present();
+    else if (runtime)
+        runtime->draw();
+
+    if (runtime) runtime->drawParticleDiagnostics();
+
+#if DEBUG_BUILD
+    ctx.profiler.render_ms = stm_ms(stm_since(render_start));
+
+    const uint64_t ui_start = stm_now();
+    Debugger::draw(ctx);
+    ctx.profiler.ui_ms = stm_ms(stm_since(ui_start));
+#endif
+
+    sg_end_pass();
+    sg_commit();
+
+#if DEBUG_BUILD
+    RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);
+    recordFrameProfile(ctx, frame_start);
+#endif
+}
+
+void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& mgr) {
+    if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
+        ctx.mouse_x = e->mouse_x;
+        ctx.mouse_y = e->mouse_y;
+        ctx.mouse_position_valid = true;
+    } else if (e->type == SAPP_EVENTTYPE_QUIT_REQUESTED) {
+        LOG_I("[APP] Received quit request from window/system");
+    } else if (e->type == SAPP_EVENTTYPE_RESIZED) {
+        LOG_I("[APP] Window resized: window=%dx%d, framebuffer=%dx%d", e->window_width, e->window_height,
+              e->framebuffer_width, e->framebuffer_height);
+    } else if (e->type == SAPP_EVENTTYPE_SUSPENDED) {
+        LOG_I("[APP] Application suspended");
+    } else if (e->type == SAPP_EVENTTYPE_RESUMED) {
+        LOG_I("[APP] Application resumed");
+    }
+
+    mgr.handleInput(e, ctx);
+
+#if DEBUG_BUILD
+    if (e->type == SAPP_EVENTTYPE_KEY_DOWN && e->key_code == SAPP_KEYCODE_F8) {
+        ctx.show_ui = !ctx.show_ui;
+        return;
+    }
+    if (simgui_handle_event(e)) return;
+#endif
+}
