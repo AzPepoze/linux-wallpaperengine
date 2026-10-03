@@ -1,0 +1,365 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
+#include "image_layer.h"
+#include "image_parser.h"
+#include "shared/core/context.h"
+#include "shared/core/engine_context.h"
+#include "shared/core/logger.h"
+#include "shared/core/utils.h"
+#include "shared/graphics/backend/gpu_debug_labels.h"
+#include "shared/graphics/diagnostics/render_observer.h"
+#include "shared/graphics/render.h"
+#include "wallpaper/2d/alpha_curve.h"
+#include "wallpaper/2d/tree/scene_tree.h"
+
+namespace {
+bool isCompositeRenderTarget(const std::string& name) {
+    if (name.rfind("_rt_", 0) != 0) return false;
+    if (name == "_rt_FullFrameBuffer") return true;
+    if (name.rfind("_rt_imageLayerComposite_", 0) == 0) return true;
+    return name.find("FrameBuffer") != std::string::npos;
+}
+}  // namespace
+
+void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
+    effect_output_image = {SG_INVALID_ID};
+    effect_output_view = {SG_INVALID_ID};
+    sg_image base_img = src_img.id != SG_INVALID_ID ? src_img : (sg_image)img;
+    sg_view base_view = src_view.id != SG_INVALID_ID ? src_view : (sg_view)cached_view;
+    if (effects.empty() || base_img.id == SG_INVALID_ID) return;
+    if (base_view.id == SG_INVALID_ID) {
+        if (src_img.id != SG_INVALID_ID) {
+            sg_view_desc v_desc = {};
+            v_desc.texture.image = src_img;
+            base_view = sg_make_view(&v_desc);
+        } else {
+            updateCachedView();
+            base_view = cached_view;
+        }
+    }
+    if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(base_img)) return;
+
+    IRenderObserver& diag = renderObserver();
+
+    bool any_effect_solo = false;
+    for (auto effect : effects) {
+        if (effect && effect->solo) {
+            any_effect_solo = true;
+            break;
+        }
+    }
+
+    const sg_image layer_source_image = base_img;
+    const sg_view layer_source_view = base_view;
+    sg_image input_image = base_img;
+    sg_view input_view = base_view;
+    int write_index = 0;
+    bool rendered_any = false;
+    int draw_order = 0;
+    diag.onSourceImage(0, input_image, effect_target_width, effect_target_height);
+
+    const float saved_view_width = ctx.renderer.view_width;
+    const float saved_view_height = ctx.renderer.view_height;
+    renderer_update_viewport(&ctx.renderer, (float)effect_target_width, (float)effect_target_height);
+
+    for (int eff_idx = 0; eff_idx < (int)effects.size(); ++eff_idx) {
+        auto effect = effects[eff_idx];
+        if (!effect) continue;
+        if (!effect->visible || (any_effect_solo && !effect->solo)) continue;
+        if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
+        if (diag.isEffectDisabled(eff_idx, effect->file_path)) continue;
+
+        for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
+            auto pass = effect->passes[pass_idx];
+            if (!pass || !pass->enabled) continue;
+
+            if (pass->shader_name.find("depthparallax") != std::string::npos && !path.empty() &&
+                strstr(path.c_str(), ".tex")) {
+                pass->resolveDepth(path.c_str(), ctx);
+            }
+
+            int target_width = effect_target_width;
+            int target_height = effect_target_height;
+            NamedRenderTarget* named_target = nullptr;
+            if (!pass->render_target.empty()) {
+                target_width = std::max(1, (int)std::lround(effect_target_width / pass->render_scale));
+                target_height = std::max(1, (int)std::lround(effect_target_height / pass->render_scale));
+                auto& target = named_effect_targets[pass->render_target];
+                if (!target.ensureSize(target_width, target_height, pass->render_target)) {
+                    continue;
+                }
+                named_target = &target;
+            }
+
+            if (diag.isPassDisabled(pass_idx)) {
+                if (named_target) {
+                    // Copy-through input to named target so downstream passes don't sample uninitialized buffer
+                    sg_pass copy_pass = {};
+                    copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+                    copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+                    copy_pass.attachments.colors[0] = named_target->currentWrite().attachment_view;
+                    sg_begin_pass(&copy_pass);
+                    renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+                    float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+                    renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
+                                         (float)target_height, 0.0f, full_white, false, nullptr);
+                    sg_end_pass();
+                    named_target->swap();
+                }
+                continue;
+            }
+
+            const sg_image output_image =
+                named_target ? named_target->currentWrite().image : effect_targets[write_index].image;
+            const sg_view output_attachment = named_target ? named_target->currentWrite().attachment_view
+                                                           : effect_targets[write_index].attachment_view;
+
+            if (pass->compiled.pipeline.id == SG_INVALID_ID) {
+                // A pass that never compiled must still forward its input so later
+                // passes (and the final layer draw) do not read uninitialised targets.
+                sg_pass copy_pass = {};
+                copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+                copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+                copy_pass.attachments.colors[0] = output_attachment;
+                sg_begin_pass(&copy_pass);
+                renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+                float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+                renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
+                                     (float)target_height, 0.0f, full_white, false, nullptr);
+                sg_end_pass();
+
+                if (named_target) {
+                    named_target->swap();
+                    input_image = named_target->currentRead().image;
+                    input_view = named_target->currentRead().texture_view;
+                } else {
+                    input_image = effect_targets[write_index].image;
+                    input_view = effect_targets[write_index].texture_view;
+                    write_index = 1 - write_index;
+                }
+                effect_output_image = input_image;
+                effect_output_view = input_view;
+                rendered_any = true;
+                continue;
+            }
+
+            float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index);
+
+            sg_image shader_input_image = input_image;
+            sg_view shader_input_view = input_view;
+            if (pass->pass_textures.texture0.id != SG_INVALID_ID &&
+                pass->pass_textures.texture0_view.id != SG_INVALID_ID) {
+                shader_input_image = pass->pass_textures.texture0;
+                shader_input_view = pass->pass_textures.texture0_view;
+            }
+
+            std::vector<sg_image> override_images(11, sg_image{SG_INVALID_ID});
+            std::vector<sg_view> override_views(11, sg_view{SG_INVALID_ID});
+            bool has_overrides = false;
+            for (const auto& [slot, binding] : pass->render_texture_bindings) {
+                if (slot < 0 || slot > 11) continue;
+                sg_image binding_image = {SG_INVALID_ID};
+                sg_view binding_view = {SG_INVALID_ID};
+                if (binding == "previous") {
+                    binding_image = input_image;
+                    binding_view = input_view;
+                } else {
+                    auto target = named_effect_targets.find(binding);
+                    if (target != named_effect_targets.end()) {
+                        const auto& read_buf = target->second.currentRead();
+                        binding_image = read_buf.image;
+                        binding_view = read_buf.texture_view;
+                    } else if (isCompositeRenderTarget(binding)) {
+                        // Unwritten composite targets read as the accumulated scene image.
+                        binding_image = layer_source_image;
+                        binding_view = layer_source_view;
+                    } else {
+                        continue;
+                    }
+                }
+                if (binding_image.id == SG_INVALID_ID) continue;
+                if (slot == 0) {
+                    shader_input_image = binding_image;
+                    shader_input_view = binding_view;
+                } else {
+                    override_images[slot - 1] = binding_image;
+                    override_views[slot - 1] = binding_view;
+                }
+                has_overrides = true;
+            }
+
+            bool has_alias = false;
+            if (output_image.id != SG_INVALID_ID && shader_input_image.id == output_image.id) {
+                effect_log.error(
+                    "Effect pass '%s' (layer '%s') aliases input slot 0 (image %u) with output attachment (image %u)",
+                    pass->shader_name.c_str(), name.c_str(), shader_input_image.id, output_image.id);
+                has_alias = true;
+            }
+            for (size_t i = 0; i < override_images.size(); ++i) {
+                if (output_image.id != SG_INVALID_ID && override_images[i].id == output_image.id) {
+                    effect_log.error(
+                        "Effect pass '%s' (layer '%s') aliases input slot %zu (image %u) with output attachment "
+                        "(image %u)",
+                        pass->shader_name.c_str(), name.c_str(), i + 1, override_images[i].id, output_image.id);
+                    has_alias = true;
+                }
+            }
+            if (has_overrides) {
+                render_pass.override_views = override_views.data();
+                render_pass.num_override_views = override_views.size();
+            }
+
+            for (size_t i = 0; i < (size_t)render_pass.num_extra_views; ++i) {
+                if (render_pass.override_views && i < render_pass.num_override_views &&
+                    render_pass.override_views[i].id != SG_INVALID_ID) {
+                    continue;
+                }
+                if (render_pass.extra_views && render_pass.extra_views[i].id != SG_INVALID_ID) {
+                    sg_view_desc vd = sg_query_view_desc(render_pass.extra_views[i]);
+                    if (vd.texture.image.id != SG_INVALID_ID && vd.texture.image.id == output_image.id) {
+                        effect_log.error(
+                            "Effect pass '%s' (layer '%s') aliases extra view slot %zu (image %u) with output "
+                            "attachment (image %u)",
+                            pass->shader_name.c_str(), name.c_str(), i + 1, vd.texture.image.id, output_image.id);
+                        has_alias = true;
+                    }
+                }
+            }
+
+            if (has_alias) {
+                effect_log.warn("Skipping pass '%s' to avoid Vulkan render target aliasing hazard",
+                                pass->shader_name.c_str());
+                continue;
+            }
+
+            sg_pass offscreen_pass = {};
+            offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+            offscreen_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+            offscreen_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+            offscreen_pass.attachments.colors[0] = output_attachment;
+            sg_begin_pass(&offscreen_pass);
+            renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+
+            render_pass.is_fullscreen_quad = pass->is_fullscreen_quad;
+
+            renderer_draw_sprite(ctx, &ctx.renderer, shader_input_image, shader_input_view, 0.0f, 0.0f,
+                                 (float)target_width, (float)target_height, 0.0f, effect_tint, false, &render_pass);
+
+            sg_end_pass();
+
+            sg_image out_img = output_image;
+            if (diag.isTracingPasses()) {
+                PassTraceEntry trace;
+                trace.frame_number = ctx.profiler.frame_index;
+                trace.layer_name = this->name.empty() ? ("Layer_" + std::to_string(scene_object_id)) : this->name;
+                trace.effect_index = eff_idx;
+                trace.effect_file = effect->file_path;
+                trace.pass_index = pass_idx;
+                trace.shader_name = pass->shader_name;
+                trace.enabled = pass->enabled;
+                trace.visible = effect->visible;
+                trace.draw_order = draw_order++;
+                trace.render_target_name = pass->render_target;
+                trace.target_image_id = out_img.id;
+                trace.target_view_id = named_target ? named_target->currentWrite().attachment_view.id
+                                                    : effect_targets[write_index].attachment_view.id;
+                trace.target_width = target_width;
+                trace.target_height = target_height;
+                trace.target_pixel_format = "RGBA8";
+                trace.render_scale = pass->render_scale;
+                trace.is_fullscreen_quad = pass->is_fullscreen_quad;
+
+                TextureBindingTrace in0;
+                in0.slot = 0;
+                in0.image_id = shader_input_image.id;
+                in0.view_id = shader_input_view.id;
+                sg_image_desc in0_d = sg_query_image_desc(shader_input_image);
+                in0.width = in0_d.width;
+                in0.height = in0_d.height;
+                in0.pixel_format = "RGBA8";
+                in0.is_render_target = in0_d.usage.color_attachment;
+                in0.semantic_source =
+                    pass->render_texture_bindings.count(0) ? pass->render_texture_bindings.at(0) : "previous";
+                trace.inputs.push_back(in0);
+
+                for (const auto& [slot, binding] : pass->render_texture_bindings) {
+                    if (slot == 0) continue;
+                    TextureBindingTrace in_b;
+                    in_b.slot = slot;
+                    in_b.semantic_source = binding;
+                    if (binding == "previous") {
+                        in_b.image_id = input_image.id;
+                        in_b.view_id = input_view.id;
+                        sg_image_desc d = sg_query_image_desc(input_image);
+                        in_b.width = d.width;
+                        in_b.height = d.height;
+                        in_b.is_render_target = d.usage.color_attachment;
+                    } else if (isCompositeRenderTarget(binding)) {
+                        if (auto target_it = named_effect_targets.find(binding);
+                            target_it != named_effect_targets.end()) {
+                            const auto& read_buf = target_it->second.currentRead();
+                            in_b.image_id = read_buf.image.id;
+                            in_b.view_id = read_buf.texture_view.id;
+                            in_b.width = read_buf.width;
+                            in_b.height = read_buf.height;
+                            in_b.is_render_target = true;
+                        } else {
+                            in_b.image_id = layer_source_image.id;
+                            in_b.view_id = layer_source_view.id;
+                            sg_image_desc d = sg_query_image_desc(layer_source_image);
+                            in_b.width = d.width;
+                            in_b.height = d.height;
+                            in_b.is_render_target = d.usage.color_attachment;
+                        }
+                    } else {
+                        auto target_it = named_effect_targets.find(binding);
+                        if (target_it != named_effect_targets.end()) {
+                            const auto& read_buf = target_it->second.currentRead();
+                            in_b.image_id = read_buf.image.id;
+                            in_b.view_id = read_buf.texture_view.id;
+                            in_b.width = read_buf.width;
+                            in_b.height = read_buf.height;
+                            in_b.is_render_target = true;
+                        }
+                    }
+                    trace.inputs.push_back(in_b);
+                }
+
+                gpu_set_image_debug_label(out_img, (pass->shader_name + " Target").c_str());
+                diag.recordPass(trace, out_img);
+            }
+
+            if (named_target) {
+                named_target->swap();
+                input_image = named_target->currentRead().image;
+                input_view = named_target->currentRead().texture_view;
+            } else {
+                input_image = effect_targets[write_index].image;
+                input_view = effect_targets[write_index].texture_view;
+                write_index = 1 - write_index;
+            }
+            effect_output_image = input_image;
+            effect_output_view = input_view;
+            rendered_any = true;
+
+            if (diag.shouldStopAfterPass(pass_idx)) {
+                break;
+            }
+        }
+    }
+
+    renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
+    if (!rendered_any) {
+        effect_output_image = {SG_INVALID_ID};
+        effect_output_view = {SG_INVALID_ID};
+    } else {
+        diag.onLayerFinalImage(0, effect_output_image, effect_target_width, effect_target_height);
+    }
+}
