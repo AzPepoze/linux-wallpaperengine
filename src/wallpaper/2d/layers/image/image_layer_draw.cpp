@@ -18,7 +18,9 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
             layer_scale[0] = node->scale[0];
             layer_scale[1] = node->scale[1];
             layer_scale[2] = node->scale[2];
-            rect.rotation = node->angles[2];
+            // Scene space is Y-up while sprites are drawn in Y-down screen space,
+            // so the authored Z angle is negated here (same as the attachment path).
+            rect.rotation = -node->angles[2];
             if (!node->attachment.empty()) {
                 mat4x4 world;
                 if (ctx.scene.scene_tree->worldTransform(scene_object_id, world)) {
