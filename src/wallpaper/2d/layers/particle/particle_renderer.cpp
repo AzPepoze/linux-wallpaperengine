@@ -92,8 +92,9 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.texcoord[0] = u;
                 vertex.texcoord[1] = v;
                 vertex.texcoord[2] = particle.rotation;
-                // WE stores particle size as a diameter; use the half-extent.
-                vertex.texcoord[3] = particle.size * 0.5f;
+                // ComputeParticlePosition applies UV offsets of +/-0.5, so
+                // its input is the full diameter, not a half-extent.
+                vertex.texcoord[3] = particle.size;
                 vertex.color[0] = particle.color[0];
                 vertex.color[1] = particle.color[1];
                 vertex.color[2] = particle.color[2];
@@ -209,8 +210,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
             fillVec4(particle_builtins.orientation_forward, 0.0f, 0.0f, 1.0f);
             fillVec4(particle_builtins.view_up, 0.0f, 1.0f, 0.0f);
             fillVec4(particle_builtins.view_right, 1.0f, 0.0f, 0.0f);
-            fillVec4(particle_builtins.eye_position, scene_w * 0.5f, scene_h * 0.5f,
-                     use_perspective ? camera_distance : 0.0f);
+            fillVec4(particle_builtins.eye_position, scene_w * 0.5f, scene_h * 0.5f, camera_distance);
 
             const float frame_width = spritesheet_cols > 0 ? 1.0f / (float)spritesheet_cols : 0.0f;
             const float frame_height = spritesheet_rows > 0 ? 1.0f / (float)spritesheet_rows : 0.0f;

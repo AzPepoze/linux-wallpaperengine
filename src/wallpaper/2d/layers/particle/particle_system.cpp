@@ -57,35 +57,6 @@ int wallpaperTextureFormatForImage(sg_image image) {
     }
 }
 
-void inferSpriteSheet(const wallpaper_engine::TextureMetadata& metadata, const ParticleSystemConfig& config, int& cols,
-                      int& rows, int& frames) {
-    cols = (int)metadata.spritesheet_cols;
-    rows = (int)metadata.spritesheet_rows;
-    frames = (int)metadata.spritesheet_frames;
-    if (frames > 1 || metadata.width == 0 || metadata.height == 0) return;
-
-    // Some Workshop particle atlases are static TEX containers with no TEXS table; only
-    // infer a strip atlas when the frames are unambiguous squares.
-    if (config.animation_mode == "randomframe" || config.animation_mode == "sequence" ||
-        config.animation_mode == "once") {
-        if (metadata.width > metadata.height && metadata.width % metadata.height == 0) {
-            const uint32_t candidate = metadata.width / metadata.height;
-            if (candidate > 1) {
-                cols = (int)candidate;
-                rows = 1;
-                frames = (int)candidate;
-            }
-        } else if (metadata.height > metadata.width && metadata.height % metadata.width == 0) {
-            const uint32_t candidate = metadata.height / metadata.width;
-            if (candidate > 1) {
-                cols = 1;
-                rows = (int)candidate;
-                frames = (int)candidate;
-            }
-        }
-    }
-}
-
 }  // namespace
 
 ParticleSystem::ParticleSystem(ParticleSystemConfig config, float scene_width, float scene_height)
@@ -183,8 +154,12 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         particle_system->texture_width = (int)metadata.width;
         particle_system->texture_height = (int)metadata.height;
         particle_system->spritesheet_duration = metadata.spritesheet_duration;
-        inferSpriteSheet(metadata, particle_system->config, particle_system->spritesheet_cols,
-                         particle_system->spritesheet_rows, particle_system->spritesheet_frames);
+        // Only the TEXS frame table establishes an atlas. A non-square static
+        // texture may be a beam or trail; splitting it into squares crops its
+        // UVs and cancels the sprite's authored aspect ratio.
+        particle_system->spritesheet_cols = (int)metadata.spritesheet_cols;
+        particle_system->spritesheet_rows = (int)metadata.spritesheet_rows;
+        particle_system->spritesheet_frames = (int)metadata.spritesheet_frames;
         if (particle_system->spritesheet_frames > 1) {
             pass->combos["SPRITESHEET"] = 1;
             // Particle flag bit 2 disables interpolation between sequence frames.
