@@ -199,7 +199,10 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
             createFromPath(child.particle_path.c_str(), ctx, scene_width, scene_height, child.override_alpha,
                            child.override_rate, child.has_override_color ? child.override_color : nullptr,
                            child.override_color_is_legacy, child.override_size);
-        if (child_system) particle_system->children.push_back(child_system);
+        if (child_system) {
+            child_system->attached_to_parent = true;
+            particle_system->children.push_back(child_system);
+        }
     }
     for (float time = 0.0f; time < particle_system->config.start_time; time += 0.1f) particle_system->update(0.1f);
     return particle_system;

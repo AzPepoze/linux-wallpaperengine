@@ -9,7 +9,7 @@ float randomFloat() {
 }
 }  // namespace
 
-void ParticleSystem::spawnParticle() {
+void ParticleSystem::spawnParticle(const float* parent_position) {
     if (static_cast<int>(particles.size()) >= max_particles) return;
     Particle particle = {};
     particle.random_seed = randomFloat();
@@ -38,6 +38,12 @@ void ParticleSystem::spawnParticle() {
             particle.position[0] = emitter.origin[0];
             particle.position[1] = emitter.origin[1];
         }
+    }
+    if (parent_position) {
+        // Attached child systems spawn around their parent particle.
+        particle.position[0] += parent_position[0];
+        particle.position[1] += parent_position[1];
+        particle.position[2] += parent_position[2];
     }
     for (const ParticleInitializerConfig& initializer : config.initializers) {
         if (initializer.type == "lifetimerandom") {
@@ -123,8 +129,4 @@ void ParticleSystem::spawnParticle() {
         }
     }
     particles.push_back(particle);
-
-    for (ParticleSystem* child : children) {
-        child->spawnParticle();
-    }
 }

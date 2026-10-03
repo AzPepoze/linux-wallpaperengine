@@ -1,17 +1,20 @@
 #include <math.h>
+#include <stdlib.h>
 
 #include "particle_system.h"
 
 void ParticleSystem::update(float dt) {
     global_time += dt;
-    for (size_t emitter_index = 0; emitter_index < config.emitters.size(); ++emitter_index) {
-        const float rate = config.emitters[emitter_index].rate * override_rate;
-        if (rate > 0) {
-            emitter_timers[emitter_index] += dt;
-            const float interval = 1.0f / rate;
-            while (emitter_timers[emitter_index] >= interval) {
-                spawnParticle();
-                emitter_timers[emitter_index] -= interval;
+    if (!attached_to_parent) {
+        for (size_t emitter_index = 0; emitter_index < config.emitters.size(); ++emitter_index) {
+            const float rate = config.emitters[emitter_index].rate * override_rate;
+            if (rate > 0) {
+                emitter_timers[emitter_index] += dt;
+                const float interval = 1.0f / rate;
+                while (emitter_timers[emitter_index] >= interval) {
+                    spawnParticle();
+                    emitter_timers[emitter_index] -= interval;
+                }
             }
         }
     }
@@ -76,5 +79,29 @@ void ParticleSystem::update(float dt) {
             particle.frame = frame;
         }
     }
-    for (ParticleSystem* child : children) child->update(dt);
+    for (ParticleSystem* child : children) {
+        child->emitFromParents(*this, dt);
+        child->update(dt);
+    }
+}
+
+void ParticleSystem::emitFromParents(const ParticleSystem& parent, float dt) {
+    if (parent.particles.empty()) return;
+    float rate = 0.0f;
+    for (const ParticleEmitterConfig& emitter : config.emitters) {
+        rate += emitter.rate;
+    }
+    rate *= override_rate;
+    if (rate <= 0.0f) return;
+
+    // Each parent particle owns an emitter instance, so the effective rate scales
+    // with the live parent count.
+    attached_emitter_timer += dt * rate * (float)parent.particles.size();
+    while (attached_emitter_timer >= 1.0f) {
+        attached_emitter_timer -= 1.0f;
+        const size_t count = parent.particles.size();
+        size_t index = (size_t)((float)rand() / (float)RAND_MAX * (float)count);
+        if (index >= count) index = count - 1;
+        spawnParticle(parent.particles[index].position);
+    }
 }

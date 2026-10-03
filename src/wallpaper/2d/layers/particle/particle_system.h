@@ -65,6 +65,10 @@ class ParticleSystem {
     bool has_refract = false;
     bool is_trail = false;
     bool use_perspective = false;
+    // A child system is emitted from its parent's particles rather than from its
+    // own emitter region; this tracks its accumulated emission time.
+    bool attached_to_parent = false;
+    float attached_emitter_timer = 0.0f;
 
     int spritesheet_cols = 0;
     int spritesheet_rows = 0;
@@ -92,6 +96,9 @@ class ParticleSystem {
                                           float override_size = 1.0f);
 
     void update(float dt);
+    // Emits this (child) system's particles from each parent particle's current
+    // position, matching Wallpaper Engine's attached child-system behaviour.
+    void emitFromParents(const ParticleSystem& parent, float dt);
     void draw(EngineContext& ctx);
     void drawDebugBounds(EngineContext& ctx);
     bool requiresSceneColor() const;
@@ -110,7 +117,7 @@ class ParticleSystem {
     GfxBuffer particle_index_buffer;
     sg_view scene_color_view = {SG_INVALID_ID};
 
-    void spawnParticle();
+    void spawnParticle(const float* parent_position = nullptr);
     void initParticleBuffers();
 };
 
