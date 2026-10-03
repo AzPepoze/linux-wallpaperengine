@@ -126,6 +126,11 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         if (cJSON_IsString(type) && type->valuestring) initializer_config.type = type->valuestring;
         readVec3(cJSON_GetObjectItemCaseSensitive(initializer, "min"), initializer_config.minimum);
         readVec3(cJSON_GetObjectItemCaseSensitive(initializer, "max"), initializer_config.maximum);
+        if (initializer_config.type == "colorrandom") {
+            // Serialized files omit bounds that equal the editor default (0..255 per channel).
+            if (!cJSON_GetObjectItemCaseSensitive(initializer, "max"))
+                initializer_config.maximum[0] = initializer_config.maximum[1] = initializer_config.maximum[2] = 255.0f;
+        }
         initializer_config.minimum_scalar = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "min"));
         initializer_config.maximum_scalar = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "max"));
         initializer_config.turbulence_offset = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "offset"));
