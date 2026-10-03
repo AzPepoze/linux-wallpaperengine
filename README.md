@@ -30,6 +30,7 @@ The following dependencies are fetched by xmake and normally do not need to be i
 - cJSON
 - stb
 - Dear ImGui (debug builds only)
+- libwayland-client, `wayland-scanner` (optional, for the desktop layer backend)
 
 ### Arch Linux / CachyOS
 
@@ -48,6 +49,12 @@ sudo pacman -S --needed \
 ```
 
 A Vulkan driver for your GPU is also required, for example `vulkan-radeon`, `vulkan-intel`, or the appropriate NVIDIA driver.
+
+Optional, for rendering on the desktop layer under Wayland (`xmake f --layer_shell=y`, enabled automatically when found):
+
+```bash
+sudo pacman -S --needed wayland wayland-protocols
+```
 
 Optional, for web wallpapers:
 
@@ -86,7 +93,9 @@ Launcher-compatible options (the wallpaper path may come first or last):
 | `-f, --fps <n>` | Cap the frame rate |
 | `-s, --silent` | Disable audio |
 | `--scaling <default\|fit\|fill\|stretch>` | `fill` crops to cover, `fit` letterboxes (`stretch` currently behaves like `fit`) |
-| `--clamp <mode>`, `-r, --screen-root <output>`, `--layer <layer>` | Accepted; desktop-layer rendering is not implemented yet, so the app runs in a window |
+| `--clamp <mode>` | Accepted and ignored |
+| `-r, --screen-root <output>`, `--layer <background\|bottom\|top\|overlay>` | Draw as a `wlr-layer-shell` wallpaper surface on the named output (default layer `background`), anchored to all edges with pointer parallax. Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the output is not found, the app logs the reason and runs in a window |
+| `--layer-size <WxH>`, `--layer-anchor <edges>` | Debug builds only: use a small anchored rectangle (for example `320x180` and `top-left`) instead of the full output |
 
 Build outputs are written to `bin/<mode>/`.
 
