@@ -52,5 +52,10 @@ int main() {
     CHECK(cli_args::optionValue(transition, {"--transition"}, value) && value == "crt");
     CHECK(cli_args::optionValue(transition, {"--transition-duration"}, value) && value == "500");
 
+    const V mode = {"app", "--transition-mode", "freeze", "/wp"};
+    CHECK(cli_args::positional(mode) == "/wp");
+    CHECK(cli_args::optionValue(mode, {"--transition-mode"}, value) && value == "freeze");
+    CHECK(cli_args::takesValue("--transition-mode"));
+
     return test::finish("cli args checks");
 }

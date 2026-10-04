@@ -190,3 +190,26 @@ bool read_config_transition(char* out_effect, size_t effect_len, int* out_durati
     }
     return found;
 }
+
+bool read_config_transition_mode(char* out_mode, size_t mode_len) {
+    if (!out_mode || mode_len == 0) return false;
+    const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
+                                       "../../../../config.json"};
+    for (const char* cfg : config_candidates) {
+        char* config_str = read_file_to_string(cfg);
+        if (!config_str) continue;
+        cJSON* config_json = cJSON_Parse(config_str);
+        if (config_json) {
+            cJSON* mode = cJSON_GetObjectItemCaseSensitive(config_json, "transition_mode");
+            if (cJSON_IsString(mode) && mode->valuestring[0] != '\0') {
+                copyPath(out_mode, mode_len, mode->valuestring);
+                cJSON_Delete(config_json);
+                free(config_str);
+                return true;
+            }
+            cJSON_Delete(config_json);
+        }
+        free(config_str);
+    }
+    return false;
+}

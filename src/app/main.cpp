@@ -121,6 +121,12 @@ static void applyCliToContext() {
     TransitionConfig transition_config;
     transition_config.selection = transition;
     transition_config.duration_ms = transition_duration;
+    bool continue_previous = false;
+    std::string transition_mode_error;
+    if (!lwe::transition::resolveTransitionModeSetting(cli.transition_mode, continue_previous,
+                                                       transition_mode_error))
+        LOG_W("[CONTROL] %s; using freeze", transition_mode_error.c_str());
+    transition_config.continue_previous = continue_previous;
     wallpaper_mgr.setTransitionConfig(transition_config);
 }
 
@@ -296,6 +302,12 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
             request.properties = cli.set_properties;
             request.transition = transition;
             request.transition_time_ms = duration;
+
+            bool continue_previous = false;
+            std::string mode_error;
+            if (!lwe::transition::resolveTransitionModeSetting(cli.transition_mode, continue_previous, mode_error))
+                LOG_W("[CONTROL] %s; using freeze", mode_error.c_str());
+            request.continue_previous = continue_previous;
 
             std::string handoff_error;
             if (ControlClient::tryHandoff(key, request, &handoff_error)) {

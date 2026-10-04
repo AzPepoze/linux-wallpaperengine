@@ -16,6 +16,8 @@ void detect_default_wallpaper(char* out_path, size_t max_len);
 // Reads `transition` and `transition_duration_ms` from the nearest config.json.
 // Returns true when at least one key was present.
 bool read_config_transition(char* out_effect, size_t effect_len, int* out_duration_ms);
+// Reads `transition_mode` ("freeze"/"continue") from the nearest config.json.
+bool read_config_transition_mode(char* out_mode, size_t mode_len);
 
 #ifdef __cplusplus
 }

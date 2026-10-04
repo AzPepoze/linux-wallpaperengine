@@ -109,6 +109,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     std::string transition_duration;
     if (cli_args::optionValue(args, {"--transition-duration"}, transition_duration))
         opts.transition_duration_ms = atoi(transition_duration.c_str());
+    cli_args::optionValue(args, {"--transition-mode"}, opts.transition_mode);
     opts.no_control = hasDashedFlag("no-control");
     for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
         const size_t equals = entry.find('=');
@@ -146,6 +147,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         if (opts.transition.empty() && config_effect[0] != '\0') opts.transition = config_effect;
         if (opts.transition_duration_ms <= 0 && config_duration > 0) opts.transition_duration_ms = config_duration;
     }
+    char config_mode[64] = {};
+    if (opts.transition_mode.empty() && read_config_transition_mode(config_mode, sizeof(config_mode)))
+        opts.transition_mode = config_mode;
     sargs_shutdown();
     return opts;
 }

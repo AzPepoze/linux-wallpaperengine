@@ -31,6 +31,7 @@ struct CliOptions {
     std::string layer_anchor;
     std::string transition;
     int transition_duration_ms = 0;
+    std::string transition_mode;
     bool no_control = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
