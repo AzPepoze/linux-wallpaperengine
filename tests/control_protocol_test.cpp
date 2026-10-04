@@ -29,5 +29,29 @@ int main() {
 
     CHECK(encodeReply(true) == std::string("{\"ok\":true}"));
     CHECK(encodeReply(false, "bad").find("\"ok\":false") != std::string::npos);
+
+    {
+        SwitchRequest mode_request;
+        mode_request.path = "/wp";
+        mode_request.continue_previous = true;
+        SwitchRequest mode_decoded;
+        std::string mode_error;
+        CHECK(decodeSwitchRequest(encodeSwitchRequest(mode_request), mode_decoded, mode_error));
+        CHECK(mode_decoded.continue_previous);
+    }
+    {
+        SwitchRequest freeze_request;
+        freeze_request.path = "/wp";  // default: freeze
+        SwitchRequest freeze_decoded;
+        std::string freeze_error;
+        CHECK(decodeSwitchRequest(encodeSwitchRequest(freeze_request), freeze_decoded, freeze_error));
+        CHECK(!freeze_decoded.continue_previous);
+    }
+    {
+        SwitchRequest bad_mode;
+        std::string bad_mode_error;
+        CHECK(!decodeSwitchRequest("{\"path\":\"/wp\",\"transition_mode\":\"bogus\"}", bad_mode, bad_mode_error));
+        CHECK(!bad_mode_error.empty());
+    }
     return test::finish("control protocol checks");
 }

@@ -14,6 +14,7 @@ struct SwitchRequest {
     std::vector<std::pair<std::string, std::string>> properties;
     int transition = lwe::transition::kSelectionNone;
     int transition_time_ms = 1000;
+    bool continue_previous = false;  // false == freeze (default)
 };
 
 // Newline-free JSON. decode leaves `out` untouched on failure and fills `error`.

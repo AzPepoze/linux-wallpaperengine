@@ -240,14 +240,15 @@ add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio
                                 "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
          {"miniaudio", "lz4", "stb"}, {"dl", "m", "pthread"})
 
-add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp"},
-         {"cjson"})
+add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp",
+                                    "src/wallpaper/transition/transition_catalog.cpp"}, {"cjson"})
 
 add_test("control_endpoint_tests", {"tests/control_endpoint_test.cpp", "src/app/control/control_endpoint.cpp"})
 
 add_test("control_socket_tests", {"tests/control_socket_test.cpp", "src/app/control/control_server.cpp",
                                   "src/app/control/control_client.cpp", "src/app/control/control_protocol.cpp",
-                                  "src/app/control/control_endpoint.cpp"}, {"cjson"})
+                                  "src/app/control/control_endpoint.cpp",
+                                  "src/wallpaper/transition/transition_catalog.cpp"}, {"cjson"})
 
 add_test("transition_cli_tests", {"tests/transition_cli_test.cpp",
                                   "src/wallpaper/transition/transition_catalog.cpp"})

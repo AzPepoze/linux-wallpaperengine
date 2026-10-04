@@ -33,6 +33,7 @@ std::string encodeSwitchRequest(const SwitchRequest& request) {
 
     cJSON_AddNumberToObject(root, "transition", request.transition);
     cJSON_AddNumberToObject(root, "transition_time_ms", request.transition_time_ms);
+    cJSON_AddStringToObject(root, "transition_mode", request.continue_previous ? "continue" : "freeze");
 
     std::string result = printAndFree(root);
     cJSON_Delete(root);
@@ -81,6 +82,15 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
     if (const cJSON* duration = cJSON_GetObjectItemCaseSensitive(root, "transition_time_ms");
         cJSON_IsNumber(duration)) {
         parsed.transition_time_ms = (int)duration->valuedouble;
+    }
+    if (const cJSON* mode = cJSON_GetObjectItemCaseSensitive(root, "transition_mode"); cJSON_IsString(mode)) {
+        lwe::transition::Mode parsed_mode = lwe::transition::Mode::Freeze;
+        if (!lwe::transition::parseMode(mode->valuestring, parsed_mode)) {
+            error = std::string("unknown transition_mode '") + mode->valuestring + "'";
+            cJSON_Delete(root);
+            return false;
+        }
+        parsed.continue_previous = parsed_mode == lwe::transition::Mode::Continue;
     }
 
     cJSON_Delete(root);
