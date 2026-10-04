@@ -239,6 +239,11 @@ add_test("transition_audio_tests", {"tests/transition_audio_test.cpp",
                                     "src/wallpaper/transition/transition_audio.cpp",
                                     "src/wallpaper/transition/transition_catalog.cpp"})
 
+add_test("wallpaper_instance_tests", {"tests/wallpaper_instance_test.cpp", "src/wallpaper/wallpaper_instance.cpp",
+                                      "src/wallpaper/user_properties.cpp", "src/shared/core/vfs.cpp",
+                                      "src/shared/core/logger.cpp"},
+         {"cjson", "sokol", "vulkan-headers", "linmath.h"})
+
 add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio/audio_engine.cpp",
                                 "src/shared/audio/audio_engine_stream.cpp", "src/shared/audio/audio_engine_spectrum.cpp",
                                 "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
