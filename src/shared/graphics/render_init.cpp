@@ -127,10 +127,138 @@ bool finalizeBlendPipeline(const BlendShaderSources& sources, GfxShader& shader_
 }
 }  // namespace
 
-void renderer_init(renderer_t* r, float w, float h) {
-    r->view_width = w;
-    r->view_height = h;
+namespace {
+const std::string kSpriteVertexSource =
+    "#version 330\n"
+    "uniform mat4 mvp;\n"
+    "layout(location=0) in vec2 position;\n"
+    "layout(location=1) in vec2 texcoord0;\n"
+    "out vec2 uv;\n"
+    "void main() {\n"
+    "  gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
+    "  uv = texcoord0;\n"
+    "}\n";
+const std::string kSpriteFragmentSource =
+    "#version 330\n"
+    "precision mediump float;\n"
+    "uniform sampler2D tex;\n"
+    "uniform vec4 tint;\n"
+    "in vec2 uv;\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "  frag_color = texture(tex, uv) * tint;\n"
+    "}\n";
 
+// Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
+// Fully transparent texels borrow the colour of nearby opaque ones, otherwise bilinear minification of the
+// straight result mixes their black into every cut-out edge.
+const std::string kUnpremulFragmentSource =
+    "#version 330\n"
+    "precision mediump float;\n"
+    "uniform sampler2D tex;\n"
+    "uniform vec4 tint;\n"
+    "in vec2 uv;\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "  vec4 c = texture(tex, uv);\n"
+    "  if (c.a > 0.0) {\n"
+    "    c.rgb = min(c.rgb / c.a, vec3(1.0));\n"
+    "  } else {\n"
+    "    vec2 texel = vec2(abs(dFdx(uv.x)), abs(dFdy(uv.y)));\n"
+    "    vec3 sum = vec3(0.0);\n"
+    "    float weight = 0.0;\n"
+    "    for (int y = -2; y <= 2; ++y) {\n"
+    "      for (int x = -2; x <= 2; ++x) {\n"
+    "        vec4 n = texture(tex, uv + vec2(float(x), float(y)) * texel);\n"
+    "        sum += n.rgb;\n"
+    "        weight += n.a;\n"
+    "      }\n"
+    "    }\n"
+    "    if (weight > 0.0) c.rgb = min(sum / weight, vec3(1.0));\n"
+    "  }\n"
+    "  frag_color = c * tint;\n"
+    "}\n";
+
+// Present pass: gentle highlight roll-off so additive HDR effects do not
+// hard-clip to flat white. Identity below the knee, asymptotes to 1 above.
+const std::string kPresentFragmentSource =
+    "#version 330\n"
+    "precision mediump float;\n"
+    "uniform sampler2D tex;\n"
+    "uniform vec4 tint;\n"
+    "in vec2 uv;\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "  vec4 c = texture(tex, uv) * tint;\n"
+    "  vec3 x = max(c.rgb, vec3(0.0));\n"
+    "  const float knee = 0.75;\n"
+    "  const float range = 1.0 - knee;\n"
+    "  vec3 rolled = knee + range * (vec3(1.0) - exp(-max(x - knee, vec3(0.0)) / range));\n"
+    "  x = mix(x, rolled, step(vec3(knee), x));\n"
+    "  frag_color = vec4(x, c.a);\n"
+    "}\n";
+
+const std::string kMeshVertexSource =
+    "#version 330\n"
+    "uniform mat4 mvp;\n"
+    "layout(location=0) in vec3 position;\n"
+    "layout(location=1) in vec2 texcoord0;\n"
+    "out vec2 uv;\n"
+    "void main() {\n"
+    "  gl_Position = mvp * vec4(position, 1.0);\n"
+    "  uv = texcoord0;\n"
+    "}\n";
+const std::string kMeshFragmentSource =
+    "#version 330\n"
+    "precision mediump float;\n"
+    "uniform sampler2D tex;\n"
+    "uniform vec4 tint;\n"
+    "in vec2 uv;\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "  frag_color = texture(tex, uv) * tint;\n"
+    "}\n";
+
+// Every 2D shader here samples one texture and takes an mvp and a tint.
+sg_shader_desc spriteShaderDesc() {
+    sg_shader_desc desc = {};
+    desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
+    desc.uniform_blocks[0].size = sizeof(mat4x4);
+    desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "mvp";
+    desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
+
+    desc.uniform_blocks[1].stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.uniform_blocks[1].size = sizeof(float) * 4;
+    desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "tint";
+    desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+
+    desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
+    desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
+    desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
+    desc.texture_sampler_pairs[0].glsl_name = "tex";
+    desc.texture_sampler_pairs[0].view_slot = 0;
+    desc.texture_sampler_pairs[0].sampler_slot = 0;
+    return desc;
+}
+
+sg_shader makeSpriteShader(const std::string& vertex_source, const std::string& fragment_source, const char* label) {
+    sg_shader_desc desc = spriteShaderDesc();
+    return create_backend_shader(&desc, vertex_source, fragment_source, label);
+}
+
+// Straight-alpha blending that keeps the accumulated target opaque: with backend defaults a translucent layer
+// replaced target alpha with its mask alpha, re-multiplying the composited scene at present.
+void useAlphaBlend(sg_pipeline_desc& desc) {
+    desc.colors[0].blend.enabled = true;
+    desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+    desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+}
+
+void createGeometryBuffers(renderer_t* r) {
     vertex_t vertices[] = {
         {0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
     sg_buffer_desc v_desc = {};
@@ -150,7 +278,9 @@ void renderer_init(renderer_t* r, float w, float h) {
     i_desc.data = SG_RANGE(indices);
     r->index_buffer = sg_make_buffer(&i_desc);
     r->bind.index_buffer = r->index_buffer;
+}
 
+void createSamplers(renderer_t* r) {
     sg_sampler_desc s_desc = {};
     s_desc.min_filter = SG_FILTER_LINEAR;
     s_desc.mag_filter = SG_FILTER_LINEAR;
@@ -163,148 +293,47 @@ void renderer_init(renderer_t* r, float w, float h) {
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
         r->bind.samplers[i] = r->smp_repeat;
     }
+}
 
-    uint32_t pixel = 0xFFFFFFFF;
-    sg_image_desc img_desc = {};
-    img_desc.width = 1;
-    img_desc.height = 1;
-    img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-    img_desc.data.mip_levels[0] = {&pixel, 4};
-    r->white_pixel = sg_make_image(&img_desc);
+// One-pixel stand-ins that effects bind when a texture input is missing.
+void createFallbackTextures(renderer_t* r) {
+    const auto makeSolid = [](uint32_t pixel, GfxImage& image, GfxView& view) {
+        sg_image_desc img_desc = {};
+        img_desc.width = 1;
+        img_desc.height = 1;
+        img_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+        img_desc.data.mip_levels[0] = {&pixel, 4};
+        image = sg_make_image(&img_desc);
+        sg_view_desc view_desc = {};
+        view_desc.texture.image = image;
+        view = sg_make_view(&view_desc);
+    };
+    makeSolid(0xFFFFFFFF, r->white_pixel, r->white_view);
+    makeSolid(0x00000000, r->black_pixel, r->black_view);
+    makeSolid(0x808080FF, r->gray_pixel, r->gray_view);
+}
 
-    sg_view_desc wv_desc = {};
-    wv_desc.texture.image = r->white_pixel;
-    r->white_view = sg_make_view(&wv_desc);
-
-    pixel = 0x00000000;
-    r->black_pixel = sg_make_image(&img_desc);
-
-    sg_view_desc bv_desc = {};
-    bv_desc.texture.image = r->black_pixel;
-    r->black_view = sg_make_view(&bv_desc);
-
-    pixel = 0x808080FF;
-    r->gray_pixel = sg_make_image(&img_desc);
-
-    sg_view_desc gv_desc = {};
-    gv_desc.texture.image = r->gray_pixel;
-    r->gray_view = sg_make_view(&gv_desc);
-
-    const std::string vertex_source =
-        "#version 330\n"
-        "uniform mat4 mvp;\n"
-        "layout(location=0) in vec2 position;\n"
-        "layout(location=1) in vec2 texcoord0;\n"
-        "out vec2 uv;\n"
-        "void main() {\n"
-        "  gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
-        "  uv = texcoord0;\n"
-        "}\n";
-    const std::string fragment_source =
-        "#version 330\n"
-        "precision mediump float;\n"
-        "uniform sampler2D tex;\n"
-        "uniform vec4 tint;\n"
-        "in vec2 uv;\n"
-        "out vec4 frag_color;\n"
-        "void main() {\n"
-        "  frag_color = texture(tex, uv) * tint;\n"
-        "}\n";
-
-    sg_shader_desc shd_desc = {};
-    shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
-    shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
-    shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "mvp";
-    shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
-
-    shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.uniform_blocks[1].size = sizeof(float) * 4;
-    shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "tint";
-    shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
-
-    shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
-    shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-    shd_desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd_desc.texture_sampler_pairs[0].glsl_name = "tex";
-    shd_desc.texture_sampler_pairs[0].view_slot = 0;
-    shd_desc.texture_sampler_pairs[0].sampler_slot = 0;
-
-    sg_shader shd = create_backend_shader(&shd_desc, vertex_source, fragment_source, "renderer-default");
+void createSpritePipelines(renderer_t* r) {
+    const sg_shader sprite_shader = makeSpriteShader(kSpriteVertexSource, kSpriteFragmentSource, "renderer-default");
 
     sg_pipeline_desc pip_desc = {};
-    pip_desc.shader = shd;
+    pip_desc.shader = sprite_shader;
     pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.index_type = SG_INDEXTYPE_UINT16;
-    pip_desc.colors[0].blend.enabled = true;
-    pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
-    pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    // Keep the accumulated target opaque: with backend defaults a translucent layer replaced
-    // target alpha with its mask alpha, re-multiplying the composited scene at present.
-    pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
-    pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    useAlphaBlend(pip_desc);
     r->pip_alpha = sg_make_pipeline(&pip_desc);
     pip_desc.colors[0].blend.enabled = false;
     r->pip_copy = sg_make_pipeline(&pip_desc);
     pip_desc.colors[0].blend.enabled = true;
 
-    // Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
-    // Fully transparent texels borrow the colour of nearby opaque ones, otherwise bilinear minification of the
-    // straight result mixes their black into every cut-out edge.
-    const std::string unpremul_fragment_source =
-        "#version 330\n"
-        "precision mediump float;\n"
-        "uniform sampler2D tex;\n"
-        "uniform vec4 tint;\n"
-        "in vec2 uv;\n"
-        "out vec4 frag_color;\n"
-        "void main() {\n"
-        "  vec4 c = texture(tex, uv);\n"
-        "  if (c.a > 0.0) {\n"
-        "    c.rgb = min(c.rgb / c.a, vec3(1.0));\n"
-        "  } else {\n"
-        "    vec2 texel = vec2(abs(dFdx(uv.x)), abs(dFdy(uv.y)));\n"
-        "    vec3 sum = vec3(0.0);\n"
-        "    float weight = 0.0;\n"
-        "    for (int y = -2; y <= 2; ++y) {\n"
-        "      for (int x = -2; x <= 2; ++x) {\n"
-        "        vec4 n = texture(tex, uv + vec2(float(x), float(y)) * texel);\n"
-        "        sum += n.rgb;\n"
-        "        weight += n.a;\n"
-        "      }\n"
-        "    }\n"
-        "    if (weight > 0.0) c.rgb = min(sum / weight, vec3(1.0));\n"
-        "  }\n"
-        "  frag_color = c * tint;\n"
-        "}\n";
     sg_pipeline_desc unpremul_desc = pip_desc;
-    unpremul_desc.shader =
-        create_backend_shader(&shd_desc, vertex_source, unpremul_fragment_source, "renderer-unpremul");
+    unpremul_desc.shader = makeSpriteShader(kSpriteVertexSource, kUnpremulFragmentSource, "renderer-unpremul");
     unpremul_desc.colors[0].blend = {};
     r->pip_unpremul = sg_make_pipeline(&unpremul_desc);
 
-    // Present pass: gentle highlight roll-off so additive HDR effects do not
-    // hard-clip to flat white. Identity below the knee, asymptotes to 1 above.
-    const std::string present_fragment_source =
-        "#version 330\n"
-        "precision mediump float;\n"
-        "uniform sampler2D tex;\n"
-        "uniform vec4 tint;\n"
-        "in vec2 uv;\n"
-        "out vec4 frag_color;\n"
-        "void main() {\n"
-        "  vec4 c = texture(tex, uv) * tint;\n"
-        "  vec3 x = max(c.rgb, vec3(0.0));\n"
-        "  const float knee = 0.75;\n"
-        "  const float range = 1.0 - knee;\n"
-        "  vec3 rolled = knee + range * (vec3(1.0) - exp(-max(x - knee, vec3(0.0)) / range));\n"
-        "  x = mix(x, rolled, step(vec3(knee), x));\n"
-        "  frag_color = vec4(x, c.a);\n"
-        "}\n";
     sg_pipeline_desc present_desc = pip_desc;
-    present_desc.shader = create_backend_shader(&shd_desc, vertex_source, present_fragment_source, "renderer-present");
+    present_desc.shader = makeSpriteShader(kSpriteVertexSource, kPresentFragmentSource, "renderer-present");
     present_desc.colors[0].blend = {};
     r->pip_present = sg_make_pipeline(&present_desc);
 
@@ -315,60 +344,30 @@ void renderer_init(renderer_t* r, float w, float h) {
     pip_desc.primitive_type = SG_PRIMITIVETYPE_LINES;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     r->pip_lines = sg_make_pipeline(&pip_desc);
+}
 
-    const std::string mesh_vertex_source =
-        "#version 330\n"
-        "uniform mat4 mvp;\n"
-        "layout(location=0) in vec3 position;\n"
-        "layout(location=1) in vec2 texcoord0;\n"
-        "out vec2 uv;\n"
-        "void main() {\n"
-        "  gl_Position = mvp * vec4(position, 1.0);\n"
-        "  uv = texcoord0;\n"
-        "}\n";
-    const std::string mesh_fragment_source =
-        "#version 330\n"
-        "precision mediump float;\n"
-        "uniform sampler2D tex;\n"
-        "uniform vec4 tint;\n"
-        "in vec2 uv;\n"
-        "out vec4 frag_color;\n"
-        "void main() {\n"
-        "  frag_color = texture(tex, uv) * tint;\n"
-        "}\n";
+// Puppet meshes: 3D positions in one buffer and UVs in another.
+void createMeshPipeline(renderer_t* r) {
+    sg_pipeline_desc desc = {};
+    desc.shader = makeSpriteShader(kMeshVertexSource, kMeshFragmentSource, "renderer-mesh");
+    desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT3;
+    desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
+    desc.layout.attrs[1].buffer_index = 1;
+    desc.index_type = SG_INDEXTYPE_UINT16;
+    useAlphaBlend(desc);
+    r->pip_mesh = sg_make_pipeline(&desc);
+}
+}  // namespace
 
-    sg_shader_desc mesh_shd_desc = {};
-    mesh_shd_desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
-    mesh_shd_desc.uniform_blocks[0].size = sizeof(mat4x4);
-    mesh_shd_desc.uniform_blocks[0].glsl_uniforms[0].glsl_name = "mvp";
-    mesh_shd_desc.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
-    mesh_shd_desc.uniform_blocks[1].stage = SG_SHADERSTAGE_FRAGMENT;
-    mesh_shd_desc.uniform_blocks[1].size = sizeof(float) * 4;
-    mesh_shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "tint";
-    mesh_shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
-    mesh_shd_desc.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
-    mesh_shd_desc.views[0].texture.image_type = SG_IMAGETYPE_2D;
-    mesh_shd_desc.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    mesh_shd_desc.samplers[0].sampler_type = SG_SAMPLERTYPE_FILTERING;
-    mesh_shd_desc.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    mesh_shd_desc.texture_sampler_pairs[0].glsl_name = "tex";
-    mesh_shd_desc.texture_sampler_pairs[0].view_slot = 0;
-    mesh_shd_desc.texture_sampler_pairs[0].sampler_slot = 0;
-    sg_shader mesh_shd =
-        create_backend_shader(&mesh_shd_desc, mesh_vertex_source, mesh_fragment_source, "renderer-mesh");
+void renderer_init(renderer_t* r, float w, float h) {
+    r->view_width = w;
+    r->view_height = h;
 
-    sg_pipeline_desc mesh_pip_desc = {};
-    mesh_pip_desc.shader = mesh_shd;
-    mesh_pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT3;
-    mesh_pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
-    mesh_pip_desc.layout.attrs[1].buffer_index = 1;
-    mesh_pip_desc.index_type = SG_INDEXTYPE_UINT16;
-    mesh_pip_desc.colors[0].blend.enabled = true;
-    mesh_pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
-    mesh_pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    mesh_pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
-    mesh_pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    r->pip_mesh = sg_make_pipeline(&mesh_pip_desc);
+    createGeometryBuffers(r);
+    createSamplers(r);
+    createFallbackTextures(r);
+    createSpritePipelines(r);
+    createMeshPipeline(r);
 
     for (int mode = 0; mode <= kLastWallpaperBlendMode; ++mode) {
         r->pip_image_composite[mode] = {};
