@@ -362,13 +362,12 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: `getCameraTransforms()` and `setCameraTransforms({eye, center, up, zoom})`; `zoom` zooms the 2D view, while `eye`, `center` and `up` are stored but the orthographic renderer does not use them
     - Works: `clearenabled`, `camerafade`, `fov`, `nearz`, `farz` (read/write; `fov`, `nearz` and `farz` are kept but the orthographic renderer does not use them)
   - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
-- [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`)
+- [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`); `getAnimation` / `getTextureAnimation` return an object even when the layer has no such animation, so unguarded calls do not throw
 - [-] Events
   - Works: `init`, `update`, `applyUserProperties` (once after the first init), `cursorEnter/Leave/Move/Down/Up/Click` on solid image layers, and `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged`, `mediaThumbnailChanged`, `mediaTimelineChanged` from MPRIS
   - Works: `destroy` (when the scene is unloaded), `resizeScreen` (receives the new size as `x`, `y`) and `applyGeneralSettings` (once at start, with `language` taken from the locale)
-- [-] Video texture handle (`thisLayer.getVideoTexture()`)
-  - Works: `play()`, `pause()`, `stop()` (back to the first frame), `isPlaying()`, `duration`, `rate`, `loop` (off stops at the end), `getCurrentTime()`, `addEndedCallback()`
-  - Missing: `setCurrentTime(t)` only accepts 0, because the decoder can only restart from the first frame
+- [x] Video texture handle (`thisLayer.getVideoTexture()`)
+  - Works: `play()`, `pause()`, `stop()` (back to the first frame), `isPlaying()`, `duration`, `rate`, `loop` (off stops at the end), `getCurrentTime()`, `setCurrentTime(t)` (seeks the video and its audio track), `addEndedCallback()`
 - [-] Particle handles (`thisLayer.getParticleSystem()`)
   - Works
     - System: `play()`, `pause()`, `stop()` (stops emission and clears the live particles), `isPlaying()`, `emitParticles(n)`
