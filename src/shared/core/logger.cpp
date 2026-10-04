@@ -51,9 +51,10 @@ static void print_log(log_level_t level, const char* tag, const char* fmt, va_li
     addRecentLog(level, tag, message);
 
     time_t now = time(NULL);
-    struct tm* t = localtime(&now);
+    struct tm local_time = {};
+    localtime_r(&now, &local_time);
     char time_str[32];
-    strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", &local_time);
 
     const char* level_strs[] = {"DEBUG", "INFO", "WARN", "ERROR"};
     const char* level_colors[] = {"\033[94m", "\033[92m", "\033[93m", "\033[91m"};

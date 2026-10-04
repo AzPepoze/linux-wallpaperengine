@@ -17,6 +17,7 @@
 #include "shared/core/build_config.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/core/phase_timer.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/backend/sokol/sokol_sync.h"
@@ -114,13 +115,17 @@ static void loadInitialWallpaper() {
     }
     strcpy(ctx.asset_root, "extracted");
     ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
-    const std::string asset_root = prepareAssetRoot(wallpaper_source);
+    std::string asset_root;
+    {
+        PhaseTimer timer("package mount / extract");
+        asset_root = prepareAssetRoot(wallpaper_source);
+    }
     strncpy(ctx.asset_root, asset_root.c_str(), sizeof(ctx.asset_root) - 1);
     wallpaper_mgr.load(ctx.asset_root, ctx);
 }
 
 static void init(void) {
-    logger_init(LOG_LEVEL_DEBUG);
+    logger_init(DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO);
 #if DEBUG_BUILD
     // Distinguish this test binary in kernel GPU-fault logs ("comm" field)
     // from other concurrently running wallpaper engine instances.
@@ -128,7 +133,10 @@ static void init(void) {
 #endif
     installSignalHandlers();
     stm_setup();
-    GpuDeviceManager::instance().init();
+    {
+        PhaseTimer timer("GPU device selection");
+        GpuDeviceManager::instance().init();
+    }
     logActiveGpu();
 
     const bool engine_from_cli =
@@ -143,11 +151,17 @@ static void init(void) {
     ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
 
     wallpaper_engine::setVideoLoadInRam(cli.video_ram);
-    initAudio();
+    {
+        PhaseTimer timer("audio init");
+        initAudio();
+    }
 #if DEBUG_BUILD
     RenderDiagnostics::instance().init(cli.diagnostics);
 #endif
-    initGraphics();
+    {
+        PhaseTimer timer("graphics init");
+        initGraphics();
+    }
 #if DEBUG_BUILD
     Debugger::init();
 #endif
@@ -161,7 +175,10 @@ static void init(void) {
     }
 #endif
 
-    if (ctx.wallpaper_path[0] != '\0') loadInitialWallpaper();
+    if (ctx.wallpaper_path[0] != '\0') {
+        PhaseTimer timer("wallpaper load (total)");
+        loadInitialWallpaper();
+    }
     LOG_I("Linux Wallpaper Engine Initialized");
 }
 

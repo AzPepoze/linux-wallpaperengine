@@ -5,6 +5,7 @@
 #include <string>
 
 #include "shared/core/logger.h"
+#include "shared/core/phase_timer.h"
 #include "shared/core/task_pool.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
@@ -38,7 +39,11 @@ std::string sceneTreeDisplayName(const wallpaper_engine::SceneObjectDocument& ob
 
 ParsedScene SceneBuilder::load(const char* scene_json_path, EngineContext& ctx) {
     wallpaper_engine::SceneDocument document;
-    if (!wallpaper_engine::parseSceneFile(scene_json_path, document)) return {};
+    {
+        PhaseTimer timer("scene.json parse");
+        if (!wallpaper_engine::parseSceneFile(scene_json_path, document)) return {};
+    }
+    PhaseTimer timer("scene build (layers, textures, effects)");
     return buildFromDocument(document, ctx);
 }
 
