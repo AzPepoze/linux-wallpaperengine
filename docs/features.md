@@ -347,7 +347,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: text layers (`text`, `font`, `pointsize`, `maxwidth`, `maxrows`, alignment) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
     - Works: `getEffect(name | index)` and `getEffectCount()`; an effect has `visible`, `name`, `getMaterial()`, `getMaterialProperty(name)` and `setMaterialProperty(name, value)` (a value set by a script replaces the constant's keyframes)
     - Works: `setParent(layer)` (keeps the local transform)
-    - Missing: `getVideoTexture`, attachments, `rotateObjectSpace`, `solid`, `executeMaterialFunction`
+    - Missing: attachments, `rotateObjectSpace`, `solid`, `executeMaterialFunction`
     - Not available for scripts on camera or scene-level properties (no owning layer)
   - [-] `thisObject`
     - Works: `visible`, `name`, `getAnimation()`; the effect itself for scripts on an effect property
@@ -362,7 +362,9 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works: `init`, `update`, `applyUserProperties` (once after the first init), `cursorEnter/Leave/Move/Down/Up/Click` on solid image layers, and `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged`, `mediaThumbnailChanged`, `mediaTimelineChanged` from MPRIS
   - Works: `destroy` (when the scene is unloaded) and `resizeScreen` (receives the new size as `x`, `y`)
   - Missing: `applyGeneralSettings`
-- [ ] Video texture handle (`IVideoTexture`)
+- [-] Video texture handle (`thisLayer.getVideoTexture()`)
+  - Works: `play()`, `pause()`, `stop()`, `isPlaying()`
+  - Missing: seeking and time (`setCurrentTime`, `getCurrentTime`, `duration`), because the decoder cannot seek
 - [-] Particle handles (`thisLayer.getParticleSystem()`)
   - Works
     - `alpha`, `size`, `count`, `speed`, `lifetime`, `rate`, `color`, `play()`, `pause()`, `stop()` (ends emission, live particles finish) and `emitParticles(n)`; one instance per system

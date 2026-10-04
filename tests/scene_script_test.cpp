@@ -139,6 +139,11 @@ class EffectScene : public CountingScene {
         particle_rate = value;
         return true;
     }
+    bool getBool(uint32_t, const std::string& property, bool& out) override {
+        if (property != "video.playing") return false;
+        out = true;
+        return true;
+    }
     bool layerCommand(uint32_t, const std::string& command) override {
         last_command = command;
         return true;
@@ -344,6 +349,19 @@ export function update() {
                             ""));
         CHECK(updateText(settings, out) && out == "0.5");
         CHECK(scene.clear.size() == 3 && scene.clear[2] == 0.5);
+
+        // Video textures: playback commands.
+        SceneScript video;
+        video.setLayerId(3);
+        CHECK(video.load(R"JS(
+export function update() {
+    var texture = thisLayer.getVideoTexture();
+    texture.pause();
+    return String(texture.isPlaying());
+})JS",
+                         ""));
+        CHECK(updateText(video, out) && out == "true");
+        CHECK(scene.last_command == "video.pause");
 
         // A script bound to an effect sees that effect as thisObject.
         SceneScript bound;

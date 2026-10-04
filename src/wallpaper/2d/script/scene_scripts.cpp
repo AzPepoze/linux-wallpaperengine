@@ -163,6 +163,11 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
         out = layer->visible;
         return true;
     }
+    if (const auto* image = dynamic_cast<const ImageLayer*>(layer); image && property == "video.playing") {
+        if (!image->bound_video_decoder) return false;
+        out = image->bound_video_decoder->isPlaying() && !image->bound_video_decoder->isPaused();
+        return true;
+    }
     if (const auto* sound = dynamic_cast<const SoundLayer*>(layer); sound && property == "playing") {
         out = sound->playing();
         return true;
@@ -247,6 +252,24 @@ bool SceneScriptBackend::setMaterialProperty(uint32_t layer_id, int effect, cons
 }
 
 bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
+    if (command.compare(0, 6, "video.") == 0) {
+        auto* image = dynamic_cast<ImageLayer*>(layerById(id));
+        if (!image || !image->bound_video_decoder) return false;
+        const std::string name = command.substr(6);
+        if (name == "play") {
+            if (image->bound_video_decoder->isPaused())
+                image->resume();
+            else
+                image->start();
+        } else if (name == "pause") {
+            image->pause();
+        } else if (name == "stop") {
+            image->stop();
+        } else {
+            return false;
+        }
+        return true;
+    }
     if (hasParticlePrefix(command)) {
         ParticleSystem* ps = particleSystemOf(layerById(id));
         if (!ps) return false;

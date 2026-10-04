@@ -356,6 +356,15 @@ EffectHandle.prototype.setMaterialProperty = function (name, value) {
 };
 function effectHandle(layerId, index) { return new EffectHandle(layerId, index); }
 
+function VideoTextureHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
+['play', 'pause', 'stop'].forEach(function (command) {
+    VideoTextureHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, 'video.' + command); };
+});
+VideoTextureHandle.prototype.isPlaying = function () { return __lweScene('get', this.__id, 'video.playing') === true; };
+LayerHandle.prototype.getVideoTexture = function () {
+    return __lweScene('get', this.__id, 'video.playing') === undefined ? undefined : new VideoTextureHandle(this.__id);
+};
+
 function ParticleHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
 (function () {
     var props = { color: vectorProperty('particle.color', 3) };
