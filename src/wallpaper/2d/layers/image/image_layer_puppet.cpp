@@ -111,6 +111,39 @@ void ImageLayer::updatePuppetPositions(int width, int height) {
     sg_update_buffer(puppet_position_buffer, &range);
 }
 
+bool ImageLayer::renderGeometry(EngineContext& ctx, int width, int height, const std::function<void()>& draw) {
+    width = std::max(1, width);
+    height = std::max(1, height);
+    if (!ensurePuppetTarget(width, height)) return false;
+
+    const float saved_view_width = ctx.renderer.view_width;
+    const float saved_view_height = ctx.renderer.view_height;
+
+    sg_pass pass = {};
+    pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+    pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+    pass.attachments.colors[0] = puppet_target.attachment_view;
+    sg_begin_pass(&pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    draw();
+    sg_end_pass();
+
+    sg_pass resolve_pass = {};
+    resolve_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    resolve_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+    resolve_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+    resolve_pass.attachments.colors[0] = puppet_straight.attachment_view;
+    sg_begin_pass(&resolve_pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    renderer_draw_unpremultiplied(&ctx.renderer, puppet_target.texture_view, (float)width, (float)height);
+    sg_end_pass();
+
+    renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
+    puppet_resolved = true;
+    return true;
+}
+
 bool ImageLayer::renderPuppet(EngineContext& ctx) {
     if (!has_puppet_mesh || img.id == SG_INVALID_ID) return false;
     if (cached_view.id == SG_INVALID_ID) updateCachedView();
@@ -129,35 +162,10 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
     int height = (int)std::lround(size[1] > 0.0f ? size[1] : (float)material_desc.height);
     width = std::max(1, width);
     height = std::max(1, height);
-    if (!ensurePuppetTarget(width, height)) return false;
-
     updatePuppetPositions(width, height);
-
-    const float saved_view_width = ctx.renderer.view_width;
-    const float saved_view_height = ctx.renderer.view_height;
-
-    sg_pass pass = {};
-    pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-    pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-    pass.attachments.colors[0] = puppet_target.attachment_view;
-    sg_begin_pass(&pass);
-    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    renderer_draw_mesh(ctx, &ctx.renderer, puppet_position_buffer, puppet_uv_buffer, puppet_index_buffer,
-                       puppet_index_count, source_image, source_view, white, (float)width, (float)height);
-    sg_end_pass();
-
-    sg_pass resolve_pass = {};
-    resolve_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    resolve_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-    resolve_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-    resolve_pass.attachments.colors[0] = puppet_straight.attachment_view;
-    sg_begin_pass(&resolve_pass);
-    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    renderer_draw_unpremultiplied(&ctx.renderer, puppet_target.texture_view, (float)width, (float)height);
-    sg_end_pass();
-
-    renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
-    return true;
+    return renderGeometry(ctx, width, height, [&] {
+        const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_mesh(ctx, &ctx.renderer, puppet_position_buffer, puppet_uv_buffer, puppet_index_buffer,
+                           puppet_index_count, source_image, source_view, white, (float)width, (float)height);
+    });
 }

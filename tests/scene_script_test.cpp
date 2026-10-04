@@ -104,6 +104,20 @@ class EffectScene : public CountingScene {
     uint32_t findLayerByName(const std::string&) override {
         return 3;
     }
+    std::vector<ShapePatch> model_shapes;
+    std::vector<ShapePatch> model_update;
+    bool model_replace = false;
+    uint32_t created_model = 0;
+    uint32_t createModelData(const std::vector<ShapePatch>& shapes) override {
+        model_shapes = shapes;
+        return 5;
+    }
+    bool updateModelData(uint32_t model, const std::vector<ShapePatch>& shapes, bool replace) override {
+        created_model = model;
+        model_update = shapes;
+        model_replace = replace;
+        return true;
+    }
     std::string parent_call;
     bool setParent(uint32_t id, uint32_t parent, const std::string& attachment, bool adjust) override {
         parent_call = std::to_string(id) + ">" + std::to_string(parent) + "@" + attachment + (adjust ? "+" : "-");
@@ -451,6 +465,51 @@ export function update() {
                          ""));
         CHECK(updateText(video, out) && out == "true:120:30:false");
         CHECK(scene.video_command == "pause" && scene.video_rate == 2.0 && scene.video_loop == 0.0);
+
+        // IModelData: shapes reach the scene with typed buffers decoded, and the layer refers to the model by id.
+        SceneScript model_api;
+        model_api.setLayerId(3);
+        CHECK(model_api.load(R"JS(
+export function update() {
+    var model = thisScene.createModelData({ shapes: [{
+        vertexBuffer: new Float32Array([0, 300, 0, 0, 0, 1, 0.5, 1,  -300, 0, 0, 0, 0, 1, 0, 0,  300, 0, 0, 0, 0, 1, 1, 0]),
+        vertexFormat: [IModelData.POSITION, IModelData.NORMAL, IModelData.UV],
+        indexBuffer: new Uint16Array([0, 1, 2]),
+        material: engine.registerAsset('materials/mine.json', true),
+        origin: { x: 1, y: 2, z: 3 }
+    }] });
+    model.applyData({ vertexBuffer: new Float32Array([9, 9, 9]) });
+    model.replaceData([null, { indexBuffer: null }]);
+    thisScene.createLayer({ model: model, origin: { x: 4, y: 5, z: 0 } });
+    thisScene.destroyModelData(model);
+    return String(IModelData.TANGENT_SIGNED);
+})JS",
+                              ""));
+        CHECK(updateText(model_api, out) && out == "tangent_signed");
+        CHECK(scene.model_shapes.size() == 1 && scene.model_shapes[0].data.vertices.size() == 24 &&
+              scene.model_shapes[0].data.vertices[1] == 300.0f && scene.model_shapes[0].data.format.size() == 3 &&
+              scene.model_shapes[0].data.format[2] == VertexAttribute::Uv &&
+              scene.model_shapes[0].data.indices.size() == 3 && scene.model_shapes[0].data.indices[2] == 2 &&
+              scene.model_shapes[0].data.material == "materials/mine.json" &&
+              scene.model_shapes[0].data.origin[2] == 3.0f);
+        CHECK(scene.model_update.size() == 2 && scene.model_update[0].remove && scene.model_update[1].remove_indices &&
+              scene.model_replace && scene.created_model == 5);
+        CHECK(scene.created_json.find("\"model\":5") != std::string::npos);
+
+        // Patches merge field by field unless the shape is replaced.
+        ModelShape shape;
+        ShapePatch full;
+        full.has_vertices = full.has_material = true;
+        full.data.vertices = {1, 2, 3};
+        full.data.material = "a";
+        applyShapePatch(shape, full, true);
+        ShapePatch only_vertices;
+        only_vertices.has_vertices = true;
+        only_vertices.data.vertices = {4, 5, 6};
+        applyShapePatch(shape, only_vertices, false);
+        CHECK(shape.vertices[0] == 4.0f && shape.material == "a");
+        applyShapePatch(shape, only_vertices, true);
+        CHECK(shape.material.empty());
 
         // Layer API: both setParent forms, object-space rotation, attachments, one-shot animation layers.
         SceneScript layer_api;

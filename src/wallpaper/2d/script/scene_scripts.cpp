@@ -14,6 +14,7 @@
 #include "shared/core/logger.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/layers/model/model_layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
@@ -963,11 +964,36 @@ uint32_t SceneScriptBackend::createLayer(const std::string& config_json) {
     cJSON* config = cJSON_Parse(config_json.c_str());
     if (!config) return 0;
     if (cJSON_IsString(config)) {
-        // A bare string names an image asset.
+        // A bare string names an asset; the layer type follows from where it lives.
+        const std::string path = config->valuestring;
+        const auto ends_with = [&](const char* suffix) {
+            const size_t length = strlen(suffix);
+            return path.size() >= length && path.compare(path.size() - length, length, suffix) == 0;
+        };
+        const char* key = "image";
+        if (path.rfind("particles/", 0) == 0)
+            key = "particle";
+        else if (ends_with(".mp3") || ends_with(".ogg") || ends_with(".wav"))
+            key = "sound";
         cJSON* wrapped = cJSON_CreateObject();
-        cJSON_AddStringToObject(wrapped, "image", config->valuestring);
+        if (strcmp(key, "sound") == 0) {
+            cJSON* sounds = cJSON_AddArrayToObject(wrapped, "sound");
+            cJSON_AddItemToArray(sounds, cJSON_CreateString(path.c_str()));
+        } else {
+            cJSON_AddStringToObject(wrapped, key, path.c_str());
+        }
         cJSON_Delete(config);
         config = wrapped;
+    }
+    std::shared_ptr<ModelData> model;
+    if (const cJSON* model_id = cJSON_GetObjectItemCaseSensitive(config, "model"); cJSON_IsNumber(model_id)) {
+        const auto found = models_.find((uint32_t)model_id->valuedouble);
+        if (found == models_.end()) {
+            cJSON_Delete(config);
+            return 0;
+        }
+        model = found->second;
+        cJSON_DeleteItemFromObjectCaseSensitive(config, "model");
     }
     uint32_t highest = ctx_.scene.scene_tree->maxId();
     highest = std::max(highest, next_object_id_);
@@ -984,13 +1010,61 @@ uint32_t SceneScriptBackend::createLayer(const std::string& config_json) {
     cJSON_free(text);
     if (!parsed) return 0;
 
-    Layer* layer = SceneBuilder::buildLayer(object, ctx_);
+    Layer* layer = nullptr;
+    if (model) {
+        layer = new ModelLayer(object.name.empty() ? "Model" : object.name.c_str(), model);
+        layer->initFromDocument(object, ctx_);
+    } else {
+        layer = SceneBuilder::buildLayer(object, ctx_);
+    }
     if (!layer) return 0;
     ctx_.scene.scene_tree->addNode(SceneBuilder::treeNode(object));
     ctx_.scene.scene_tree->rebuildHierarchy();
     ctx_.scene.layers.push_back(layer);
     if (created_handler_) created_handler_(object);
     return id;
+}
+
+uint32_t SceneScriptBackend::createModelData(const std::vector<ShapePatch>& shapes) {
+    auto model = std::make_shared<ModelData>();
+    for (const ShapePatch& patch : shapes) {
+        ModelShape shape;
+        applyShapePatch(shape, patch, true);
+        model->shapes.push_back(std::move(shape));
+    }
+    const uint32_t id = ++next_model_id_;
+    models_[id] = std::move(model);
+    return id;
+}
+
+bool SceneScriptBackend::updateModelData(uint32_t model_id, const std::vector<ShapePatch>& shapes, bool replace) {
+    const auto found = models_.find(model_id);
+    if (found == models_.end()) return false;
+    ModelData& model = *found->second;
+    std::vector<size_t> removed;
+    for (const ShapePatch& patch : shapes) {
+        if (patch.index < 0) continue;
+        const size_t index = (size_t)patch.index;
+        if (patch.remove) {
+            if (replace && index < model.shapes.size()) removed.push_back(index);
+            continue;
+        }
+        if (index >= model.shapes.size()) {
+            // Only replaceData may add a shape, and only next to the existing ones.
+            if (!replace || index != model.shapes.size()) continue;
+            model.shapes.emplace_back();
+        }
+        applyShapePatch(model.shapes[index], patch, replace);
+    }
+    std::sort(removed.rbegin(), removed.rend());
+    for (size_t index : removed) model.shapes.erase(model.shapes.begin() + (std::ptrdiff_t)index);
+    ++model.revision;
+    return true;
+}
+
+bool SceneScriptBackend::destroyModelData(uint32_t model_id) {
+    // Layers that still draw the model keep their own reference until they are removed.
+    return models_.erase(model_id) > 0;
 }
 
 bool SceneScriptBackend::destroyLayer(uint32_t id) {

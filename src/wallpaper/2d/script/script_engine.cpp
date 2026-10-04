@@ -554,6 +554,14 @@ function layerHandle(id) {
     if (!id || !__lweScene('exists', id)) return undefined;
     return handles[id] || (handles[id] = new LayerHandle(id));
 }
+// IModelData: custom geometry for a layer made with thisScene.createLayer({ model }).
+hide('IModelData', {
+    POSITION: 'position', NORMAL: 'normal', UV: 'uv', TANGENT_SIGNED: 'tangent_signed', COLOR: 'color'
+});
+function ModelDataHandle(id) { Object.defineProperty(this, '__id', { value: id }); }
+// A shape is one object, or an array of them (null removes a shape in replaceData).
+ModelDataHandle.prototype.applyData = function (shapes) { __lweScene('modelUpdate', this.__id, shapes, false); };
+ModelDataHandle.prototype.replaceData = function (shapes) { __lweScene('modelUpdate', this.__id, shapes, true); };
 hide('thisScene', {
     getLayer: function (nameOrIndex) { return layerHandle(__lweScene('find', nameOrIndex)); },
     getLayerCount: function () { return __lweScene('list').length; },
@@ -579,6 +587,13 @@ hide('thisScene', {
             if (transforms[key]) __lweScene('sceneSet', 'camera' + key, toArray(transforms[key], 3));
         });
     },
+    createModelData: function (configuration) {
+        var id = configuration && configuration.shapes ? __lweScene('modelCreate', configuration.shapes) : 0;
+        return id ? new ModelDataHandle(id) : undefined;
+    },
+    destroyModelData: function (modelData) {
+        if (modelData instanceof ModelDataHandle) __lweScene('modelDestroy', modelData.__id);
+    },
     getInitialLayerConfig: function (layer) {
         var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
         var json = handle ? __lweScene('initialConfig', handle.__id) : '';
@@ -587,9 +602,13 @@ hide('thisScene', {
     // `config` is an asset path or an object shaped like an entry of scene.json `objects`.
     createLayer: function (config) {
         var json;
+        // An asset handle from engine.registerAsset() stands for the asset's path.
+        if (config && typeof config === 'object' && typeof config.file === 'string' && Object.keys(config).length === 1)
+            config = config.file;
         try {
-            // scene.json writes vectors as "x y z".
+            // scene.json writes vectors as "x y z"; model data goes by its id.
             json = JSON.stringify(config, function (key, value) {
+                if (key === 'model' && value instanceof ModelDataHandle) return value.__id;
                 if (value && typeof value === 'object' && typeof value.x === 'number' && typeof value.y === 'number')
                     return [value.x, value.y, value.z].filter(function (v) { return v !== undefined; }).join(' ');
                 return value;
@@ -754,6 +773,175 @@ JSValue idArray(JSContext* ctx, const std::vector<uint32_t>& ids) {
     return array;
 }
 
+enum class ListKind { Floats, Indices };
+
+// The numbers of a Float32Array / Uint16Array / Uint32Array, or of a plain array.
+bool numberList(JSContext* ctx, JSValueConst value, ListKind kind, std::vector<double>& out) {
+    size_t offset = 0, byte_length = 0, bytes = 0;
+    JSValue buffer = JS_GetTypedArrayBuffer(ctx, value, &offset, &byte_length, &bytes);
+    if (!JS_IsException(buffer)) {
+        size_t buffer_size = 0;
+        const uint8_t* data = JS_GetArrayBuffer(ctx, &buffer_size, buffer);
+        JS_FreeValue(ctx, buffer);
+        if (!data || offset + byte_length > buffer_size || bytes == 0) return false;
+        data += offset;
+        for (size_t i = 0; i < byte_length / bytes; ++i) {
+            const uint8_t* element = data + i * bytes;
+            double number = 0.0;
+            if (kind == ListKind::Floats && bytes == 4) {
+                float f;
+                memcpy(&f, element, 4);
+                number = f;
+            } else if (kind == ListKind::Floats && bytes == 8) {
+                memcpy(&number, element, 8);
+            } else if (bytes == 4) {
+                uint32_t u;
+                memcpy(&u, element, 4);
+                number = u;
+            } else if (bytes == 2) {
+                uint16_t u;
+                memcpy(&u, element, 2);
+                number = u;
+            } else {
+                number = *element;
+            }
+            out.push_back(number);
+        }
+        return true;
+    }
+    JS_FreeValue(ctx, JS_GetException(ctx));
+    if (!JS_IsArray(ctx, value)) return false;
+    JSValue length = JS_GetPropertyStr(ctx, value, "length");
+    uint32_t count = 0;
+    JS_ToUint32(ctx, &count, length);
+    JS_FreeValue(ctx, length);
+    for (uint32_t i = 0; i < count; ++i) {
+        JSValue item = JS_GetPropertyUint32(ctx, value, i);
+        double number = 0.0;
+        JS_ToFloat64(ctx, &number, item);
+        JS_FreeValue(ctx, item);
+        out.push_back(number);
+    }
+    return true;
+}
+
+bool stringProperty(JSContext* ctx, JSValueConst object, const char* name, std::string& out) {
+    JSValue value = JS_GetPropertyStr(ctx, object, name);
+    const char* text = JS_IsString(value) ? JS_ToCString(ctx, value) : nullptr;
+    if (text) {
+        out = text;
+        JS_FreeCString(ctx, text);
+    }
+    JS_FreeValue(ctx, value);
+    return text != nullptr;
+}
+
+// One shape of createModelData / applyData / replaceData.
+bool parseShapePatch(JSContext* ctx, JSValueConst shape, int index, ShapePatch& patch) {
+    patch.index = index;
+    if (JS_IsNull(shape)) {
+        patch.remove = true;
+        return true;
+    }
+    if (!JS_IsObject(shape)) return false;
+
+    JSValue vertices = JS_GetPropertyStr(ctx, shape, "vertexBuffer");
+    if (!JS_IsUndefined(vertices) && !JS_IsNull(vertices)) {
+        std::vector<double> numbers;
+        if (numberList(ctx, vertices, ListKind::Floats, numbers)) {
+            patch.has_vertices = true;
+            patch.data.vertices.assign(numbers.begin(), numbers.end());
+        }
+    }
+    JS_FreeValue(ctx, vertices);
+
+    JSValue format = JS_GetPropertyStr(ctx, shape, "vertexFormat");
+    if (JS_IsArray(ctx, format)) {
+        patch.has_format = true;
+        JSValue length = JS_GetPropertyStr(ctx, format, "length");
+        uint32_t count = 0;
+        JS_ToUint32(ctx, &count, length);
+        JS_FreeValue(ctx, length);
+        for (uint32_t i = 0; i < count; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, format, i);
+            const char* name = JS_IsString(item) ? JS_ToCString(ctx, item) : nullptr;
+            if (name) {
+                const std::string attribute = name;
+                if (attribute == "position") patch.data.format.push_back(VertexAttribute::Position);
+                if (attribute == "normal") patch.data.format.push_back(VertexAttribute::Normal);
+                if (attribute == "uv") patch.data.format.push_back(VertexAttribute::Uv);
+                if (attribute == "tangent_signed") patch.data.format.push_back(VertexAttribute::TangentSigned);
+                if (attribute == "color") patch.data.format.push_back(VertexAttribute::Color);
+                JS_FreeCString(ctx, name);
+            }
+            JS_FreeValue(ctx, item);
+        }
+    }
+    JS_FreeValue(ctx, format);
+
+    JSValue indices = JS_GetPropertyStr(ctx, shape, "indexBuffer");
+    if (JS_IsNull(indices)) {
+        patch.remove_indices = true;
+    } else if (!JS_IsUndefined(indices)) {
+        std::vector<double> numbers;
+        if (numberList(ctx, indices, ListKind::Indices, numbers)) {
+            patch.has_indices = true;
+            patch.data.indices.assign(numbers.begin(), numbers.end());
+        }
+    }
+    JS_FreeValue(ctx, indices);
+
+    JSValue material = JS_GetPropertyStr(ctx, shape, "material");
+    if (JS_IsString(material)) {
+        const char* text = JS_ToCString(ctx, material);
+        if (text) {
+            patch.has_material = true;
+            patch.data.material = text;
+            JS_FreeCString(ctx, text);
+        }
+    } else if (JS_IsObject(material)) {
+        // An IAssetHandle from engine.registerAsset().
+        patch.has_material = stringProperty(ctx, material, "file", patch.data.material);
+    }
+    JS_FreeValue(ctx, material);
+
+    JSValue origin = JS_GetPropertyStr(ctx, shape, "origin");
+    if (JS_IsObject(origin)) {
+        patch.has_origin = true;
+        const char* axes[3] = {"x", "y", "z"};
+        for (int i = 0; i < 3; ++i) {
+            JSValue axis = JS_GetPropertyStr(ctx, origin, axes[i]);
+            double number = 0.0;
+            if (!JS_IsUndefined(axis)) JS_ToFloat64(ctx, &number, axis);
+            patch.data.origin[i] = (float)number;
+            JS_FreeValue(ctx, axis);
+        }
+    }
+    JS_FreeValue(ctx, origin);
+    return true;
+}
+
+// `shapes` is one shape object or an array of them (a null entry removes that shape).
+std::vector<ShapePatch> parseShapePatches(JSContext* ctx, JSValueConst shapes) {
+    std::vector<ShapePatch> patches;
+    if (JS_IsArray(ctx, shapes)) {
+        JSValue length = JS_GetPropertyStr(ctx, shapes, "length");
+        uint32_t count = 0;
+        JS_ToUint32(ctx, &count, length);
+        JS_FreeValue(ctx, length);
+        for (uint32_t i = 0; i < count; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, shapes, i);
+            ShapePatch patch;
+            if (parseShapePatch(ctx, item, (int)i, patch)) patches.push_back(std::move(patch));
+            JS_FreeValue(ctx, item);
+        }
+    } else {
+        ShapePatch patch;
+        if (parseShapePatch(ctx, shapes, 0, patch)) patches.push_back(std::move(patch));
+    }
+    return patches;
+}
+
 JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     ScriptSceneBackend* scene = ScriptEngine::instance().sceneBackend();
     if (!scene || argc < 1) return JS_UNDEFINED;
@@ -814,6 +1002,10 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
 
     const uint32_t id = idArg(1);
+    if (op == "modelCreate" && argc > 1) return JS_NewUint32(ctx, scene->createModelData(parseShapePatches(ctx, argv[1])));
+    if (op == "modelUpdate" && argc > 3)
+        return JS_NewBool(ctx, scene->updateModelData(id, parseShapePatches(ctx, argv[2]), JS_ToBool(ctx, argv[3]) > 0));
+    if (op == "modelDestroy") return JS_NewBool(ctx, scene->destroyModelData(id));
     if (op == "exists") return JS_NewBool(ctx, scene->layerExists(id));
     if (op == "createLayer") return JS_NewUint32(ctx, scene->createLayer(stringArg(1)));
     if (op == "destroyLayer") return JS_NewBool(ctx, scene->destroyLayer(id));

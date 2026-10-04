@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -65,6 +66,9 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool resetBone(uint32_t layer_id, int bone) override;
     bool getSceneProperty(const std::string& name, std::vector<double>& out) override;
     bool setSceneProperty(const std::string& name, const std::vector<double>& value) override;
+    uint32_t createModelData(const std::vector<ShapePatch>& shapes) override;
+    bool updateModelData(uint32_t model, const std::vector<ShapePatch>& shapes, bool replace) override;
+    bool destroyModelData(uint32_t model) override;
     uint32_t createLayer(const std::string& config_json) override;
     bool destroyLayer(uint32_t id) override;
     bool sortLayer(uint32_t id, int index) override;
@@ -112,6 +116,8 @@ class SceneScriptBackend : public ScriptSceneBackend {
     SceneAnimations& animations_;
     std::vector<AnimationTarget> targets_;
     std::unordered_map<uint32_t, std::string> initial_configs_;
+    std::map<uint32_t, std::shared_ptr<ModelData>> models_;
+    uint32_t next_model_id_ = 0;
     std::vector<uint32_t> destroyed_;
     uint32_t next_object_id_ = 0;
     std::function<void(const wallpaper_engine::SceneObjectDocument&)> created_handler_;

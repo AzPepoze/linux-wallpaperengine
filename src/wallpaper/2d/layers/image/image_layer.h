@@ -2,6 +2,7 @@
 #define IMAGE_LAYER_H
 
 #include <array>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -279,6 +280,10 @@ class ImageLayer : public Layer {
     // Sprite placement in screen pixels. Text layers override this to anchor
     // the sprite to the alignment corner instead of the centre.
     virtual ScreenRect screenRect(EngineContext& ctx) const;
+
+    // Makes the layer's picture a mesh drawing: `draw` issues renderer_draw_mesh calls in a width x height pixel
+    // space (top-left origin). Call it after ImageLayer::update, which resets the picture each frame.
+    bool renderGeometry(EngineContext& ctx, int width, int height, const std::function<void()>& draw);
 
     wallpaper_engine::ImageObjectDocument alpha_document;
     // Set when the object's alpha is driven by a SceneScript; `alpha_script_value` is its running result.

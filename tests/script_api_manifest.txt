@@ -82,6 +82,14 @@ thisScene.getLayerIndex function
 thisScene.createLayer function
 thisScene.destroyLayer function
 thisScene.sortLayer function
+thisScene.createModelData function
+thisScene.destroyModelData function
+IModelData.POSITION string
+IModelData.NORMAL string
+IModelData.UV string
+IModelData.TANGENT_SIGNED string
+IModelData.COLOR string
+engine.registerAsset('x') object
 thisScene.getInitialLayerConfig function
 thisScene.getCameraTransforms function
 thisScene.setCameraTransforms function

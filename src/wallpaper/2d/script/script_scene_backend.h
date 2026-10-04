@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "wallpaper/2d/layers/model/model_data.h"
+
 // What scripts can see and change of the running scene. Layers are addressed by scene object id (0 = none).
 class ScriptSceneBackend {
    public:
@@ -137,6 +139,19 @@ class ScriptSceneBackend {
         return false;
     }
     virtual bool setSceneProperty(const std::string& /*name*/, const std::vector<double>& /*value*/) {
+        return false;
+    }
+
+    // Script-made geometry (IModelData). A layer made with createLayer({model}) draws the model; later patches show
+    // up on it. `replace` allows any change (shapes added or removed, new buffer sizes), otherwise only the fields
+    // present change.
+    virtual uint32_t createModelData(const std::vector<ShapePatch>& /*shapes*/) {
+        return 0;
+    }
+    virtual bool updateModelData(uint32_t /*model*/, const std::vector<ShapePatch>& /*shapes*/, bool /*replace*/) {
+        return false;
+    }
+    virtual bool destroyModelData(uint32_t /*model*/) {
         return false;
     }
 
