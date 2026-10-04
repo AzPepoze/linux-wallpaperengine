@@ -21,14 +21,11 @@ class SceneScript {
     // Calls `update(value)`; stores the result in `out`. False without `update`.
     bool update(const std::string& value, std::string& out);
 
-    // Property scripts (e.g. an image's alpha): `init()` yields the starting value, `update(value)` the next one.
-    // False when the script does not define the hook or it returned a non-number.
-    bool callInit(double& out);
+    // Property scripts (e.g. an image's alpha): `init(value)` gets `value` and may return the starting value, which
+    // replaces it; `update(value)` returns the next one. False when the hook is missing or did not return a number.
+    // Per-frame inputs (engine.frametime, audio buffers) live on ScriptEngine.
+    bool callInit(double& value);
     bool updateNumber(double value, double& out);
-
-    // Per-frame inputs the script reads: `engine.frametime` and the 16-band audio average (0 when silent).
-    void setFrameTime(double seconds);
-    void setAudioAverage(const float* bands, int count);
 
     // Calls a single-string-argument hook such as `mediaPropertiesChanged`.
     void callWithString(const std::string& function, const std::string& argument);

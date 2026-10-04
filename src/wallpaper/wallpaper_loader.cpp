@@ -1,10 +1,12 @@
 #include "wallpaper/wallpaper_loader.h"
 
 #include <cstring>
+#include <filesystem>
 
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/video/video_wallpaper.h"
 #include "wallpaper/web/web_wallpaper.h"
 
@@ -57,6 +59,8 @@ std::unique_ptr<Wallpaper> WallpaperLoader::load(const ProjectInfo& info, Engine
     strncpy(ctx.asset_root, info.root.c_str(), sizeof(ctx.asset_root) - 1);
     ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
     ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+    ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
+    ScriptEngine::instance().setWallpaperId(std::filesystem::path(info.root).filename().string());
     ctx.asset_mgr.prefetchPackageTextures();
     struct ReleaseDecoded {
         AssetManager& assets;

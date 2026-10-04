@@ -9,6 +9,7 @@
 #include "sokol_time.h"
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/2d/script/script_engine.h"
 
 #if DEBUG_BUILD
 #include "shared/graphics/diagnostics/render_diagnostics.h"
@@ -46,6 +47,15 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
 #endif
     ctx.time += dt;
     AudioEngine::instance().update(dt);
+    {
+        const AudioEngine::Spectrum& spectrum = AudioEngine::instance().spectrum();
+        ScriptEngine& scripts = ScriptEngine::instance();
+        scripts.setAudioBands(16, spectrum.bands16_left, spectrum.bands16_right);
+        scripts.setAudioBands(32, spectrum.bands32_left, spectrum.bands32_right);
+        scripts.setAudioBands(64, spectrum.bands64_left, spectrum.bands64_right);
+        scripts.beginFrame(dt, ctx.time, ctx.scene.scene_w, ctx.scene.scene_h, (float)surface::width(),
+                           (float)surface::height());
+    }
 
     ctx.asset_mgr.updateVideoTextures(dt, ctx.scene.layers);
     parallax_update(ctx, dt, surface::width(), surface::height());

@@ -157,7 +157,7 @@ add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
 add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
-                                "src/shared/core/logger.cpp"},
+                                "src/wallpaper/2d/script/script_engine.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})
 
 add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
@@ -195,7 +195,8 @@ target("script_corpus")
     set_warnings("all", "extra")
     add_includedirs("src")
     add_packages("cjson", "quickjs")
-    add_files("tools/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp", "src/shared/assets/unpack.cpp",
+    add_files("tools/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+              "src/wallpaper/2d/script/script_engine.cpp", "src/shared/assets/unpack.cpp",
               "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp")
     if is_mode("debug", "asan", "ubsan") then
         add_defines("DEBUG_BUILD=1")

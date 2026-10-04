@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "image_parser.h"
-#include "shared/audio/audio_engine.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
@@ -46,9 +45,6 @@ void ImageLayer::updateCachedView() {
 
 void ImageLayer::update(float dt, EngineContext& ctx) {
     if (alpha_script) {
-        const AudioEngine::Spectrum& spectrum = AudioEngine::instance().spectrum();
-        alpha_script->setFrameTime(dt);
-        alpha_script->setAudioAverage(spectrum.bands16_left, 16);
         // A keyframed alpha feeds the script its animated value; otherwise the script carries its own state.
         const double input = alpha_document.alpha_keys.empty() ? alpha_script_value
                                                                : (double)evaluateImageAlpha(alpha_document, ctx.time);

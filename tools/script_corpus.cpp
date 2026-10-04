@@ -21,6 +21,7 @@
 #include "shared/assets/unpack.h"
 #include "shared/core/utils.h"
 #include "wallpaper/2d/script/scene_script.h"
+#include "wallpaper/2d/script/script_engine.h"
 
 namespace {
 
@@ -126,13 +127,14 @@ ScriptResult run(const ScriptBlock& block, int frames) {
         return result;
     }
 
-    double scratch = 0.0;
+    double scratch = 1.0;
     if (script.hasFunction("init")) script.callInit(scratch);
 
     const Kind kind = kindOf(block.property);
     if (script.valid() && kind != Kind::Unsupported) {
         result.exercised = true;
         for (int frame = 0; frame < frames && script.errorCount() == 0; ++frame) {
+            ScriptEngine::instance().beginFrame(1.0 / 60.0, frame / 60.0, 3840.0f, 2160.0f, 1920.0f, 1080.0f);
             const auto start = std::chrono::steady_clock::now();
             if (kind == Kind::Text) {
                 std::string out;
@@ -152,13 +154,15 @@ ScriptResult run(const ScriptBlock& block, int frames) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string root, out_path = "script_corpus_report.json", work = "build/script_corpus_work";
+    std::string root, assets_dir, out_path = "script_corpus_report.json", work = "build/script_corpus_work";
     std::set<std::string> only;
     int frames = 120;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--out" && i + 1 < argc) {
             out_path = argv[++i];
+        } else if (arg == "--assets-dir" && i + 1 < argc) {
+            assets_dir = argv[++i];
         } else if (arg == "--work" && i + 1 < argc) {
             work = argv[++i];
         } else if (arg == "--frames" && i + 1 < argc) {
@@ -176,10 +180,16 @@ int main(int argc, char** argv) {
         }
     }
     if (root.empty()) {
-        fprintf(stderr, "usage: %s <workshop-content-dir> [--out report.json] [--work dir] [--ids a,b] [--frames N]\n",
+        fprintf(stderr,
+                "usage: %s <workshop-content-dir> [--out report.json] [--work dir] [--ids a,b] [--frames N] "
+                "[--assets-dir dir]\n",
                 argv[0]);
         return 2;
     }
+
+    // steamapps/workshop/content/431960 -> steamapps/common/wallpaper_engine/assets
+    if (assets_dir.empty()) assets_dir = root + "/../../../common/wallpaper_engine/assets";
+    ScriptEngine::instance().setAssetsDir(assets_dir);
 
     std::vector<std::string> ids;
     if (DIR* dir = opendir(root.c_str())) {
