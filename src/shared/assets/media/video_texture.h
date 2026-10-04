@@ -37,6 +37,8 @@ class VideoTexture {
     void setLooping(bool enabled);
     // Back to the first frame, keeping the play state.
     void rewind();
+    // Jump to `seconds` into the file, keeping the play state. False when the container cannot seek.
+    bool seek(double seconds);
 
     void start();
     void stop();

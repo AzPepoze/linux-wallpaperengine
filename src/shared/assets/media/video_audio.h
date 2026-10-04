@@ -23,6 +23,8 @@ class VideoAudioStream {
 
     void pump(AudioEngine::StreamHandle stream, uint32_t target_queued_frames);
     void restart(AudioEngine::StreamHandle stream);
+    // Resync the audio track to `seconds`, matching a video seek.
+    void seek(AudioEngine::StreamHandle stream, double seconds);
 
     // Starts the background thread that pumps `stream` up to `target_queued_frames`. Idempotent.
     void startFeeder(AudioEngine::StreamHandle stream, uint32_t target_queued_frames);

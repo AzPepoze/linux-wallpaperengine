@@ -24,6 +24,7 @@ class VideoDecoder {
     bool receive_frame(AVFrame* out_frame, bool& out_eof, ZeroCopyMetrics& zero_copy, PlaybackStats& stats,
                        PerformanceTiming& perf);
     bool loop(PlaybackStats& stats);
+    bool seek(double seconds);
     void close();
 
     int get_width() const {

@@ -199,6 +199,23 @@ void VideoAudioStream::restart(AudioEngine::StreamHandle stream) {
     LOG_TAG_D(TAG, "Video audio resynced to video loop");
 }
 
+void VideoAudioStream::seek(AudioEngine::StreamHandle stream, double seconds) {
+    if (!impl || !impl->has_audio) return;
+    std::lock_guard<std::mutex> lock(impl->decode_mutex);
+    AVStream* audio_stream = impl->format->streams[impl->stream_index];
+    const int64_t timestamp = (int64_t)(seconds / av_q2d(audio_stream->time_base));
+    if (av_seek_frame(impl->format, impl->stream_index, timestamp, AVSEEK_FLAG_BACKWARD) < 0)
+        LOG_TAG_W(TAG, "Failed to seek video audio to %.2fs", seconds);
+    avcodec_flush_buffers(impl->codec);
+    if (impl->swr) {
+        swr_close(impl->swr);
+        swr_init(impl->swr);
+    }
+    impl->draining = false;
+    impl->drained = false;
+    AudioEngine::instance().clearStream(stream);
+}
+
 void VideoAudioStream::startFeeder(AudioEngine::StreamHandle stream, uint32_t target_queued_frames) {
     if (!impl || !impl->has_audio || stream == AudioEngine::kInvalidStream || impl->feeder.joinable()) return;
     impl->feeder_stop = false;

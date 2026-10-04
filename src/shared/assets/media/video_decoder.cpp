@@ -191,6 +191,15 @@ bool VideoDecoder::loop(PlaybackStats& stats) {
     return true;
 }
 
+bool VideoDecoder::seek(double seconds) {
+    if (!format_ctx_ || video_stream_index_ < 0) return false;
+    AVStream* stream = format_ctx_->streams[video_stream_index_];
+    const int64_t timestamp = (int64_t)(seconds / av_q2d(stream->time_base));
+    if (av_seek_frame(format_ctx_, video_stream_index_, timestamp, AVSEEK_FLAG_BACKWARD) < 0) return false;
+    if (decoder_ctx_) avcodec_flush_buffers(decoder_ctx_);
+    return true;
+}
+
 void VideoDecoder::close() {
     if (packet_) {
         av_packet_free(&packet_);

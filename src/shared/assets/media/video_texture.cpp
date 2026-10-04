@@ -232,6 +232,22 @@ void VideoTexture::rewind() {
     }
 }
 
+bool VideoTexture::seek(double seconds) {
+    const double length = duration();
+    const double target = length > 0.0 ? std::clamp(seconds, 0.0, length) : std::max(0.0, seconds);
+    bool ok = false;
+    if (impl->is_hw_active) {
+        ok = impl->hw_decoder.seek(target);
+    } else if (impl->sw_format && impl->sw_codec && impl->sw_stream_index >= 0) {
+        AVStream* stream = impl->sw_format->streams[impl->sw_stream_index];
+        const int64_t timestamp = (int64_t)(target / av_q2d(stream->time_base));
+        ok = av_seek_frame(impl->sw_format, impl->sw_stream_index, timestamp, AVSEEK_FLAG_BACKWARD) >= 0;
+        avcodec_flush_buffers(impl->sw_codec);
+    }
+    if (ok) impl->scheduler.reset();
+    return ok;
+}
+
 void VideoTexture::start() {
     impl->is_playing = true;
     impl->is_paused = false;

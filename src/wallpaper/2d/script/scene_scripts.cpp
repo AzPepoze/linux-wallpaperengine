@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "script_engine.h"
+#include "shared/assets/media/video_audio.h"
 #include "shared/assets/media/video_rate.h"
 #include "shared/assets/media/video_texture.h"
 #include "shared/core/logger.h"
@@ -696,10 +697,13 @@ bool SceneScriptBackend::videoSet(ImageLayer& image, const std::string& field, d
     } else if (field == "loop") {
         decoder->setLooping(value != 0.0);
     } else if (field == "currentTime") {
-        // The decoder can only restart from the first frame.
-        if (value > 0.0) return false;
-        decoder->rewind();
-        active->position = 0.0;
+        const double length = decoder->duration();
+        const double target = length > 0.0 ? std::clamp(value, 0.0, length) : std::max(0.0, value);
+        if (!decoder->seek(target)) return false;
+        active->position = target;
+        active->position_loop = decoder->loopCount();
+        if (active->audio && active->audio_stream != AudioEngine::kInvalidStream)
+            active->audio->seek(active->audio_stream, target);
     } else {
         return false;
     }
