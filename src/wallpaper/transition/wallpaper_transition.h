@@ -25,6 +25,17 @@ class WallpaperTransition {
     float progress() const {
         return progress_;
     }
+    // Marks the transition as using a per-frame live source (continue mode).
+    // begin() must already have allocated the snapshot for width x height.
+    void setLive(bool live) {
+        live_ = live;
+    }
+    bool live() const {
+        return live_;
+    }
+    // Re-blits the outgoing instance's composed frame this frame into the
+    // overlay snapshot. No-op unless active and live.
+    void updateSource(EngineContext& ctx, sg_view source, sg_image source_image, int width, int height);
     // Freeze the snapshot on screen (used when a switch fails to load).
     void hold() {
         active_ = true;
@@ -42,6 +53,7 @@ class WallpaperTransition {
    private:
     bool ensureTarget(int width, int height);
     void destroyTarget();
+    void copySource(EngineContext& ctx, sg_view source, sg_image source_image, int width, int height);
     void drawOverlay(EngineContext& ctx, int width, int height);
 
     GfxImage image_;
@@ -54,6 +66,7 @@ class WallpaperTransition {
     float progress_ = 0.0f;
     bool active_ = false;
     bool hold_ = false;
+    bool live_ = false;
     uint32_t switch_seed_ = 0;
     TransitionConfig config_ = {};
 };

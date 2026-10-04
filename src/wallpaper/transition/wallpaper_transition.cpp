@@ -66,7 +66,21 @@ bool WallpaperTransition::begin(EngineContext& ctx, sg_view source, sg_image sou
     elapsed_ = 0.0f;
     progress_ = 0.0f;
     hold_ = false;
+    live_ = false;
     switch_seed_ = (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count();
+
+    copySource(ctx, source, source_image, width, height);
+
+    // Load the matching Wallpaper Engine transition shader; if the install
+    // lacks it the built-in fade in composite() takes over.
+    if (config.selection >= 0) shader_.init(ctx, config.selection);
+
+    active_ = true;
+    return true;
+}
+
+void WallpaperTransition::copySource(EngineContext& ctx, sg_view source, sg_image source_image, int width, int height) {
+    if (source.id == SG_INVALID_ID || !ensureTarget(width, height)) return;
 
     sg_pass pass = {};
     pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -80,13 +94,11 @@ bool WallpaperTransition::begin(EngineContext& ctx, sg_view source, sg_image sou
     renderer_draw_sprite(ctx, &ctx.renderer, source_image, source, 0.0f, 0.0f, (float)width, (float)height, 0.0f, white,
                          false, nullptr, /*replace=*/true);
     sg_end_pass();
+}
 
-    // Load the matching Wallpaper Engine transition shader; if the install
-    // lacks it the built-in fade in composite() takes over.
-    if (config.selection >= 0) shader_.init(ctx, config.selection);
-
-    active_ = true;
-    return true;
+void WallpaperTransition::updateSource(EngineContext& ctx, sg_view source, sg_image source_image, int width, int height) {
+    if (!active_ || !live_) return;
+    copySource(ctx, source, source_image, width, height);
 }
 
 void WallpaperTransition::update(float dt) {
@@ -155,11 +167,13 @@ void WallpaperTransition::captureStage(EngineContext& ctx) {
 
 void WallpaperTransition::cancel() {
     active_ = false;
+    live_ = false;
     progress_ = 1.0f;
 }
 
 void WallpaperTransition::shutdown() {
     active_ = false;
+    live_ = false;
     shader_.shutdown();
     destroyTarget();
 }
