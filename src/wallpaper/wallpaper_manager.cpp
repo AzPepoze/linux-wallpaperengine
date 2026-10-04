@@ -8,6 +8,7 @@
 #include "shared/assets/shared_assets.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
+#include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/transition/transition_audio.h"
 #include "wallpaper/wallpaper_loader.h"
@@ -69,8 +70,33 @@ void WallpaperManager::update(float dt, EngineContext& ctx) {
         destroyInstance(ctx, outgoing_instance_);
     }
 
-    if (outgoing_instance_ && transition_.active()) tickOutgoingAudio(ctx, dt);
+    if (outgoing_instance_ && transition_.active() && !transition_.live()) tickOutgoingAudio(ctx, dt);
     if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->update(dt, ctx);
+}
+
+bool WallpaperManager::stepOutgoingForTransition(EngineContext& ctx, float dt) {
+    if (!outgoing_instance_ || !transition_.active() || !transition_.live()) return false;
+
+    // Make the outgoing instance the active view, step and offscreen-render it,
+    // then hand its composed frame to the transition as this frame's source.
+    activateInstance(ctx, *outgoing_instance_, active_view_);
+    auto* scene = dynamic_cast<Scene2DWallpaper*>(outgoing_instance_->wallpaper.get());
+    Scene2DRuntime* runtime = scene ? scene->getRuntime() : nullptr;
+    bool ok = false;
+    if (runtime && outgoing_instance_->wallpaper) {
+        outgoing_instance_->wallpaper->update(dt, ctx);
+        outgoing_instance_->assets.updateVideoTextures(dt, ctx.scene.layers);
+        parallax_update(ctx, dt, surface::width(), surface::height());
+        runtime->setForceOffscreen(true);
+        runtime->draw();
+        transition_.updateSource(ctx, runtime->composedView(), runtime->composedImage(), surface::width(),
+                                 surface::height());
+        runtime->setForceOffscreen(false);
+        ok = true;
+    }
+    // Restore the incoming instance as the active view for this frame's work.
+    activateInstance(ctx, *active_instance_, active_view_);
+    return ok;
 }
 
 void WallpaperManager::tickOutgoingAudio(EngineContext& ctx, float dt) {
@@ -143,10 +169,6 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         config.selection = lwe::transition::pickRandomEffect(random_seed_);
     }
     config.continue_previous = request.continue_previous;
-    if (config.continue_previous) {
-        LOG_TAG_W("WALLPAPER_MGR", "transition-mode 'continue' is not implemented yet (P2); using freeze");
-        config.continue_previous = false;
-    }
 
     AudioEngine& audio = AudioEngine::instance();
     // A new switch supersedes an in-flight fade: drop its outgoing instance/group.
@@ -171,6 +193,7 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
                 runtime->draw();
                 captured = transition_.begin(ctx, runtime->composedView(), runtime->composedImage(), surface::width(),
                                              surface::height(), config);
+                if (captured) transition_.setLive(config.continue_previous);
             }
         }
     }

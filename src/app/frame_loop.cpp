@@ -118,6 +118,9 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     Scene2DRuntime* runtime = activeRuntime(mgr);
     updateFrame(ctx, mgr, runtime);
     mgr.updateTransition((float)surface::frameDuration());
+    // continue mode: step/render the outgoing instance and feed the live source
+    // before the incoming instance draws.
+    if (mgr.isTransitioning()) mgr.stepOutgoingForTransition(ctx, (float)surface::frameDuration());
     if (runtime && mgr.isTransitioning())
         runtime->setForceOffscreen(true);
     else if (runtime)

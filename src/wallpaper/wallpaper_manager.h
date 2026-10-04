@@ -53,6 +53,9 @@ class WallpaperManager {
         return transition_.active();
     }
     void updateTransition(float dt);
+    // continue mode: update and offscreen-render the outgoing instance, then
+    // refresh the transition's live source. No-op unless transitioning live.
+    bool stepOutgoingForTransition(EngineContext& ctx, float dt);
     void compositeTransition(EngineContext& ctx) {
         transition_.composite(ctx);
     }
