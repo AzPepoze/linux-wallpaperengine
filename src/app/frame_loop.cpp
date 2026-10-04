@@ -10,6 +10,7 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/input/pointer_input.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/2d/script/media_events.h"
 #include "wallpaper/2d/script/script_engine.h"
 
 #if DEBUG_BUILD
@@ -64,6 +65,9 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
         scripts.beginFrame(dt, ctx.time, ctx.scene.scene_w, ctx.scene.scene_h, (float)surface::width(),
                            (float)surface::height());
     }
+
+    static wallpaper_engine::MediaScriptBridge media_bridge;
+    media_bridge.update();
 
     ctx.asset_mgr.updateVideoTextures(dt, ctx.scene.layers);
     parallax_update(ctx, dt, surface::width(), surface::height());

@@ -229,6 +229,11 @@ add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
+add_test("media_events_tests", {"tests/media_events_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+                                "src/wallpaper/2d/script/script_engine.cpp", "src/wallpaper/2d/script/media_events.cpp",
+                                "src/shared/media/mpris_source.cpp", "src/shared/core/logger.cpp"},
+         {"quickjs"})
+
 -- Loads every SceneScript block of a Workshop folder and reports script errors (no GPU). See utils/script_corpus.cpp.
 target("script_corpus")
     set_kind("binary")
