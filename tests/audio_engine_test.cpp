@@ -1,5 +1,7 @@
 #include "shared/audio/audio_engine.h"
 
+#include <vector>
+
 #include "test_util.h"
 
 int main() {
@@ -27,6 +29,17 @@ int main() {
     audio.destroyGroup(g1);
     audio.destroyGroup(AudioEngine::kDefaultGroup);  // must be a no-op
     CHECK(audio.groupVolume(AudioEngine::kDefaultGroup) == 1.0f);
+
+    // A video pump fills the stream to 24000 frames (0.5 s). The buffer must have
+    // headroom beyond that so a decoded frame is never discarded: pushing a full
+    // fill plus one frame must drop nothing.
+    const AudioEngine::StreamHandle stream = audio.createStream(48000, 2);
+    CHECK(stream != AudioEngine::kInvalidStream);
+    const std::vector<float> frames((25000 + 1024) * 2, 0.0f);
+    audio.pushStream(stream, frames.data(), (uint32_t)(frames.size() / 2));
+    CHECK(audio.streamDroppedFrames(stream) == 0);
+    CHECK(audio.streamQueuedFrames(stream) >= 24000);
+    audio.destroyStream(stream);
 
     return test::finish("audio engine group checks");
 }

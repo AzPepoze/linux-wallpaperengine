@@ -24,6 +24,8 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
 
     auto instance = std::make_unique<WallpaperInstance>();
     instance->audio_group = AudioEngine::instance().createGroup();
+    LOG_TAG_I("WALLPAPER_MGR", "New instance audio group=%u for %s", (unsigned)instance->audio_group,
+              scene_directory.c_str());
     if (shared_assets_) instance->assets.attachShared(shared_assets_);
     instance->state.wallpaper_path = scene_directory;
     instance->state.is_pkg = ctx.is_pkg;
@@ -185,6 +187,8 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     // switchWallpaper -> load moved the old active to outgoing_instance_ and made
     // the new instance active (ctx.audio_group is now the new group).
     const AudioEngine::GroupId new_group = ctx.audio_group;
+    LOG_TAG_I("WALLPAPER_MGR", "audio switch: old_group=%u new_group=%u fade=%d cut=%d", (unsigned)old_group,
+              (unsigned)new_group, plan.fade_old ? 1 : 0, plan.destroy_old_now ? 1 : 0);
     if (plan.destroy_old_now) {
         audio.destroyGroup(old_group);
         destroyInstance(ctx, outgoing_instance_);

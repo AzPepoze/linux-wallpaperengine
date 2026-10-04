@@ -178,6 +178,7 @@ void AssetManager::addVideoTexture(const char* path, sg_image image,
 
 void AssetManager::clearVideoTextures() {
     for (auto& video : video_textures) {
+        if (video.audio) video.audio->stopFeeder();
         if (video.audio_stream != AudioEngine::kInvalidStream) {
             AudioEngine::instance().destroyStream(video.audio_stream);
         }
@@ -214,8 +215,8 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
                 }
             }
             if (!is_used_by_visible_layer) {
-                if (video.audio_stream != AudioEngine::kInvalidStream)
-                    AudioEngine::instance().clearStream(video.audio_stream);
+                if (video.audio && video.audio_stream != AudioEngine::kInvalidStream)
+                    video.audio->setFeeding(video.audio_stream, false);
                 continue;
             }
         }
@@ -232,7 +233,9 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
                     video.audio_loop_seen = loops;
                     video.audio->restart(video.audio_stream);
                 }
-                video.audio->pump(video.audio_stream, 24000);
+                // Decoding runs on the audio feeder thread so render stalls cannot starve playback.
+                video.audio->setFeeding(video.audio_stream, true);
+                video.audio->startFeeder(video.audio_stream, 24000);
             }
         }
 

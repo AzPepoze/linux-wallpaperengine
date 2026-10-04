@@ -4,6 +4,10 @@
 #include <string.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include "shared/assets/media/media_source.h"
@@ -39,6 +43,12 @@ struct VideoAudioStream::Impl {
     bool logged_started = false;
     std::vector<float> converted;
 
+    // Serialises decoder state between the feeder thread and the render thread (restart/setRate).
+    std::mutex decode_mutex;
+    std::thread feeder;
+    std::atomic<bool> feeder_stop{false};
+    std::atomic<bool> feeding{false};
+
     wallpaper_engine::MediaIo io;
 
     bool initResampler(uint32_t output_rate) {
@@ -60,7 +70,9 @@ struct VideoAudioStream::Impl {
     }
 };
 
-VideoAudioStream::~VideoAudioStream() = default;
+VideoAudioStream::~VideoAudioStream() {
+    stopFeeder();
+}
 
 std::unique_ptr<VideoAudioStream> VideoAudioStream::open(const char* path) {
     if (!path) return nullptr;
@@ -117,6 +129,7 @@ bool VideoAudioStream::hasAudio() const {
 
 void VideoAudioStream::setRate(float rate) {
     if (!impl || !impl->has_audio) return;
+    std::lock_guard<std::mutex> lock(impl->decode_mutex);
     if (impl->initResampler(resampledAudioRate(kOutputSampleRate, rate))) return;
     LOG_TAG_W(TAG, "Failed to apply playback rate to audio; disabling it");
     impl->has_audio = false;
@@ -124,7 +137,9 @@ void VideoAudioStream::setRate(float rate) {
 
 void VideoAudioStream::pump(AudioEngine::StreamHandle stream, uint32_t target_queued_frames) {
     if (!impl || !impl->has_audio || stream == AudioEngine::kInvalidStream) return;
+    std::lock_guard<std::mutex> lock(impl->decode_mutex);
     if (impl->drained) return;
+    if (impl->feeder.joinable() && !impl->feeding.load()) return;  // hidden
 
     AudioEngine& engine = AudioEngine::instance();
     int guard = 0;
@@ -169,6 +184,7 @@ void VideoAudioStream::pump(AudioEngine::StreamHandle stream, uint32_t target_qu
 
 void VideoAudioStream::restart(AudioEngine::StreamHandle stream) {
     if (!impl || !impl->has_audio) return;
+    std::lock_guard<std::mutex> lock(impl->decode_mutex);
     if (av_seek_frame(impl->format, impl->stream_index, 0, AVSEEK_FLAG_BACKWARD) < 0) {
         LOG_TAG_W(TAG, "Failed to seek video audio to start");
     }
@@ -181,4 +197,30 @@ void VideoAudioStream::restart(AudioEngine::StreamHandle stream) {
     impl->drained = false;
     AudioEngine::instance().clearStream(stream);
     LOG_TAG_D(TAG, "Video audio resynced to video loop");
+}
+
+void VideoAudioStream::startFeeder(AudioEngine::StreamHandle stream, uint32_t target_queued_frames) {
+    if (!impl || !impl->has_audio || stream == AudioEngine::kInvalidStream || impl->feeder.joinable()) return;
+    impl->feeder_stop = false;
+    impl->feeding = true;
+    impl->feeder = std::thread([this, stream, target_queued_frames] {
+        while (!impl->feeder_stop.load(std::memory_order_relaxed)) {
+            if (impl->feeding.load(std::memory_order_relaxed)) pump(stream, target_queued_frames);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    });
+}
+
+void VideoAudioStream::stopFeeder() {
+    if (!impl || !impl->feeder.joinable()) return;
+    impl->feeder_stop = true;
+    impl->feeder.join();
+}
+
+void VideoAudioStream::setFeeding(AudioEngine::StreamHandle stream, bool feeding) {
+    if (!impl || impl->feeding.exchange(feeding) == feeding) return;
+    if (feeding || stream == AudioEngine::kInvalidStream) return;
+    // Hold the decode lock so an in-flight pump cannot refill what we drop.
+    std::lock_guard<std::mutex> lock(impl->decode_mutex);
+    AudioEngine::instance().clearStream(stream);
 }

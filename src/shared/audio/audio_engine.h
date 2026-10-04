@@ -53,6 +53,10 @@ class AudioEngine {
     void pushStream(StreamHandle handle, const float* samples, uint32_t frame_count);
     void clearStream(StreamHandle handle);
     uint32_t streamQueuedFrames(StreamHandle handle) const;
+    // Number of audio callbacks that had to zero-fill because the queue ran dry.
+    uint32_t streamUnderruns(StreamHandle handle) const;
+    // Number of decoded frames discarded because the queue was full.
+    uint64_t streamDroppedFrames(StreamHandle handle) const;
     void setStreamMuted(StreamHandle handle, bool muted);
     // Stops draining the queue so buffered audio resumes exactly where it paused.
     void setStreamPaused(StreamHandle handle, bool paused);

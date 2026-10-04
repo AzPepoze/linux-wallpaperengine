@@ -25,7 +25,8 @@ AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32
     stream->channels = channels;
     stream->sample_rate = sample_rate;
     stream->group = group;
-    if (ma_pcm_rb_init(ma_format_f32, channels, sample_rate / 2, nullptr, nullptr, &stream->rb) != MA_SUCCESS) {
+    // 1 s buffer: twice the video feeder's 0.5 s fill target, so pushStream() never drops a frame.
+    if (ma_pcm_rb_init(ma_format_f32, channels, sample_rate, nullptr, nullptr, &stream->rb) != MA_SUCCESS) {
         return kInvalidStream;
     }
     stream->rb_ready = true;
@@ -45,6 +46,7 @@ AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32
     }
 
     StreamHandle handle = kInvalidStream;
+    std::lock_guard<std::mutex> lock(impl->stream_mutex);
     if (!impl->stream_free.empty()) {
         handle = impl->stream_free.back();
         impl->stream_free.pop_back();
@@ -53,11 +55,12 @@ AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32
         impl->streams.push_back(std::move(stream));
         handle = (StreamHandle)impl->streams.size();
     }
-    LOG_TAG_I("AUDIO", "PCM stream created (%u Hz, %u channels)", sample_rate, channels);
+    LOG_TAG_I("AUDIO", "PCM stream created (%u Hz, %u channels, group=%u)", sample_rate, channels, (unsigned)group);
     return handle;
 }
 
 void AudioEngine::destroyStream(StreamHandle handle) {
+    std::lock_guard<std::mutex> lock(impl->stream_mutex);
     if (handle == kInvalidStream || handle > impl->streams.size()) return;
     auto& stream = impl->streams[handle - 1];
     if (!stream) return;
@@ -69,6 +72,7 @@ void AudioEngine::destroyStream(StreamHandle handle) {
 }
 
 void AudioEngine::pushStream(StreamHandle handle, const float* samples, uint32_t frame_count) {
+    std::lock_guard<std::mutex> lock(impl->stream_mutex);
     if (handle == kInvalidStream || handle > impl->streams.size() || !samples) return;
     auto& stream = impl->streams[handle - 1];
     if (!stream) return;
@@ -84,9 +88,11 @@ void AudioEngine::pushStream(StreamHandle handle, const float* samples, uint32_t
         src += (size_t)to_write * frame_bytes;
         remaining -= to_write;
     }
+    if (remaining > 0) stream->dropped_frames.fetch_add(remaining, std::memory_order_relaxed);
 }
 
 void AudioEngine::clearStream(StreamHandle handle) {
+    std::lock_guard<std::mutex> lock(impl->stream_mutex);
     if (handle == kInvalidStream || handle > impl->streams.size()) return;
     auto& stream = impl->streams[handle - 1];
     if (!stream) return;
@@ -94,10 +100,25 @@ void AudioEngine::clearStream(StreamHandle handle) {
 }
 
 uint32_t AudioEngine::streamQueuedFrames(StreamHandle handle) const {
+    std::lock_guard<std::mutex> lock(impl->stream_mutex);
     if (handle == kInvalidStream || handle > impl->streams.size()) return 0;
     const auto& stream = impl->streams[handle - 1];
     if (!stream) return 0;
     return ma_pcm_rb_available_read(const_cast<ma_pcm_rb*>(&stream->rb));
+}
+
+uint32_t AudioEngine::streamUnderruns(StreamHandle handle) const {
+    if (handle == kInvalidStream || handle > impl->streams.size()) return 0;
+    const auto& stream = impl->streams[handle - 1];
+    if (!stream) return 0;
+    return stream->underruns.load(std::memory_order_relaxed);
+}
+
+uint64_t AudioEngine::streamDroppedFrames(StreamHandle handle) const {
+    if (handle == kInvalidStream || handle > impl->streams.size()) return 0;
+    const auto& stream = impl->streams[handle - 1];
+    if (!stream) return 0;
+    return stream->dropped_frames.load(std::memory_order_relaxed);
 }
 
 void AudioEngine::setStreamMuted(StreamHandle handle, bool muted) {

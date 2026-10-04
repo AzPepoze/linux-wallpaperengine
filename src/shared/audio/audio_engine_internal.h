@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -70,7 +71,12 @@ struct AudioEngine::Impl {
         bool sound_ready = false;
         bool rb_ready = false;
         GroupId group = kDefaultGroup;
+        std::atomic<uint32_t> underruns{0};
+        std::atomic<uint64_t> dropped_frames{0};
     };
+    // Guards the streams table (not the audio thread): video feeder threads push while the main
+    // thread creates/destroys streams.
+    std::mutex stream_mutex;
     std::vector<std::unique_ptr<Stream>> streams;
     std::vector<StreamHandle> stream_free;
 
@@ -109,6 +115,7 @@ struct AudioEngine::Impl {
         }
         if (total < frame_count) {
             memset(out + total * frame_bytes, 0, (size_t)(frame_count - total) * frame_bytes);
+            stream->underruns.fetch_add(1, std::memory_order_relaxed);
         }
         *frames_read = frame_count;
         return MA_SUCCESS;

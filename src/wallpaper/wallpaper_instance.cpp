@@ -4,6 +4,7 @@ void activateInstance(EngineContext& ctx, WallpaperInstance& instance, Wallpaper
     if (current == &instance) return;
     if (current) stashInstanceState(ctx, current->state);
     activateInstanceState(ctx, instance.state);
+    instance.assets.setAudioGroup(instance.audio_group);
     ctx.asset_mgr = &instance.assets;
     ctx.audio_group = instance.audio_group;
     current = &instance;

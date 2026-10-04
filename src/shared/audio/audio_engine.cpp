@@ -113,6 +113,7 @@ void AudioEngine::init() {
 
 void AudioEngine::shutdown() {
     if (!impl) return;
+    std::unique_lock<std::mutex> stream_lock(impl->stream_mutex);
     for (auto& stream : impl->streams) {
         if (!stream) continue;
         if (stream->sound_ready) ma_sound_uninit(&stream->sound);
@@ -121,6 +122,7 @@ void AudioEngine::shutdown() {
     }
     impl->streams.clear();
     impl->stream_free.clear();
+    stream_lock.unlock();
 
     for (auto& slot : impl->sound_slots) {
         if (slot) slot->shutdown();
@@ -180,6 +182,7 @@ void AudioEngine::destroyGroup(GroupId group) {
             impl->sound_free.push_back((SoundHandle)(i + 1));
         }
     }
+    std::lock_guard<std::mutex> stream_lock(impl->stream_mutex);
     for (size_t i = 0; i < impl->streams.size(); ++i) {
         auto& stream = impl->streams[i];
         if (!stream || stream->group != group) continue;
@@ -267,7 +270,8 @@ AudioEngine::SoundHandle AudioEngine::play(const std::string& path, bool loop, f
     ma_sound_set_volume(&slot->sound, slot->base_volume * groupVolume(group));
     if (!start_paused) ma_sound_start(&slot->sound);
     impl->sound_slots[handle - 1] = std::move(slot);
-    LOG_TAG_I("AUDIO", "Sound started (loop=%d, volume=%.2f): %s", loop ? 1 : 0, volume, path.c_str());
+    LOG_TAG_I("AUDIO", "Sound started (loop=%d, volume=%.2f, group=%u): %s", loop ? 1 : 0, volume, (unsigned)group,
+              path.c_str());
     return handle;
 }
 

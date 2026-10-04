@@ -7,7 +7,8 @@
 #include "shared/audio/audio_engine.h"
 
 // Decodes the audio track of a video wallpaper and feeds it to an AudioEngine PCM stream.
-// The caller drives decode with pump() and resyncs on video loop with restart().
+// A feeder thread keeps the stream topped up (startFeeder) so render stalls cannot starve the audio
+// device; the caller resyncs on video loop with restart(). pump() is also usable directly.
 class VideoAudioStream {
    public:
     ~VideoAudioStream();
@@ -22,6 +23,13 @@ class VideoAudioStream {
 
     void pump(AudioEngine::StreamHandle stream, uint32_t target_queued_frames);
     void restart(AudioEngine::StreamHandle stream);
+
+    // Starts the background thread that pumps `stream` up to `target_queued_frames`. Idempotent.
+    void startFeeder(AudioEngine::StreamHandle stream, uint32_t target_queued_frames);
+    // Joins the thread; must run before the stream is destroyed.
+    void stopFeeder();
+    // While false the feeder idles (video not visible). Turning it off also drops queued audio.
+    void setFeeding(AudioEngine::StreamHandle stream, bool feeding);
 
    private:
     VideoAudioStream() = default;
