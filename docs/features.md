@@ -382,7 +382,14 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - `getBlendShapeIndex`, `getBlendShapeWeight`, `setBlendShapeWeight`, `applyBonePhysicsImpulse` and `resetBonePhysicsSimulation` answer for a model without blend shapes or physics bones (index -1, weight 0, no effect), which is every model in the supported `.mdl` formats
   - Missing
     - Models with morph targets or physics bones: the `.mdl` parser reads neither
-- [ ] Model data (`IModelData`: `createModelData`, `destroyModelData`, `applyData`, `replaceData`). It builds custom geometry for 3D model layers, which this 2D renderer has no equivalent of (no depth buffer, 3D materials or lighting)
+- [-] Model data (`IModelData`)
+  - Works
+    - `thisScene.createModelData({ shapes })`, `applyData`, `replaceData`, `destroyModelData`, the `IModelData.POSITION / NORMAL / UV / TANGENT_SIGNED / COLOR` constants, and `thisScene.createLayer({ model })`; asset handles from `engine.registerAsset()` work as materials and as `createLayer` arguments
+    - The mesh is drawn flat into the layer's picture: each shape is textured with its material's first texture (white when it has none)
+  - Missing
+    - Depth, lighting, normals, tangents, vertex colors and the material's own shader; `perspective`
+    - Shapes with more than 65535 vertices
+    - Not yet confirmed on screen (covered by unit tests of the script side only)
 
 ## Interaction
 
