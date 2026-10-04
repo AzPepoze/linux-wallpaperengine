@@ -11,6 +11,7 @@
 #include "shader/shader_processor.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/core/task_pool.h"
 #include "sokol_glue.h"
 
 namespace {
@@ -25,7 +26,7 @@ struct BlendShaderSources {
     bool valid = false;
 };
 
-// Thread-safe: only reads asset files and does string processing — no GPU calls.
+// Thread-safe: reads asset files, processes sources and compiles SPIR-V — no GPU calls.
 BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode) {
     BlendShaderSources result;
     result.mode = blend_mode;
@@ -105,6 +106,9 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
     result.vert = prefix + processed_vert;
     result.frag = prefix + blend_define + processed_frag;
     result.valid = true;
+
+    // Compile the SPIR-V here, in parallel with the other modes; the main thread then only creates GPU objects.
+    ShaderCompiler::prewarm("image-composite-" + std::to_string(blend_mode), result.vert, result.frag, {}, 1);
     return result;
 }
 
@@ -380,7 +384,7 @@ void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
     futures.reserve(count);
     for (int mode = kFirstWallpaperBlendMode; mode <= kLastWallpaperBlendMode; ++mode) {
         if (r->pip_image_composite[mode].id != SG_INVALID_ID) continue;
-        futures.push_back(std::async(std::launch::async, prepareBlendShaderSources, std::ref(ctx), mode));
+        futures.push_back(TaskPool::instance().enqueue(prepareBlendShaderSources, std::ref(ctx), mode));
     }
 
     for (auto& f : futures) {

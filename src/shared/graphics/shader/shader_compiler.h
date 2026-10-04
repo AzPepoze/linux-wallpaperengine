@@ -49,9 +49,18 @@ class ShaderCompiler {
     static CompiledShader compile(const std::string& shader_name, const std::string& vertSource,
                                   const std::string& fragSource,
                                   const std::map<std::string, std::vector<float>>& uniforms, int textureCount);
+    // Runs everything compile() does except creating GPU objects, so the SPIR-V is cached; safe on a worker thread.
+    static void prewarm(const std::string& shader_name, const std::string& vertSource, const std::string& fragSource,
+                        const std::map<std::string, std::vector<float>>& uniforms, int textureCount);
     static GfxPipeline makePipeline(sg_shader shader, ShaderVertexLayout layout, ShaderBlendMode blend_mode);
     static std::string applyDebugMode(const std::string& fsSource, int debug_mode);
     static std::string applyDebugStep(const std::string& shader_name, const std::string& fsSource, int debug_step);
+
+   private:
+    static CompiledShader build(const std::string& shader_name, const std::string& vertSource,
+                                const std::string& fragSource,
+                                const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
+                                bool create_gpu_objects);
 };
 
 #endif  // SHADER_COMPILER_H

@@ -87,6 +87,19 @@ GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout la
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
                                        const std::string& fragSource,
                                        const std::map<std::string, std::vector<float>>& uniforms, int textureCount) {
+    return build(shader_name, vertSource, fragSource, uniforms, textureCount, true);
+}
+
+void ShaderCompiler::prewarm(const std::string& shader_name, const std::string& vertSource,
+                             const std::string& fragSource, const std::map<std::string, std::vector<float>>& uniforms,
+                             int textureCount) {
+    build(shader_name, vertSource, fragSource, uniforms, textureCount, false);
+}
+
+CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::string& vertSource,
+                                     const std::string& fragSource,
+                                     const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
+                                     bool create_gpu_objects) {
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
@@ -179,6 +192,10 @@ CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std
         shd_desc.texture_sampler_pairs[slot].sampler_slot = slot;
     }
 
+    if (!create_gpu_objects) {
+        prewarm_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
+        return result;
+    }
     result.shader = create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
 
     if (result.shader.id == SG_INVALID_ID) {

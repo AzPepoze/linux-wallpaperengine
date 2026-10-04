@@ -2,18 +2,15 @@
 #define SHADER_BACKEND_INTERNAL_H
 
 #include <slang.h>
-#include <unistd.h>
 
 #include <atomic>
-#include <cstdio>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "shared/core/disk_cache.h"
 #include "sokol_gfx.h"
 
 struct ShaderDiskCache {
@@ -26,21 +23,9 @@ struct ShaderDiskCache {
     static constexpr size_t kMaxMemoryCacheBytes = 8u << 20;
     size_t memory_cache_bytes = 0;
 
-    // Bump the suffix whenever a compiler or rewrite change invalidates old binaries.
-    static const std::string& cacheDir() {
-        static const std::string dir = [] {
-            const char* xdg = getenv("XDG_CACHE_HOME");
-            const char* home = getenv("HOME");
-            std::string base = (xdg && xdg[0]) ? xdg : (home && home[0]) ? std::string(home) + "/.cache" : "/tmp";
-            return base + "/linux-wallpaperengine/shaders-v1";
-        }();
-        return dir;
-    }
-
-    static std::string cachePath(uint64_t hash, const char* stage_str) {
-        char name[48];
-        snprintf(name, sizeof(name), "/%s_%016llx.spv", stage_str, (unsigned long long)hash);
-        return cacheDir() + name;
+    static uint64_t computeHash(SlangStage stage, const std::string& source) {
+        const uint64_t seed = disk_cache::hash(&stage, sizeof(stage));
+        return disk_cache::hash(source.data(), source.size(), seed);
     }
 
     void remember(uint64_t hash, const std::vector<uint32_t>& spirv) {
@@ -48,17 +33,6 @@ struct ShaderDiskCache {
         const size_t bytes = spirv.size() * sizeof(uint32_t);
         if (memory_cache_bytes + bytes > kMaxMemoryCacheBytes) return;
         if (in_memory_cache.emplace(hash, spirv).second) memory_cache_bytes += bytes;
-    }
-
-    static uint64_t computeHash(SlangStage stage, const std::string& source) {
-        uint64_t hash = 14695981039346656037ULL;
-        hash ^= static_cast<uint64_t>(stage);
-        hash *= 1099511628211ULL;
-        for (char c : source) {
-            hash ^= static_cast<uint8_t>(c);
-            hash *= 1099511628211ULL;
-        }
-        return hash;
     }
 
     bool tryGet(uint64_t hash, const char* stage_str, std::vector<uint32_t>& out_spirv) {
@@ -72,24 +46,14 @@ struct ShaderDiskCache {
             }
         }
 
-        std::ifstream file(cachePath(hash, stage_str), std::ios::binary | std::ios::ate);
-        if (!file.is_open()) {
+        std::vector<uint8_t> bytes;
+        if (!disk_cache::read(disk_cache::fileName(stage_str, hash, "spv"), bytes) ||
+            bytes.size() % sizeof(uint32_t) != 0) {
             cache_misses.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
-
-        const std::streamsize size = file.tellg();
-        file.seekg(0, std::ios::beg);
-        if (size <= 0 || (size % sizeof(uint32_t)) != 0) {
-            cache_misses.fetch_add(1, std::memory_order_relaxed);
-            return false;
-        }
-
-        out_spirv.resize(size / sizeof(uint32_t));
-        if (!file.read(reinterpret_cast<char*>(out_spirv.data()), size)) {
-            cache_misses.fetch_add(1, std::memory_order_relaxed);
-            return false;
-        }
+        out_spirv.resize(bytes.size() / sizeof(uint32_t));
+        memcpy(out_spirv.data(), bytes.data(), bytes.size());
 
         remember(hash, out_spirv);
         cache_hits.fetch_add(1, std::memory_order_relaxed);
@@ -98,26 +62,8 @@ struct ShaderDiskCache {
 
     void put(uint64_t hash, const char* stage_str, const std::vector<uint32_t>& spirv) {
         if (spirv.empty()) return;
-
         remember(hash, spirv);
-
-        std::error_code ec;
-        std::filesystem::create_directories(cacheDir(), ec);
-
-        // Write-then-rename so a crash or a concurrent run never leaves a truncated binary behind.
-        const std::string path = cachePath(hash, stage_str);
-        const std::string temp = path + "." + std::to_string(getpid()) + ".tmp";
-        {
-            std::ofstream file(temp, std::ios::binary | std::ios::trunc);
-            if (!file.is_open()) return;
-            file.write(reinterpret_cast<const char*>(spirv.data()), spirv.size() * sizeof(uint32_t));
-            if (!file) {
-                std::filesystem::remove(temp, ec);
-                return;
-            }
-        }
-        std::filesystem::rename(temp, path, ec);
-        if (ec) std::filesystem::remove(temp, ec);
+        disk_cache::write(disk_cache::fileName(stage_str, hash, "spv"), spirv.data(), spirv.size() * sizeof(uint32_t));
     }
 };
 

@@ -201,7 +201,7 @@ target("shader_tests")
               "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
               "src/shared/graphics/shader/shader_vector_rewrite.cpp",
               "src/shared/graphics/shader/shader_swizzle_rewrite.cpp", "src/shared/core/vfs.cpp",
-              "src/shared/core/logger.cpp")
+              "src/shared/core/logger.cpp", "src/shared/core/disk_cache.cpp")
 
 -- Synthetic project detection checks. Not built by default; run with `xmake build project_tests`.
 target("project_tests")

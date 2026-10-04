@@ -7,6 +7,7 @@
 #include "shared/audio/audio_engine.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/core/phase_timer.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
