@@ -2,8 +2,11 @@
 #define SHADER_BACKEND_INTERNAL_H
 
 #include <slang.h>
+#include <unistd.h>
 
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -19,7 +22,33 @@ struct ShaderDiskCache {
     std::atomic<uint64_t> cache_hits{0};
     std::atomic<uint64_t> cache_misses{0};
 
-    static constexpr const char* kCacheDir = "/tmp/linux-wallpaperengine/shaders";
+    // Bound on the RAM copy; the disk cache backs everything beyond it.
+    static constexpr size_t kMaxMemoryCacheBytes = 8u << 20;
+    size_t memory_cache_bytes = 0;
+
+    // Bump the suffix whenever a compiler or rewrite change invalidates old binaries.
+    static const std::string& cacheDir() {
+        static const std::string dir = [] {
+            const char* xdg = getenv("XDG_CACHE_HOME");
+            const char* home = getenv("HOME");
+            std::string base = (xdg && xdg[0]) ? xdg : (home && home[0]) ? std::string(home) + "/.cache" : "/tmp";
+            return base + "/linux-wallpaperengine/shaders-v1";
+        }();
+        return dir;
+    }
+
+    static std::string cachePath(uint64_t hash, const char* stage_str) {
+        char name[48];
+        snprintf(name, sizeof(name), "/%s_%016llx.spv", stage_str, (unsigned long long)hash);
+        return cacheDir() + name;
+    }
+
+    void remember(uint64_t hash, const std::vector<uint32_t>& spirv) {
+        std::lock_guard<std::mutex> lock(mem_cache_mutex);
+        const size_t bytes = spirv.size() * sizeof(uint32_t);
+        if (memory_cache_bytes + bytes > kMaxMemoryCacheBytes) return;
+        if (in_memory_cache.emplace(hash, spirv).second) memory_cache_bytes += bytes;
+    }
 
     static uint64_t computeHash(SlangStage stage, const std::string& source) {
         uint64_t hash = 14695981039346656037ULL;
@@ -43,9 +72,7 @@ struct ShaderDiskCache {
             }
         }
 
-        char path[512];
-        snprintf(path, sizeof(path), "%s/%s_%016llx.spv", kCacheDir, stage_str, (unsigned long long)hash);
-        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        std::ifstream file(cachePath(hash, stage_str), std::ios::binary | std::ios::ate);
         if (!file.is_open()) {
             cache_misses.fetch_add(1, std::memory_order_relaxed);
             return false;
@@ -64,11 +91,7 @@ struct ShaderDiskCache {
             return false;
         }
 
-        {
-            std::lock_guard<std::mutex> lock(mem_cache_mutex);
-            in_memory_cache[hash] = out_spirv;
-        }
-
+        remember(hash, out_spirv);
         cache_hits.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
@@ -76,20 +99,25 @@ struct ShaderDiskCache {
     void put(uint64_t hash, const char* stage_str, const std::vector<uint32_t>& spirv) {
         if (spirv.empty()) return;
 
-        {
-            std::lock_guard<std::mutex> lock(mem_cache_mutex);
-            in_memory_cache[hash] = spirv;
-        }
+        remember(hash, spirv);
 
         std::error_code ec;
-        std::filesystem::create_directories(kCacheDir, ec);
+        std::filesystem::create_directories(cacheDir(), ec);
 
-        char path[512];
-        snprintf(path, sizeof(path), "%s/%s_%016llx.spv", kCacheDir, stage_str, (unsigned long long)hash);
-        std::ofstream file(path, std::ios::binary | std::ios::trunc);
-        if (file.is_open()) {
+        // Write-then-rename so a crash or a concurrent run never leaves a truncated binary behind.
+        const std::string path = cachePath(hash, stage_str);
+        const std::string temp = path + "." + std::to_string(getpid()) + ".tmp";
+        {
+            std::ofstream file(temp, std::ios::binary | std::ios::trunc);
+            if (!file.is_open()) return;
             file.write(reinterpret_cast<const char*>(spirv.data()), spirv.size() * sizeof(uint32_t));
+            if (!file) {
+                std::filesystem::remove(temp, ec);
+                return;
+            }
         }
+        std::filesystem::rename(temp, path, ec);
+        if (ec) std::filesystem::remove(temp, ec);
     }
 };
 

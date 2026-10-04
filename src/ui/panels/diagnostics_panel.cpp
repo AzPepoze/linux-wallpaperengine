@@ -65,8 +65,8 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
 
     uint64_t shd_hits = 0, shd_misses = 0;
     get_shader_cache_stats(&shd_hits, &shd_misses);
-    UiComponents::PropertyRow("SPIR-V Cache:", "%llu Hits / %llu Misses (/tmp/linux-wallpaperengine)",
-                              static_cast<unsigned long long>(shd_hits), static_cast<unsigned long long>(shd_misses));
+    UiComponents::PropertyRow("SPIR-V Cache:", "%llu Hits / %llu Misses", static_cast<unsigned long long>(shd_hits),
+                              static_cast<unsigned long long>(shd_misses));
 
     const auto& videos = ctx.asset_mgr.getVideoTextures();
     if (!videos.empty()) {
