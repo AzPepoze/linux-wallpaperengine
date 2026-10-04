@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <vector>
+
 #include "shared/assets/unpack.h"
 #include "shared/core/build_config.h"
 #include "shared/core/utils.h"
@@ -23,17 +25,19 @@ std::string extractOutputDir(const WallpaperSource& source, const CliOptions& op
     strncpy(wp_copy, source.path.c_str(), sizeof(wp_copy) - 1);
     return std::string("extracted/") + basename(wp_copy);
 }
+
+std::string detectDefaultWallpaperPath() {
+    std::vector<char> detected(1024, '\0');
+    detect_default_wallpaper(detected.data(), detected.size());
+    return std::string(detected.data());
+}
 }  // namespace
 
 WallpaperSource resolveWallpaperSource(const CliOptions& opts) {
     WallpaperSource source;
     source.path = opts.wallpaper_arg;
     source.is_pkg = opts.pkg_flag;
-    if (source.path.empty() && !opts.sandbox) {
-        char detected[1024] = {};
-        detect_default_wallpaper(detected, sizeof(detected));
-        source.path = detected;
-    }
+    if (source.path.empty() && !opts.sandbox) source.path = detectDefaultWallpaperPath();
     if (!source.path.empty() && isPackageFile(source.path)) source.is_pkg = true;
     return source;
 }

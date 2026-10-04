@@ -39,7 +39,7 @@ struct AudioEngine::Impl {
         bool has_decoder = false;
         bool active = false;
 
-        void release() {
+        void shutdown() {
             if (!active) return;
             ma_sound_uninit(&sound);
             if (has_decoder) ma_decoder_uninit(&decoder);

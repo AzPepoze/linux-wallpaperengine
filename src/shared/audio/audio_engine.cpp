@@ -64,12 +64,12 @@ void AudioEngine::init() {
     }
     impl->capture_context_ok = true;
 
-    const ma_device_info* playback_devices = nullptr;
+    ma_device_info* playback_devices = nullptr;
     ma_uint32 playback_count = 0;
-    const ma_device_info* capture_devices = nullptr;
+    ma_device_info* capture_devices = nullptr;
     ma_uint32 capture_count = 0;
-    ma_context_get_devices(&impl->capture_context, (ma_device_info**)&playback_devices, &playback_count,
-                           (ma_device_info**)&capture_devices, &capture_count);
+    ma_context_get_devices(&impl->capture_context, &playback_devices, &playback_count, &capture_devices,
+                           &capture_count);
 
     ma_device_info default_playback = {};
     const bool has_default = ma_context_get_device_info(&impl->capture_context, ma_device_type_playback, nullptr,
@@ -123,7 +123,7 @@ void AudioEngine::shutdown() {
     impl->stream_free.clear();
 
     for (auto& slot : impl->sound_slots) {
-        if (slot) slot->release();
+        if (slot) slot->shutdown();
     }
     impl->sound_slots.clear();
     impl->sound_free.clear();
@@ -203,7 +203,7 @@ void AudioEngine::stop(SoundHandle handle) {
     auto& slot = impl->sound_slots[handle - 1];
     if (!slot || !slot->active) return;
     ma_sound_stop(&slot->sound);
-    slot->release();
+    slot->shutdown();
     impl->sound_free.push_back(handle);
 }
 
