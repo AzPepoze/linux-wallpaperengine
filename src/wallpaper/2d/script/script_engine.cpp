@@ -16,14 +16,6 @@ int64_t scriptNowNs() {
         .count();
 }
 
-namespace {
-
-int interruptHandler(JSRuntime*, void* opaque) {
-    return static_cast<ScriptEngine*>(opaque)->deadlineExceeded() ? 1 : 0;
-}
-
-}  // namespace
-
 void scriptLogException(JSContext* ctx, const char* what) {
     JSValue exception = JS_GetException(ctx);
     const char* message = JS_ToCString(ctx, exception);
@@ -58,50 +50,12 @@ void ScriptEngine::release() {
 }
 
 void ScriptEngine::create() {
-    runtime_ = JS_NewRuntime();
-    if (!runtime_) {
-        LOG_TAG_W(TAG, "QuickJS runtime creation failed");
-        return;
-    }
-    JS_SetMemoryLimit(runtime_, 64u * 1024u * 1024u);
-    JS_SetInterruptHandler(runtime_, interruptHandler, this);
-    installScriptModuleLoader(runtime_);
-    context_ = JS_NewContext(runtime_);
-    if (!context_) {
-        LOG_TAG_W(TAG, "QuickJS context creation failed");
-        return;
-    }
-    installScriptHostFunctions(context_);
-
-    std::string base_classes;
-    if (!assets_dir_.empty()) base_classes = readScriptFile(assets_dir_ + "/scripts/jsclasses/baseclasses.js");
-    if (base_classes.empty())
-        LOG_TAG_W(
-            TAG, "baseclasses.js not found under the assets folder; Vec2/Vec3/Mat4 and WEMath modules are unavailable");
-
-    struct Chunk {
-        const char* name;
-        const std::string* text;
-    };
-    const std::string prelude = scriptPreludeSource();
-    const Chunk chunks[] = {{"baseclasses.js", &base_classes}, {"<script-prelude>", &prelude}};
-    for (const Chunk& chunk : chunks) {
-        if (chunk.text->empty()) continue;
-        CallScope scope(*this, nullptr, 0, 500.0);
-        JSValue result = JS_Eval(context_, chunk.text->c_str(), chunk.text->size(), chunk.name, JS_EVAL_TYPE_GLOBAL);
-        if (JS_IsException(result)) scriptLogException(context_, chunk.name);
-        JS_FreeValue(context_, result);
-    }
+    runtime_.create(assets_dir_);
 }
 
 void ScriptEngine::destroy() {
-    if (context_) {
-        flushStorage();
-        JS_FreeContext(context_);
-    }
-    if (runtime_) JS_FreeRuntime(runtime_);
-    context_ = nullptr;
-    runtime_ = nullptr;
+    if (runtime_.context()) flushStorage();
+    runtime_.destroy();
 }
 
 void ScriptEngine::registerScript(SceneScript* script) {
@@ -139,31 +93,31 @@ int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const Scr
 }
 
 void ScriptEngine::setUserProperties(const ScriptEvent& properties) {
-    if (!context_) return;
+    if (!runtime_.context()) return;
     CallScope scope(*this, nullptr, 0, 20.0);
-    JSValue global = JS_GetGlobalObject(context_);
-    JSValue setter = JS_GetPropertyStr(context_, global, "__lweSetUserProperties");
-    JSValue object = toJsObject(context_, properties);
-    JSValue result = JS_Call(context_, setter, JS_UNDEFINED, 1, &object);
-    if (JS_IsException(result)) scriptLogException(context_, "userProperties");
-    JS_FreeValue(context_, result);
-    JS_FreeValue(context_, object);
-    JS_FreeValue(context_, setter);
-    JS_FreeValue(context_, global);
+    JSValue global = JS_GetGlobalObject(runtime_.context());
+    JSValue setter = JS_GetPropertyStr(runtime_.context(), global, "__lweSetUserProperties");
+    JSValue object = toJsObject(runtime_.context(), properties);
+    JSValue result = JS_Call(runtime_.context(), setter, JS_UNDEFINED, 1, &object);
+    if (JS_IsException(result)) scriptLogException(runtime_.context(), "userProperties");
+    JS_FreeValue(runtime_.context(), result);
+    JS_FreeValue(runtime_.context(), object);
+    JS_FreeValue(runtime_.context(), setter);
+    JS_FreeValue(runtime_.context(), global);
 }
 
 void ScriptEngine::animationEnded(uint32_t handle) {
-    if (!context_) return;
+    if (!runtime_.context()) return;
     CallScope scope(*this, nullptr, 0, 20.0);
-    JSValue global = JS_GetGlobalObject(context_);
-    JSValue notify = JS_GetPropertyStr(context_, global, "__lweAnimationEnded");
-    JSValue argument = JS_NewUint32(context_, handle);
-    JSValue result = JS_Call(context_, notify, JS_UNDEFINED, 1, &argument);
-    if (JS_IsException(result)) scriptLogException(context_, "animationEnded");
-    JS_FreeValue(context_, result);
-    JS_FreeValue(context_, argument);
-    JS_FreeValue(context_, notify);
-    JS_FreeValue(context_, global);
+    JSValue global = JS_GetGlobalObject(runtime_.context());
+    JSValue notify = JS_GetPropertyStr(runtime_.context(), global, "__lweAnimationEnded");
+    JSValue argument = JS_NewUint32(runtime_.context(), handle);
+    JSValue result = JS_Call(runtime_.context(), notify, JS_UNDEFINED, 1, &argument);
+    if (JS_IsException(result)) scriptLogException(runtime_.context(), "animationEnded");
+    JS_FreeValue(runtime_.context(), result);
+    JS_FreeValue(runtime_.context(), argument);
+    JS_FreeValue(runtime_.context(), notify);
+    JS_FreeValue(runtime_.context(), global);
 }
 
 bool ScriptEngine::anyScriptExports(const std::vector<const char*>& hooks) {
@@ -187,53 +141,53 @@ std::vector<uint32_t> ScriptEngine::layersWithHooks(const std::vector<const char
 }
 
 void ScriptEngine::setInput(float world_x, float world_y, float screen_x, float screen_y, bool left_down) {
-    if (!context_) return;
+    if (!runtime_.context()) return;
     CallScope scope(*this, nullptr, 0, 10.0);
-    JSValue global = JS_GetGlobalObject(context_);
-    JSValue set_input = JS_GetPropertyStr(context_, global, "__lweSetInput");
-    JSValue args[5] = {JS_NewFloat64(context_, world_x), JS_NewFloat64(context_, world_y),
-                       JS_NewFloat64(context_, screen_x), JS_NewFloat64(context_, screen_y),
-                       JS_NewBool(context_, left_down)};
-    JSValue result = JS_Call(context_, set_input, JS_UNDEFINED, 5, args);
-    if (JS_IsException(result)) scriptLogException(context_, "input");
-    JS_FreeValue(context_, result);
-    for (JSValue& arg : args) JS_FreeValue(context_, arg);
-    JS_FreeValue(context_, set_input);
-    JS_FreeValue(context_, global);
+    JSValue global = JS_GetGlobalObject(runtime_.context());
+    JSValue set_input = JS_GetPropertyStr(runtime_.context(), global, "__lweSetInput");
+    JSValue args[5] = {JS_NewFloat64(runtime_.context(), world_x), JS_NewFloat64(runtime_.context(), world_y),
+                       JS_NewFloat64(runtime_.context(), screen_x), JS_NewFloat64(runtime_.context(), screen_y),
+                       JS_NewBool(runtime_.context(), left_down)};
+    JSValue result = JS_Call(runtime_.context(), set_input, JS_UNDEFINED, 5, args);
+    if (JS_IsException(result)) scriptLogException(runtime_.context(), "input");
+    JS_FreeValue(runtime_.context(), result);
+    for (JSValue& arg : args) JS_FreeValue(runtime_.context(), arg);
+    JS_FreeValue(runtime_.context(), set_input);
+    JS_FreeValue(runtime_.context(), global);
 }
 
 bool ScriptEngine::deadlineExceeded() const {
-    return deadline_ns_ != 0 && scriptNowNs() > deadline_ns_;
+    return runtime_.deadlineExceeded();
 }
 
 ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms)
     : engine_(engine), previous_errors_(engine.current_errors_), previous_id_(engine.current_script_id_) {
     engine.current_errors_ = errors;
     engine.current_script_id_ = script_id;
-    engine.deadline_ns_ = scriptNowNs() + (int64_t)(budget_ms * 1e6);
+    engine.runtime_.setDeadlineNs(scriptNowNs() + (int64_t)(budget_ms * 1e6));
 }
 
 ScriptEngine::CallScope::~CallScope() {
     engine_.current_errors_ = previous_errors_;
     engine_.current_script_id_ = previous_id_;
-    engine_.deadline_ns_ = 0;
+    engine_.runtime_.setDeadlineNs(0);
 }
 
 void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w,
                               float screen_h) {
-    if (!context_) return;
+    if (!runtime_.context()) return;
     CallScope scope(*this, nullptr, 0, 20.0);
-    JSValue global = JS_GetGlobalObject(context_);
-    JSValue tick = JS_GetPropertyStr(context_, global, "__lweTick");
-    JSValue args[6] = {JS_NewFloat64(context_, dt),       JS_NewFloat64(context_, runtime_seconds),
-                       JS_NewFloat64(context_, canvas_w), JS_NewFloat64(context_, canvas_h),
-                       JS_NewFloat64(context_, screen_w), JS_NewFloat64(context_, screen_h)};
-    JSValue result = JS_Call(context_, tick, JS_UNDEFINED, 6, args);
-    if (JS_IsException(result)) scriptLogException(context_, "tick");
-    JS_FreeValue(context_, result);
-    for (JSValue& arg : args) JS_FreeValue(context_, arg);
-    JS_FreeValue(context_, tick);
-    JS_FreeValue(context_, global);
+    JSValue global = JS_GetGlobalObject(runtime_.context());
+    JSValue tick = JS_GetPropertyStr(runtime_.context(), global, "__lweTick");
+    JSValue args[6] = {JS_NewFloat64(runtime_.context(), dt),       JS_NewFloat64(runtime_.context(), runtime_seconds),
+                       JS_NewFloat64(runtime_.context(), canvas_w), JS_NewFloat64(runtime_.context(), canvas_h),
+                       JS_NewFloat64(runtime_.context(), screen_w), JS_NewFloat64(runtime_.context(), screen_h)};
+    JSValue result = JS_Call(runtime_.context(), tick, JS_UNDEFINED, 6, args);
+    if (JS_IsException(result)) scriptLogException(runtime_.context(), "tick");
+    JS_FreeValue(runtime_.context(), result);
+    for (JSValue& arg : args) JS_FreeValue(runtime_.context(), arg);
+    JS_FreeValue(runtime_.context(), tick);
+    JS_FreeValue(runtime_.context(), global);
 
     for (size_t i = 0; i < scripts_.size(); ++i) {
         if (scripts_[i].sticky_delivered) continue;
@@ -251,26 +205,29 @@ void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w,
 }
 
 void ScriptEngine::setAudioBands(int resolution, const float* left, const float* right) {
-    if (!context_ || (resolution != 16 && resolution != 32 && resolution != 64)) return;
-    JSValue global = JS_GetGlobalObject(context_);
-    JSValue all = JS_GetPropertyStr(context_, global, "__lweAudio");
-    JSValue bands = JS_GetPropertyUint32(context_, all, (uint32_t)resolution);
+    if (!runtime_.context() || (resolution != 16 && resolution != 32 && resolution != 64)) return;
+    JSValue global = JS_GetGlobalObject(runtime_.context());
+    JSValue all = JS_GetPropertyStr(runtime_.context(), global, "__lweAudio");
+    JSValue bands = JS_GetPropertyUint32(runtime_.context(), all, (uint32_t)resolution);
     if (JS_IsObject(bands)) {
-        JSValue average = JS_GetPropertyStr(context_, bands, "average");
-        JSValue left_array = JS_GetPropertyStr(context_, bands, "left");
-        JSValue right_array = JS_GetPropertyStr(context_, bands, "right");
+        JSValue average = JS_GetPropertyStr(runtime_.context(), bands, "average");
+        JSValue left_array = JS_GetPropertyStr(runtime_.context(), bands, "left");
+        JSValue right_array = JS_GetPropertyStr(runtime_.context(), bands, "right");
         for (int i = 0; i < resolution; ++i) {
-            JS_SetPropertyUint32(context_, left_array, (uint32_t)i, JS_NewFloat64(context_, left[i]));
-            JS_SetPropertyUint32(context_, right_array, (uint32_t)i, JS_NewFloat64(context_, right[i]));
-            JS_SetPropertyUint32(context_, average, (uint32_t)i, JS_NewFloat64(context_, (left[i] + right[i]) * 0.5));
+            JS_SetPropertyUint32(runtime_.context(), left_array, (uint32_t)i,
+                                 JS_NewFloat64(runtime_.context(), left[i]));
+            JS_SetPropertyUint32(runtime_.context(), right_array, (uint32_t)i,
+                                 JS_NewFloat64(runtime_.context(), right[i]));
+            JS_SetPropertyUint32(runtime_.context(), average, (uint32_t)i,
+                                 JS_NewFloat64(runtime_.context(), (left[i] + right[i]) * 0.5));
         }
-        JS_FreeValue(context_, average);
-        JS_FreeValue(context_, left_array);
-        JS_FreeValue(context_, right_array);
+        JS_FreeValue(runtime_.context(), average);
+        JS_FreeValue(runtime_.context(), left_array);
+        JS_FreeValue(runtime_.context(), right_array);
     }
-    JS_FreeValue(context_, bands);
-    JS_FreeValue(context_, all);
-    JS_FreeValue(context_, global);
+    JS_FreeValue(runtime_.context(), bands);
+    JS_FreeValue(runtime_.context(), all);
+    JS_FreeValue(runtime_.context(), global);
 }
 
 void ScriptEngine::setWallpaperId(const std::string& id) {
@@ -278,15 +235,15 @@ void ScriptEngine::setWallpaperId(const std::string& id) {
 }
 
 void ScriptEngine::flushStorage() {
-    if (!context_) return;
+    if (!runtime_.context()) return;
     CallScope scope(*this, nullptr, 0, 50.0);
-    JSValue global = JS_GetGlobalObject(context_);
-    JSValue flush = JS_GetPropertyStr(context_, global, "__lweStorageFlush");
-    if (JS_IsFunction(context_, flush)) {
-        JSValue result = JS_Call(context_, flush, JS_UNDEFINED, 0, nullptr);
-        if (JS_IsException(result)) scriptLogException(context_, "storage");
-        JS_FreeValue(context_, result);
+    JSValue global = JS_GetGlobalObject(runtime_.context());
+    JSValue flush = JS_GetPropertyStr(runtime_.context(), global, "__lweStorageFlush");
+    if (JS_IsFunction(runtime_.context(), flush)) {
+        JSValue result = JS_Call(runtime_.context(), flush, JS_UNDEFINED, 0, nullptr);
+        if (JS_IsException(result)) scriptLogException(runtime_.context(), "storage");
+        JS_FreeValue(runtime_.context(), result);
     }
-    JS_FreeValue(context_, flush);
-    JS_FreeValue(context_, global);
+    JS_FreeValue(runtime_.context(), flush);
+    JS_FreeValue(runtime_.context(), global);
 }

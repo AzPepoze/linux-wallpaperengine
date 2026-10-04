@@ -7,9 +7,7 @@
 #include <vector>
 
 #include "scene_script.h"
-
-struct JSContext;
-struct JSRuntime;
+#include "script_runtime.h"
 
 struct ScriptErrors {
     std::string last;
@@ -26,7 +24,7 @@ class ScriptEngine {
     void retain();
     void release();
     JSContext* context() const {
-        return context_;
+        return runtime_.context();
     }
 
     // The Wallpaper Engine assets folder supplies baseclasses.js and the WEMath/WEColor/WEVector modules; set it
@@ -97,13 +95,11 @@ class ScriptEngine {
     void create();
     void destroy();
 
-    JSRuntime* runtime_ = nullptr;
-    JSContext* context_ = nullptr;
+    ScriptRuntime runtime_;
     int refs_ = 0;
     int next_script_id_ = 0;
     int current_script_id_ = 0;
     ScriptErrors* current_errors_ = nullptr;
-    int64_t deadline_ns_ = 0;
     std::string wallpaper_id_ = "default";
     std::string assets_dir_;
     class ScriptSceneBackend* scene_backend_ = nullptr;
