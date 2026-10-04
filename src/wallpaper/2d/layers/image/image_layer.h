@@ -1,6 +1,7 @@
 #ifndef IMAGE_LAYER_H
 #define IMAGE_LAYER_H
 
+#include <array>
 #include <map>
 #include <string>
 #include <vector>
@@ -13,6 +14,9 @@
 #include "wallpaper/2d/puppet/puppet_pose.h"
 
 class EngineContext;
+class Effect;
+class IRenderObserver;
+class ShaderPass;
 
 class ImageLayer : public Layer {
    public:
@@ -156,6 +160,37 @@ class ImageLayer : public Layer {
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
 
    private:
+    // State threaded through the passes of one effect chain.
+    struct ChainState {
+        sg_image layer_source_image = {SG_INVALID_ID};
+        sg_view layer_source_view = {SG_INVALID_ID};
+        sg_image input_image = {SG_INVALID_ID};
+        sg_view input_view = {SG_INVALID_ID};
+        // Passes that render into a named target do not advance the layer image that an explicit `previous` binding
+        // reads.
+        sg_image chain_image = {SG_INVALID_ID};
+        sg_view chain_view = {SG_INVALID_ID};
+        int write_index = 0;
+        bool rendered_any = false;
+        int draw_order = 0;
+    };
+
+    // The images one pass samples: slot 0 and the explicit render-target bindings for slots 1..11.
+    struct PassInputs {
+        sg_image image = {SG_INVALID_ID};
+        sg_view view = {SG_INVALID_ID};
+        std::array<sg_image, 11> override_images;
+        std::array<sg_view, 11> override_views;
+        bool has_overrides = false;
+    };
+
+    PassInputs resolvePassInputs(const ShaderPass& pass, const ChainState& state);
+    // Moves on after a pass wrote its target: the next pass reads what this one produced.
+    void advanceChain(ChainState& state, NamedRenderTarget* named_target);
+    void tracePass(IRenderObserver& diag, EngineContext& ctx, const Effect& effect, const ShaderPass& pass,
+                   int effect_index, int pass_index, const PassInputs& inputs, ChainState& state,
+                   NamedRenderTarget* named_target, sg_image output_image, int target_width, int target_height);
+
     EffectTarget effect_targets[2];
     EffectTarget region_source;
     EffectTarget animated_frame;

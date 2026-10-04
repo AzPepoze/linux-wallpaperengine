@@ -14,8 +14,11 @@
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
 #include "shared/graphics/diagnostics/render_observer.h"
+#include "shared/graphics/pass_util.h"
+#include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
 #include "wallpaper/2d/alpha_curve.h"
+#include "wallpaper/2d/effects/effect.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
@@ -25,7 +28,183 @@ bool isCompositeRenderTarget(const std::string& name) {
     if (name.rfind("_rt_imageLayerComposite_", 0) == 0) return true;
     return name.find("FrameBuffer") != std::string::npos;
 }
+
+// Forwards an input image into a target untouched, so later passes never read an uninitialised buffer.
+void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_view, sg_view target, int width,
+                       int height) {
+    sg_pass copy_pass = colorPass(target, SG_LOADACTION_CLEAR);
+    sg_begin_pass(&copy_pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f,
+                         white, false, nullptr);
+    sg_end_pass();
+}
+
+// Sampling an image that the pass also renders into is a Vulkan hazard; logs every such binding.
+bool aliasesOutput(const std::string& layer_name, const ShaderPass& pass, sg_image slot0_image,
+                   const std::array<sg_image, 11>& override_images, const render_effect_pass_t& render_pass,
+                   sg_image output_image) {
+    if (output_image.id == SG_INVALID_ID) return false;
+    bool aliased = false;
+    if (slot0_image.id == output_image.id) {
+        effect_log.error(
+            "Effect pass '%s' (layer '%s') aliases input slot 0 (image %u) with output attachment (image %u)",
+            pass.shader_name.c_str(), layer_name.c_str(), slot0_image.id, output_image.id);
+        aliased = true;
+    }
+    for (size_t i = 0; i < override_images.size(); ++i) {
+        if (override_images[i].id != output_image.id) continue;
+        effect_log.error(
+            "Effect pass '%s' (layer '%s') aliases input slot %zu (image %u) with output attachment (image %u)",
+            pass.shader_name.c_str(), layer_name.c_str(), i + 1, override_images[i].id, output_image.id);
+        aliased = true;
+    }
+    for (size_t i = 0; i < (size_t)render_pass.num_extra_views; ++i) {
+        if (render_pass.override_views && i < render_pass.num_override_views &&
+            render_pass.override_views[i].id != SG_INVALID_ID) {
+            continue;
+        }
+        if (!render_pass.extra_views || render_pass.extra_views[i].id == SG_INVALID_ID) continue;
+        const sg_view_desc view_desc = sg_query_view_desc(render_pass.extra_views[i]);
+        if (view_desc.texture.image.id != SG_INVALID_ID && view_desc.texture.image.id == output_image.id) {
+            effect_log.error(
+                "Effect pass '%s' (layer '%s') aliases extra view slot %zu (image %u) with output attachment "
+                "(image %u)",
+                pass.shader_name.c_str(), layer_name.c_str(), i + 1, view_desc.texture.image.id, output_image.id);
+            aliased = true;
+        }
+    }
+    return aliased;
+}
 }  // namespace
+
+ImageLayer::PassInputs ImageLayer::resolvePassInputs(const ShaderPass& pass, const ChainState& state) {
+    PassInputs inputs;
+    inputs.image = state.input_image;
+    inputs.view = state.input_view;
+    if (pass.pass_textures.texture0.id != SG_INVALID_ID && pass.pass_textures.texture0_view.id != SG_INVALID_ID) {
+        inputs.image = pass.pass_textures.texture0;
+        inputs.view = pass.pass_textures.texture0_view;
+    }
+    inputs.override_images.fill(sg_image{SG_INVALID_ID});
+    inputs.override_views.fill(sg_view{SG_INVALID_ID});
+
+    for (const auto& [slot, binding] : pass.render_texture_bindings) {
+        if (slot < 0 || slot > 11) continue;
+        sg_image binding_image = {SG_INVALID_ID};
+        sg_view binding_view = {SG_INVALID_ID};
+        if (binding == "previous") {
+            binding_image = state.chain_image;
+            binding_view = state.chain_view;
+        } else if (auto target = named_effect_targets.find(binding); target != named_effect_targets.end()) {
+            const auto& read_buf = target->second.currentRead();
+            binding_image = read_buf.image;
+            binding_view = read_buf.texture_view;
+        } else if (isCompositeRenderTarget(binding)) {
+            // Unwritten composite targets read as the accumulated scene image.
+            binding_image = state.layer_source_image;
+            binding_view = state.layer_source_view;
+        } else {
+            continue;
+        }
+        if (binding_image.id == SG_INVALID_ID) continue;
+        if (slot == 0) {
+            inputs.image = binding_image;
+            inputs.view = binding_view;
+        } else {
+            inputs.override_images[slot - 1] = binding_image;
+            inputs.override_views[slot - 1] = binding_view;
+        }
+        inputs.has_overrides = true;
+    }
+    return inputs;
+}
+
+void ImageLayer::advanceChain(ChainState& state, NamedRenderTarget* named_target) {
+    if (named_target) {
+        named_target->swap();
+        state.input_image = named_target->currentRead().image;
+        state.input_view = named_target->currentRead().texture_view;
+    } else {
+        state.input_image = effect_targets[state.write_index].image;
+        state.input_view = effect_targets[state.write_index].texture_view;
+        state.chain_image = state.input_image;
+        state.chain_view = state.input_view;
+        state.write_index = 1 - state.write_index;
+    }
+    effect_output_image = state.input_image;
+    effect_output_view = state.input_view;
+    state.rendered_any = true;
+}
+
+void ImageLayer::tracePass(IRenderObserver& diag, EngineContext& ctx, const Effect& effect, const ShaderPass& pass,
+                           int effect_index, int pass_index, const PassInputs& inputs, ChainState& state,
+                           NamedRenderTarget* named_target, sg_image output_image, int target_width,
+                           int target_height) {
+    PassTraceEntry trace;
+    trace.frame_number = ctx.profiler.frame_index;
+    trace.layer_name = name.empty() ? ("Layer_" + std::to_string(scene_object_id)) : name;
+    trace.effect_index = effect_index;
+    trace.effect_file = effect.file_path;
+    trace.pass_index = pass_index;
+    trace.shader_name = pass.shader_name;
+    trace.enabled = pass.enabled;
+    trace.visible = effect.visible;
+    trace.draw_order = state.draw_order++;
+    trace.render_target_name = pass.render_target;
+    trace.target_image_id = output_image.id;
+    trace.target_view_id = named_target ? named_target->currentWrite().attachment_view.id
+                                        : effect_targets[state.write_index].attachment_view.id;
+    trace.target_width = target_width;
+    trace.target_height = target_height;
+    trace.target_pixel_format = "RGBA8";
+    trace.render_scale = pass.render_scale;
+    trace.is_fullscreen_quad = pass.is_fullscreen_quad;
+
+    auto describe = [](TextureBindingTrace& binding, sg_image image, sg_view view) {
+        binding.image_id = image.id;
+        binding.view_id = view.id;
+        const sg_image_desc desc = sg_query_image_desc(image);
+        binding.width = desc.width;
+        binding.height = desc.height;
+        binding.is_render_target = desc.usage.color_attachment;
+    };
+    auto describeNamedTarget = [](TextureBindingTrace& binding, const NamedRenderTarget& target) {
+        const auto& read_buf = target.currentRead();
+        binding.image_id = read_buf.image.id;
+        binding.view_id = read_buf.texture_view.id;
+        binding.width = read_buf.width;
+        binding.height = read_buf.height;
+        binding.is_render_target = true;
+    };
+
+    TextureBindingTrace slot0;
+    slot0.slot = 0;
+    describe(slot0, inputs.image, inputs.view);
+    slot0.pixel_format = "RGBA8";
+    slot0.semantic_source = pass.render_texture_bindings.count(0) ? pass.render_texture_bindings.at(0) : "previous";
+    trace.inputs.push_back(slot0);
+
+    for (const auto& [slot, binding] : pass.render_texture_bindings) {
+        if (slot == 0) continue;
+        TextureBindingTrace input;
+        input.slot = slot;
+        input.semantic_source = binding;
+        const auto named = named_effect_targets.find(binding);
+        if (binding == "previous") {
+            describe(input, state.chain_image, state.chain_view);
+        } else if (named != named_effect_targets.end()) {
+            describeNamedTarget(input, named->second);
+        } else if (isCompositeRenderTarget(binding)) {
+            describe(input, state.layer_source_image, state.layer_source_view);
+        }
+        trace.inputs.push_back(input);
+    }
+
+    gpu_set_image_debug_label(output_image, (pass.shader_name + " Target").c_str());
+    diag.recordPass(trace, output_image);
+}
 
 void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
     effect_output_image = {SG_INVALID_ID};
@@ -51,39 +230,27 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
     IRenderObserver& diag = renderObserver();
 
-    bool any_effect_solo = false;
-    for (auto effect : effects) {
-        if (effect && effect->solo) {
-            any_effect_solo = true;
-            break;
-        }
-    }
+    const bool any_effect_solo =
+        std::any_of(effects.begin(), effects.end(), [](const Effect* effect) { return effect && effect->solo; });
 
-    const sg_image layer_source_image = base_img;
-    const sg_view layer_source_view = base_view;
-    sg_image input_image = base_img;
-    sg_view input_view = base_view;
-    // Passes that render into a named target do not advance the layer image that an explicit `previous` binding reads.
-    sg_image chain_image = base_img;
-    sg_view chain_view = base_view;
-    int write_index = 0;
-    bool rendered_any = false;
-    int draw_order = 0;
-    diag.onSourceImage(0, input_image, effect_target_width, effect_target_height);
+    ChainState state;
+    state.layer_source_image = state.input_image = state.chain_image = base_img;
+    state.layer_source_view = state.input_view = state.chain_view = base_view;
+    diag.onSourceImage(0, state.input_image, effect_target_width, effect_target_height);
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
     renderer_update_viewport(&ctx.renderer, (float)effect_target_width, (float)effect_target_height);
 
     for (int eff_idx = 0; eff_idx < (int)effects.size(); ++eff_idx) {
-        auto effect = effects[eff_idx];
+        Effect* effect = effects[eff_idx];
         if (!effect) continue;
         if (!effect->visible || (any_effect_solo && !effect->solo)) continue;
         if (!diag.isEffectIsolated(eff_idx, effect->file_path)) continue;
         if (diag.isEffectDisabled(eff_idx, effect->file_path)) continue;
 
         for (int pass_idx = 0; pass_idx < (int)effect->passes.size(); ++pass_idx) {
-            auto pass = effect->passes[pass_idx];
+            ShaderPass* pass = effect->passes[pass_idx];
             if (!pass || !pass->enabled) continue;
 
             if (pass->shader_name.find("depthparallax") != std::string::npos && !path.empty() &&
@@ -98,280 +265,67 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 target_width = std::max(1, (int)std::lround(effect_target_width / pass->render_scale));
                 target_height = std::max(1, (int)std::lround(effect_target_height / pass->render_scale));
                 auto& target = named_effect_targets[pass->render_target];
-                if (!target.ensureSize(target_width, target_height, pass->render_target)) {
-                    continue;
-                }
+                if (!target.ensureSize(target_width, target_height, pass->render_target)) continue;
                 named_target = &target;
             }
 
             if (diag.isPassDisabled(pass_idx)) {
                 if (named_target) {
-                    // Copy-through input to named target so downstream passes don't sample uninitialized buffer
-                    sg_pass copy_pass = {};
-                    copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-                    copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-                    copy_pass.attachments.colors[0] = named_target->currentWrite().attachment_view;
-                    sg_begin_pass(&copy_pass);
-                    renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
-                    float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-                    renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
-                                         (float)target_height, 0.0f, full_white, false, nullptr);
-                    sg_end_pass();
+                    // Copy the input through so downstream passes do not sample an uninitialised buffer.
+                    copyInputToTarget(ctx, state.input_image, state.input_view,
+                                      named_target->currentWrite().attachment_view, target_width, target_height);
                     named_target->swap();
                 }
                 continue;
             }
 
             const sg_image output_image =
-                named_target ? named_target->currentWrite().image : effect_targets[write_index].image;
+                named_target ? named_target->currentWrite().image : effect_targets[state.write_index].image;
             const sg_view output_attachment = named_target ? named_target->currentWrite().attachment_view
-                                                           : effect_targets[write_index].attachment_view;
+                                                           : effect_targets[state.write_index].attachment_view;
 
             if (pass->compiled.pipeline.id == SG_INVALID_ID) {
-                // A pass that never compiled must still forward its input so later
-                // passes (and the final layer draw) do not read uninitialised targets.
-                sg_pass copy_pass = {};
-                copy_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-                copy_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-                copy_pass.attachments.colors[0] = output_attachment;
-                sg_begin_pass(&copy_pass);
-                renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
-                float full_white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-                renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)target_width,
-                                     (float)target_height, 0.0f, full_white, false, nullptr);
-                sg_end_pass();
-
-                if (named_target) {
-                    named_target->swap();
-                    input_image = named_target->currentRead().image;
-                    input_view = named_target->currentRead().texture_view;
-                } else {
-                    input_image = effect_targets[write_index].image;
-                    input_view = effect_targets[write_index].texture_view;
-                    chain_image = input_image;
-                    chain_view = input_view;
-                    chain_image = input_image;
-                    chain_view = input_view;
-                    write_index = 1 - write_index;
-                }
-                effect_output_image = input_image;
-                effect_output_view = input_view;
-                rendered_any = true;
+                // A pass that never compiled still forwards its input, so later passes and the final layer draw
+                // do not read uninitialised targets.
+                copyInputToTarget(ctx, state.input_image, state.input_view, output_attachment, target_width,
+                                  target_height);
+                advanceChain(state, named_target);
                 continue;
             }
 
-            float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            PassInputs inputs = resolvePassInputs(*pass, state);
             render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index, ctx.time);
-
-            sg_image shader_input_image = input_image;
-            sg_view shader_input_view = input_view;
-            if (pass->pass_textures.texture0.id != SG_INVALID_ID &&
-                pass->pass_textures.texture0_view.id != SG_INVALID_ID) {
-                shader_input_image = pass->pass_textures.texture0;
-                shader_input_view = pass->pass_textures.texture0_view;
+            if (inputs.has_overrides) {
+                render_pass.override_views = inputs.override_views.data();
+                render_pass.num_override_views = inputs.override_views.size();
             }
-
-            std::array<sg_image, 11> override_images;
-            std::array<sg_view, 11> override_views;
-            override_images.fill(sg_image{SG_INVALID_ID});
-            override_views.fill(sg_view{SG_INVALID_ID});
-            bool has_overrides = false;
-            for (const auto& [slot, binding] : pass->render_texture_bindings) {
-                if (slot < 0 || slot > 11) continue;
-                sg_image binding_image = {SG_INVALID_ID};
-                sg_view binding_view = {SG_INVALID_ID};
-                if (binding == "previous") {
-                    binding_image = chain_image;
-                    binding_view = chain_view;
-                } else {
-                    auto target = named_effect_targets.find(binding);
-                    if (target != named_effect_targets.end()) {
-                        const auto& read_buf = target->second.currentRead();
-                        binding_image = read_buf.image;
-                        binding_view = read_buf.texture_view;
-                    } else if (isCompositeRenderTarget(binding)) {
-                        // Unwritten composite targets read as the accumulated scene image.
-                        binding_image = layer_source_image;
-                        binding_view = layer_source_view;
-                    } else {
-                        continue;
-                    }
-                }
-                if (binding_image.id == SG_INVALID_ID) continue;
-                if (slot == 0) {
-                    shader_input_image = binding_image;
-                    shader_input_view = binding_view;
-                } else {
-                    override_images[slot - 1] = binding_image;
-                    override_views[slot - 1] = binding_view;
-                }
-                has_overrides = true;
-            }
-
-            bool has_alias = false;
-            if (output_image.id != SG_INVALID_ID && shader_input_image.id == output_image.id) {
-                effect_log.error(
-                    "Effect pass '%s' (layer '%s') aliases input slot 0 (image %u) with output attachment (image %u)",
-                    pass->shader_name.c_str(), name.c_str(), shader_input_image.id, output_image.id);
-                has_alias = true;
-            }
-            for (size_t i = 0; i < override_images.size(); ++i) {
-                if (output_image.id != SG_INVALID_ID && override_images[i].id == output_image.id) {
-                    effect_log.error(
-                        "Effect pass '%s' (layer '%s') aliases input slot %zu (image %u) with output attachment "
-                        "(image %u)",
-                        pass->shader_name.c_str(), name.c_str(), i + 1, override_images[i].id, output_image.id);
-                    has_alias = true;
-                }
-            }
-            if (has_overrides) {
-                render_pass.override_views = override_views.data();
-                render_pass.num_override_views = override_views.size();
-            }
-
-            for (size_t i = 0; i < (size_t)render_pass.num_extra_views; ++i) {
-                if (render_pass.override_views && i < render_pass.num_override_views &&
-                    render_pass.override_views[i].id != SG_INVALID_ID) {
-                    continue;
-                }
-                if (render_pass.extra_views && render_pass.extra_views[i].id != SG_INVALID_ID) {
-                    sg_view_desc vd = sg_query_view_desc(render_pass.extra_views[i]);
-                    if (vd.texture.image.id != SG_INVALID_ID && vd.texture.image.id == output_image.id) {
-                        effect_log.error(
-                            "Effect pass '%s' (layer '%s') aliases extra view slot %zu (image %u) with output "
-                            "attachment (image %u)",
-                            pass->shader_name.c_str(), name.c_str(), i + 1, vd.texture.image.id, output_image.id);
-                        has_alias = true;
-                    }
-                }
-            }
-
-            if (has_alias) {
+            if (aliasesOutput(name, *pass, inputs.image, inputs.override_images, render_pass, output_image)) {
                 effect_log.warn("Skipping pass '%s' to avoid Vulkan render target aliasing hazard",
                                 pass->shader_name.c_str());
                 continue;
             }
 
-            sg_pass offscreen_pass = {};
-            offscreen_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-            offscreen_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-            offscreen_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-            offscreen_pass.attachments.colors[0] = output_attachment;
+            sg_pass offscreen_pass = colorPass(output_attachment, SG_LOADACTION_CLEAR);
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
-
             render_pass.is_fullscreen_quad = pass->is_fullscreen_quad;
-
-            renderer_draw_sprite(ctx, &ctx.renderer, shader_input_image, shader_input_view, 0.0f, 0.0f,
-                                 (float)target_width, (float)target_height, 0.0f, effect_tint, false, &render_pass);
-
+            float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            renderer_draw_sprite(ctx, &ctx.renderer, inputs.image, inputs.view, 0.0f, 0.0f, (float)target_width,
+                                 (float)target_height, 0.0f, effect_tint, false, &render_pass);
             sg_end_pass();
 
-            sg_image out_img = output_image;
             if (diag.isTracingPasses()) {
-                PassTraceEntry trace;
-                trace.frame_number = ctx.profiler.frame_index;
-                trace.layer_name = this->name.empty() ? ("Layer_" + std::to_string(scene_object_id)) : this->name;
-                trace.effect_index = eff_idx;
-                trace.effect_file = effect->file_path;
-                trace.pass_index = pass_idx;
-                trace.shader_name = pass->shader_name;
-                trace.enabled = pass->enabled;
-                trace.visible = effect->visible;
-                trace.draw_order = draw_order++;
-                trace.render_target_name = pass->render_target;
-                trace.target_image_id = out_img.id;
-                trace.target_view_id = named_target ? named_target->currentWrite().attachment_view.id
-                                                    : effect_targets[write_index].attachment_view.id;
-                trace.target_width = target_width;
-                trace.target_height = target_height;
-                trace.target_pixel_format = "RGBA8";
-                trace.render_scale = pass->render_scale;
-                trace.is_fullscreen_quad = pass->is_fullscreen_quad;
-
-                TextureBindingTrace in0;
-                in0.slot = 0;
-                in0.image_id = shader_input_image.id;
-                in0.view_id = shader_input_view.id;
-                sg_image_desc in0_d = sg_query_image_desc(shader_input_image);
-                in0.width = in0_d.width;
-                in0.height = in0_d.height;
-                in0.pixel_format = "RGBA8";
-                in0.is_render_target = in0_d.usage.color_attachment;
-                in0.semantic_source =
-                    pass->render_texture_bindings.count(0) ? pass->render_texture_bindings.at(0) : "previous";
-                trace.inputs.push_back(in0);
-
-                for (const auto& [slot, binding] : pass->render_texture_bindings) {
-                    if (slot == 0) continue;
-                    TextureBindingTrace in_b;
-                    in_b.slot = slot;
-                    in_b.semantic_source = binding;
-                    if (binding == "previous") {
-                        in_b.image_id = chain_image.id;
-                        in_b.view_id = chain_view.id;
-                        sg_image_desc d = sg_query_image_desc(chain_image);
-                        in_b.width = d.width;
-                        in_b.height = d.height;
-                        in_b.is_render_target = d.usage.color_attachment;
-                    } else if (isCompositeRenderTarget(binding)) {
-                        if (auto target_it = named_effect_targets.find(binding);
-                            target_it != named_effect_targets.end()) {
-                            const auto& read_buf = target_it->second.currentRead();
-                            in_b.image_id = read_buf.image.id;
-                            in_b.view_id = read_buf.texture_view.id;
-                            in_b.width = read_buf.width;
-                            in_b.height = read_buf.height;
-                            in_b.is_render_target = true;
-                        } else {
-                            in_b.image_id = layer_source_image.id;
-                            in_b.view_id = layer_source_view.id;
-                            sg_image_desc d = sg_query_image_desc(layer_source_image);
-                            in_b.width = d.width;
-                            in_b.height = d.height;
-                            in_b.is_render_target = d.usage.color_attachment;
-                        }
-                    } else {
-                        auto target_it = named_effect_targets.find(binding);
-                        if (target_it != named_effect_targets.end()) {
-                            const auto& read_buf = target_it->second.currentRead();
-                            in_b.image_id = read_buf.image.id;
-                            in_b.view_id = read_buf.texture_view.id;
-                            in_b.width = read_buf.width;
-                            in_b.height = read_buf.height;
-                            in_b.is_render_target = true;
-                        }
-                    }
-                    trace.inputs.push_back(in_b);
-                }
-
-                gpu_set_image_debug_label(out_img, (pass->shader_name + " Target").c_str());
-                diag.recordPass(trace, out_img);
+                tracePass(diag, ctx, *effect, *pass, eff_idx, pass_idx, inputs, state, named_target, output_image,
+                          target_width, target_height);
             }
 
-            if (named_target) {
-                named_target->swap();
-                input_image = named_target->currentRead().image;
-                input_view = named_target->currentRead().texture_view;
-            } else {
-                input_image = effect_targets[write_index].image;
-                input_view = effect_targets[write_index].texture_view;
-                chain_image = input_image;
-                chain_view = input_view;
-                write_index = 1 - write_index;
-            }
-            effect_output_image = input_image;
-            effect_output_view = input_view;
-            rendered_any = true;
-
-            if (diag.shouldStopAfterPass(pass_idx)) {
-                break;
-            }
+            advanceChain(state, named_target);
+            if (diag.shouldStopAfterPass(pass_idx)) break;
         }
     }
 
     renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);
-    if (!rendered_any) {
+    if (!state.rendered_any) {
         effect_output_image = {SG_INVALID_ID};
         effect_output_view = {SG_INVALID_ID};
     } else {

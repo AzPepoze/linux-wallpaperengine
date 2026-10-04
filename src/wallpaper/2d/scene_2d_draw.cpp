@@ -8,6 +8,7 @@
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
+#include "shared/graphics/pass_util.h"
 #include "shared/graphics/passes/pass_loader.h"
 #include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
@@ -19,15 +20,6 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
-sg_pass colorPass(sg_view target, sg_load_action load, float clear_alpha = 0.0f) {
-    sg_pass pass = {};
-    pass.action.colors[0].load_action = load;
-    pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-    pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, clear_alpha};
-    pass.attachments.colors[0] = target;
-    return pass;
-}
-
 // Copies a render target into the pass that is currently open, untinted and opaque to blending.
 void drawFullscreenTarget(EngineContext& ctx, sg_image image, sg_view texture_view, int width, int height) {
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
