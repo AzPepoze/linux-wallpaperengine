@@ -1,7 +1,6 @@
 #include "asset_manager.h"
 
 #include <cjson/cJSON.h>
-#include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -12,6 +11,7 @@
 #include <unordered_map>
 
 #include "shared/assets/media/video_rate.h"
+#include "shared/assets/shared_assets.h"
 #include "shared/assets/tex_decoder.h"
 #include "shared/core/logger.h"
 #include "shared/core/task_pool.h"
@@ -42,35 +42,34 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
 
 }  // namespace
 
-struct AssetManager::DecodeCache {
-    using Entry = std::shared_future<std::shared_ptr<const wallpaper_engine::DecodedImage>>;
-
-    std::mutex mutex;
-    std::unordered_map<std::string, Entry> entries;
-
-    static std::string key(const char* path, int image_index) {
-        return std::string(path) + "#" + std::to_string(image_index);
-    }
-};
-
-AssetManager::AssetManager()
-    : internal_provider(std::make_unique<InternalAssetProvider>()), decode_cache_(std::make_unique<DecodeCache>()) {}
+AssetManager::AssetManager() : wallpaper_decode_cache_(std::make_unique<TextureDecodeCache>()) {}
 
 AssetManager::~AssetManager() {
     clearVideoTextures();
 }
 
-void AssetManager::init(const char* ep, const char* wp) {
-    // Drop the previous wallpaper's video decoders and audio streams. Without
-    // this, a stream handle freed by AudioEngine::destroyGroup on switch could
-    // be reused while video_textures still stored it.
-    clearVideoTextures();
-    engine_path = ep ? ep : "";
-    wallpaper_path = wp ? wp : "";
+void AssetManager::attachShared(SharedAssets* shared) {
+    shared_ = shared;
+    engine_path = shared ? shared->engine_path : "";
+}
 
-    engine_provider = std::make_unique<EngineAssetProvider>(engine_path);
+void AssetManager::initWallpaper(const char* wp) {
+    wallpaper_path = wp ? wp : "";
     wallpaper_provider = std::make_unique<WallpaperAssetProvider>(wallpaper_path);
-    internal_provider = std::make_unique<InternalAssetProvider>();
+    wallpaper_decode_cache_ = std::make_unique<TextureDecodeCache>();
+}
+
+void AssetManager::init(const char* ep, const char* wp) {
+    // Temporary shim until every caller supplies a process-wide SharedAssets:
+    // owns a private one so behavior is unchanged.
+    clearVideoTextures();
+    if (!owned_shared_) owned_shared_ = std::make_unique<SharedAssets>();
+    owned_shared_->engine_path = ep ? ep : "";
+    owned_shared_->engine_provider = std::make_unique<EngineAssetProvider>(owned_shared_->engine_path);
+    owned_shared_->internal_provider = std::make_unique<InternalAssetProvider>();
+    owned_shared_->decode_cache = std::make_unique<TextureDecodeCache>();
+    attachShared(owned_shared_.get());
+    initWallpaper(wp);
 }
 
 void AssetManager::prefetchPackageTextures() const {
@@ -89,42 +88,28 @@ void AssetManager::prefetchPackageTextures() const {
         if (total_bytes + size > kMaxTotalBytes) return true;
         total_bytes += size;
 
-        auto task = TaskPool::instance().enqueue([path] {
-            return std::make_shared<const wallpaper_engine::DecodedImage>(
-                wallpaper_engine::decodeTexture(path.c_str()));
-        });
-        std::lock_guard<std::mutex> lock(decode_cache_->mutex);
-        decode_cache_->entries.emplace(DecodeCache::key(path.c_str(), 0), task.share());
+        wallpaper_decode_cache_->prefetch(path.c_str(), 0);
         return false;
     });
 }
 
 void AssetManager::releaseDecodedTextures() const {
-    {
-        std::lock_guard<std::mutex> lock(decode_cache_->mutex);
-        decode_cache_->entries.clear();
+    wallpaper_decode_cache_->release();
+}
+
+const TextureDecodeCache& AssetManager::decodeCacheFor(const char* abs_path) const {
+    // Engine install textures are shared across instances; wallpaper (and
+    // internal) textures live in this instance's cache and are released on switch.
+    if (shared_ && shared_->decode_cache && !shared_->engine_path.empty() &&
+        strncmp(abs_path, shared_->engine_path.c_str(), shared_->engine_path.size()) == 0) {
+        return *shared_->decode_cache;
     }
-    malloc_trim(0);
+    return *wallpaper_decode_cache_;
 }
 
 std::shared_ptr<const wallpaper_engine::DecodedImage> AssetManager::decodeShared(const char* abs_path,
                                                                                  int image_index) const {
-    const std::string key = DecodeCache::key(abs_path, image_index);
-    DecodeCache::Entry pending;
-    {
-        std::lock_guard<std::mutex> lock(decode_cache_->mutex);
-        const auto found = decode_cache_->entries.find(key);
-        if (found != decode_cache_->entries.end()) pending = found->second;
-    }
-    if (pending.valid()) return pending.get();
-
-    auto image =
-        std::make_shared<const wallpaper_engine::DecodedImage>(wallpaper_engine::decodeTexture(abs_path, image_index));
-    std::promise<std::shared_ptr<const wallpaper_engine::DecodedImage>> ready;
-    ready.set_value(image);
-    std::lock_guard<std::mutex> lock(decode_cache_->mutex);
-    decode_cache_->entries.emplace(key, ready.get_future().share());
-    return image;
+    return decodeCacheFor(abs_path).decode(abs_path, image_index);
 }
 
 void AssetManager::setVideoPlayback(float rate, float volume) {
@@ -281,7 +266,8 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
 bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {
     if (!rel_path || !out_abs_path || max_len <= 0) return false;
 
-    if (internal_provider && internal_provider->resolvePath(rel_path, out_abs_path, max_len)) {
+    if (shared_ && shared_->internal_provider &&
+        shared_->internal_provider->resolvePath(rel_path, out_abs_path, max_len)) {
         return true;
     }
 
@@ -289,7 +275,7 @@ bool AssetManager::resolvePath(const char* rel_path, char* out_abs_path, int max
         return true;
     }
 
-    if (engine_provider && engine_provider->resolvePath(rel_path, out_abs_path, max_len)) {
+    if (shared_ && shared_->engine_provider && shared_->engine_provider->resolvePath(rel_path, out_abs_path, max_len)) {
         return true;
     }
 

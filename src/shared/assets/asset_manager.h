@@ -15,6 +15,8 @@
 #include "sokol_gfx.h"
 
 class Layer;
+class TextureDecodeCache;
+struct SharedAssets;
 
 class AssetManager : public IAssetResolver {
    public:
@@ -22,6 +24,12 @@ class AssetManager : public IAssetResolver {
     ~AssetManager() override;
 
     void init(const char* engine_path, const char* wallpaper_path);
+
+    // Reference the process-wide shared assets (install/internal providers and
+    // their decode cache). Built once by the app.
+    void attachShared(SharedAssets* shared);
+    // Point at one wallpaper's content (its provider and decode cache).
+    void initWallpaper(const char* wallpaper_path);
 
     void setAudioGroup(AudioEngine::GroupId group) {
         audio_group_ = group;
@@ -67,8 +75,10 @@ class AssetManager : public IAssetResolver {
     std::string wallpaper_path;
 
     std::unique_ptr<WallpaperAssetProvider> wallpaper_provider;
-    std::unique_ptr<EngineAssetProvider> engine_provider;
-    std::unique_ptr<InternalAssetProvider> internal_provider;
+    SharedAssets* shared_ = nullptr;
+    // Temporary: owns a SharedAssets until the app supplies a process-wide one
+    // (removed once every caller uses attachShared).
+    std::unique_ptr<SharedAssets> owned_shared_;
 
     mutable std::vector<ActiveVideoTexture> video_textures;
     float video_rate_ = 1.0f;
@@ -82,8 +92,8 @@ class AssetManager : public IAssetResolver {
     GfxImage resolveTextureInternal(const char* name, std::string* out_path, int image_index,
                                     bool warn_on_failure) const;
 
-    struct DecodeCache;
-    std::unique_ptr<DecodeCache> decode_cache_;
+    std::unique_ptr<TextureDecodeCache> wallpaper_decode_cache_;
+    const TextureDecodeCache& decodeCacheFor(const char* abs_path) const;
     std::shared_ptr<const wallpaper_engine::DecodedImage> decodeShared(const char* abs_path, int image_index) const;
 };
 
