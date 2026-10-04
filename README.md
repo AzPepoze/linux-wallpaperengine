@@ -297,14 +297,16 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 ### Puppet Warp
 
-- [ ] Puppet Warp
-- [ ] Puppet geometry / mesh
+- [-] Puppet Warp
+- [x] Puppet model (`.mdl` / MDLV) parsing
+- [x] Puppet geometry / mesh
 - [ ] Custom topology / vertex editing
-- [ ] Skeleton / bones
-- [ ] Bone weights
-- [ ] Puppet animations
-- [ ] Multiple puppet animations
-- [ ] Animation mixing
+- [x] Skeleton / bones
+- [x] Bone weights (four influences per vertex)
+- [x] Puppet animations (keyframed bone clips)
+- [x] Multiple puppet animations (animation layers with rate and visibility)
+- [x] Animation mixing (blend and additive layers)
+- [x] Effects on puppet layers (run on the source texture before the mesh is assembled)
 - [ ] Character sheets
 - [ ] Texture channels
 - [ ] Shape animations / blend shapes
@@ -315,7 +317,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [ ] Kinematic chains
 - [ ] Inverse kinematics
 - [ ] Bone blend rules
-- [ ] Attachment points
+- [x] Attachment points (named sockets that child layers follow)
 - [ ] Interactive bones
 - [ ] SceneScript puppet control
 - [ ] 3D perspective extrusion
