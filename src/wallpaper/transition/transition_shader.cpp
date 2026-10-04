@@ -144,6 +144,51 @@ void generateBricks(float progress, float aspect, std::vector<vertex_t>& out) {
     }
 }
 
+// --- Glass shatter (#23): a tessellated shard plane ------------------------
+struct ShatterVertex {
+    float px;
+    float py;
+    float pz;
+    float u;
+    float v;
+    float cx;
+    float cy;
+    float cz;
+    float nx;
+    float ny;
+    float nz;
+};
+
+constexpr int kShatterGrid = 24;
+
+void generateShatterMesh(std::vector<ShatterVertex>& out) {
+    out.clear();
+    out.reserve(kShatterGrid * kShatterGrid * 6);
+    const float step = 2.0f / (float)kShatterGrid;
+    const auto uvx = [](float x) { return x * 0.5f + 0.5f; };
+    const auto uvy = [](float y) { return 1.0f - (y * 0.5f + 0.5f); };
+    for (int j = 0; j < kShatterGrid; ++j) {
+        for (int i = 0; i < kShatterGrid; ++i) {
+            const float x0 = -1.0f + (float)i * step;
+            const float x1 = x0 + step;
+            const float y0 = -1.0f + (float)j * step;
+            const float y1 = y0 + step;
+            const float cx = (x0 + x1) * 0.5f;
+            const float cy = (y0 + y1) * 0.5f;
+            const ShatterVertex a = {x0, y0, 0.0f, uvx(x0), uvy(y0), cx, cy, 0.0f, 0.0f, 0.0f, 1.0f};
+            const ShatterVertex b = {x1, y0, 0.0f, uvx(x1), uvy(y0), cx, cy, 0.0f, 0.0f, 0.0f, 1.0f};
+            const ShatterVertex c = {x1, y1, 0.0f, uvx(x1), uvy(y1), cx, cy, 0.0f, 0.0f, 0.0f, 1.0f};
+            const ShatterVertex d = {x0, y1, 0.0f, uvx(x0), uvy(y1), cx, cy, 0.0f, 0.0f, 0.0f, 1.0f};
+            out.push_back(a);
+            out.push_back(b);
+            out.push_back(c);
+            out.push_back(a);
+            out.push_back(c);
+            out.push_back(d);
+        }
+    }
+}
+
 // Wallpaper Engine ships these only as DX11 fallback HLSL. Give Slang the same
 // explicit Vulkan bindings the GLSL path would have generated. `fragment`
 // gates the parts only the fragment shader declares.
@@ -221,6 +266,13 @@ bool TransitionShader::init(EngineContext& ctx, int effect_index) {
     desc.texture_sampler_pairs[2].sampler_slot = 1;
 
     const char* label = lwe::transition::effectByIndex(effect_index)->name;
+    const bool is_shatter = effect_index == (int)lwe::transition::Effect::GlassShatter;
+    if (is_shatter) {
+        // The vertex stage also reads the dynamic block.
+        desc.uniform_blocks[1].stage = SG_SHADERSTAGE_VERTEX;
+        desc.uniform_blocks[1].size = sizeof(DynamicUniforms);
+        desc.uniform_blocks[1].spirv_set0_binding_n = 1;
+    }
     shader_ = create_backend_shader_hlsl(&desc, vertex_source, fragment_source, label);
     if (shader_.id == SG_INVALID_ID) {
         LOG_TAG_W("TRANSITION", "Transition shader '%s' failed to compile; using the built-in fade", label);
@@ -230,11 +282,23 @@ bool TransitionShader::init(EngineContext& ctx, int effect_index) {
 
     sg_pipeline_desc pipeline_desc = {};
     pipeline_desc.shader = shader_;
-    pipeline_desc.layout.buffers[0].stride = sizeof(vertex_t);
-    pipeline_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
-    pipeline_desc.layout.attrs[0].offset = 0;
-    pipeline_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
-    pipeline_desc.layout.attrs[1].offset = sizeof(float) * 2;
+    if (is_shatter) {
+        pipeline_desc.layout.buffers[0].stride = sizeof(ShatterVertex);
+        pipeline_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT3;
+        pipeline_desc.layout.attrs[0].offset = 0;
+        pipeline_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
+        pipeline_desc.layout.attrs[1].offset = sizeof(float) * 3;
+        pipeline_desc.layout.attrs[2].format = SG_VERTEXFORMAT_FLOAT3;
+        pipeline_desc.layout.attrs[2].offset = sizeof(float) * 5;
+        pipeline_desc.layout.attrs[3].format = SG_VERTEXFORMAT_FLOAT3;
+        pipeline_desc.layout.attrs[3].offset = sizeof(float) * 8;
+    } else {
+        pipeline_desc.layout.buffers[0].stride = sizeof(vertex_t);
+        pipeline_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
+        pipeline_desc.layout.attrs[0].offset = 0;
+        pipeline_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
+        pipeline_desc.layout.attrs[1].offset = sizeof(float) * 2;
+    }
     pipeline_desc.index_type = SG_INDEXTYPE_UINT16;
     // The shader premultiplies rgb by its mask alpha, so the usual (ONE,
     // ONE_MINUS_SRC_ALPHA) premultiplied blend reveals the new wallpaper.
@@ -276,6 +340,22 @@ bool TransitionShader::init(EngineContext& ctx, int effect_index) {
         brick_indices_ = sg_make_buffer(&index_desc);
     }
 
+    if (is_shatter) {
+        std::vector<ShatterVertex> mesh;
+        generateShatterMesh(mesh);
+        sg_buffer_desc vertex_desc = {};
+        vertex_desc.data = {mesh.data(), mesh.size() * sizeof(ShatterVertex)};
+        shatter_vertices_ = sg_make_buffer(&vertex_desc);
+
+        std::vector<uint16_t> indices(mesh.size());
+        for (size_t i = 0; i < indices.size(); ++i) indices[i] = (uint16_t)i;
+        sg_buffer_desc index_desc = {};
+        index_desc.usage.index_buffer = true;
+        index_desc.data = {indices.data(), indices.size() * sizeof(uint16_t)};
+        shatter_indices_ = sg_make_buffer(&index_desc);
+        shatter_index_count_ = (int)mesh.size();
+    }
+
     effect_index_ = effect_index;
     LOG_TAG_I("TRANSITION", "Loaded Wallpaper Engine transition shader '%s'", label);
     return true;
@@ -299,7 +379,11 @@ void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, flo
     sg_apply_pipeline(pipeline_);
     sg_bindings bind = {};
     int draw_count = 6;
-    if (effect_index_ == (int)lwe::transition::Effect::Bricks && brick_vertices_.id != SG_INVALID_ID) {
+    if (effect_index_ == (int)lwe::transition::Effect::GlassShatter && shatter_vertices_.id != SG_INVALID_ID) {
+        bind.vertex_buffers[0] = shatter_vertices_;
+        bind.index_buffer = shatter_indices_;
+        draw_count = shatter_index_count_;
+    } else if (effect_index_ == (int)lwe::transition::Effect::Bricks && brick_vertices_.id != SG_INVALID_ID) {
         std::vector<vertex_t> vertices;
         generateBricks(progress, height > 0 ? (float)width / (float)height : 1.0f, vertices);
         sg_update_buffer(brick_vertices_, {vertices.data(), vertices.size() * sizeof(vertex_t)});
@@ -337,6 +421,7 @@ void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, flo
 
     sg_range range = {.ptr = &uniforms, .size = sizeof(uniforms)};
     sg_apply_uniforms(0, &range);
+    if (effect_index_ == (int)lwe::transition::Effect::GlassShatter) sg_apply_uniforms(1, &range);
     sg_draw(0, draw_count, 1);
     ctx.renderer.draw_calls++;
 }
