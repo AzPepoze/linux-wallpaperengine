@@ -302,6 +302,19 @@ export function update() { return String(shared.mark); }
         engine.setActiveScope(nullptr);
     }
 
+    // Profiling only observes: a report after 10 s of frame time must not disturb the scripts.
+    {
+        ScriptEngine& engine = ScriptEngine::instance();
+        engine.setProfiling(true);
+        SceneScript script;
+        CHECK(script.load(kClockScript, ""));
+        std::string out;
+        CHECK(updateText(script, out));
+        engine.beginFrame(11.0, 20.0, 1920, 1080, 1920, 1080);
+        CHECK(updateText(script, out));
+        engine.setProfiling(false);
+    }
+
     // Effects: look up by name or index, toggle visibility, read and write material constants.
     {
         EffectScene scene;

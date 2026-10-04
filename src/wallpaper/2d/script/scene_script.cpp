@@ -326,6 +326,10 @@ uint32_t SceneScript::layerId() const {
     return impl_ ? impl_->layer_id : 0;
 }
 
+int SceneScript::id() const {
+    return impl_ ? impl_->id : 0;
+}
+
 const void* SceneScript::scope() const {
     return impl_ ? impl_->scope : nullptr;
 }

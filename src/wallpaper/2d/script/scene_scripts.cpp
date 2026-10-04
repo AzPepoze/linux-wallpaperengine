@@ -536,6 +536,10 @@ bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) 
         return numbers({&general.ambient_color[0], &general.ambient_color[1], &general.ambient_color[2]});
     if (name == "skylightcolor")
         return numbers({&general.skylight_color[0], &general.skylight_color[1], &general.skylight_color[2]});
+    auto& camera = ctx.scene.camera;
+    if (name == "cameraeye") return numbers({&camera.eye[0], &camera.eye[1], &camera.eye[2]});
+    if (name == "cameracenter") return numbers({&camera.center[0], &camera.center[1], &camera.center[2]});
+    if (name == "cameraup") return numbers({&camera.up[0], &camera.up[1], &camera.up[2]});
     if (name == "cameraparallax") return boolean(&ctx.parallax.enabled);
     if (name == "cameraparallaxamount") return numbers({&ctx.parallax.amount});
     if (name == "cameraparallaxdelay") return numbers({&ctx.parallax.delay});

@@ -32,6 +32,7 @@
 #include "sokol_glue.h"
 #include "sokol_log.h"
 #include "sokol_time.h"
+#include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/project_info.h"
@@ -183,6 +184,7 @@ static void init(void) {
     wallpaper_mgr.setSharedAssets(&shared_assets);
 
     wallpaper_engine::setVideoLoadInRam(cli.video_ram);
+    ScriptEngine::instance().setProfiling(cli.script_profile);
     {
         PhaseTimer timer("audio init");
         initAudio();

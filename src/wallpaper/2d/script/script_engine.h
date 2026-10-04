@@ -66,6 +66,10 @@ class ScriptEngine {
     // engine.userProperties: one field per property (colors as Vec3).
     void setUserProperties(const ScriptEvent& properties);
     void flushStorage();
+    // With profiling on, the scripts that spent the most time are logged every 10 seconds.
+    void setProfiling(bool enabled) {
+        profiling_ = enabled;
+    }
 
     void registerScript(SceneScript* script);
     void unregisterScript(SceneScript* script);
@@ -95,6 +99,8 @@ class ScriptEngine {
         ScriptErrors* previous_errors_;
         int previous_id_;
         const void* previous_scope_;
+        int script_id_;
+        int64_t started_ns_ = 0;
     };
     ScriptErrors* currentErrors() const {
         return current_errors_;
@@ -142,6 +148,15 @@ class ScriptEngine {
     std::vector<ScriptEntry> scripts_;
     std::map<std::string, ScriptEvent> sticky_events_;
     double storage_flush_timer_ = 0.0;
+
+    struct ProfileEntry {
+        int64_t ns = 0;
+        int calls = 0;
+    };
+    bool profiling_ = false;
+    std::map<int, ProfileEntry> profile_;
+    double profile_timer_ = 0.0;
+    void reportProfile();
 };
 
 // Records the pending exception of `ctx` against the current script.

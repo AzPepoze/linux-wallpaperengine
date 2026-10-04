@@ -3,6 +3,7 @@
 #include <quickjs.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -442,6 +443,20 @@ hide('thisScene', {
     getLayerIndex: function (layer) {
         var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
         return handle ? __lweScene('index', handle.__id) : -1;
+    },
+    // The 2D renderer is orthographic, so the camera vectors are kept for scripts but do not move the view.
+    getCameraTransforms: function () {
+        var read = function (name) {
+            var a = __lweScene('sceneGet', name);
+            return a ? vec3(a[0], a[1], a[2]) : undefined;
+        };
+        return { eye: read('cameraeye'), center: read('cameracenter'), up: read('cameraup') };
+    },
+    setCameraTransforms: function (transforms) {
+        if (!transforms) return;
+        ['eye', 'center', 'up'].forEach(function (key) {
+            if (transforms[key]) __lweScene('sceneSet', 'camera' + key, toArray(transforms[key], 3));
+        });
     },
     getInitialLayerConfig: function (layer) {
         var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
@@ -1041,7 +1056,9 @@ ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, i
     : engine_(engine),
       previous_errors_(engine.current_errors_),
       previous_id_(engine.current_script_id_),
-      previous_scope_(engine.current_scope_) {
+      previous_scope_(engine.current_scope_),
+      script_id_(script_id) {
+    if (engine.profiling_) started_ns_ = nowNs();
     engine.current_errors_ = errors;
     engine.current_script_id_ = script_id;
     engine.current_scope_ = scope;
@@ -1049,10 +1066,31 @@ ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, i
 }
 
 ScriptEngine::CallScope::~CallScope() {
+    if (started_ns_ != 0 && script_id_ != 0) {
+        ProfileEntry& entry = engine_.profile_[script_id_];
+        entry.ns += nowNs() - started_ns_;
+        ++entry.calls;
+    }
     engine_.current_errors_ = previous_errors_;
     engine_.current_script_id_ = previous_id_;
     engine_.current_scope_ = previous_scope_;
     engine_.deadline_ns_ = 0;
+}
+
+void ScriptEngine::reportProfile() {
+    std::vector<std::pair<int, ProfileEntry>> ranked(profile_.begin(), profile_.end());
+    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.second.ns > b.second.ns; });
+    int64_t total_ns = 0;
+    for (const auto& [id, entry] : ranked) total_ns += entry.ns;
+    LOG_TAG_I(TAG, "script profile: %zu scripts, %.2f ms in total over the last 10 s", ranked.size(), total_ns / 1e6);
+    for (size_t i = 0; i < ranked.size() && i < 5; ++i) {
+        uint32_t layer = 0;
+        for (const ScriptEntry& entry : scripts_)
+            if (entry.script && entry.script->id() == ranked[i].first) layer = entry.script->layerId();
+        LOG_TAG_I(TAG, "  script %d (object %u): %.2f ms, %d calls", ranked[i].first, layer, ranked[i].second.ns / 1e6,
+                  ranked[i].second.calls);
+    }
+    profile_.clear();
 }
 
 void ScriptEngine::registerScope(const void* scope, ScriptSceneBackend* backend, const std::string& wallpaper_id) {
@@ -1106,6 +1144,14 @@ void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w,
         SceneScript* script = scripts_[i].script;
         const std::map<std::string, ScriptEvent> events = sticky_events_;
         for (const auto& [hook, event] : events) script->callHook(hook.c_str(), event);
+    }
+
+    if (profiling_) {
+        profile_timer_ += dt;
+        if (profile_timer_ >= 10.0) {
+            profile_timer_ = 0.0;
+            reportProfile();
+        }
     }
 
     storage_flush_timer_ += dt;

@@ -94,6 +94,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled ||
                     cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"}) || envEnabled("LWE_VIDEO_RAM");
+    opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});
 #if DEBUG_BUILD
     std::string capture_frame;
     if (cli_args::optionValue(args, {"--diagnose-frame"}, capture_frame)) {
