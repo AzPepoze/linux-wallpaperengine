@@ -279,7 +279,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [ ] Audio-responsive particles
 - [-] Particle sprite-sheet animations
 - [ ] Particle instance modifiers
-- [-] Particle instance overrides (alpha, rate, size, color, count and speed)
+- [-] Particle instance overrides (alpha, size, color, lifetime and speed per particle; `count` scales emission and `rate` is a system time scale; the per-override disable flags are honoured)
 
 ### Timeline Animations
 

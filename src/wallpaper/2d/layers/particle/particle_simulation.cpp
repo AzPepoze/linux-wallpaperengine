@@ -3,11 +3,13 @@
 
 #include "particle_system.h"
 
-void ParticleSystem::update(float dt) {
+void ParticleSystem::update(float real_dt) {
+    // `rate` scales this system's own clock: emission, lifetimes and motion all run faster or slower.
+    const float dt = real_dt * fmaxf(0.0f, override_rate);
     global_time += dt;
     if (spawn_type == ParticleSpawnType::Static) {
         for (size_t emitter_index = 0; emitter_index < config.emitters.size(); ++emitter_index) {
-            const float rate = config.emitters[emitter_index].rate * override_rate;
+            const float rate = config.emitters[emitter_index].rate * override_count;
             if (rate > 0) {
                 emitter_timers[emitter_index] += dt;
                 const float interval = 1.0f / rate;
@@ -87,18 +89,19 @@ void ParticleSystem::update(float dt) {
         }
     }
     for (ParticleSystem* child : children) {
-        if (child->spawn_type == ParticleSpawnType::EventFollow) child->emitFromParents(*this, dt);
-        child->update(dt);
+        if (child->spawn_type == ParticleSpawnType::EventFollow) child->emitFromParents(*this, real_dt);
+        child->update(real_dt);
     }
 }
 
-void ParticleSystem::emitFromParents(const ParticleSystem& parent, float dt) {
+void ParticleSystem::emitFromParents(const ParticleSystem& parent, float real_dt) {
     if (parent.particles.empty()) return;
+    const float dt = real_dt * fmaxf(0.0f, override_rate);
     float rate = 0.0f;
     for (const ParticleEmitterConfig& emitter : config.emitters) {
         rate += emitter.rate;
     }
-    rate *= override_rate;
+    rate *= override_count;
     if (rate <= 0.0f) return;
 
     // Each parent particle owns an emitter instance, so the effective rate scales

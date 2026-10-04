@@ -304,6 +304,7 @@ void parseParticleFields(const cJSON* object, ParticleObjectDocument& particle) 
     parseFloat(member(instance_override, "size"), particle.override_size);
     parseFloat(member(instance_override, "count"), particle.override_count);
     parseFloat(member(instance_override, "speed"), particle.override_speed);
+    parseFloat(member(instance_override, "lifetime"), particle.override_lifetime);
 
     if (parseVec(member(instance_override, "color"), particle.override_color.data(), 3)) {
         particle.has_override_color = true;

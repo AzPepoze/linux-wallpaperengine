@@ -116,8 +116,17 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
     particle_system->override_size = overrides.override_size;
     particle_system->override_count = overrides.override_count;
     particle_system->override_speed = overrides.override_speed;
+    particle_system->override_lifetime = overrides.override_lifetime;
     particle_system->override_color_is_legacy = overrides.override_color_is_legacy;
-    if (overrides.has_override_color) {
+
+    // The particle's own flags can switch individual overrides off.
+    constexpr int kDisableColor = 8, kDisableCount = 16, kDisableLifetime = 32, kDisableSize = 64, kDisableSpeed = 128;
+    const int flags = particle_system->config.flags;
+    if (flags & kDisableCount) particle_system->override_count = 1.0f;
+    if (flags & kDisableLifetime) particle_system->override_lifetime = 1.0f;
+    if (flags & kDisableSize) particle_system->override_size = 1.0f;
+    if (flags & kDisableSpeed) particle_system->override_speed = 1.0f;
+    if (overrides.has_override_color && !(flags & kDisableColor)) {
         particle_system->has_override_color = true;
         for (int component = 0; component < 3; ++component)
             particle_system->override_color[component] = overrides.override_color[component];

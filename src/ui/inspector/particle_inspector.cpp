@@ -167,7 +167,7 @@ void showParticleSystemDetails(ParticleSystem& ps) {
     }
 
     ImGui::SliderFloat("Alpha Override", &ps.override_alpha, 0.0f, 5.0f, "%.2f");
-    ImGui::SliderFloat("Rate / Count Multiplier", &ps.override_rate, 0.0f, 20.0f, "%.2f");
+    ImGui::SliderFloat("Rate (time scale)", &ps.override_rate, 0.0f, 20.0f, "%.2f");
 
     if (ImGui::TreeNode("Emitter / Spawn Controls")) {
         for (size_t i = 0; i < ps.config.emitters.size(); ++i) {
