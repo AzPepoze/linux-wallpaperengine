@@ -25,8 +25,7 @@ void ParticleSystem::update(float dt) {
             // Event-death children are created where this particle died.
             for (ParticleSystem* child : children) {
                 if (child->spawn_type != ParticleSpawnType::EventDeath) continue;
-                if (child->child_probability < 1.0f &&
-                    (float)rand() / (float)RAND_MAX > child->child_probability)
+                if (child->child_probability < 1.0f && (float)rand() / (float)RAND_MAX > child->child_probability)
                     continue;
                 child->spawnParticle(particle.position);
             }

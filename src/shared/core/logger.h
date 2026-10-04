@@ -29,7 +29,6 @@ class Logger {
     void log(log_level_t level, const char* fmt, va_list args);
 };
 
-// Global core logger
 extern Logger core_log;
 extern Logger effect_log;
 
@@ -50,7 +49,6 @@ void log_msg(log_level_t level, const char* tag, const char* fmt, ...);
 #define LOG_W(fmt, ...) core_log.warn(fmt, ##__VA_ARGS__)
 #define LOG_E(fmt, ...) core_log.error(fmt, ##__VA_ARGS__)
 
-// Tagged macros
 #define LOG_TAG_D(tag, fmt, ...) log_msg(LOG_LEVEL_DEBUG, tag, fmt, ##__VA_ARGS__)
 #define LOG_TAG_I(tag, fmt, ...) log_msg(LOG_LEVEL_INFO, tag, fmt, ##__VA_ARGS__)
 #define LOG_TAG_W(tag, fmt, ...) log_msg(LOG_LEVEL_WARN, tag, fmt, ##__VA_ARGS__)

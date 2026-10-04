@@ -2,7 +2,6 @@
 
 #include "particle_parser.h"
 #include "particle_system.h"
-#include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/utils.h"
 #include "wallpaper/2d/camera/parallax.h"

@@ -9,7 +9,6 @@
 #include "shared/graphics/render.h"
 #include "sokol_gfx.h"
 #include "wallpaper/2d/parser/scene_document.h"
-#include "wallpaper_api.h"
 
 typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;

@@ -61,7 +61,6 @@ struct DiagnosticExportPayload {
     bool has_deterministic_time = false;
     bool final_only = false;
 
-    // Raw memory captures
     bool has_source_image = false;
     std::vector<uint8_t> source_rgba;
     int source_w = 0;
@@ -102,7 +101,6 @@ class RenderDiagnostics : public IRenderObserver {
     void registerShaderDump(const ShaderDump& dump) override;
     void registerUniformProvenance(const PassUniformProvenance& prov) override;
 
-    // Per-pass and image tracing
     void onSourceImage(int effect_index, sg_image img, int width, int height) override;
     void recordPass(PassTraceEntry trace, sg_image out_img) override;
     void onLayerFinalImage(int effect_index, sg_image img, int width, int height) override;
@@ -149,7 +147,6 @@ class RenderDiagnostics : public IRenderObserver {
     std::vector<ShaderDump> shader_dumps_;
     std::vector<PassUniformProvenance> provenance_list_;
 
-    // Frame capture caches
     bool has_source_image_ = false;
     std::vector<uint8_t> source_rgba_;
     int source_w_ = 0;

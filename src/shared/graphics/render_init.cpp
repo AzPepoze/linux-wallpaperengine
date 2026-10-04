@@ -9,7 +9,6 @@
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
 #include "shader/shader_processor.h"
-#include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "sokol_glue.h"
@@ -180,7 +179,7 @@ void renderer_init(renderer_t* r, float w, float h) {
     bv_desc.texture.image = r->black_pixel;
     r->black_view = sg_make_view(&bv_desc);
 
-    pixel = 0x808080FF;  // Retained as a general-purpose neutral gray fallback/debug texture.
+    pixel = 0x808080FF;
     r->gray_pixel = sg_make_image(&img_desc);
 
     sg_view_desc gv_desc = {};
@@ -373,7 +372,7 @@ void renderer_init(renderer_t* r, float w, float h) {
     }
 }
 
-// DO NOT EDIT: precompiles all blend pipelines during init to prevent GPU context loss mid-render (crash fix)
+// Precompiles all blend pipelines during init; creating them mid-render caused GPU context loss.
 void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
     const int count = kLastWallpaperBlendMode - kFirstWallpaperBlendMode + 1;
 

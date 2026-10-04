@@ -2,7 +2,6 @@
 #include <cmath>
 
 #include "image_layer.h"
-#include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/render.h"
 #include "wallpaper/2d/camera/parallax.h"

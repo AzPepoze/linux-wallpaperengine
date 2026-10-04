@@ -22,7 +22,6 @@ struct DiagnosticConfig {
     bool has_deterministic_time = false;
     float deterministic_time = 0.0f;
 
-    // Pass isolation controls
     int isolate_effect_index = -1;
     std::string isolate_effect_path;
     int isolate_pass_index = -1;
@@ -46,7 +45,6 @@ struct DiagnosticConfig {
     // A/B test flag (deferred / controlled)
     bool enable_ab = false;
 
-    // Runtime state flags
     bool capture_triggered = false;
     bool capture_complete = false;
 

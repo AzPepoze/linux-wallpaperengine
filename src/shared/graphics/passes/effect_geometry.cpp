@@ -229,8 +229,7 @@ bool effectShaderUsesClipSpaceGeometry(const std::string& vertex_source, const c
         size_t name_end = equals - 1;
         while (name_end > 0 && std::isspace((unsigned char)active[name_end - 1])) --name_end;
         size_t name_start = name_end;
-        while (name_start > 0 &&
-               (std::isalnum((unsigned char)active[name_start - 1]) || active[name_start - 1] == '_'))
+        while (name_start > 0 && (std::isalnum((unsigned char)active[name_start - 1]) || active[name_start - 1] == '_'))
             --name_start;
         if (name_end > name_start) position_aliases.push_back(active.substr(name_start, name_end - name_start));
         alias_search += 10;

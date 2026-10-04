@@ -14,7 +14,7 @@
 #include "app/signals.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
-#include "shared/core/context.h"
+#include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"

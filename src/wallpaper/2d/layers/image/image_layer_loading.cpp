@@ -8,7 +8,6 @@
 
 #include "image_layer.h"
 #include "image_parser.h"
-#include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"

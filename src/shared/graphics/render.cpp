@@ -10,7 +10,6 @@
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
 #include "shader/shader_processor.h"
-#include "shared/core/context.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "sokol_glue.h"

@@ -54,7 +54,6 @@ bool gpu_blit_zero_copy_surface(const ImportedVideoSurface& surface, sg_image ds
     surface_barrier.image = surface.image;
     surface_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-    // Transition destination image to color attachment optimal
     VkImageMemoryBarrier dst_barrier = {};
     dst_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     dst_barrier.srcAccessMask = 0;

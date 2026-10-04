@@ -55,7 +55,8 @@ class ShaderPass {
 
     uint64_t current_frame = 0;
     void applyCompiledUniforms() {
-        for (const auto& block : compiled.custom_uniform_blocks) {            if (block.slot < 0 || block.uniform_names.empty()) continue;
+        for (const auto& block : compiled.custom_uniform_blocks) {
+            if (block.slot < 0 || block.uniform_names.empty()) continue;
 
             std::vector<float> packed(block.uniform_names.size() * 4, 0.0f);
             for (size_t i = 0; i < block.uniform_names.size(); ++i) {
