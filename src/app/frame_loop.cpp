@@ -4,6 +4,7 @@
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
+#include "shared/media/media_thumbnail_texture.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_time.h"
@@ -68,7 +69,11 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     }
 
     static wallpaper_engine::MediaScriptBridge media_bridge;
-    media_bridge.update();
+    auto& thumbnail_texture = wallpaper_engine::MediaThumbnailTexture::instance();
+    media_bridge.update(thumbnail_texture.inUse(), [&](const wallpaper_engine::ThumbnailColors& thumbnail) {
+        thumbnail_texture.setThumbnail(thumbnail);
+    });
+    thumbnail_texture.flush();
 
     ctx.asset_mgr->updateVideoTextures(dt, ctx.scene.layers);
     parallax_update(ctx, dt, surface::width(), surface::height());

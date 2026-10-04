@@ -77,19 +77,22 @@ MediaScriptBridge::~MediaScriptBridge() {
     if (source_) source_->stop();
 }
 
-void MediaScriptBridge::update() {
+void MediaScriptBridge::update(bool wants_thumbnail, const std::function<void(const ThumbnailColors&)>& on_thumbnail) {
     if (!started_) {
-        // Scanning every script for its hooks is not free, so only look again when scripts were loaded or freed.
-        ScriptEngine& engine = ScriptEngine::instance();
-        if (engine.scriptCount() == checked_script_count_) return;
-        checked_script_count_ = engine.scriptCount();
-        if (!engine.anyScriptExports({"mediaStatusChanged", "mediaPlaybackChanged", "mediaPropertiesChanged",
-                                      "mediaThumbnailChanged", "mediaTimelineChanged"}))
-            return;
+        if (!wants_thumbnail) {
+            // Scanning every script for its hooks is not free, so only look again when scripts were loaded or freed.
+            ScriptEngine& engine = ScriptEngine::instance();
+            if (engine.scriptCount() == checked_script_count_) return;
+            checked_script_count_ = engine.scriptCount();
+            if (!engine.anyScriptExports({"mediaStatusChanged", "mediaPlaybackChanged", "mediaPropertiesChanged",
+                                          "mediaThumbnailChanged", "mediaTimelineChanged"}))
+                return;
+        }
         source_->start();
         started_ = true;
     }
     for (const MediaEvent& event : source_->poll()) {
+        if (event.kind == MediaEvent::Kind::Thumbnail && on_thumbnail) on_thumbnail(event.thumbnail);
         const char* hook = nullptr;
         bool sticky = false;
         const ScriptEvent script_event = toScriptEvent(event, hook, sticky);
