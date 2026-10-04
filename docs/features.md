@@ -355,7 +355,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: `visible`, `name`, `getAnimation()`; the effect itself for scripts on an effect property
   - [-] `thisScene`
     - Works: `getLayer(name | index)`, `getLayerCount()`, `enumerateLayers()`, `getLayerIndex()`
-    - Missing: `createLayer`, `destroyLayer`, `sortLayer` (stubs that do nothing), `getInitialLayerConfig`, camera transforms, scene settings (`bloom*`, `clearcolor`, `camerashake*`...), model data
+    - Works: `createLayer(config)` (an asset path, or an object shaped like a scene.json object: image, particle, text or sound; its own scripts and animations are bound), `destroyLayer`, `sortLayer`
+    - Missing: `getInitialLayerConfig`, camera transforms, scene settings (`bloom*`, `clearcolor`, `camerashake*`...), model data
   - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
 - [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`)
 - [-] Events
@@ -368,7 +369,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Missing
     - `controlpoint0` to `controlpoint7` are stored but nothing in the simulation reads them
     - Child systems are not exposed as separate instances
-- [ ] Dynamic layers (`createLayer`, `destroyLayer`, `sortLayer`) and model data (`IModelData`)
+- [ ] Model data (`IModelData`)
 - [ ] Bone, blend-shape and physics APIs
 
 ## Interaction

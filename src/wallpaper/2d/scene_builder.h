@@ -36,6 +36,10 @@ class SceneBuilder {
                                        const char* path, EngineContext& ctx);
     static ParsedScene buildVideoScene(const char* video_path, EngineContext& ctx);
     static ParsedScene load(const char* scene_json_path, EngineContext& ctx);
+
+    static SceneTreeNode treeNode(const wallpaper_engine::SceneObjectDocument& object);
+    // Null for objects that have no layer (groups).
+    static Layer* buildLayer(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx);
 };
 
 #endif  // SCENE_BUILDER_H

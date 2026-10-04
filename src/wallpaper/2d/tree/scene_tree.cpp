@@ -30,6 +30,24 @@ void SceneTree::addNode(const SceneTreeNode& node) {
     nodes_[node.id] = node;
 }
 
+void SceneTree::removeNode(uint32_t id) {
+    if (nodes_.erase(id) == 0) return;
+    for (auto& [node_id, node] : nodes_) {
+        (void)node_id;
+        if (node.parent_id == id) node.parent_id = 0;
+    }
+    rebuildHierarchy();
+}
+
+uint32_t SceneTree::maxId() const {
+    uint32_t highest = 0;
+    for (const auto& [id, node] : nodes_) {
+        (void)node;
+        highest = std::max(highest, id);
+    }
+    return highest;
+}
+
 void SceneTree::rebuildHierarchy() {
     for (auto& [id, node] : nodes_) {
         (void)id;

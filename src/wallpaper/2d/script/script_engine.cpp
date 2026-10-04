@@ -404,8 +404,27 @@ hide('thisScene', {
         var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
         return handle ? __lweScene('index', handle.__id) : -1;
     },
-    createLayer: function () { return null; }, destroyLayer: function () { return false; },
-    sortLayer: function () { return false; }
+    // `config` is an asset path or an object shaped like an entry of scene.json `objects`.
+    createLayer: function (config) {
+        var json;
+        try {
+            // scene.json writes vectors as "x y z".
+            json = JSON.stringify(config, function (key, value) {
+                if (value && typeof value === 'object' && typeof value.x === 'number' && typeof value.y === 'number')
+                    return [value.x, value.y, value.z].filter(function (v) { return v !== undefined; }).join(' ');
+                return value;
+            });
+        } catch (e) { return undefined; }
+        return layerHandle(__lweScene('createLayer', json));
+    },
+    destroyLayer: function (layer) {
+        var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
+        return !!handle && __lweScene('destroyLayer', handle.__id);
+    },
+    sortLayer: function (layer, index) {
+        var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
+        return !!handle && __lweScene('sortLayer', handle.__id, Number(index) | 0);
+    }
 });
 function vec3(x, y, z) { return typeof g.Vec3 === 'function' ? new g.Vec3(x, y, z) : { x: x, y: y, z: z }; }
 var inputState = { cursorWorldPosition: vec3(0, 0, 0), cursorScreenPosition: vec2(0, 0), cursorLeftDown: false };
@@ -566,6 +585,9 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
 
     const uint32_t id = idArg(1);
     if (op == "exists") return JS_NewBool(ctx, scene->layerExists(id));
+    if (op == "createLayer") return JS_NewUint32(ctx, scene->createLayer(stringArg(1)));
+    if (op == "destroyLayer") return JS_NewBool(ctx, scene->destroyLayer(id));
+    if (op == "sortLayer") return JS_NewBool(ctx, scene->sortLayer(id, (int)idArg(2)));
     if (op == "layerCommand") return JS_NewBool(ctx, scene->layerCommand(id, stringArg(2)));
     if (op == "name") return JS_NewString(ctx, scene->layerName(id).c_str());
     if (op == "matrix") {

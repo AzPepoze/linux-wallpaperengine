@@ -38,6 +38,36 @@ std::string sceneTreeDisplayName(const wallpaper_engine::SceneObjectDocument& ob
 
 }  // namespace
 
+SceneTreeNode SceneBuilder::treeNode(const wallpaper_engine::SceneObjectDocument& object) {
+    SceneTreeNode node;
+    node.id = object.node.id;
+    node.parent_id = object.node.parent_id;
+    node.name = sceneTreeDisplayName(object);
+    node.attachment = object.node.attachment;
+    node.origin = object.node.origin;
+    node.scale = object.node.scale;
+    node.angles = object.node.angles;
+    for (float& angle : node.angles) angle *= (float)(180.0 / M_PI);
+    node.parallax_depth = object.node.parallax_depth;
+    node.propagate_to_children = object.node.propagate_to_children;
+    return node;
+}
+
+Layer* SceneBuilder::buildLayer(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx) {
+    switch (object.kind) {
+        case wallpaper_engine::SceneObjectKind::Particle:
+            return ParticleLayer::createFromDocument(object, ctx);
+        case wallpaper_engine::SceneObjectKind::Image:
+            return ImageLayer::createFromDocument(object, ctx);
+        case wallpaper_engine::SceneObjectKind::Text:
+            return TextLayer::createFromDocument(object, ctx);
+        case wallpaper_engine::SceneObjectKind::Sound:
+            return SoundLayer::createFromDocument(object, ctx);
+        default:
+            return nullptr;
+    }
+}
+
 ParsedScene SceneBuilder::load(const char* scene_json_path, EngineContext& ctx) {
     wallpaper_engine::SceneDocument document;
     {
@@ -81,57 +111,15 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     for (const auto& object : document.objects) {
         if (!object.node.valid) continue;
 
-        SceneTreeNode node;
-        node.id = object.node.id;
-        node.parent_id = object.node.parent_id;
-        node.name = sceneTreeDisplayName(object);
-        node.attachment = object.node.attachment;
-        node.origin = object.node.origin;
-        node.scale = object.node.scale;
-        node.angles = object.node.angles;
-        for (float& angle : node.angles) angle *= (float)(180.0 / M_PI);
-        node.parallax_depth = object.node.parallax_depth;
-        node.propagate_to_children = object.node.propagate_to_children;
-        out.scene_tree->addNode(node);
+        out.scene_tree->addNode(treeNode(object));
     }
     out.scene_tree->rebuildHierarchy();
 
     for (const auto& object : document.objects) {
-        Layer* layer = nullptr;
-        if (object.kind == wallpaper_engine::SceneObjectKind::Particle) {
-            layer = ParticleLayer::createFromDocument(object, ctx);
-        } else if (object.kind == wallpaper_engine::SceneObjectKind::Image) {
-            layer = ImageLayer::createFromDocument(object, ctx);
-        } else if (object.kind == wallpaper_engine::SceneObjectKind::Text) {
-            layer = TextLayer::createFromDocument(object, ctx);
-        } else if (object.kind == wallpaper_engine::SceneObjectKind::Sound) {
-            layer = SoundLayer::createFromDocument(object, ctx);
-        }
-        if (layer) out.layers.push_back(layer);
+        if (Layer* layer = buildLayer(object, ctx)) out.layers.push_back(layer);
     }
 
-    for (const auto& object : document.objects) {
-        if (!object.node.valid) continue;
-        const auto bind = [&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
-            if (!scripted.empty())
-                out.scripts->add(object.node.id, property, scripted.script, scripted.properties_json);
-        };
-        if (!object.animations.empty()) out.scripts->animations().add(object.node.id, object.animations);
-        bind(object.node.origin_script, BoundProperty::Origin);
-        bind(object.node.scale_script, BoundProperty::Scale);
-        bind(object.node.angles_script, BoundProperty::Angles);
-        bind(object.visible_script, BoundProperty::Visible);
-        bind(object.image.color_script, BoundProperty::Color);
-        for (size_t i = 0; i < object.effects.size(); ++i) {
-            const auto& effect = object.effects[i];
-            if (!effect.visible_script.empty())
-                out.scripts->add(object.node.id, BoundProperty::EffectVisible, effect.visible_script.script,
-                                 effect.visible_script.properties_json, (int)i);
-            for (const auto& constant : effect.constant_scripts)
-                out.scripts->add(object.node.id, BoundProperty::EffectConstant, constant.script.script,
-                                 constant.script.properties_json, (int)i, constant.name);
-        }
-    }
+    for (const auto& object : document.objects) out.scripts->addObject(object);
 
     LOG_I("Built scene tree with %zu nodes, %zu layers and %zu property scripts", out.scene_tree->size(),
           out.layers.size(), out.scripts->size());

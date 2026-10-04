@@ -101,6 +101,21 @@ class EffectScene : public CountingScene {
         visible[effect] = value;
         return true;
     }
+    std::string created_json;
+    std::string sorted;
+    std::string destroyed;
+    uint32_t createLayer(const std::string& config) override {
+        created_json = config;
+        return 3;
+    }
+    bool destroyLayer(uint32_t id) override {
+        destroyed = std::to_string(id);
+        return true;
+    }
+    bool sortLayer(uint32_t id, int index) override {
+        sorted = std::to_string(id) + "@" + std::to_string(index);
+        return true;
+    }
     double particle_rate = 1.0;
     std::string last_command;
     bool getNumber(uint32_t id, const std::string& property, double& out) override {
@@ -291,6 +306,21 @@ export function update() {
                              ""));
         CHECK(updateText(particles, out) && out == "1");
         CHECK(scene.particle_rate == 2.0 && scene.last_command == "particle.emit:5");
+
+        // Dynamic layers: the config reaches the scene as scene.json text (vectors as "x y z").
+        SceneScript dynamic;
+        dynamic.setLayerId(3);
+        CHECK(dynamic.load(R"JS(
+export function update() {
+    var layer = thisScene.createLayer({ image: 'models/x.json', origin: { x: 1, y: 2, z: 3 }, name: 'made' });
+    thisScene.sortLayer(layer, 0);
+    thisScene.destroyLayer(layer);
+    return String(layer && layer.name !== undefined);
+})JS",
+                           ""));
+        CHECK(updateText(dynamic, out) && out == "true");
+        CHECK(scene.created_json.find("\"origin\":\"1 2 3\"") != std::string::npos);
+        CHECK(scene.sorted == "3@0" && scene.destroyed == "3");
 
         // A script bound to an effect sees that effect as thisObject.
         SceneScript bound;

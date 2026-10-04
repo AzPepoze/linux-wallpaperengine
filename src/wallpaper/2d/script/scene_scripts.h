@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,6 +42,15 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool animationCommand(uint32_t handle, const std::string& command) override;
     std::vector<uint32_t> takeEndedAnimations() override;
     int animationLayerCount(uint32_t layer_id) override;
+    uint32_t createLayer(const std::string& config_json) override;
+    bool destroyLayer(uint32_t id) override;
+    bool sortLayer(uint32_t id, int index) override;
+    // Object ids whose destruction was requested since the last call.
+    std::vector<uint32_t> takeDestroyed();
+    // Called with each object created by a script so its own scripts and animations get bound.
+    void setCreatedHandler(std::function<void(const wallpaper_engine::SceneObjectDocument&)> handler) {
+        created_handler_ = std::move(handler);
+    }
     int effectCount(uint32_t layer_id) override;
     int findEffect(uint32_t layer_id, const std::string& name) override;
     std::string effectName(uint32_t layer_id, int effect) override;
@@ -67,6 +77,9 @@ class SceneScriptBackend : public ScriptSceneBackend {
     EngineContext& ctx_;
     SceneAnimations& animations_;
     std::vector<AnimationTarget> targets_;
+    std::vector<uint32_t> destroyed_;
+    uint32_t next_object_id_ = 0;
+    std::function<void(const wallpaper_engine::SceneObjectDocument&)> created_handler_;
 };
 
 enum class BoundProperty { Origin, Scale, Angles, Visible, Color, EffectVisible, EffectConstant };
@@ -80,6 +93,8 @@ class ScriptBindings {
     ScriptBindings(const ScriptBindings&) = delete;
     ScriptBindings& operator=(const ScriptBindings&) = delete;
 
+    // Binds every script and animation an object declares.
+    void addObject(const wallpaper_engine::SceneObjectDocument& object);
     // `effect_index` and `constant` address effect properties (the effect's index on the object; the material key).
     bool add(uint32_t object_id, BoundProperty property, const std::string& script, const std::string& properties_json,
              int effect_index = -1, const std::string& constant = "");
@@ -107,11 +122,14 @@ class ScriptBindings {
     bool read(const Binding& binding, ScriptValue& value);
     void write(const Binding& binding, const ScriptValue& value);
     void dispatchPointer();
+    void removeDestroyed();
 
     EngineContext& ctx_;
     SceneAnimations animations_;
     SceneScriptBackend backend_;
     std::vector<Binding> bindings_;
+    std::vector<Binding> pending_bindings_;
+    bool updating_ = false;
     PointerTracker pointer_;
     std::vector<uint32_t> cursor_layers_;  // scene objects with a script that handles any cursor event
     bool cursor_layers_ready_ = false;

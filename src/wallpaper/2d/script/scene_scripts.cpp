@@ -12,6 +12,8 @@
 #include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
+#include "wallpaper/2d/parser/scene_parser.h"
+#include "wallpaper/2d/scene_builder.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 #define TAG "SCRIPT"
@@ -430,6 +432,88 @@ std::vector<uint32_t> SceneScriptBackend::takeEndedAnimations() {
 ScriptBindings::ScriptBindings(EngineContext& ctx) : ctx_(ctx), animations_(ctx), backend_(ctx, animations_) {
     ScriptEngine::instance().registerScope(this, &backend_, std::filesystem::path(ctx.asset_root).filename().string());
     ScriptEngine::instance().setCreationScope(this);
+    backend_.setCreatedHandler([this](const wallpaper_engine::SceneObjectDocument& object) { addObject(object); });
+}
+
+void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& object) {
+    if (!object.node.valid) return;
+    const uint32_t id = object.node.id;
+    const auto bind = [&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
+        if (!scripted.empty()) add(id, property, scripted.script, scripted.properties_json);
+    };
+    if (!object.animations.empty()) animations_.add(id, object.animations);
+    bind(object.node.origin_script, BoundProperty::Origin);
+    bind(object.node.scale_script, BoundProperty::Scale);
+    bind(object.node.angles_script, BoundProperty::Angles);
+    bind(object.visible_script, BoundProperty::Visible);
+    bind(object.image.color_script, BoundProperty::Color);
+    for (size_t i = 0; i < object.effects.size(); ++i) {
+        const auto& effect = object.effects[i];
+        if (!effect.visible_script.empty())
+            add(id, BoundProperty::EffectVisible, effect.visible_script.script, effect.visible_script.properties_json,
+                (int)i);
+        for (const auto& constant : effect.constant_scripts)
+            add(id, BoundProperty::EffectConstant, constant.script.script, constant.script.properties_json, (int)i,
+                constant.name);
+    }
+}
+
+uint32_t SceneScriptBackend::createLayer(const std::string& config_json) {
+    if (!ctx_.scene.scene_tree) return 0;
+    cJSON* config = cJSON_Parse(config_json.c_str());
+    if (!config) return 0;
+    if (cJSON_IsString(config)) {
+        // A bare string names an image asset.
+        cJSON* wrapped = cJSON_CreateObject();
+        cJSON_AddStringToObject(wrapped, "image", config->valuestring);
+        cJSON_Delete(config);
+        config = wrapped;
+    }
+    uint32_t highest = ctx_.scene.scene_tree->maxId();
+    highest = std::max(highest, next_object_id_);
+    const uint32_t id = highest + 1;
+    next_object_id_ = id;
+    cJSON_DeleteItemFromObjectCaseSensitive(config, "id");
+    cJSON_AddNumberToObject(config, "id", id);
+    char* text = cJSON_PrintUnformatted(config);
+    cJSON_Delete(config);
+    if (!text) return 0;
+
+    wallpaper_engine::SceneObjectDocument object;
+    const bool parsed = wallpaper_engine::parseSceneObject(text, object);
+    cJSON_free(text);
+    if (!parsed) return 0;
+
+    Layer* layer = SceneBuilder::buildLayer(object, ctx_);
+    if (!layer) return 0;
+    ctx_.scene.scene_tree->addNode(SceneBuilder::treeNode(object));
+    ctx_.scene.scene_tree->rebuildHierarchy();
+    ctx_.scene.layers.push_back(layer);
+    if (created_handler_) created_handler_(object);
+    return id;
+}
+
+bool SceneScriptBackend::destroyLayer(uint32_t id) {
+    Layer* layer = layerById(id);
+    if (!layer || std::find(destroyed_.begin(), destroyed_.end(), id) != destroyed_.end()) return false;
+    layer->setVisible(false);
+    destroyed_.push_back(id);
+    return true;
+}
+
+std::vector<uint32_t> SceneScriptBackend::takeDestroyed() {
+    return std::exchange(destroyed_, {});
+}
+
+bool SceneScriptBackend::sortLayer(uint32_t id, int index) {
+    auto& layers = ctx_.scene.layers;
+    const auto it = std::find_if(layers.begin(), layers.end(), [&](const Layer* l) { return l->scene_object_id == id; });
+    if (it == layers.end()) return false;
+    Layer* layer = *it;
+    layers.erase(it);
+    const size_t position = (size_t)std::clamp(index, 0, (int)layers.size());
+    layers.insert(layers.begin() + (std::ptrdiff_t)position, layer);
+    return true;
 }
 
 void ScriptBindings::setUserProperties(const UserProperties& properties) {
@@ -499,7 +583,8 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
     binding.effect_index = effect_index;
     binding.constant = constant;
     binding.script = std::move(loaded);
-    bindings_.push_back(std::move(binding));
+    // Bindings added by a running script wait until the update loop is done.
+    (updating_ ? pending_bindings_ : bindings_).push_back(std::move(binding));
     return true;
 }
 
@@ -663,10 +748,27 @@ void ScriptBindings::dispatchPointer() {
     }
 }
 
+void ScriptBindings::removeDestroyed() {
+    for (uint32_t id : backend_.takeDestroyed()) {
+        bindings_.erase(
+            std::remove_if(bindings_.begin(), bindings_.end(), [&](const Binding& b) { return b.object_id == id; }),
+            bindings_.end());
+        auto& layers = ctx_.scene.layers;
+        const auto it =
+            std::find_if(layers.begin(), layers.end(), [&](const Layer* l) { return l->scene_object_id == id; });
+        if (it != layers.end()) {
+            delete *it;
+            layers.erase(it);
+        }
+        if (ctx_.scene.scene_tree) ctx_.scene.scene_tree->removeNode(id);
+    }
+}
+
 void ScriptBindings::update(float dt) {
     animations_.update(dt);
     for (uint32_t handle : backend_.takeEndedAnimations()) ScriptEngine::instance().animationEnded(handle);
     dispatchPointer();
+    updating_ = true;
     for (Binding& binding : bindings_) {
         if (!binding.layer) {
             for (Layer* layer : ctx_.scene.layers)
@@ -683,6 +785,10 @@ void ScriptBindings::update(float dt) {
         if (!read(binding, value)) continue;
         if (binding.script->updateValue(value)) write(binding, value);
     }
+    updating_ = false;
+    for (Binding& created : pending_bindings_) bindings_.push_back(std::move(created));
+    pending_bindings_.clear();
+    removeDestroyed();
 
     if (user_properties_pending_) {
         user_properties_pending_ = false;

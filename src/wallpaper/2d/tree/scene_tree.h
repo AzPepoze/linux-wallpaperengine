@@ -29,6 +29,9 @@ class SceneTree {
     void clear();
     void addNode(const SceneTreeNode& node);
     void rebuildHierarchy();
+    // Children of a removed node become roots.
+    void removeNode(uint32_t id);
+    uint32_t maxId() const;
 
     const SceneTreeNode* find(uint32_t id) const;
     SceneTreeNode* find(uint32_t id);
