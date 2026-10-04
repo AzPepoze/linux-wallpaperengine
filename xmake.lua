@@ -221,6 +221,10 @@ add_test("user_properties_tests", {"tests/user_properties_test.cpp", "src/wallpa
          {"cjson"})
 
 add_test("scene_parser_tests", {"tests/scene_parser_test.cpp", "src/wallpaper/2d/parser/scene_parser.cpp",
+                                "src/wallpaper/2d/parser/scene_parser_common.cpp",
+                                "src/wallpaper/2d/parser/scene_parser_objects.cpp",
+                                "src/wallpaper/2d/parser/scene_parser_effects.cpp",
+                                "src/wallpaper/2d/parser/scene_parser_animation.cpp",
                                 "src/wallpaper/user_properties.cpp", "src/shared/core/utils.cpp",
                                 "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
          {"cjson"})
@@ -292,7 +296,9 @@ target("script_corpus")
               "src/wallpaper/2d/script/script_value_js.cpp",
               "src/shared/assets/unpack.cpp",
               "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp",
-              "src/wallpaper/2d/parser/scene_parser.cpp", "src/wallpaper/user_properties.cpp",
+              "src/wallpaper/2d/parser/scene_parser.cpp", "src/wallpaper/2d/parser/scene_parser_common.cpp",
+              "src/wallpaper/2d/parser/scene_parser_objects.cpp", "src/wallpaper/2d/parser/scene_parser_effects.cpp",
+              "src/wallpaper/2d/parser/scene_parser_animation.cpp", "src/wallpaper/user_properties.cpp",
               "src/wallpaper/2d/animation/animation_timelines.cpp",
               "src/wallpaper/2d/animation_curve.cpp")
     if is_mode("debug", "asan", "ubsan") then
