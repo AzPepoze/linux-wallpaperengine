@@ -53,16 +53,18 @@ Object.defineProperty(g, 'thisObject', {
                 // The animation of the constant this script drives (`effect:<i>:<constant>`).
                 current.thisObject.getAnimation = function (name) {
                     var key = name === undefined ? current.property : String(name);
-                    return animationHandle(__lweScene('animFind', current.layerId, 'timeline', key));
+                    var id = __lweScene('animFind', current.layerId, 'timeline', key);
+                    if (!id) id = __lweScene('animFind', current.layerId, 'timeline', current.property || '');
+                    return animationHandle(id);
                 };
                 return current.thisObject;
             }
             current.thisObject = {
                 getAnimation: function (name) {
-                    if (name !== undefined) return animationHandle(__lweScene('animFind', current.layerId, 'any', String(name)));
-                    // Without a name: the animation of the property this script drives, else the object's first one.
-                    return animationHandle(__lweScene('animFind', current.layerId, 'any', current.property || '')) ||
-                           animationHandle(__lweScene('animFind', current.layerId, 'any', ''));
+                    var key = name === undefined ? (current.property || '') : String(name);
+                    var id = __lweScene('animFind', current.layerId, 'any', key);
+                    if (!id) id = __lweScene('animFind', current.layerId, 'any', '');
+                    return animationHandle(id);
                 }
             };
             Object.defineProperties(current.thisObject, {
@@ -314,8 +316,10 @@ AnimationHandle.prototype.setFrame = function (frame) { __lweScene('animSet', th
 AnimationHandle.prototype.addEndedCallback = function (callback) {
     (endedCallbacks[this.__id] = endedCallbacks[this.__id] || []).push(callback);
 };
+// An empty handle (id 0) reads as undefined and no-ops, like Wallpaper Engine's animation object for a layer without one.
+var emptyAnimation = null;
 function animationHandle(id) {
-    if (!id) return undefined;
+    if (!id) return emptyAnimation || (emptyAnimation = new AnimationHandle(0));
     return animationHandles[id] || (animationHandles[id] = new AnimationHandle(id));
 }
 hide('__lweAnimationEnded', function (id) {
