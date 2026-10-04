@@ -1,7 +1,10 @@
 #include "wallpaper/wallpaper_loader.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -11,6 +14,19 @@
 #include "wallpaper/web/web_wallpaper.h"
 
 namespace {
+// Effective user properties: project defaults, then the desktop GUI's saved values, then --set-property.
+void loadUserProperties(const ProjectInfo& info, EngineContext& ctx) {
+    ctx.user_properties = UserProperties();
+    ctx.user_properties.loadProject(info.root + "/project.json");
+    if (const char* home = getenv("HOME")) {
+        std::ifstream file(std::string(home) + "/.config/linux-wallpaperengine-gui/config.json");
+        std::stringstream text;
+        text << file.rdbuf();
+        ctx.user_properties.applySaved(text.str(), std::filesystem::path(info.root).filename().string());
+    }
+    for (const auto& [key, value] : ctx.cli_properties) ctx.user_properties.setFromString(key, value);
+}
+
 std::unique_ptr<Wallpaper> createWallpaper(ProjectType type, EngineContext& ctx) {
     switch (type) {
         case ProjectType::Scene:
@@ -59,6 +75,7 @@ std::unique_ptr<Wallpaper> WallpaperLoader::load(const ProjectInfo& info, Engine
     strncpy(ctx.asset_root, info.root.c_str(), sizeof(ctx.asset_root) - 1);
     ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
     ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+    loadUserProperties(info, ctx);
     ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
     ScriptEngine::instance().setWallpaperId(std::filesystem::path(info.root).filename().string());
     ctx.asset_mgr.prefetchPackageTextures();

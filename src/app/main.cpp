@@ -256,6 +256,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     selectRequestedGpu();
 
     if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
+    ctx.cli_properties = cli.set_properties;
     wallpaper_source = resolveWallpaperSource(cli);
     strncpy(ctx.wallpaper_path, wallpaper_source.path.c_str(), sizeof(ctx.wallpaper_path) - 1);
     ctx.is_pkg = wallpaper_source.is_pkg;

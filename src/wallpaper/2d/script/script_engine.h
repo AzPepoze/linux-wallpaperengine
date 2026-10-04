@@ -48,6 +48,8 @@ class ScriptEngine {
     void beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w, float screen_h);
     void setAudioBands(int resolution, const float* left, const float* right);
     void setInput(float world_x, float world_y, float screen_x, float screen_y, bool left_down);
+    // engine.userProperties: one field per property (colors as Vec3).
+    void setUserProperties(const ScriptEvent& properties);
     void flushStorage();
 
     void registerScript(SceneScript* script);

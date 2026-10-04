@@ -10,6 +10,7 @@
 #include "shared/core/config.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "wallpaper/user_properties.h"
 
 namespace wallpaper_engine {
 namespace {
@@ -532,7 +533,77 @@ SceneObjectDocument parseObject(const cJSON* object) {
 
 }  // namespace
 
-bool parseSceneFile(const char* scene_json_path, SceneDocument& out) {
+namespace {
+
+std::string userValueText(const UserPropertyValue& value) {
+    char buffer[64];
+    switch (value.type) {
+        case UserPropertyValue::Type::Bool:
+            return value.b ? "1" : "0";
+        case UserPropertyValue::Type::Number:
+            snprintf(buffer, sizeof(buffer), "%g", value.n);
+            return buffer;
+        case UserPropertyValue::Type::Color:
+            snprintf(buffer, sizeof(buffer), "%g %g %g", value.color[0], value.color[1], value.color[2]);
+            return buffer;
+        case UserPropertyValue::Type::Text:
+            return value.text;
+    }
+    return "";
+}
+
+cJSON* userValueJson(const UserPropertyValue& value) {
+    switch (value.type) {
+        case UserPropertyValue::Type::Bool:
+            return cJSON_CreateBool(value.b);
+        case UserPropertyValue::Type::Number:
+            return cJSON_CreateNumber(value.n);
+        case UserPropertyValue::Type::Color:
+        case UserPropertyValue::Type::Text:
+            return cJSON_CreateString(userValueText(value).c_str());
+    }
+    return cJSON_CreateNull();
+}
+
+// A binding is { "user": "key" | { "name": "key", "condition": "x" }, "value": default }. A condition makes the value
+// a boolean: true while the property equals it.
+void resolveUserBindings(cJSON* node, const UserProperties& properties) {
+    if (cJSON_IsObject(node)) {
+        const cJSON* user = cJSON_GetObjectItemCaseSensitive(node, "user");
+        std::string key, condition;
+        bool has_condition = false;
+        if (cJSON_IsString(user) && user->valuestring) {
+            key = user->valuestring;
+        } else if (cJSON_IsObject(user)) {
+            const cJSON* name = cJSON_GetObjectItemCaseSensitive(user, "name");
+            const cJSON* cond = cJSON_GetObjectItemCaseSensitive(user, "condition");
+            if (cJSON_IsString(name) && name->valuestring) key = name->valuestring;
+            if (cJSON_IsString(cond) && cond->valuestring) {
+                has_condition = true;
+                condition = cond->valuestring;
+            } else if (cJSON_IsNumber(cond)) {
+                has_condition = true;
+                char buffer[32];
+                snprintf(buffer, sizeof(buffer), "%g", cond->valuedouble);
+                condition = buffer;
+            }
+        }
+        if (const UserPropertyValue* value = key.empty() ? nullptr : properties.find(key)) {
+            cJSON* replacement =
+                has_condition ? cJSON_CreateBool(userValueText(*value) == condition) : userValueJson(*value);
+            if (cJSON_HasObjectItem(node, "value"))
+                cJSON_ReplaceItemInObjectCaseSensitive(node, "value", replacement);
+            else
+                cJSON_AddItemToObject(node, "value", replacement);
+        }
+    }
+    for (cJSON* child = node ? node->child : nullptr; child; child = child->next)
+        resolveUserBindings(child, properties);
+}
+
+}  // namespace
+
+bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserProperties* user_properties) {
     char* json_str = read_file_to_string(scene_json_path);
     if (!json_str) {
         LOG_E("Failed to read scene JSON: %s", scene_json_path);
@@ -547,6 +618,7 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out) {
     }
 
     LOG_I("Scene JSON parsed successfully");
+    if (user_properties) resolveUserBindings(root, *user_properties);
     detectResolution(root, out);
     parseCamera(cJSON_GetObjectItemCaseSensitive(root, "camera"), out);
     parseGeneral(cJSON_GetObjectItemCaseSensitive(root, "general"), out);

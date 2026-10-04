@@ -6,6 +6,7 @@
 #include <string>
 
 #include "test_util.h"
+#include "wallpaper/user_properties.h"
 
 using namespace wallpaper_engine;
 
@@ -249,6 +250,63 @@ void testPropertyAnimations() {
                  "the legacy alpha keys still parse");
 }
 
+std::string writeTemp(const char* text) {
+    char path[] = "/tmp/lwe_user_XXXXXX";
+    const int fd = mkstemp(path);
+    if (fd < 0) return "";
+    write(fd, text, std::char_traits<char>::length(text));
+    close(fd);
+    return path;
+}
+
+void testUserBindings() {
+    const char* project = R"JSON({"general": {"properties": {
+      "opacity": {"type": "slider", "value": 1.0}, "showFish": {"type": "bool", "value": true},
+      "tint": {"type": "color", "value": "1 1 1"}, "mode": {"type": "combo", "value": 1},
+      "speed": {"type": "slider", "value": 2}}}})JSON";
+    const char* scene = R"JSON({
+      "camera": {"center": "0 0 0", "eye": "0 0 1", "up": "0 1 0"},
+      "objects": [
+        {"id": 1, "name": "A", "image": "models/a.json", "alpha": {"user": "opacity", "value": 0.5},
+         "visible": {"user": "showFish", "value": true}, "color": {"user": "tint", "value": "1 1 1"},
+         "origin": {"script": "export function update(v) { return v; }", "value": "0 0 0",
+                    "scriptproperties": {"speed": {"user": "speed", "value": 1}}}},
+        {"id": 2, "name": "B", "image": "models/b.json",
+         "visible": {"user": {"name": "mode", "condition": "2"}, "value": false}},
+        {"id": 3, "name": "C", "image": "models/c.json", "visible": {"user": "unknownKey", "value": false}}
+      ]})JSON";
+    const std::string project_path = writeTemp(project);
+    const std::string scene_path = writeTemp(scene);
+
+    UserProperties properties;
+    test::expect("user", properties.loadProject(project_path), "project defaults load");
+    properties.setFromString("opacity", "0.25");
+    properties.setFromString("showFish", "0");
+    properties.setFromString("tint", "0 0.5 1");
+    properties.setFromString("mode", "2");
+    properties.setFromString("speed", "4");
+
+    SceneDocument resolved, defaults;
+    test::expect("user", parseSceneFile(scene_path.c_str(), resolved, &properties), "scene parses with properties");
+    test::expect("user", parseSceneFile(scene_path.c_str(), defaults), "scene parses without properties");
+    unlink(project_path.c_str());
+    unlink(scene_path.c_str());
+    if (resolved.objects.size() != 3 || defaults.objects.size() != 3) return;
+
+    const SceneObjectDocument& a = resolved.objects[0];
+    test::expect("user", a.image.alpha == 0.25f && !a.visible, "plain bindings take the property value");
+    test::expect("user", a.image.color[0] == 0.0f && a.image.color[1] == 0.5f && a.image.color[2] == 1.0f,
+                 "a color property fills the vector");
+    test::expect("user", a.node.origin_script.properties_json.find("\"value\":4") != std::string::npos,
+                 "scriptproperties bindings are resolved too");
+    test::expect("user", resolved.objects[1].visible, "a condition binding is true while the property equals it");
+    test::expect("user", !resolved.objects[2].visible, "an unknown property keeps its default");
+
+    test::expect("user", defaults.objects[0].image.alpha == 0.5f && defaults.objects[0].visible,
+                 "without properties the defaults are untouched");
+    test::expect("user", !defaults.objects[1].visible, "and so is a condition binding");
+}
+
 void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
@@ -260,6 +318,7 @@ int main() {
     testScriptedValues();
     testEffectScripts();
     testPropertyAnimations();
+    testUserBindings();
     testMissingFile();
     return test::finish("scene parser tests");
 }

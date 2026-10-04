@@ -3,12 +3,15 @@
 
 #include <stdint.h>
 
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "shared/assets/asset_manager.h"
 #include "shared/graphics/render.h"
 #include "sokol_gfx.h"
 #include "wallpaper/2d/parser/scene_document.h"
+#include "wallpaper/user_properties.h"
 
 typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;
@@ -109,6 +112,8 @@ struct EngineContext {
     char wallpaper_path[512] = {};
     char engine_path[512] = {};
     char asset_root[512] = {};
+    UserProperties user_properties;
+    std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
 

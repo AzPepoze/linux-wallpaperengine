@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include "script_scene_backend.h"
+#include "script_value_js.h"
 #include "shared/core/logger.h"
 
 #define TAG "SCRIPT"
@@ -131,6 +132,7 @@ var engine = {
     setInterval: function (callback, delay) { return addTimer(callback, delay, true); }
 };
 hide('engine', engine);
+hide('__lweSetUserProperties', function (properties) { engine.userProperties = properties; });
 
 hide('__lweTick', function (dt, runtime, canvasW, canvasH, screenW, screenH) {
     engine.frametime = dt;
@@ -694,6 +696,20 @@ int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const Scr
     for (const ScriptEntry& entry : entries)
         if (entry.script->layerId() == layer_id && entry.script->callHook(hook, event)) ++delivered;
     return delivered;
+}
+
+void ScriptEngine::setUserProperties(const ScriptEvent& properties) {
+    if (!context_) return;
+    CallScope scope(*this, nullptr, 0, 20.0);
+    JSValue global = JS_GetGlobalObject(context_);
+    JSValue setter = JS_GetPropertyStr(context_, global, "__lweSetUserProperties");
+    JSValue object = toJsObject(context_, properties);
+    JSValue result = JS_Call(context_, setter, JS_UNDEFINED, 1, &object);
+    if (JS_IsException(result)) scriptLogException(context_, "userProperties");
+    JS_FreeValue(context_, result);
+    JS_FreeValue(context_, object);
+    JS_FreeValue(context_, setter);
+    JS_FreeValue(context_, global);
 }
 
 void ScriptEngine::animationEnded(uint32_t handle) {

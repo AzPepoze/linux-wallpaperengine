@@ -286,6 +286,30 @@ ScriptBindings::ScriptBindings(EngineContext& ctx) : ctx_(ctx), animations_(ctx)
     ScriptEngine::instance().setSceneBackend(&backend_);
 }
 
+void ScriptBindings::setUserProperties(const UserProperties& properties) {
+    user_properties_.clear();
+    for (const UserPropertyDef& def : properties.all()) {
+        const UserPropertyValue& value = def.value;
+        switch (value.type) {
+            case UserPropertyValue::Type::Bool:
+                user_properties_.emplace_back(def.key, ScriptValue::makeBool(value.b));
+                break;
+            case UserPropertyValue::Type::Number:
+                user_properties_.emplace_back(def.key, ScriptValue::makeNumber(value.n));
+                break;
+            case UserPropertyValue::Type::Color:
+                user_properties_.emplace_back(def.key,
+                                              ScriptValue::makeVec3(value.color[0], value.color[1], value.color[2]));
+                break;
+            case UserPropertyValue::Type::Text:
+                user_properties_.emplace_back(def.key, ScriptValue::makeString(value.text));
+                break;
+        }
+    }
+    ScriptEngine::instance().setUserProperties(user_properties_);
+    user_properties_pending_ = true;
+}
+
 ScriptBindings::~ScriptBindings() {
     bindings_.clear();  // scripts first: they may still call back into the backend while shutting down
     if (ScriptEngine::instance().sceneBackend() == &backend_) ScriptEngine::instance().setSceneBackend(nullptr);
@@ -461,5 +485,10 @@ void ScriptBindings::update(float dt) {
         }
         if (!read(binding, value)) continue;
         if (binding.script->updateValue(value)) write(binding, value);
+    }
+
+    if (user_properties_pending_) {
+        user_properties_pending_ = false;
+        ScriptEngine::instance().broadcast("applyUserProperties", user_properties_);
     }
 }

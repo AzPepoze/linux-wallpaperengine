@@ -73,6 +73,8 @@ class ScriptBindings {
 
     bool add(uint32_t object_id, BoundProperty property, const std::string& script, const std::string& properties_json);
     void update(float dt);
+    // Publishes engine.userProperties and sends applyUserProperties once, after the scripts' init().
+    void setUserProperties(const UserProperties& properties);
     size_t size() const {
         return bindings_.size();
     }
@@ -100,6 +102,8 @@ class ScriptBindings {
     PointerTracker pointer_;
     std::vector<uint32_t> cursor_layers_;  // scene objects with a script that handles any cursor event
     bool cursor_layers_ready_ = false;
+    ScriptEvent user_properties_;
+    bool user_properties_pending_ = false;
 };
 
 #endif  // SCENE_SCRIPTS_H
