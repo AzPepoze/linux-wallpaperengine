@@ -232,6 +232,9 @@ add_test("animation_timelines_tests", {"tests/animation_timelines_test.cpp",
                                        "src/wallpaper/2d/animation/animation_timelines.cpp",
                                        "src/wallpaper/2d/animation_curve.cpp"})
 
+add_test("transition_catalog_tests", {"tests/transition_catalog_test.cpp",
+                                      "src/wallpaper/transition/transition_catalog.cpp"})
+
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
