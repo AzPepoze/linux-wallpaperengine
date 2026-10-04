@@ -47,6 +47,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.parallax_pos[0] = ctx.parallax.smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = ctx.parallax.smooth_y * 0.5f + 0.5f;
         builtin.time = ctx.time;
+        builtin.frametime = ctx.frametime;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
         builtin.texel_size[0] = r->view_width > 0.0f ? 1.0f / r->view_width : 0.0f;

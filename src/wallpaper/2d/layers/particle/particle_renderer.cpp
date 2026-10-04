@@ -180,6 +180,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
             builtins.parallax_pos[0] = ctx.parallax.smooth_x * 0.5f + 0.5f;
             builtins.parallax_pos[1] = ctx.parallax.smooth_y * 0.5f + 0.5f;
             builtins.time = ctx.time;
+            builtins.frametime = ctx.frametime;
             builtins.screen_res[0] = ctx.renderer.view_width;
             builtins.screen_res[1] = ctx.renderer.view_height;
             builtins.texel_size[0] = ctx.renderer.view_width > 0.0f ? 1.0f / ctx.renderer.view_width : 0.0f;

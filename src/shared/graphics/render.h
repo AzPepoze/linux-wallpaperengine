@@ -71,7 +71,7 @@ typedef struct {
     vec4 texture_resolutions[5];  // 0: main image, 1-4: effect textures
     vec2 parallax_pos;            // 0..1
     float time;
-    float padding;
+    float frametime;
     vec2 screen_res;
     vec2 texel_size;
     mat4x4 effect_texture_projection;

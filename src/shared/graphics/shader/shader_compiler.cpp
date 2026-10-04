@@ -136,6 +136,7 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                    "g_Texture4Resolution",
                                    "g_ParallaxPosition",
                                    "g_Time",
+                                   "g_Frametime",
                                    "g_Screen",
                                    "g_TexelSize",
                                    "g_EffectTextureProjectionMatrix",
@@ -145,7 +146,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                    "g_LightSkylightColor"};
     const sg_uniform_type builtin_types[] = {SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
                                              SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT2,
-                                             SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_FLOAT2,
+                                             SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2,
+                                             SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4};
     constexpr int kBuiltinMemberCount = sizeof(builtin_names) / sizeof(builtin_names[0]);

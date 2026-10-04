@@ -130,6 +130,7 @@ struct EngineContext {
     CameraShakeState shake;
     DebugState debug;
     float time = 0.0f;
+    float frametime = 0.0f;  // seconds since the previous frame (g_Frametime)
 };
 
 #endif  // ENGINE_CONTEXT_H

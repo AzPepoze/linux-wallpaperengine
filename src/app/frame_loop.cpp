@@ -66,6 +66,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
 #if DEBUG_BUILD
     if (RenderDiagnostics::instance().getConfig().fixed_step) dt = 1.0f / 60.0f;
 #endif
+    ctx.frametime = dt;
     ctx.time += dt;
     AudioEngine::instance().update(dt);
     {
