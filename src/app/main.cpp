@@ -123,8 +123,7 @@ static void applyCliToContext() {
     transition_config.duration_ms = transition_duration;
     bool continue_previous = false;
     std::string transition_mode_error;
-    if (!lwe::transition::resolveTransitionModeSetting(cli.transition_mode, continue_previous,
-                                                       transition_mode_error))
+    if (!lwe::transition::resolveTransitionModeSetting(cli.transition_mode, continue_previous, transition_mode_error))
         LOG_W("[CONTROL] %s; using freeze", transition_mode_error.c_str());
     transition_config.continue_previous = continue_previous;
     wallpaper_mgr.setTransitionConfig(transition_config);

@@ -199,8 +199,7 @@ void AudioEngine::setGroupVolume(GroupId group, float volume) {
     const float gain = impl->groups[group].volume;
     for (size_t i = 0; i < impl->sound_slots.size(); ++i) {
         auto& slot = impl->sound_slots[i];
-        if (slot && slot->active && slot->group == group)
-            ma_sound_set_volume(&slot->sound, slot->base_volume * gain);
+        if (slot && slot->active && slot->group == group) ma_sound_set_volume(&slot->sound, slot->base_volume * gain);
     }
     for (auto& stream : impl->streams) {
         if (stream && stream->group == group && stream->sound_ready)
