@@ -34,5 +34,9 @@ int main() {
     CHECK(cli_args::positional(layerDebug) == "/wp");
     CHECK(cli_args::optionValue(layerDebug, {"--layer-size"}, value) && value == "320x180");
 
+    const V diagnose = {"app", "--diagnose", "--diagnose-frame", "10", "/wp"};
+    CHECK(cli_args::positional(diagnose) == "/wp");
+    CHECK(cli_args::optionValue(diagnose, {"--diagnose-frame"}, value) && value == "10");
+
     return test::finish("cli args checks");
 }

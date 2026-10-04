@@ -23,6 +23,7 @@ const char* const kValueOptions[] = {"--gpu",
                                      "--layer-anchor",
                                      "--volume",
                                      "--disable-effects",
+                                     "--diagnose-frame",
                                      "--particle-debug-velocity-scale",
                                      "--particle-debug-max-particles"};
 }  // namespace

@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -178,6 +179,20 @@ bool writeStageImages(ExportContext& export_context) {
 
 bool analyzePassImages(ExportContext& export_context, const ImageStats& source_stats, bool has_source_stats) {
     DiagnosticExportPayload& payload = export_context.payload;
+    // PNG encoding is independent per image, so it runs on worker threads while statistics are computed here.
+    const size_t batch_size = std::max(1u, std::thread::hardware_concurrency());
+    std::vector<std::pair<std::future<bool>, CapturedPassImage*>> writes;
+    std::vector<std::string> written_names;
+    auto flushWrites = [&]() {
+        for (size_t i = 0; i < writes.size(); ++i) {
+            if (!writes[i].first.get()) continue;
+            writes[i].second->trace.captured_image_filename = written_names[i];
+            export_context.generated_files.push_back(written_names[i]);
+        }
+        writes.clear();
+        written_names.clear();
+    };
+
     ImageStats previous_stats = source_stats;
     bool has_previous_stats = has_source_stats;
     const std::vector<uint8_t>* prev_rgba = payload.has_source_image ? &payload.source_rgba : nullptr;
@@ -225,12 +240,21 @@ bool analyzePassImages(ExportContext& export_context, const ImageStats& source_s
                 char pass_file_name[256];
                 snprintf(pass_file_name, sizeof(pass_file_name), "pass-%02d-%s.png", item.trace.pass_index,
                          shader_clean.c_str());
-                if (RenderDiagnostics::writePng(pass_dir + "/" + pass_file_name, item.width, item.height,
-                                                item.rgba_data.data())) {
-                    item.trace.captured_image_filename =
-                        export_context.frameRelative(std::string(pass_dir_name) + "/" + pass_file_name);
-                    export_context.generated_files.push_back(item.trace.captured_image_filename);
-                }
+                const std::string relative =
+                    export_context.frameRelative(std::string(pass_dir_name) + "/" + pass_file_name);
+                const std::string png_path = pass_dir + "/" + pass_file_name;
+                const int png_width = item.width;
+                const int png_height = item.height;
+                const uint8_t* png_data = item.rgba_data.data();
+                writes.emplace_back(std::async(std::launch::async,
+                                               [png_path, png_width, png_height, png_data]() {
+                                                   return RenderDiagnostics::writePng(png_path, png_width, png_height,
+                                                                                      png_data);
+                                               }),
+                                    &item);
+                item.trace.captured_image_filename.clear();
+                written_names.push_back(relative);
+                if (writes.size() >= batch_size) flushWrites();
             }
 
             if (item.trace.render_target_name.empty()) {
@@ -241,8 +265,9 @@ bool analyzePassImages(ExportContext& export_context, const ImageStats& source_s
                 prev_rgba = &item.rgba_data;
             }
         }
-        payload.render_graph.addPass(item.trace);
     }
+    flushWrites();
+    for (auto& item : payload.pass_images) payload.render_graph.addPass(item.trace);
     return true;
 }
 
@@ -377,6 +402,7 @@ void writeManifest(const ExportContext& export_context) {
 }  // namespace
 
 void exportBundleAsync(DiagnosticExportPayload payload, const std::atomic<bool>* cancel) {
+    const auto export_start = std::chrono::steady_clock::now();
     ensureDir(payload.output_dir);
 
     char frame_dir_name[64];
@@ -396,7 +422,10 @@ void exportBundleAsync(DiagnosticExportPayload payload, const std::atomic<bool>*
     writeEnvironment(export_context);
     writeManifest(export_context);
 
-    effect_log.info("Effect diagnostic capture complete (written to: %s/)", payload.output_dir.c_str());
+    const double export_ms =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - export_start).count();
+    effect_log.info("Effect diagnostic capture complete in %.0f ms (written to: %s/)", export_ms,
+                    payload.output_dir.c_str());
     printf("\n=======================================================\n");
     printf("Effect diagnostic capture written to:\n%s/\n", payload.output_dir.c_str());
     printf("=======================================================\n\n");

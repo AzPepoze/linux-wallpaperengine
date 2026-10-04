@@ -1,5 +1,6 @@
 #include "shader_pass.h"
 
+#include <cctype>
 #include <cstdlib>
 #include <sstream>
 
@@ -104,6 +105,30 @@ bool readShaderStage(EngineContext& ctx, const char* relative_path, char* absolu
     source = text;
     free(text);
     return true;
+}
+
+// Highest N among the `uniform sampler2D g_TextureN` declarations. The material may supply fewer textures than the
+// shader reads (a bloom pass gets its second input at draw time), and every sampler the shader uses needs a binding.
+int highestDeclaredTextureSlot(const std::string& source) {
+    static const std::string kSampler = "sampler2D";
+    static const std::string kName = "g_Texture";
+    int highest = 0;
+    size_t pos = 0;
+    while ((pos = source.find(kSampler, pos)) != std::string::npos) {
+        pos += kSampler.size();
+        if (pos >= source.size() || !std::isspace((unsigned char)source[pos])) continue;
+        while (pos < source.size() && std::isspace((unsigned char)source[pos])) ++pos;
+        if (source.compare(pos, kName.size(), kName) != 0) continue;
+        pos += kName.size();
+        int slot = 0;
+        bool has_digits = false;
+        while (pos < source.size() && std::isdigit((unsigned char)source[pos])) {
+            slot = slot * 10 + (source[pos++] - '0');
+            has_digits = true;
+        }
+        if (has_digits) highest = std::max(highest, slot);
+    }
+    return highest;
 }
 
 // The depth-parallax mask is authored in sRGB but sampled as linear data here.
@@ -299,6 +324,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
         (void)binding;
         if (slot > 0) texture_count = std::max(texture_count, slot);
     }
+    texture_count = std::max(texture_count, std::min(11, std::max(highestDeclaredTextureSlot(sources.processed_vs),
+                                                                  highestDeclaredTextureSlot(sources.processed_fs))));
     prepared->texture_count = texture_count;
     if (warm_cache) {
         ShaderCompiler::prewarm(shader_name, sources.full_vs, sources.full_fs, uniforms, texture_count);

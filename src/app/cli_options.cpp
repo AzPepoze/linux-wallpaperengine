@@ -93,6 +93,12 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled ||
                     cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"}) || envEnabled("LWE_VIDEO_RAM");
+#if DEBUG_BUILD
+    std::string capture_frame;
+    if (cli_args::optionValue(args, {"--diagnose-frame"}, capture_frame)) {
+        opts.diagnostics.target_frame = atoi(capture_frame.c_str());
+    }
+#endif
     cli_args::optionValue(args, {"--assets-dir"}, opts.assets_dir);
     cli_args::optionValue(args, {"--scaling"}, opts.scaling);
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);

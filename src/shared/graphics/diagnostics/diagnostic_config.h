@@ -15,6 +15,9 @@ struct DiagnosticOptions {
     bool exit_after_diagnose = false;
     // Fixed 1/60 s frame step and a seeded random generator, so a capture frame is identical from run to run.
     bool deterministic = false;
+    // Frame to capture; frames only advance as fast as the compositor asks for them, so a hidden window needs a low
+    // one.
+    int target_frame = 100;
 };
 
 struct DiagnosticConfig {

@@ -113,7 +113,7 @@ Render diagnostics are available in debug builds and are opt-in. Enable them wit
 bin/debug/linux-wallpaperengine --diagnose "/path/to/wallpaper"
 ```
 
-Diagnostics can capture render-pipeline state including pass images, scene stages, render graphs, shader code, and uniforms. Add `--diagnose-deterministic` to use a fixed 1/60 s step and a seeded random generator, so the same frame renders identically on every run (the window size and cursor position still affect the result).
+Diagnostics can capture render-pipeline state including pass images, scene stages, render graphs, shader code, and uniforms. Use `--diagnose-frame <n>` to capture an earlier frame than the default 100 (a window that is not on screen advances frames slowly). Add `--diagnose-deterministic` to use a fixed 1/60 s step and a seeded random generator, so the same frame renders identically on every run (the window size and cursor position still affect the result).
 
 ## FEATURE SUPPORT
 

@@ -46,7 +46,7 @@ void RenderDiagnostics::shutdown(bool cancel_pending) {
 
 void RenderDiagnostics::init(const DiagnosticOptions& options) {
     config.enabled = options.enabled;
-    config.target_frame = 100;
+    config.target_frame = options.target_frame > 0 ? (uint64_t)options.target_frame : 100;
     config.capture_pass_images = true;
     if (!options.enabled) return;
     config.fixed_step = options.deterministic;

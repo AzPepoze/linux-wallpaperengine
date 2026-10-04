@@ -84,7 +84,9 @@ target("linux-wallpaperengine")
     end
 
     if is_mode("debug", "asan", "ubsan") then
-        add_files("src/**.cpp|wallpaper/web/web_renderer_main.cpp" .. layer_exclude)
+        add_files("src/**.cpp|wallpaper/web/web_renderer_main.cpp|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
+        -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.
+        add_files("src/shared/graphics/diagnostics/**.cpp", {cxxflags = "-O2"})
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
