@@ -227,7 +227,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [x] Start-time warmup
 - [ ] World-space particles
 - [x] Perspective particles
-- [-] Sprite sheets
+- [-] Sprite sheets (grids and TEXS frame metadata read from the texture header)
 - [ ] Frame blending
 - [ ] Material lighting
 - [-] Refraction
@@ -236,7 +236,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 #### Renderers
 
 - [-] Particle sprite rendering
-- [-] Particle trail rendering
+- [-] Particle trail rendering (beam aspect ratio and camera-depth trails)
 - [ ] Full particle renderer set
 
 #### Emitters
@@ -552,7 +552,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [-] Playback controls
 - [x] FFmpeg software decoding
 - [x] VA-API hardware decoding
-- [-] GPU-native VA-API / DMA-BUF video textures
+- [-] GPU-native VA-API / DMA-BUF video textures (including layer-shell surfaces, with a guarded fallback when import fails)
 - [x] Automatic software decode fallback
 - [-] Video user properties (rate, volume and fit defaults only; no live editing)
 
@@ -577,8 +577,8 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [ ] Screensaver mode
 - [-] Runtime command-line controls
 - [x] GPU enumeration
-- [x] GPU selection
+- [x] GPU selection (also honoured on the Wayland layer surface)
 - [x] Package extraction CLI
 - [x] Debug sandbox
-- [x] Debug scene tree keyboard navigation, wallpaper path copy and sound-layer mute toggle
+- [x] Debug scene tree keyboard navigation, wallpaper path copy and sound-layer mute toggle (cursor calls are skipped on Wayland layer surfaces)
 - [x] Debug render diagnostics
