@@ -5,6 +5,7 @@
 #include "shared/core/utils.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
+#include "shared/graphics/pass_util.h"
 #include "shared/graphics/passes/pass_loader.h"
 #include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
@@ -127,73 +128,33 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
     const int bloom_w = std::max(1, width / 4);
     const int bloom_h = std::max(1, height / 4);
     if (!ensureBloomTargets(bloom_w, bloom_h)) return current_target_index;
-    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    // Each stage draws one filtered full-target quad: scene -> extract -> blur v -> blur h -> combine over the scene.
+    const auto runStage = [&](ShaderPass& pass, sg_view target, sg_image source, sg_view source_view, int target_w,
+                              int target_h, sg_view bloom_view = {SG_INVALID_ID}) {
+        sg_pass target_pass = colorPass(target, SG_LOADACTION_CLEAR, 1.0f);
+        sg_begin_pass(&target_pass);
+        renderer_update_viewport(&ctx.renderer, (float)target_w, (float)target_h);
 
-    {
-        sg_pass extract_pass = {};
-        extract_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        extract_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-        extract_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-        extract_pass.attachments.colors[0] = bloom_targets[0].attachment_view;
-        sg_begin_pass(&extract_pass);
-        renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
-
-        render_effect_pass_t pass_desc = bloom_pass_extract->getRenderPass(ctx.profiler.frame_index, ctx.time);
-        renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current_target_index].image,
-                             scene_targets[current_target_index].texture_view, 0.0f, 0.0f, (float)bloom_w,
-                             (float)bloom_h, 0.0f, white, false, &pass_desc);
-        sg_end_pass();
-    }
-
-    {
-        sg_pass blur_v_pass = {};
-        blur_v_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        blur_v_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-        blur_v_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-        blur_v_pass.attachments.colors[0] = bloom_targets[1].attachment_view;
-        sg_begin_pass(&blur_v_pass);
-        renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
-
-        render_effect_pass_t pass_desc = bloom_pass_blur_v->getRenderPass(ctx.profiler.frame_index, ctx.time);
-        renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[0].image, bloom_targets[0].texture_view, 0.0f, 0.0f,
-                             (float)bloom_w, (float)bloom_h, 0.0f, white, false, &pass_desc);
-        sg_end_pass();
-    }
-
-    {
-        sg_pass blur_h_pass = {};
-        blur_h_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        blur_h_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-        blur_h_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-        blur_h_pass.attachments.colors[0] = bloom_targets[0].attachment_view;
-        sg_begin_pass(&blur_h_pass);
-        renderer_update_viewport(&ctx.renderer, (float)bloom_w, (float)bloom_h);
-
-        render_effect_pass_t pass_desc = bloom_pass_blur_h->getRenderPass(ctx.profiler.frame_index, ctx.time);
-        renderer_draw_sprite(ctx, &ctx.renderer, bloom_targets[1].image, bloom_targets[1].texture_view, 0.0f, 0.0f,
-                             (float)bloom_w, (float)bloom_h, 0.0f, white, false, &pass_desc);
-        sg_end_pass();
-    }
-
-    const int next = 1 - current_target_index;
-    {
-        sg_pass combine_pass = {};
-        combine_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        combine_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-        combine_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-        combine_pass.attachments.colors[0] = scene_targets[next].attachment_view;
-        sg_begin_pass(&combine_pass);
-        renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-
-        render_effect_pass_t pass_desc = bloom_pass_combine->getRenderPass(ctx.profiler.frame_index, ctx.time);
-        sg_view extra_views[] = {bloom_targets[0].texture_view};
-        pass_desc.override_views = extra_views;
-        pass_desc.num_override_views = 1;
-
-        renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current_target_index].image,
-                             scene_targets[current_target_index].texture_view, 0.0f, 0.0f, (float)width, (float)height,
+        render_effect_pass_t pass_desc = pass.getRenderPass(ctx.profiler.frame_index, ctx.time);
+        sg_view extra_views[] = {bloom_view};
+        if (bloom_view.id != SG_INVALID_ID) {
+            pass_desc.override_views = extra_views;
+            pass_desc.num_override_views = 1;
+        }
+        float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_sprite(ctx, &ctx.renderer, source, source_view, 0.0f, 0.0f, (float)target_w, (float)target_h,
                              0.0f, white, false, &pass_desc);
         sg_end_pass();
-    }
+    };
+
+    const int next = 1 - current_target_index;
+    const SceneTarget& scene = scene_targets[current_target_index];
+    runStage(*bloom_pass_extract, bloom_targets[0].attachment_view, scene.image, scene.texture_view, bloom_w, bloom_h);
+    runStage(*bloom_pass_blur_v, bloom_targets[1].attachment_view, bloom_targets[0].image,
+             bloom_targets[0].texture_view, bloom_w, bloom_h);
+    runStage(*bloom_pass_blur_h, bloom_targets[0].attachment_view, bloom_targets[1].image,
+             bloom_targets[1].texture_view, bloom_w, bloom_h);
+    runStage(*bloom_pass_combine, scene_targets[next].attachment_view, scene.image, scene.texture_view, width, height,
+             bloom_targets[0].texture_view);
     return next;
 }
