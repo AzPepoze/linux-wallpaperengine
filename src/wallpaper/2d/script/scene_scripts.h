@@ -39,6 +39,8 @@ class SceneScriptBackend : public ScriptSceneBackend {
     int findAttachment(uint32_t layer_id, const std::string& name) override;
     bool getAttachment(uint32_t layer_id, const std::string& key, const std::string& field,
                        std::vector<double>& out) override;
+    bool transformAttachmentToTexture(uint32_t layer_id, uint32_t attachment_layer, const std::string& key,
+                                      std::vector<double>& out) override;
     uint32_t createAnimationLayer(uint32_t layer_id, const std::string& config_json) override;
     bool destroyAnimationLayer(uint32_t layer_id, const std::string& name_or_index) override;
     uint32_t findLayerByName(const std::string& name) override;
@@ -72,6 +74,12 @@ class SceneScriptBackend : public ScriptSceneBackend {
     void setCreatedHandler(std::function<void(const wallpaper_engine::SceneObjectDocument&)> handler) {
         created_handler_ = std::move(handler);
     }
+    int effectPassCount(uint32_t layer_id, int effect) override;
+    bool getPassMaterialProperty(uint32_t layer_id, int effect, int pass, const std::string& name,
+                                 std::vector<double>& out) override;
+    bool setPassMaterialProperty(uint32_t layer_id, int effect, int pass, const std::string& name,
+                                 const std::vector<double>& value) override;
+    bool executeMaterialFunction(uint32_t layer_id, int effect, const std::string& name) override;
     int effectCount(uint32_t layer_id) override;
     int findEffect(uint32_t layer_id, const std::string& name) override;
     std::string effectName(uint32_t layer_id, int effect) override;
@@ -84,10 +92,15 @@ class SceneScriptBackend : public ScriptSceneBackend {
    private:
     class Effect* effectAt(uint32_t layer_id, int effect) const;
     struct AnimationTarget {
-        bool sprite = false;  // otherwise a puppet animation layer
+        bool sprite = false;  // otherwise a puppet animation layer (or a video, see below)
         uint32_t layer_id = 0;
         size_t index = 0;
+        bool video = false;      // the layer's video texture
+        uint32_t seen_loop = 0;  // video: end-of-file count already reported
     };
+    bool videoGet(class ImageLayer& image, const std::string& field, double& out);
+    bool videoSet(class ImageLayer& image, const std::string& field, double value);
+    bool videoCommand(class ImageLayer& image, const std::string& command);
     static constexpr uint32_t kTargetBase = 0x40000000u;
 
     Layer* layerById(uint32_t id) const;
@@ -159,6 +172,7 @@ class ScriptBindings {
     bool cursor_layers_ready_ = false;
     ScriptEvent user_properties_;
     bool user_properties_pending_ = false;
+    bool general_settings_sent_ = false;
 };
 
 #endif  // SCENE_SCRIPTS_H

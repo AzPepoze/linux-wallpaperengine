@@ -371,6 +371,10 @@ void parseTextFields(const cJSON* object, TextObjectDocument& text_doc) {
     if (parseFloat(member(object, "maxrows"), max_rows)) text_doc.max_rows = (int)max_rows;
     parseString(member(object, "horizontalalign"), text_doc.horizontal_align);
     parseString(member(object, "verticalalign"), text_doc.vertical_align);
+    text_doc.opaque_background = parseBool(member(object, "opaquebackground"), false);
+    parseVec(member(object, "backgroundcolor"), text_doc.background_color.data(), 3);
+    parseFloat(member(object, "padding"), text_doc.padding);
+    parseString(member(object, "anchor"), text_doc.anchor);
 }
 
 void parseSoundFields(const cJSON* object, SoundObjectDocument& sound_doc) {

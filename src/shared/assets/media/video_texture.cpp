@@ -37,6 +37,7 @@ struct VideoTexture::Impl {
     bool zero_copy_disabled = false;
     bool is_playing = true;
     bool is_paused = false;
+    bool looping = true;
     uint32_t loop_count = 0;
     AVFrame* current_frame = nullptr;
 
@@ -50,6 +51,17 @@ struct VideoTexture::Impl {
     uint32_t video_width = 0;
     uint32_t video_height = 0;
     float frame_duration = 1.0f / 30.0f;
+
+    // At the end of the file: wrap around when looping, otherwise stop. True when decoding can go on.
+    bool wrapAtEnd() {
+        ++loop_count;
+        if (!looping) {
+            is_playing = false;
+            return false;
+        }
+        hw_decoder.loop(stats);
+        return true;
+    }
 
     void disableZeroCopy(const char* reason) {
         if (zero_copy_disabled) return;
@@ -198,6 +210,28 @@ uint32_t VideoTexture::loopCount() const {
     return impl->loop_count;
 }
 
+double VideoTexture::duration() const {
+    if (impl->is_hw_active) return impl->hw_decoder.duration();
+    return impl->sw_format && impl->sw_format->duration > 0 ? (double)impl->sw_format->duration / AV_TIME_BASE : 0.0;
+}
+
+bool VideoTexture::looping() const {
+    return impl->looping;
+}
+
+void VideoTexture::setLooping(bool enabled) {
+    impl->looping = enabled;
+}
+
+void VideoTexture::rewind() {
+    if (impl->is_hw_active) {
+        impl->hw_decoder.loop(impl->stats);
+    } else if (impl->sw_format && impl->sw_codec) {
+        av_seek_frame(impl->sw_format, impl->sw_stream_index, 0, AVSEEK_FLAG_BACKWARD);
+        avcodec_flush_buffers(impl->sw_codec);
+    }
+}
+
 void VideoTexture::start() {
     impl->is_playing = true;
     impl->is_paused = false;
@@ -244,9 +278,8 @@ bool VideoTexture::decodeNextFrameZeroCopy(ImportedVideoSurface*& out_surface, A
 
     while (!impl->hw_decoder.receive_frame(impl->current_frame, eof, impl->zero_copy, impl->stats, impl->perf)) {
         if (eof) {
-            impl->hw_decoder.loop(impl->stats);
-            ++impl->loop_count;
-            continue;
+            if (impl->wrapAtEnd()) continue;
+            return false;
         }
         return false;
     }
@@ -287,9 +320,8 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
         av_frame_unref(impl->current_frame);
         while (!impl->hw_decoder.receive_frame(impl->current_frame, eof, impl->zero_copy, impl->stats, impl->perf)) {
             if (eof) {
-                impl->hw_decoder.loop(impl->stats);
-                ++impl->loop_count;
-                continue;
+                if (impl->wrapAtEnd()) continue;
+                return false;
             }
             return false;
         }
@@ -314,6 +346,11 @@ bool VideoTexture::decodeNextFrame(std::vector<uint8_t>& output) {
         if (received == 0) return impl->convertToRgba(impl->sw_frame, output);
         if (av_read_frame(impl->sw_format, impl->sw_packet) < 0) {
             if (++loops_without_frame > 1) return false;
+            if (!impl->looping) {
+                ++impl->loop_count;
+                impl->is_playing = false;
+                return false;
+            }
             av_seek_frame(impl->sw_format, impl->sw_stream_index, 0, AVSEEK_FLAG_BACKWARD);
             avcodec_flush_buffers(impl->sw_codec);
             ++impl->loop_count;

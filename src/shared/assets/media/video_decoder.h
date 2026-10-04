@@ -38,6 +38,10 @@ class VideoDecoder {
     double get_fps() const {
         return fps_;
     }
+    // Length of the file in seconds, 0 when the container does not say.
+    double duration() const {
+        return format_ctx_ && format_ctx_->duration > 0 ? (double)format_ctx_->duration / AV_TIME_BASE : 0.0;
+    }
     double get_nominal_frame_duration() const {
         return nominal_frame_duration_;
     }

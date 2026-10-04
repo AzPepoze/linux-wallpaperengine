@@ -240,7 +240,16 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
             }
         }
 
-        video.elapsed_seconds += elapsed_seconds * video_rate_;
+        const float step = elapsed_seconds * video_rate_ * video.rate;
+        if (video.decoder->loopCount() != video.position_loop) {
+            video.position_loop = video.decoder->loopCount();
+            video.position = 0.0;
+        }
+        if (video.decoder->isPlaying()) {
+            const double length = video.decoder->duration();
+            video.position = length > 0.0 ? std::min(video.position + step, length) : video.position + step;
+        }
+        video.elapsed_seconds += step;
         const float frame_dur = video.decoder->frameDuration();
         if (video.elapsed_seconds < frame_dur) continue;
 

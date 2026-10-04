@@ -161,6 +161,14 @@ bool PuppetPose::localPose(const MdlModel& model, const std::vector<PuppetAnimat
     return seeded;
 }
 
+void PuppetPose::localMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                               std::vector<PuppetMatrix>& out) const {
+    std::vector<MdlKeyframe> pose;
+    const bool seeded = localPose(model, layers, pose);
+    out.assign(model.bones.size(), PuppetMatrix{});
+    for (size_t i = 0; i < model.bones.size(); ++i) out[i] = seeded ? composeLocal(pose[i]) : bindLocal(model.bones[i]);
+}
+
 void PuppetPose::worldMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
                                std::vector<PuppetMatrix>& out) const {
     std::vector<MdlKeyframe> pose;

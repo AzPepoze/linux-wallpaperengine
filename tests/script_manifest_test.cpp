@@ -23,9 +23,11 @@ class ManifestScene : public ScriptSceneBackend {
         return "layer";
     }
     bool getVector(uint32_t, const std::string& property, double out[3], int& components) override {
-        if (property != "origin" && property != "scale" && property != "angles" && property != "size" &&
-            property != "parallaxDepth")
-            return false;
+        static const char* const names[] = {"origin",     "scale",   "angles", "size", "parallaxDepth",
+                                            "color",      "backgroundcolor", "particle.color"};
+        bool known = property.rfind("particle.controlpoint", 0) == 0;
+        for (const char* name : names) known = known || property == name;
+        if (!known) return false;
         out[0] = out[1] = out[2] = 1.0;
         components = property == "size" || property == "parallaxDepth" ? 2 : 3;
         return true;
@@ -34,17 +36,21 @@ class ManifestScene : public ScriptSceneBackend {
         return true;
     }
     bool getBool(uint32_t, const std::string& property, bool& out) override {
-        if (property != "visible" && property != "video.playing") return false;
-        out = true;
-        return true;
+        static const char* const names[] = {"visible",          "rootmotion", "perspective", "solid",
+                                            "opaquebackground", "limitrows",  "limitwidth",  "playing"};
+        for (const char* name : names)
+            if (property == name) return out = true;
+        return false;
     }
     bool setBool(uint32_t, const std::string&, bool) override {
         return true;
     }
     bool getNumber(uint32_t, const std::string& property, double& out) override {
-        if (property.rfind("particle.", 0) != 0) return false;
+        static const char* const names[] = {"alpha", "volume", "pointsize", "padding", "maxrows", "maxwidth"};
+        bool known = property.rfind("particle.", 0) == 0;
+        for (const char* name : names) known = known || property == name;
         out = 1.0;
-        return true;
+        return known;
     }
     uint32_t parentOf(uint32_t) override {
         return 0;
@@ -57,6 +63,33 @@ class ManifestScene : public ScriptSceneBackend {
     }
     std::vector<uint32_t> allLayers() override {
         return {3};
+    }
+    uint32_t findAnimation(uint32_t, const std::string&, const std::string&) override {
+        return 9;
+    }
+    bool animationGet(uint32_t, const std::string& field, double& out) override {
+        out = 1.0;
+        return field != "name";
+    }
+    int effectPassCount(uint32_t, int) override {
+        return 1;
+    }
+    bool animationGetString(uint32_t, const std::string&, std::string& out) override {
+        out = "clip";
+        return true;
+    }
+    bool animationSet(uint32_t, const std::string&, double) override {
+        return true;
+    }
+    bool animationCommand(uint32_t, const std::string&) override {
+        return true;
+    }
+    bool getString(uint32_t, const std::string& property, std::string& out) override {
+        static const char* const names[] = {"text", "font", "horizontalalign", "verticalalign", "anchor"};
+        out = "text";
+        for (const char* name : names)
+            if (property == name) return true;
+        return false;
     }
     int effectCount(uint32_t) override {
         return 1;

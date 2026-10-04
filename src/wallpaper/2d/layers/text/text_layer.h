@@ -23,6 +23,10 @@ class TextLayer : public ImageLayer {
     bool propertySetString(const std::string& name, const std::string& value);
     bool propertyGetNumber(const std::string& name, double& out) const;
     bool propertySetNumber(const std::string& name, double value);
+    bool propertyGetBool(const std::string& name, bool& out) const;
+    bool propertySetBool(const std::string& name, bool value);
+    bool propertyGetVector(const std::string& name, double out[3]) const;
+    bool propertySetVector(const std::string& name, const double value[3]);
 
    protected:
     ScreenRect screenRect(EngineContext& ctx) const override;

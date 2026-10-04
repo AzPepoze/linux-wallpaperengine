@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 
 #include "shared/core/engine_context.h"
@@ -20,6 +21,21 @@ Effect::Effect(cJSON* config, EngineContext& ctx) {
             cJSON* scale = cJSON_GetObjectItemCaseSensitive(fbo, "scale");
             if (cJSON_IsString(name) && name->valuestring && cJSON_IsNumber(scale) && scale->valuedouble > 0.0)
                 target_scales[name->valuestring] = (float)scale->valuedouble;
+        }
+    }
+    cJSON* functions_node = cJSON_GetObjectItemCaseSensitive(config, "functions");
+    if (cJSON_IsObject(functions_node)) {
+        cJSON* function;
+        cJSON_ArrayForEach(function, functions_node) {
+            cJSON* action = cJSON_GetObjectItemCaseSensitive(function, "action");
+            cJSON* targets = cJSON_GetObjectItemCaseSensitive(function, "fbos");
+            if (!function->string || !cJSON_IsString(action) || !action->valuestring ||
+                strcmp(action->valuestring, "clear") != 0 || !cJSON_IsArray(targets))
+                continue;
+            cJSON* target;
+            cJSON_ArrayForEach(target, targets) {
+                if (cJSON_IsString(target) && target->valuestring) functions[function->string].push_back(target->valuestring);
+            }
         }
     }
     cJSON* passes_node = cJSON_GetObjectItemCaseSensitive(config, "passes");

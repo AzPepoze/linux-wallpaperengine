@@ -15,9 +15,15 @@ struct TextObjectConfig {
     float alpha = 1.0f;
     std::array<float, 2> size = {0.0f, 0.0f};
     float maxwidth = 0.0f;
-    int max_rows = 0;
+    bool limit_width = false;
+    int max_rows = 1;
+    bool limit_rows = false;
     std::string horizontal_align = "center";
     std::string vertical_align = "center";
+    bool opaque_background = false;
+    std::array<float, 3> background_color = {0.0f, 0.0f, 0.0f};
+    float padding = 0.0f;
+    std::string anchor = "center";  // kept for scripts; the layout does not follow screen edges
 };
 
 class TextParser {

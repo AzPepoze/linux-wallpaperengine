@@ -183,8 +183,39 @@ class EffectScene : public CountingScene {
         return true;
     }
     bool getBool(uint32_t, const std::string& property, bool& out) override {
-        if (property != "video.playing") return false;
+        if (property != "particle.playing") return false;
         out = true;
+        return true;
+    }
+    // A video texture on layer 3 is animation handle 7.
+    double video_rate = 1.0;
+    double video_loop = 1.0;
+    std::string video_command;
+    uint32_t findAnimation(uint32_t, const std::string& kind, const std::string&) override {
+        return kind == "video" ? 7 : 0;
+    }
+    bool animationGet(uint32_t, const std::string& field, double& out) override {
+        if (field == "duration")
+            out = 120.0;
+        else if (field == "rate")
+            out = video_rate;
+        else if (field == "loop")
+            out = video_loop;
+        else if (field == "currentTime")
+            out = 30.0;
+        else if (field == "playing")
+            out = 1.0;
+        else
+            return false;
+        return true;
+    }
+    bool animationSet(uint32_t, const std::string& field, double value) override {
+        if (field == "rate") video_rate = value;
+        if (field == "loop") video_loop = value;
+        return true;
+    }
+    bool animationCommand(uint32_t, const std::string& command) override {
+        video_command = command;
         return true;
     }
     bool layerCommand(uint32_t, const std::string& command) override {
@@ -371,12 +402,12 @@ export function update() {
         CHECK(particles.load(R"JS(
 export function update() {
     var system = thisLayer.getParticleSystem();
-    system.rate = system.rate * 2;
+    system.instance.rate = system.instance.rate * 2;
     system.emitParticles(5);
-    return String(system.getInstanceCount());
+    return String(system.isPlaying());
 })JS",
                              ""));
-        CHECK(updateText(particles, out) && out == "1");
+        CHECK(updateText(particles, out) && out == "true");
         CHECK(scene.particle_rate == 2.0 && scene.last_command == "particle.emit:5");
 
         // Dynamic layers: the config reaches the scene as scene.json text (vectors as "x y z").
@@ -413,11 +444,13 @@ export function update() {
 export function update() {
     var texture = thisLayer.getVideoTexture();
     texture.pause();
-    return String(texture.isPlaying());
+    texture.rate = 2;
+    texture.loop = false;
+    return texture.isPlaying() + ':' + texture.duration + ':' + texture.getCurrentTime() + ':' + texture.loop;
 })JS",
                          ""));
-        CHECK(updateText(video, out) && out == "true");
-        CHECK(scene.last_command == "video.pause");
+        CHECK(updateText(video, out) && out == "true:120:30:false");
+        CHECK(scene.video_command == "pause" && scene.video_rate == 2.0 && scene.video_loop == 0.0);
 
         // Layer API: both setParent forms, object-space rotation, attachments, one-shot animation layers.
         SceneScript layer_api;
@@ -448,12 +481,13 @@ export function update() {
         bones.setLayerId(3);
         CHECK(bones.load(R"JS(
 export function update() {
-    var origin = thisLayer.getBoneOrigin('head');
-    thisLayer.setBoneOrigin(1, { x: origin.x + 10, y: origin.y, z: origin.z });
-    return thisLayer.getBoneCount() + ':' + thisLayer.getBoneIndex('head');
+    var origin = thisLayer.getLocalBoneOrigin('head');
+    thisLayer.setLocalBoneOrigin(1, { x: origin.x + 10, y: origin.y, z: origin.z });
+    return thisLayer.getBoneCount() + ':' + thisLayer.getBoneIndex('head') + ':' +
+           thisLayer.getBlendShapeIndex('smile') + ':' + thisLayer.getBlendShapeWeight(0);
 })JS",
                          ""));
-        CHECK(updateText(bones, out) && out == "2:1");
+        CHECK(updateText(bones, out) && out == "2:1:-1:0");
         CHECK(scene.bone_origin[0] == 11.0 && scene.bone_origin[2] == 3.0);
 
         // A script bound to an effect sees that effect as thisObject.

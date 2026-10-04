@@ -64,6 +64,8 @@ class ImageLayer : public Layer {
     bool rootMotion() const {
         return puppet_pose.root_motion;
     }
+    // Drops the named off-screen buffers of the effect chain; they start empty when next used.
+    void clearEffectTargets(const std::vector<std::string>& names);
     const wallpaper_engine::MdlModel& puppetModel() const {
         return puppet;
     }

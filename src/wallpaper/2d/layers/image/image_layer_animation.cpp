@@ -1,9 +1,11 @@
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "image_layer.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/render.h"
+#include "wallpaper/2d/tree/scene_tree.h"
 
 void ImageLayer::updateAnimatedFrame(EngineContext& ctx) {
     const float clock = sprite_clock.joined ? ctx.time : (float)sprite_clock.time;
@@ -233,6 +235,10 @@ bool ImageLayer::puppetLayerTakeEnded(size_t index) {
     return true;
 }
 
+void ImageLayer::clearEffectTargets(const std::vector<std::string>& names) {
+    for (const std::string& name : names) named_effect_targets.erase(name);
+}
+
 int ImageLayer::puppetLayerCreate(const std::string& animation, double rate, double blend, bool additive, bool once,
                                   bool remove_when_done, const std::string& name) {
     if (!has_puppet_mesh) return -1;
@@ -294,10 +300,13 @@ int ImageLayer::boneParent(size_t bone) const {
 
 bool ImageLayer::boneGet(size_t bone, const std::string& field, std::vector<double>& out) const {
     if (bone >= puppet.bones.size()) return false;
-    if (field == "matrix") {
-        std::vector<wallpaper_engine::PuppetMatrix> world;
-        puppet_pose.worldMatrices(puppet, puppet_layers, world);
-        out.assign(world[bone].m, world[bone].m + 16);
+    if (field == "matrix" || field == "localmatrix") {
+        std::vector<wallpaper_engine::PuppetMatrix> matrices;
+        if (field == "matrix")
+            puppet_pose.worldMatrices(puppet, puppet_layers, matrices);
+        else
+            puppet_pose.localMatrices(puppet, puppet_layers, matrices);
+        out.assign(matrices[bone].m, matrices[bone].m + 16);
         return true;
     }
     std::vector<wallpaper_engine::MdlKeyframe> pose;
@@ -317,11 +326,40 @@ bool ImageLayer::boneGet(size_t bone, const std::string& field, std::vector<doub
 }
 
 bool ImageLayer::boneSet(size_t bone, const std::string& field, const std::vector<double>& value) {
-    if (bone >= puppet.bones.size() || value.size() < 3) return false;
+    if (bone >= puppet.bones.size()) return false;
     std::vector<wallpaper_engine::MdlKeyframe> pose;
     if (!puppet_pose.localPose(puppet, puppet_layers, pose)) return false;
     wallpaper_engine::MdlKeyframe next = pose[bone];
     constexpr double kDegToRad = M_PI / 180.0;
+
+    if (field == "matrix" || field == "localmatrix") {
+        if (value.size() < 16) return false;
+        mat4x4 wanted;
+        for (int i = 0; i < 16; ++i) wanted[i / 4][i % 4] = (float)value[(size_t)i];
+        if (field == "matrix") {
+            // A model-space transform becomes relative to the parent bone.
+            const uint32_t parent = puppet.bones[bone].parent;
+            if (parent < puppet.bones.size()) {
+                std::vector<wallpaper_engine::PuppetMatrix> world;
+                puppet_pose.worldMatrices(puppet, puppet_layers, world);
+                mat4x4 parent_world, inverse, local;
+                for (int i = 0; i < 16; ++i) parent_world[i / 4][i % 4] = world[parent].m[i];
+                mat4x4_invert(inverse, parent_world);
+                mat4x4_mul(local, inverse, wanted);
+                memcpy(wanted, local, sizeof(mat4x4));
+            }
+        }
+        SceneTreeNode split;
+        SceneTree::decompose(wanted, split);
+        for (size_t i = 0; i < 3; ++i) {
+            next.translation[i] = split.origin[i];
+            next.scale[i] = split.scale[i];
+            next.rotation[i] = (float)(split.angles[i] * kDegToRad);
+        }
+        puppet_pose.setBoneOverride(bone, next);
+        return true;
+    }
+    if (value.size() < 3) return false;
     for (size_t i = 0; i < 3; ++i) {
         if (field == "origin")
             next.translation[i] = (float)value[i];

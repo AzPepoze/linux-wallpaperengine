@@ -135,6 +135,10 @@ struct TextObjectDocument {
     int max_rows = 1;
     std::string horizontal_align = "center";
     std::string vertical_align = "center";
+    bool opaque_background = false;
+    std::array<float, 3> background_color = {0.0f, 0.0f, 0.0f};
+    float padding = 0.0f;
+    std::string anchor = "center";
 };
 
 struct SoundObjectDocument {

@@ -9,6 +9,8 @@
 #include <unordered_map>
 
 #include "script_engine.h"
+#include "shared/assets/media/video_rate.h"
+#include "shared/assets/media/video_texture.h"
 #include "shared/core/logger.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
@@ -36,6 +38,7 @@ float* particleScalar(ParticleSystem& ps, const std::string& field) {
     if (field == "speed") return &ps.override_speed;
     if (field == "lifetime") return &ps.override_lifetime;
     if (field == "rate") return &ps.override_rate;
+    if (field == "colorn") return &ps.override_color[0];  // one factor, applied to all three components
     return nullptr;
 }
 
@@ -77,6 +80,10 @@ bool SceneScriptBackend::getVector(uint32_t id, const std::string& property, dou
         for (int i = 0; i < 3; ++i) out[i] = field[i];
         components = 3;
         return true;
+    }
+    if (const auto* text = dynamic_cast<const TextLayer*>(layerById(id)); text && property == "backgroundcolor") {
+        components = 3;
+        return text->propertyGetVector(property, out);
     }
     const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
     if (!node) return false;
@@ -130,6 +137,8 @@ bool SceneScriptBackend::setVector(uint32_t id, const std::string& property, con
         if (field_name == "color") ps->has_override_color = true;
         return true;
     }
+    if (auto* text = dynamic_cast<TextLayer*>(layerById(id)); text && property == "backgroundcolor")
+        return text->propertySetVector(property, value);
     SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
     if (!node) return false;
     auto assign3 = [&](std::array<float, 3>& v) {
@@ -166,14 +175,21 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
         out = layer->visible;
         return true;
     }
-    if (const auto* image = dynamic_cast<const ImageLayer*>(layer);
-        image && image->boneCount() && (property == "rootmotion" || property == "perspective")) {
-        out = property == "rootmotion" ? image->rootMotion() : image->perspective;
+    if (const auto* text = dynamic_cast<const TextLayer*>(layer); text && text->propertyGetBool(property, out))
+        return true;
+    if (property == "particle.playing") {
+        const auto* particles = dynamic_cast<const ParticleLayer*>(layer);
+        if (!particles || !particles->ps) return false;
+        out = (particles->ps->emitting && !particles->ps->paused) || !particles->ps->particles.empty();
         return true;
     }
-    if (const auto* image = dynamic_cast<const ImageLayer*>(layer); image && property == "video.playing") {
-        if (!image->bound_video_decoder) return false;
-        out = image->bound_video_decoder->isPlaying() && !image->bound_video_decoder->isPaused();
+    if (const auto* image = dynamic_cast<const ImageLayer*>(layer);
+        image && (property == "solid" || (image->boneCount() && (property == "rootmotion" || property == "perspective")))) {
+        if (property == "solid") {
+            out = image->cursor_solid;
+            return true;
+        }
+        out = property == "rootmotion" ? image->rootMotion() : image->perspective;
         return true;
     }
     if (const auto* sound = dynamic_cast<const SoundLayer*>(layer); sound && property == "playing") {
@@ -184,6 +200,14 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
 }
 
 bool SceneScriptBackend::setBool(uint32_t id, const std::string& property, bool value) {
+    if (auto* text = dynamic_cast<TextLayer*>(layerById(id)); text && text->propertySetBool(property, value))
+        return true;
+    if (property == "solid") {
+        ImageLayer* image = imageById(id);
+        if (!image) return false;
+        image->cursor_solid = value;
+        return true;
+    }
     if (property == "rootmotion" || property == "perspective") {
         ImageLayer* image = imageById(id);
         if (!image || !image->boneCount()) return false;
@@ -268,25 +292,39 @@ bool SceneScriptBackend::setMaterialProperty(uint32_t layer_id, int effect, cons
     return applied;
 }
 
+int SceneScriptBackend::effectPassCount(uint32_t layer_id, int effect) {
+    const Effect* e = effectAt(layer_id, effect);
+    return e ? (int)e->passes.size() : 0;
+}
+
+bool SceneScriptBackend::getPassMaterialProperty(uint32_t layer_id, int effect, int pass, const std::string& name,
+                                                 std::vector<double>& out) {
+    const Effect* e = effectAt(layer_id, effect);
+    if (!e || pass < 0 || (size_t)pass >= e->passes.size() || !e->passes[(size_t)pass]) return false;
+    const std::vector<float>* values = e->passes[(size_t)pass]->materialConstant(name);
+    if (!values) return false;
+    out.assign(values->begin(), values->end());
+    return true;
+}
+
+bool SceneScriptBackend::setPassMaterialProperty(uint32_t layer_id, int effect, int pass, const std::string& name,
+                                                 const std::vector<double>& value) {
+    Effect* e = effectAt(layer_id, effect);
+    if (!e || pass < 0 || (size_t)pass >= e->passes.size() || !e->passes[(size_t)pass]) return false;
+    return e->passes[(size_t)pass]->setMaterialConstant(name, std::vector<float>(value.begin(), value.end()));
+}
+
+bool SceneScriptBackend::executeMaterialFunction(uint32_t layer_id, int effect, const std::string& name) {
+    const Effect* e = effectAt(layer_id, effect);
+    auto* image = dynamic_cast<ImageLayer*>(layerById(layer_id));
+    if (!e || !image) return false;
+    const auto function = e->functions.find(name);
+    if (function == e->functions.end()) return false;
+    image->clearEffectTargets(function->second);
+    return true;
+}
+
 bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
-    if (command.compare(0, 6, "video.") == 0) {
-        auto* image = dynamic_cast<ImageLayer*>(layerById(id));
-        if (!image || !image->bound_video_decoder) return false;
-        const std::string name = command.substr(6);
-        if (name == "play") {
-            if (image->bound_video_decoder->isPaused())
-                image->resume();
-            else
-                image->start();
-        } else if (name == "pause") {
-            image->pause();
-        } else if (name == "stop") {
-            image->stop();
-        } else {
-            return false;
-        }
-        return true;
-    }
     if (hasParticlePrefix(command)) {
         ParticleSystem* ps = particleSystemOf(layerById(id));
         if (!ps) return false;
@@ -299,6 +337,7 @@ bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
         } else if (name == "stop") {
             ps->emitting = false;
             ps->paused = false;
+            ps->clearParticles();
         } else if (name.compare(0, 5, "emit:") == 0) {
             ps->emitParticles(std::atoi(name.c_str() + 5));
         } else {
@@ -344,9 +383,14 @@ bool SceneScriptBackend::setNumber(uint32_t id, const std::string& property, dou
     if (!layer) return false;
     if (hasParticlePrefix(property)) {
         ParticleSystem* ps = particleSystemOf(layer);
-        float* field = ps ? particleScalar(*ps, property.substr(sizeof(kParticlePrefix) - 1)) : nullptr;
+        const std::string field_name = property.substr(sizeof(kParticlePrefix) - 1);
+        float* field = ps ? particleScalar(*ps, field_name) : nullptr;
         if (!field) return false;
         *field = (float)value;
+        if (field_name == "colorn") {
+            ps->override_color[1] = ps->override_color[2] = (float)value;
+            ps->has_override_color = true;
+        }
         return true;
     }
     if (auto* sound = dynamic_cast<SoundLayer*>(layer)) {
@@ -447,10 +491,10 @@ int SceneScriptBackend::findAttachment(uint32_t layer_id, const std::string& nam
     return -1;
 }
 
-bool SceneScriptBackend::getAttachment(uint32_t layer_id, const std::string& key, const std::string& field,
-                                       std::vector<double>& out) {
-    const ImageLayer* image = imageById(layer_id);
-    SceneTree* tree = ctx_.scene.scene_tree;
+namespace {
+// World transform of a puppet attachment, picked by name or index.
+bool attachmentWorldMatrix(SceneTree* tree, const ImageLayer* image, uint32_t layer_id, const std::string& key,
+                           mat4x4 out) {
     const SceneTreeNode* node = tree ? tree->find(layer_id) : nullptr;
     if (!image || !node) return false;
 
@@ -463,9 +507,42 @@ bool SceneScriptBackend::getAttachment(uint32_t layer_id, const std::string& key
     const auto attachment = node->attachment_transforms.find(name);
     mat4x4 world;
     if (attachment == node->attachment_transforms.end() || !tree->worldTransform(layer_id, world)) return false;
-    mat4x4 local, combined;
+    mat4x4 local;
     memcpy(local, attachment->second.data(), sizeof(mat4x4));
-    mat4x4_mul(combined, world, local);
+    mat4x4_mul(out, world, local);
+    return true;
+}
+}  // namespace
+
+bool SceneScriptBackend::transformAttachmentToTexture(uint32_t layer_id, uint32_t attachment_layer,
+                                                      const std::string& key, std::vector<double>& out) {
+    const ImageLayer* target_layer = imageById(layer_id);
+    SceneTree* tree = ctx_.scene.scene_tree;
+    mat4x4 attached, target_world;
+    if (!target_layer || !tree || target_layer->size[0] <= 0.0f || target_layer->size[1] <= 0.0f ||
+        !attachmentWorldMatrix(tree, imageById(attachment_layer), attachment_layer, key, attached) ||
+        !tree->worldTransform(layer_id, target_world))
+        return false;
+
+    // Layer space is centered with y up; texture space runs 0..1 from the top-left corner.
+    mat4x4 to_texture, inverse, in_layer, in_texture;
+    mat4x4_identity(to_texture);
+    to_texture[0][0] = 1.0f / target_layer->size[0];
+    to_texture[1][1] = -1.0f / target_layer->size[1];
+    to_texture[3][0] = 0.5f;
+    to_texture[3][1] = 0.5f;
+    mat4x4_invert(inverse, target_world);
+    mat4x4_mul(in_layer, inverse, attached);
+    mat4x4_mul(in_texture, to_texture, in_layer);
+    out = {in_texture[0][0], in_texture[0][1], 0.0, in_texture[1][0], in_texture[1][1],
+           0.0,              in_texture[3][0], in_texture[3][1], 1.0};
+    return true;
+}
+
+bool SceneScriptBackend::getAttachment(uint32_t layer_id, const std::string& key, const std::string& field,
+                                       std::vector<double>& out) {
+    mat4x4 combined;
+    if (!attachmentWorldMatrix(ctx_.scene.scene_tree, imageById(layer_id), layer_id, key, combined)) return false;
 
     if (field == "matrix") {
         out.resize(16);
@@ -508,8 +585,8 @@ ImageLayer* SceneScriptBackend::imageById(uint32_t id) const {
 uint32_t SceneScriptBackend::targetHandle(const AnimationTarget& wanted) {
     for (size_t i = 0; i < targets_.size(); ++i) {
         const AnimationTarget& existing = targets_[i];
-        if (existing.sprite == wanted.sprite && existing.layer_id == wanted.layer_id &&
-            (wanted.sprite || existing.index == wanted.index))
+        if (existing.sprite == wanted.sprite && existing.video == wanted.video &&
+            existing.layer_id == wanted.layer_id && (wanted.sprite || wanted.video || existing.index == wanted.index))
             return kTargetBase + (uint32_t)i;
     }
     targets_.push_back(wanted);
@@ -563,6 +640,14 @@ bool SceneScriptBackend::destroyAnimationLayer(uint32_t layer_id, const std::str
 
 uint32_t SceneScriptBackend::findAnimation(uint32_t layer_id, const std::string& kind, const std::string& key) {
     ImageLayer* image = imageById(layer_id);
+    if (kind == "video") {
+        if (!image || !image->bound_video_decoder) return 0;
+        AnimationTarget video_target;
+        video_target.video = true;
+        video_target.layer_id = layer_id;
+        video_target.seen_loop = image->bound_video_decoder->loopCount();
+        return targetHandle(video_target);
+    }
     const bool want_any = kind == "any";
 
     if (kind == "timeline" || want_any) {
@@ -582,11 +667,71 @@ uint32_t SceneScriptBackend::findAnimation(uint32_t layer_id, const std::string&
     return 0;
 }
 
+bool SceneScriptBackend::videoGet(ImageLayer& image, const std::string& field, double& out) {
+    wallpaper_engine::VideoTexture* decoder = image.bound_video_decoder;
+    auto* active = decoder ? ctx_.asset_mgr->findVideoTexture(decoder) : nullptr;
+    if (!decoder || !active) return false;
+    if (field == "duration")
+        out = decoder->duration();
+    else if (field == "rate")
+        out = active->rate;
+    else if (field == "loop")
+        out = decoder->looping() ? 1.0 : 0.0;
+    else if (field == "currentTime")
+        out = active->position;
+    else if (field == "playing")
+        out = decoder->isPlaying() ? 1.0 : 0.0;
+    else
+        return false;
+    return true;
+}
+
+bool SceneScriptBackend::videoSet(ImageLayer& image, const std::string& field, double value) {
+    wallpaper_engine::VideoTexture* decoder = image.bound_video_decoder;
+    auto* active = decoder ? ctx_.asset_mgr->findVideoTexture(decoder) : nullptr;
+    if (!decoder || !active) return false;
+    if (field == "rate") {
+        active->rate = clampPlaybackRate((float)value);
+    } else if (field == "loop") {
+        decoder->setLooping(value != 0.0);
+    } else if (field == "currentTime") {
+        // The decoder can only restart from the first frame.
+        if (value > 0.0) return false;
+        decoder->rewind();
+        active->position = 0.0;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool SceneScriptBackend::videoCommand(ImageLayer& image, const std::string& command) {
+    wallpaper_engine::VideoTexture* decoder = image.bound_video_decoder;
+    auto* active = decoder ? ctx_.asset_mgr->findVideoTexture(decoder) : nullptr;
+    if (!decoder || !active) return false;
+    if (command == "play") {
+        if (decoder->isPaused())
+            image.resume();
+        else
+            image.start();
+    } else if (command == "pause") {
+        image.pause();
+    } else if (command == "stop") {
+        image.stop();
+        decoder->rewind();
+        active->position = 0.0;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 bool SceneScriptBackend::animationGet(uint32_t handle, const std::string& field, double& out) {
     const AnimationTarget* t = target(handle);
     if (!t) return animations_.get(handle, field, out);
     ImageLayer* image = imageById(t->layer_id);
     if (!image) return false;
+    if (t->video) return videoGet(*image, field, out);
     return t->sprite ? image->spriteGet(field, ctx_.time, out) : image->puppetLayerGet(t->index, field, out);
 }
 
@@ -594,7 +739,7 @@ bool SceneScriptBackend::animationGetString(uint32_t handle, const std::string& 
     const AnimationTarget* t = target(handle);
     if (!t) return animations_.getString(handle, field, out);
     ImageLayer* image = imageById(t->layer_id);
-    if (!image || t->sprite) return false;
+    if (!image || t->sprite || t->video) return false;
     return image->puppetLayerGetString(t->index, field, out);
 }
 
@@ -603,6 +748,7 @@ bool SceneScriptBackend::animationSet(uint32_t handle, const std::string& field,
     if (!t) return animations_.set(handle, field, value);
     ImageLayer* image = imageById(t->layer_id);
     if (!image) return false;
+    if (t->video) return videoSet(*image, field, value);
     return t->sprite ? image->spriteSet(field, value, ctx_.time) : image->puppetLayerSet(t->index, field, value);
 }
 
@@ -611,6 +757,7 @@ bool SceneScriptBackend::animationCommand(uint32_t handle, const std::string& co
     if (!t) return animations_.command(handle, command);
     ImageLayer* image = imageById(t->layer_id);
     if (!image) return false;
+    if (t->video) return videoCommand(*image, command);
     return t->sprite ? image->spriteCommand(command, ctx_.time) : image->puppetLayerCommand(t->index, command);
 }
 
@@ -620,7 +767,17 @@ std::vector<uint32_t> SceneScriptBackend::takeEndedAnimations() {
     for (size_t i = 0; i < targets_.size(); ++i) {
         if (targets_[i].sprite) continue;
         ImageLayer* image = imageById(targets_[i].layer_id);
-        if (image && image->puppetLayerTakeEnded(targets_[i].index)) ended.push_back(kTargetBase + (uint32_t)i);
+        if (!image) continue;
+        if (targets_[i].video) {
+            // A video ends each time the decoder reaches the end of the file.
+            const uint32_t passes = image->bound_video_decoder ? image->bound_video_decoder->loopCount() : 0;
+            if (passes != targets_[i].seen_loop) {
+                targets_[i].seen_loop = passes;
+                ended.push_back(kTargetBase + (uint32_t)i);
+            }
+        } else if (image->puppetLayerTakeEnded(targets_[i].index)) {
+            ended.push_back(kTargetBase + (uint32_t)i);
+        }
     }
     return ended;
 }
@@ -694,6 +851,7 @@ bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) 
     if (name == "skylightcolor")
         return numbers({&general.skylight_color[0], &general.skylight_color[1], &general.skylight_color[2]});
     auto& camera = ctx.scene.camera;
+    if (name == "camerazoom") return numbers({&general.zoom});
     if (name == "cameraeye") return numbers({&camera.eye[0], &camera.eye[1], &camera.eye[2]});
     if (name == "cameracenter") return numbers({&camera.center[0], &camera.center[1], &camera.center[2]});
     if (name == "cameraup") return numbers({&camera.up[0], &camera.up[1], &camera.up[2]});
@@ -736,13 +894,35 @@ int SceneScriptBackend::boneParent(uint32_t layer_id, int bone) {
 
 bool SceneScriptBackend::getBone(uint32_t layer_id, int bone, const std::string& field, std::vector<double>& out) {
     const ImageLayer* image = imageById(layer_id);
-    return image && bone >= 0 && image->boneGet((size_t)bone, field, out);
+    if (!image || bone < 0 || !image->boneGet((size_t)bone, field, out)) return false;
+    mat4x4 world;
+    if (field == "matrix" && out.size() == 16 && ctx_.scene.scene_tree &&
+        ctx_.scene.scene_tree->worldTransform(layer_id, world)) {
+        // Bones are kept in the layer's space; scripts see them in the world.
+        mat4x4 model, combined;
+        for (int i = 0; i < 16; ++i) model[i / 4][i % 4] = (float)out[(size_t)i];
+        mat4x4_mul(combined, world, model);
+        for (int i = 0; i < 16; ++i) out[(size_t)i] = combined[i / 4][i % 4];
+    }
+    return true;
 }
 
 bool SceneScriptBackend::setBone(uint32_t layer_id, int bone, const std::string& field,
                                  const std::vector<double>& value) {
     ImageLayer* image = imageById(layer_id);
-    return image && bone >= 0 && image->boneSet((size_t)bone, field, value);
+    if (!image || bone < 0) return false;
+    mat4x4 world;
+    if (field == "matrix" && value.size() >= 16 && ctx_.scene.scene_tree &&
+        ctx_.scene.scene_tree->worldTransform(layer_id, world)) {
+        mat4x4 inverse, wanted, model;
+        mat4x4_invert(inverse, world);
+        for (int i = 0; i < 16; ++i) wanted[i / 4][i % 4] = (float)value[(size_t)i];
+        mat4x4_mul(model, inverse, wanted);
+        std::vector<double> converted(16);
+        for (int i = 0; i < 16; ++i) converted[(size_t)i] = model[i / 4][i % 4];
+        return image->boneSet((size_t)bone, field, converted);
+    }
+    return image->boneSet((size_t)bone, field, value);
 }
 
 bool SceneScriptBackend::resetBone(uint32_t layer_id, int bone) {
@@ -1022,6 +1202,20 @@ void ScriptBindings::write(const Binding& binding, const ScriptValue& value) {
 }
 
 namespace {
+// The UI language as Wallpaper Engine reports it ("en-us"), taken from the locale.
+std::string systemLanguage() {
+    for (const char* variable : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
+        const char* value = std::getenv(variable);
+        if (!value || !*value) continue;
+        std::string language = value;
+        language = language.substr(0, language.find_first_of(".@"));
+        std::replace(language.begin(), language.end(), '_', '-');
+        std::transform(language.begin(), language.end(), language.begin(), ::tolower);
+        if (language != "c" && language != "posix") return language;
+    }
+    return "en-us";
+}
+
 const std::vector<const char*> kCursorHooks = {"cursorEnter", "cursorLeave", "cursorMove",
                                                "cursorDown",  "cursorUp",    "cursorClick"};
 
@@ -1145,5 +1339,10 @@ void ScriptBindings::update(float dt) {
     if (user_properties_pending_) {
         user_properties_pending_ = false;
         ScriptEngine::instance().broadcast("applyUserProperties", user_properties_);
+    }
+    if (!general_settings_sent_) {
+        general_settings_sent_ = true;
+        ScriptEngine::instance().broadcast("applyGeneralSettings",
+                                           {{"language", ScriptValue::makeString(systemLanguage())}});
     }
 }

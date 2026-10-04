@@ -92,6 +92,11 @@ class ScriptSceneBackend {
                                const std::string& /*field*/, std::vector<double>& /*out*/) {
         return false;
     }
+    // A 3x3 (column-major, 9 values) taking a puppet attachment of `attachment_layer` into this layer's texture space.
+    virtual bool transformAttachmentToTexture(uint32_t /*layer_id*/, uint32_t /*attachment_layer*/,
+                                              const std::string& /*key*/, std::vector<double>& /*out*/) {
+        return false;
+    }
     // Rotates around the layer's own axes; angles in degrees.
     virtual bool rotateObjectSpace(uint32_t /*id*/, const double /*angles*/[3]) {
         return false;
@@ -170,6 +175,22 @@ class ScriptSceneBackend {
     }
     virtual bool setMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/,
                                      const std::vector<double>& /*value*/) {
+        return false;
+    }
+    // One pass of an effect is one material (IMaterial).
+    virtual int effectPassCount(uint32_t /*layer_id*/, int /*effect*/) {
+        return 0;
+    }
+    virtual bool getPassMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, int /*pass*/,
+                                         const std::string& /*name*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setPassMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, int /*pass*/,
+                                         const std::string& /*name*/, const std::vector<double>& /*value*/) {
+        return false;
+    }
+    // Runs a function the effect defines (the fluid simulation's clear functions).
+    virtual bool executeMaterialFunction(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/) {
         return false;
     }
 };

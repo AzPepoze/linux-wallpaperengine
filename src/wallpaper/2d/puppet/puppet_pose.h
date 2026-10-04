@@ -49,6 +49,9 @@ class PuppetPose {
     // Local pose of every bone as currently animated (overrides included); false when no clip drives the model.
     bool localPose(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
                    std::vector<MdlKeyframe>& pose) const;
+    // Bone transforms relative to the parent bone (the bind transform when no clip drives the model).
+    void localMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                       std::vector<PuppetMatrix>& out) const;
     // Bone transforms in model space, parents applied.
     void worldMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
                        std::vector<PuppetMatrix>& out) const;

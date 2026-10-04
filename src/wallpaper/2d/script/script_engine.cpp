@@ -275,7 +275,14 @@ Object.defineProperties(LayerHandle.prototype, {
     maxwidth: scalarProperty('maxwidth', Number),
     maxrows: scalarProperty('maxrows', Number),
     horizontalalign: scalarProperty('horizontalalign', String),
-    verticalalign: scalarProperty('verticalalign', String)
+    verticalalign: scalarProperty('verticalalign', String),
+    anchor: scalarProperty('anchor', String),
+    padding: scalarProperty('padding', Number),
+    opaquebackground: scalarProperty('opaquebackground', Boolean),
+    limitrows: scalarProperty('limitrows', Boolean),
+    limitwidth: scalarProperty('limitwidth', Boolean),
+    backgroundcolor: vectorProperty('backgroundcolor', 3),
+    solid: scalarProperty('solid', Boolean)
 });
 var animationHandles = {};
 var endedCallbacks = {};
@@ -355,7 +362,25 @@ Object.defineProperties(EffectHandle.prototype, {
     },
     name: { get: function () { return __lweScene('effName', this.__layer, this.__index); }, enumerable: true }
 });
-EffectHandle.prototype.getMaterial = function () { return this; };
+EffectHandle.prototype.getMaterialCount = function () { return __lweScene('effPasses', this.__layer, this.__index); };
+EffectHandle.prototype.executeMaterialFunction = function (name) {
+    __lweScene('effExec', this.__layer, this.__index, String(name));
+};
+// An IMaterial has no fixed members: every shader constant of its pass reads and writes as a property.
+EffectHandle.prototype.getMaterial = function (index) {
+    var layer = this.__layer, effect = this.__index, pass = Number(index) || 0;
+    if (pass < 0 || pass >= __lweScene('effPasses', layer, effect)) return undefined;
+    return new Proxy({}, {
+        get: function (target, name) {
+            if (typeof name !== 'string') return undefined;
+            return materialResult(__lweScene('passGet', layer, effect, pass, name));
+        },
+        set: function (target, name, value) {
+            if (typeof name === 'string') __lweScene('passSet', layer, effect, pass, name, materialValues(value));
+            return true;
+        }
+    });
+};
 EffectHandle.prototype.getMaterialProperty = function (name) {
     return materialResult(__lweScene('matGet', this.__layer, this.__index, String(name)));
 };
@@ -370,52 +395,86 @@ function boneIndexOf(layer, bone) {
 }
 LayerHandle.prototype.getBoneCount = function () { return __lweScene('boneCount', this.__id); };
 LayerHandle.prototype.getBoneIndex = function (name) { return __lweScene('boneFind', this.__id, String(name)); };
-LayerHandle.prototype.getBoneName = function (bone) { return __lweScene('boneName', this.__id, bone); };
 LayerHandle.prototype.getBoneParentIndex = function (bone) {
     return __lweScene('boneParent', this.__id, boneIndexOf(this, bone));
 };
-LayerHandle.prototype.getBoneTransform = function (bone) {
-    var m = __lweScene('boneGet', this.__id, boneIndexOf(this, bone), 'matrix');
-    return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
-};
-LayerHandle.prototype.resetBone = function (bone) { return __lweScene('boneReset', this.__id, boneIndexOf(this, bone)); };
-['Origin', 'Angles', 'Scale'].forEach(function (what) {
+function matrixOf(value) {
+    return value && Array.isArray(value.m) && value.m.length === 16 ? value.m : (Array.isArray(value) ? value : undefined);
+}
+[['getBoneTransform', 'setBoneTransform', 'matrix'], ['getLocalBoneTransform', 'setLocalBoneTransform', 'localmatrix']]
+    .forEach(function (names) {
+        LayerHandle.prototype[names[0]] = function (bone) {
+            var m = __lweScene('boneGet', this.__id, boneIndexOf(this, bone), names[2]);
+            return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
+        };
+        LayerHandle.prototype[names[1]] = function (bone, transform) {
+            var m = matrixOf(transform);
+            if (m) __lweScene('boneSet', this.__id, boneIndexOf(this, bone), names[2], m);
+        };
+    });
+['Origin', 'Angles'].forEach(function (what) {
     var field = what.toLowerCase();
-    LayerHandle.prototype['getBone' + what] = function (bone) {
+    LayerHandle.prototype['getLocalBone' + what] = function (bone) {
         var a = __lweScene('boneGet', this.__id, boneIndexOf(this, bone), field);
         return a ? vec3(a[0], a[1], a[2]) : undefined;
     };
-    LayerHandle.prototype['setBone' + what] = function (bone, value) {
-        return __lweScene('boneSet', this.__id, boneIndexOf(this, bone), field, toArray(value, 3));
+    LayerHandle.prototype['setLocalBone' + what] = function (bone, value) {
+        __lweScene('boneSet', this.__id, boneIndexOf(this, bone), field, toArray(value, 3));
     };
 });
+// No model in the supported formats carries blend shapes or physics bones, so these answer for a model without them.
+LayerHandle.prototype.getBlendShapeIndex = function () { return -1; };
+LayerHandle.prototype.getBlendShapeWeight = function () { return 0; };
+LayerHandle.prototype.setBlendShapeWeight = function () {};
+LayerHandle.prototype.applyBonePhysicsImpulse = function () {};
+LayerHandle.prototype.resetBonePhysicsSimulation = function () {};
 
-function VideoTextureHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
-['play', 'pause', 'stop'].forEach(function (command) {
-    VideoTextureHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, 'video.' + command); };
+// IVideoTexture rides on the animation handle plumbing: `__id` is the handle of the layer's video.
+function VideoTextureHandle(handle) { Object.defineProperty(this, '__id', { value: handle }); }
+Object.defineProperties(VideoTextureHandle.prototype, {
+    duration: animationNumber('duration'),
+    rate: animationNumber('rate', true),
+    loop: {
+        get: function () { var v = __lweScene('animGet', this.__id, 'loop'); return v === undefined ? undefined : v !== 0; },
+        set: function (value) { __lweScene('animSet', this.__id, 'loop', value ? 1 : 0); }, enumerable: true
+    }
 });
-VideoTextureHandle.prototype.isPlaying = function () { return __lweScene('get', this.__id, 'video.playing') === true; };
+['play', 'pause', 'stop'].forEach(function (command) {
+    VideoTextureHandle.prototype[command] = function () { __lweScene('animCommand', this.__id, command); };
+});
+VideoTextureHandle.prototype.isPlaying = function () { return __lweScene('animGet', this.__id, 'playing') === 1; };
+VideoTextureHandle.prototype.getCurrentTime = function () { return __lweScene('animGet', this.__id, 'currentTime'); };
+VideoTextureHandle.prototype.setCurrentTime = function (time) {
+    __lweScene('animSet', this.__id, 'currentTime', Number(time));
+};
+VideoTextureHandle.prototype.addEndedCallback = function (callback) {
+    (endedCallbacks[this.__id] = endedCallbacks[this.__id] || []).push(callback);
+};
 LayerHandle.prototype.getVideoTexture = function () {
-    return __lweScene('get', this.__id, 'video.playing') === undefined ? undefined : new VideoTextureHandle(this.__id);
+    var handle = __lweScene('animFind', this.__id, 'video', '');
+    return handle ? new VideoTextureHandle(handle) : undefined;
 };
 
-function ParticleHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
+function ParticleInstanceHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
 (function () {
-    var props = { color: vectorProperty('particle.color', 3) };
-    ['alpha', 'size', 'count', 'speed', 'lifetime', 'rate'].forEach(function (field) {
+    var props = {};
+    ['alpha', 'size', 'count', 'speed', 'lifetime', 'rate', 'colorn'].forEach(function (field) {
         props[field] = scalarProperty('particle.' + field, Number);
     });
     for (var i = 0; i < 8; ++i) props['controlpoint' + i] = vectorProperty('particle.controlpoint' + i, 3);
-    Object.defineProperties(ParticleHandle.prototype, props);
+    Object.defineProperties(ParticleInstanceHandle.prototype, props);
 })();
+function ParticleHandle(layerId) {
+    Object.defineProperty(this, '__id', { value: layerId });
+    Object.defineProperty(this, 'instance', { value: new ParticleInstanceHandle(layerId), enumerable: true });
+}
 ['play', 'pause', 'stop'].forEach(function (command) {
     ParticleHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, 'particle.' + command); };
 });
+ParticleHandle.prototype.isPlaying = function () { return __lweScene('get', this.__id, 'particle.playing') === true; };
 ParticleHandle.prototype.emitParticles = function (count) {
-    __lweScene('layerCommand', this.__id, 'particle.emit:' + (Number(count) | 0));
+    __lweScene('layerCommand', this.__id, 'particle.emit:' + (count === undefined ? 1 : Number(count) | 0));
 };
-ParticleHandle.prototype.getInstanceCount = function () { return 1; };
-ParticleHandle.prototype.getInstance = function () { return this; };
 LayerHandle.prototype.getParticleSystem = function () {
     return __lweScene('get', this.__id, 'particle.rate') === undefined ? undefined : new ParticleHandle(this.__id);
 };
@@ -445,7 +504,14 @@ LayerHandle.prototype.setParent = function (parent, second, third) {
 LayerHandle.prototype.rotateObjectSpace = function (angles) {
     return __lweScene('rotateObjectSpace', this.__id, toArray(angles, 3));
 };
-LayerHandle.prototype.getAttachmentIndex = function (name) { return __lweScene('attachIndex', this.__id, String(name)); };
+LayerHandle.prototype.transformAttachmentToTexture = function (attachmentLayer, attachmentName) {
+    var other = attachmentLayer && typeof attachmentLayer === 'object' ? attachmentLayer
+                                                                        : thisScene.getLayer(attachmentLayer);
+    if (!other) return undefined;
+    var m = __lweScene('attachToTexture', this.__id, other.__id, String(attachmentName));
+    return m && typeof g.Mat3 === 'function' ? new g.Mat3(m) : undefined;
+};
+LayerHandle.prototype.getAttachmentIndex =function (name) { return __lweScene('attachIndex', this.__id, String(name)); };
 LayerHandle.prototype.getAttachmentMatrix = function (attachment) {
     var m = __lweScene('attachGet', this.__id, String(attachment), 'matrix');
     return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
@@ -502,10 +568,13 @@ hide('thisScene', {
             var a = __lweScene('sceneGet', name);
             return a ? vec3(a[0], a[1], a[2]) : undefined;
         };
-        return { eye: read('cameraeye'), center: read('cameracenter'), up: read('cameraup') };
+        var zoom = __lweScene('sceneGet', 'camerazoom');
+        return { eye: read('cameraeye'), center: read('cameracenter'), up: read('cameraup'),
+                 zoom: zoom ? zoom[0] : undefined };
     },
     setCameraTransforms: function (transforms) {
         if (!transforms) return;
+        if (typeof transforms.zoom === 'number') __lweScene('sceneSet', 'camerazoom', [transforms.zoom]);
         ['eye', 'center', 'up'].forEach(function (key) {
             if (transforms[key]) __lweScene('sceneSet', 'camera' + key, toArray(transforms[key], 3));
         });
@@ -770,6 +839,14 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
         }
         return JS_NewBool(ctx, scene->rotateObjectSpace(id, angles));
     }
+    if (op == "attachToTexture") {
+        std::vector<double> values;
+        if (!scene->transformAttachmentToTexture(id, idArg(2), stringArg(3), values)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (size_t i = 0; i < values.size(); ++i)
+            JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, values[i]));
+        return array;
+    }
     if (op == "attachIndex") return JS_NewInt32(ctx, scene->findAttachment(id, stringArg(2)));
     if (op == "attachGet") {
         std::vector<double> values;
@@ -822,7 +899,11 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
     if (op == "boneSet" && argc > 4) {
         std::vector<double> values;
-        for (uint32_t i = 0; i < 3; ++i) {
+        uint32_t count = 0;
+        JSValue length = JS_GetPropertyStr(ctx, argv[4], "length");
+        JS_ToUint32(ctx, &count, length);
+        JS_FreeValue(ctx, length);
+        for (uint32_t i = 0; i < count && i < 16; ++i) {
             JSValue item = JS_GetPropertyUint32(ctx, argv[4], i);
             double number = 0.0;
             JS_ToFloat64(ctx, &number, item);
@@ -841,6 +922,32 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
     if (op == "effSetVisible" && argc > 3)
         return JS_NewBool(ctx, scene->setEffectVisible(id, (int)idArg(2), JS_ToBool(ctx, argv[3]) != 0));
+    if (op == "effPasses") return JS_NewInt32(ctx, scene->effectPassCount(id, (int)idArg(2)));
+    if (op == "effExec") return JS_NewBool(ctx, scene->executeMaterialFunction(id, (int)idArg(2), stringArg(3)));
+    if (op == "passGet") {
+        std::vector<double> values;
+        if (!scene->getPassMaterialProperty(id, (int)idArg(2), (int)idArg(3), stringArg(4), values))
+            return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (size_t i = 0; i < values.size(); ++i)
+            JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, values[i]));
+        return array;
+    }
+    if (op == "passSet" && argc > 5) {
+        std::vector<double> values;
+        JSValue length = JS_GetPropertyStr(ctx, argv[5], "length");
+        uint32_t count = 0;
+        JS_ToUint32(ctx, &count, length);
+        JS_FreeValue(ctx, length);
+        for (uint32_t i = 0; i < count && i < 4; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, argv[5], i);
+            double number = 0.0;
+            JS_ToFloat64(ctx, &number, item);
+            JS_FreeValue(ctx, item);
+            values.push_back(number);
+        }
+        return JS_NewBool(ctx, scene->setPassMaterialProperty(id, (int)idArg(2), (int)idArg(3), stringArg(4), values));
+    }
     if (op == "matGet") {
         std::vector<double> values;
         if (!scene->getMaterialProperty(id, (int)idArg(2), stringArg(3), values)) return JS_UNDEFINED;
