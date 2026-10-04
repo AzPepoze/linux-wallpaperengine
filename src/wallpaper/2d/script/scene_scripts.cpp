@@ -140,6 +140,13 @@ bool SceneScriptBackend::setVector(uint32_t id, const std::string& property, con
         node->parallax_depth = {(float)value[0], (float)value[1]};
         return true;
     }
+    if (property == "size") {
+        Layer* layer = layerById(id);
+        if (!layer) return false;
+        layer->size[0] = (float)value[0];
+        layer->size[1] = (float)value[1];
+        return true;
+    }
     return false;
 }
 
@@ -322,6 +329,17 @@ uint32_t SceneScriptBackend::parentOf(uint32_t id) {
     return node ? node->parent_id : 0;
 }
 
+bool SceneScriptBackend::setParent(uint32_t id, uint32_t parent) {
+    SceneTree* tree = ctx_.scene.scene_tree;
+    SceneTreeNode* node = tree ? tree->find(id) : nullptr;
+    if (!node || (parent != 0 && !tree->find(parent))) return false;
+    for (uint32_t ancestor = parent; ancestor != 0; ancestor = tree->find(ancestor)->parent_id)
+        if (ancestor == id) return false;  // would make the layer its own ancestor
+    node->parent_id = parent;
+    tree->rebuildHierarchy();
+    return true;
+}
+
 std::vector<uint32_t> SceneScriptBackend::childrenOf(uint32_t id) {
     const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
     return node ? node->children : std::vector<uint32_t>();
@@ -447,6 +465,7 @@ void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& obje
     bind(object.node.angles_script, BoundProperty::Angles);
     bind(object.visible_script, BoundProperty::Visible);
     bind(object.image.color_script, BoundProperty::Color);
+    bind(object.image.size_script, BoundProperty::Size);
     for (size_t i = 0; i < object.effects.size(); ++i) {
         const auto& effect = object.effects[i];
         if (!effect.visible_script.empty())
@@ -630,6 +649,9 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
         case BoundProperty::Color:
             loaded->setProperty("color");
             break;
+        case BoundProperty::Size:
+            loaded->setProperty("size");
+            break;
         case BoundProperty::EffectVisible:
             // `effect:<index>:<what>` makes thisObject the effect (see the prelude).
             loaded->setProperty("effect:" + std::to_string(effect_index) + ":visible");
@@ -673,6 +695,10 @@ bool ScriptBindings::read(const Binding& binding, ScriptValue& value) {
         case BoundProperty::Color:
             if (!binding.layer) return false;
             value = ScriptValue::makeVec3(binding.layer->tint[0], binding.layer->tint[1], binding.layer->tint[2]);
+            return true;
+        case BoundProperty::Size:
+            if (!binding.layer) return false;
+            value = ScriptValue::makeVec2(binding.layer->size[0], binding.layer->size[1]);
             return true;
         case BoundProperty::EffectVisible: {
             bool visible = false;
@@ -720,6 +746,12 @@ void ScriptBindings::write(const Binding& binding, const ScriptValue& value) {
         case BoundProperty::Color:
             if (binding.layer)
                 for (int i = 0; i < 3; ++i) binding.layer->tint[i] = (float)value.vec[i];
+            return;
+        case BoundProperty::Size:
+            if (binding.layer) {
+                binding.layer->size[0] = (float)value.vec[0];
+                binding.layer->size[1] = (float)value.vec[1];
+            }
             return;
         case BoundProperty::EffectVisible:
             backend_.setEffectVisible(binding.object_id, binding.effect_index, value.number != 0.0);

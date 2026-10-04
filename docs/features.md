@@ -328,12 +328,12 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - `createScriptProperties` extras used by a few Workshop wallpapers (`addTask`, `addListener`, `addAniMapper`, `addInterpolator`, `addChangedUserProperty`)
 - [-] Properties that can host a script
   - Works
-    - `origin`, `scale`, `angles`, `visible` and `color` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
+    - `origin`, `scale`, `angles`, `visible`, `color` and image `size` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
     - Text content (`update(string)`, about four times per second)
     - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect
   - Missing
-    - `size` (parsed, not bound), particle fields, camera and scene settings
+    - Particle fields and camera properties
     - `visible` on objects that have no layer (groups) is not applied
     - Scripts on text color, point size and other text properties
     - Four-component effect constants
@@ -349,7 +349,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `color`, `alpha`, `getParent()`, `getChildren()`, `getTransformMatrix()` (`Mat4`), `getAnimation`, `getAnimationLayer`, `getAnimationLayerCount`, `getTextureAnimation`
     - Works: text layers (`text`, `font`, `pointsize`, `maxwidth`, `maxrows`, alignment) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
     - Works: `getEffect(name | index)` and `getEffectCount()`; an effect has `visible`, `name`, `getMaterial()`, `getMaterialProperty(name)` and `setMaterialProperty(name, value)` (a value set by a script replaces the constant's keyframes)
-    - Missing: `getVideoTexture`, `setParent`, attachments, `rotateObjectSpace`, `solid`, `executeMaterialFunction`
+    - Works: `setParent(layer)` (keeps the local transform)
+    - Missing: `getVideoTexture`, attachments, `rotateObjectSpace`, `solid`, `executeMaterialFunction`
     - Not available for scripts on camera or scene-level properties (no owning layer)
   - [-] `thisObject`
     - Works: `visible`, `name`, `getAnimation()`; the effect itself for scripts on an effect property

@@ -43,6 +43,10 @@ class ScriptSceneBackend {
 
     virtual uint32_t parentOf(uint32_t id) = 0;
     virtual std::vector<uint32_t> childrenOf(uint32_t id) = 0;
+    // Parent 0 detaches the layer. The layer keeps its local transform.
+    virtual bool setParent(uint32_t /*id*/, uint32_t /*parent*/) {
+        return false;
+    }
 
     virtual uint32_t findLayerByName(const std::string& name) = 0;
     virtual std::vector<uint32_t> allLayers() = 0;  // in scene (draw) order

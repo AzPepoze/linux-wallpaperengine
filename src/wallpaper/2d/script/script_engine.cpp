@@ -391,7 +391,11 @@ LayerHandle.prototype.getTransformMatrix = function () {
     return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
 };
 LayerHandle.prototype.getParent = function () { return layerHandle(__lweScene('parent', this.__id)); };
-LayerHandle.prototype.getChildren = function () { return __lweScene('children', this.__id).map(layerHandle); };
+LayerHandle.prototype.setParent = function (parent) {
+    var handle = parent && typeof parent === 'object' ? parent : (parent ? thisScene.getLayer(parent) : undefined);
+    return __lweScene('setParent', this.__id, handle ? handle.__id : 0);
+};
+LayerHandle.prototype.getChildren =function () { return __lweScene('children', this.__id).map(layerHandle); };
 function layerHandle(id) {
     if (!id || !__lweScene('exists', id)) return undefined;
     return handles[id] || (handles[id] = new LayerHandle(id));
@@ -647,6 +651,7 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
         return array;
     }
     if (op == "parent") return JS_NewUint32(ctx, scene->parentOf(id));
+    if (op == "setParent") return JS_NewBool(ctx, scene->setParent(id, idArg(2)));
     if (op == "children") return idArray(ctx, scene->childrenOf(id));
     if (op == "index") {
         const std::vector<uint32_t> layers = scene->allLayers();

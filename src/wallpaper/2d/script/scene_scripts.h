@@ -33,6 +33,7 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool setString(uint32_t id, const std::string& property, const std::string& value) override;
     uint32_t parentOf(uint32_t id) override;
     std::vector<uint32_t> childrenOf(uint32_t id) override;
+    bool setParent(uint32_t id, uint32_t parent) override;
     uint32_t findLayerByName(const std::string& name) override;
     std::vector<uint32_t> allLayers() override;
     uint32_t findAnimation(uint32_t layer_id, const std::string& kind, const std::string& key) override;
@@ -84,7 +85,7 @@ class SceneScriptBackend : public ScriptSceneBackend {
     std::function<void(const wallpaper_engine::SceneObjectDocument&)> created_handler_;
 };
 
-enum class BoundProperty { Origin, Scale, Angles, Visible, Color, EffectVisible, EffectConstant };
+enum class BoundProperty { Origin, Scale, Angles, Visible, Color, Size, EffectVisible, EffectConstant };
 
 // The scene's script-driven properties: each frame the script gets the property's current value and its result is
 // written back. Owns the scene backend and keeps it registered with the script engine.
