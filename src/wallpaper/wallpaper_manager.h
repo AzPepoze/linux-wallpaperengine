@@ -12,13 +12,20 @@
 #include "sokol_app.h"
 #include "wallpaper/transition/wallpaper_transition.h"
 #include "wallpaper/wallpaper.h"
+#include "wallpaper/wallpaper_instance.h"
 
 class ControlServer;
+struct SharedAssets;
 
 class WallpaperManager {
    public:
     WallpaperManager() = default;
     ~WallpaperManager() = default;
+
+    // Process-wide assets every instance shares (install/internal providers).
+    void setSharedAssets(SharedAssets* shared) {
+        shared_assets_ = shared;
+    }
 
     bool load(const std::string& scene_directory, EngineContext& ctx);
     void update(float dt, EngineContext& ctx);
@@ -27,7 +34,7 @@ class WallpaperManager {
     void handleInput(const sapp_event* event, EngineContext& ctx);
     void pause();
     void resume();
-    void clear();
+    void clear(EngineContext& ctx);
 
     // Runtime wallpaper switching over the control socket.
     void setControlServer(ControlServer* server) {
@@ -60,14 +67,23 @@ class WallpaperManager {
     }
 
     Wallpaper* getActiveWallpaper() const {
-        return active_wallpaper_.get();
+        return active_instance_ ? active_instance_->wallpaper.get() : nullptr;
     }
     bool hasActiveWallpaper() const {
-        return active_wallpaper_ != nullptr;
+        return active_instance_ != nullptr;
     }
 
    private:
-    std::unique_ptr<Wallpaper> active_wallpaper_;
+    // Destroys `instance` with its own view active, so Scene2DRuntime::cleanup()
+    // tears down that instance's layers (it reads ctx.scene).
+    void destroyInstance(EngineContext& ctx, std::unique_ptr<WallpaperInstance>& instance);
+    // Pumps the outgoing instance's video/audio without rendering it (freeze).
+    void tickOutgoingAudio(EngineContext& ctx, float dt);
+
+    std::unique_ptr<WallpaperInstance> active_instance_;
+    std::unique_ptr<WallpaperInstance> outgoing_instance_;
+    WallpaperInstance* active_view_ = nullptr;
+    SharedAssets* shared_assets_ = nullptr;
     ControlServer* control_ = nullptr;
     std::optional<SwitchRequest> pending_switch_;
     WallpaperTransition transition_;

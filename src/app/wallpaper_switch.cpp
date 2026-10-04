@@ -21,11 +21,9 @@ bool switchWallpaper(WallpaperManager& mgr, EngineContext& ctx, const std::strin
     if (vfs::mounted()) vfs::unmount();
 
     if (isVideoFile(path.c_str())) {
-        ctx.asset_mgr->initWallpaper(path.c_str());
         return mgr.load(path, ctx);
     }
 
-    ctx.asset_mgr->initWallpaper(path.c_str());
     strncpy(ctx.asset_root, "extracted", sizeof(ctx.asset_root) - 1);
     WallpaperSource source;
     source.path = path;

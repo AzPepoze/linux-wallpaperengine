@@ -5,6 +5,7 @@
 
 #include "app/control/control_server.h"
 #include "app/wallpaper_switch.h"
+#include "shared/assets/shared_assets.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
@@ -17,65 +18,98 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     const ProjectInfo info = ProjectInfo::detect(scene_directory);
     if (!WallpaperLoader::canLoad(info)) return false;
 
-    // The initial wallpaper gets its own audio group so the first switch can
-    // crossfade. A switch pre-sets ctx.audio_group before calling load(), so
-    // this only fires for the first, directly-loaded wallpaper.
-    if (ctx.audio_group == AudioEngine::kDefaultGroup) {
-        ctx.audio_group = AudioEngine::instance().createGroup();
-        ctx.asset_mgr->setAudioGroup(ctx.audio_group);
-    }
+    // Retain the current wallpaper as the outgoing one: it stays alive (and keeps
+    // playing) until the transition ends. The initial load has none.
+    if (active_instance_) outgoing_instance_ = std::move(active_instance_);
 
-    clear();
+    auto instance = std::make_unique<WallpaperInstance>();
+    instance->audio_group = AudioEngine::instance().createGroup();
+    if (shared_assets_) instance->assets.attachShared(shared_assets_);
+    instance->state.wallpaper_path = scene_directory;
+    instance->state.is_pkg = ctx.is_pkg;
+
+    activateInstance(ctx, *instance, active_view_);
+    // The incoming audio starts silent when a frame was already captured for the
+    // transition; otherwise it plays at full volume immediately.
+    AudioEngine::instance().setGroupVolume(instance->audio_group, transition_.active() ? 0.0f : 1.0f);
+
     auto wallpaper = WallpaperLoader::load(info, ctx);
-    if (!wallpaper) return false;
-    active_wallpaper_ = std::move(wallpaper);
+    if (!wallpaper) {
+        AudioEngine::instance().destroyGroup(instance->audio_group);
+        if (outgoing_instance_) {
+            activateInstance(ctx, *outgoing_instance_, active_view_);
+            active_instance_ = std::move(outgoing_instance_);
+        } else {
+            deactivateInstance(ctx, active_view_);
+        }
+        return false;
+    }
+    instance->wallpaper = std::move(wallpaper);
+    active_instance_ = std::move(instance);
     return true;
 }
 
+void WallpaperManager::destroyInstance(EngineContext& ctx, std::unique_ptr<WallpaperInstance>& instance) {
+    if (!instance) return;
+    // Make it the active view so its runtime cleanup tears down its own layers.
+    activateInstance(ctx, *instance, active_view_);
+    instance->wallpaper.reset();  // ~Wallpaper -> clear() -> Scene2DRuntime::cleanup()
+    instance.reset();
+    active_view_ = nullptr;  // it pointed into the destroyed instance
+    if (active_instance_) activateInstance(ctx, *active_instance_, active_view_);
+}
+
 void WallpaperManager::update(float dt, EngineContext& ctx) {
-    if (active_wallpaper_) {
-        active_wallpaper_->update(dt, ctx);
+    // A finished (or never-started) fade: drop the outgoing wallpaper and its group.
+    if (outgoing_instance_ && !transition_.active()) {
+        AudioEngine::instance().destroyGroup(fading_group_);
+        fading_group_ = AudioEngine::kDefaultGroup;
+        destroyInstance(ctx, outgoing_instance_);
     }
+
+    if (outgoing_instance_ && transition_.active()) tickOutgoingAudio(ctx, dt);
+    if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->update(dt, ctx);
+}
+
+void WallpaperManager::tickOutgoingAudio(EngineContext& ctx, float dt) {
+    if (!outgoing_instance_) return;
+    activateInstance(ctx, *outgoing_instance_, active_view_);
+    outgoing_instance_->assets.updateVideoTextures(dt, ctx.scene.layers);
+    activateInstance(ctx, *active_instance_, active_view_);
 }
 
 void WallpaperManager::render(EngineContext& ctx) {
-    if (active_wallpaper_) {
-        active_wallpaper_->render(ctx);
-    }
+    if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->render(ctx);
 }
 
 void WallpaperManager::onResize(float width, float height) {
-    if (active_wallpaper_) {
-        active_wallpaper_->onResize(width, height);
-    }
+    if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->onResize(width, height);
 }
 
 void WallpaperManager::handleInput(const sapp_event* event, EngineContext& ctx) {
-    if (active_wallpaper_) {
-        active_wallpaper_->handleInput(event, ctx);
-    }
+    if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->handleInput(event, ctx);
 }
 
 void WallpaperManager::pause() {
-    if (active_wallpaper_) active_wallpaper_->pause();
+    if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->pause();
 }
 
 void WallpaperManager::resume() {
-    if (active_wallpaper_) active_wallpaper_->resume();
+    if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->resume();
 }
 
-void WallpaperManager::clear() {
-    if (active_wallpaper_) {
-        LOG_TAG_I("WALLPAPER_MGR", "Clearing active wallpaper instance...");
-        active_wallpaper_->clear();
-        active_wallpaper_.reset();
-        LOG_TAG_I("WALLPAPER_MGR", "Active wallpaper cleared.");
-    }
-    // Drop any crossfade bookkeeping so a torn-down instance cannot keep a
-    // dangling group. active_group_ is left as ctx.audio_group.
+void WallpaperManager::clear(EngineContext& ctx) {
     AudioEngine::instance().destroyGroup(fading_group_);
     fading_group_ = AudioEngine::kDefaultGroup;
     audio_crossfade_ = false;
+    if (outgoing_instance_) destroyInstance(ctx, outgoing_instance_);
+    if (active_instance_) {
+        LOG_TAG_I("WALLPAPER_MGR", "Clearing active wallpaper instance...");
+        active_instance_->wallpaper.reset();
+        active_instance_.reset();
+        active_view_ = nullptr;
+        LOG_TAG_I("WALLPAPER_MGR", "Active wallpaper cleared.");
+    }
 }
 
 void WallpaperManager::pollControl(EngineContext& ctx) {
@@ -113,29 +147,23 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     }
 
     AudioEngine& audio = AudioEngine::instance();
-    // A new switch during an in-flight crossfade supersedes the older outgoing
-    // group; destroy it so it cannot leak (its visual is already replaced too).
-    if (audio_crossfade_) {
+    // A new switch supersedes an in-flight fade: drop its outgoing instance/group.
+    if (outgoing_instance_) {
+        destroyInstance(ctx, outgoing_instance_);
         audio.destroyGroup(fading_group_);
         fading_group_ = AudioEngine::kDefaultGroup;
         audio_crossfade_ = false;
     }
-    const bool has_old = active_wallpaper_ && ctx.audio_group != AudioEngine::kDefaultGroup;
+
+    const bool has_old = active_instance_ && ctx.audio_group != AudioEngine::kDefaultGroup;
     const AudioEngine::GroupId old_group = ctx.audio_group;
     const lwe::transition::AudioSwitchPlan plan =
-        lwe::transition::planAudioSwitch(active_wallpaper_ != nullptr, has_old, config.selection);
-    if (plan.fade_old) audio.beginGroupFade(old_group);
+        lwe::transition::planAudioSwitch(active_instance_ != nullptr, has_old, config.selection);
 
-    const AudioEngine::GroupId new_group = audio.createGroup();
-    audio.setGroupVolume(new_group, plan.new_starts_silent ? 0.0f : 1.0f);
-    ctx.audio_group = new_group;
-    ctx.asset_mgr->setAudioGroup(new_group);
-
-    // Capture the outgoing frame before unloading it. The switch itself always
-    // happens; only the transition is skipped for `none`.
+    // Capture the outgoing frame before the switch replaces the active instance.
     bool captured = false;
     if (config.selection != lwe::transition::kSelectionNone) {
-        if (auto* scene = dynamic_cast<Scene2DWallpaper*>(active_wallpaper_.get())) {
+        if (auto* scene = dynamic_cast<Scene2DWallpaper*>(getActiveWallpaper())) {
             if (Scene2DRuntime* runtime = scene->getRuntime()) {
                 runtime->setForceOffscreen(true);
                 runtime->draw();
@@ -150,26 +178,25 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
 
     if (!switchWallpaper(*this, ctx, request.path, request.is_pkg, request.properties)) {
         LOG_TAG_E("WALLPAPER_MGR", "Switch to %s failed; holding the previous frame", request.path.c_str());
-        audio.destroyGroup(new_group);
-        ctx.audio_group = old_group;
-        ctx.asset_mgr->setAudioGroup(old_group);
-        if (lwe::transition::destroyOldGroupAfterFailure(active_wallpaper_ != nullptr)) {
-            // The outgoing wallpaper was already cleared, so no owner remains for
-            // its detached voices; free the group now instead of leaking it.
-            audio.destroyGroup(old_group);
-            ctx.audio_group = AudioEngine::kDefaultGroup;
-            ctx.asset_mgr->setAudioGroup(AudioEngine::kDefaultGroup);
-        } else if (plan.fade_old) {
-            audio.setGroupVolume(old_group, 1.0f);
-            audio.cancelGroupFade(old_group);
-        }
         if (captured) transition_.hold();
         return true;
     }
-    fading_group_ = plan.fade_old ? old_group : AudioEngine::kDefaultGroup;
-    active_group_ = new_group;
-    audio_crossfade_ = plan.fade_old;
-    if (plan.destroy_old_now) audio.destroyGroup(old_group);
+
+    // switchWallpaper -> load moved the old active to outgoing_instance_ and made
+    // the new instance active (ctx.audio_group is now the new group).
+    const AudioEngine::GroupId new_group = ctx.audio_group;
+    if (plan.destroy_old_now) {
+        audio.destroyGroup(old_group);
+        destroyInstance(ctx, outgoing_instance_);
+    } else if (plan.fade_old) {
+        fading_group_ = old_group;
+        active_group_ = new_group;
+        audio_crossfade_ = true;
+    } else {
+        fading_group_ = AudioEngine::kDefaultGroup;
+        active_group_ = new_group;
+        audio_crossfade_ = false;
+    }
     LOG_TAG_I("WALLPAPER_MGR", "Switched to %s", request.path.c_str());
     return true;
 }
@@ -185,9 +212,7 @@ void WallpaperManager::updateTransition(float dt) {
         audio.setGroupVolume(active_group_, progress);
         return;
     }
-    // Transition finished: kill the outgoing group and leave the new one at full.
-    audio.destroyGroup(fading_group_);
+    // Fade finished: the outgoing instance is torn down in update(ctx).
     audio.setGroupVolume(active_group_, 1.0f);
-    fading_group_ = AudioEngine::kDefaultGroup;
     audio_crossfade_ = false;
 }

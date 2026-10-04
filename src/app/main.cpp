@@ -141,7 +141,6 @@ static void loadInitialWallpaper() {
         return;
     }
     strcpy(ctx.asset_root, "extracted");
-    ctx.asset_mgr->initWallpaper(ctx.wallpaper_path);
     std::string asset_root;
     {
         PhaseTimer timer("package mount / extract");
@@ -181,7 +180,7 @@ static void init(void) {
     shared_assets.internal_provider = std::make_unique<InternalAssetProvider>();
     shared_assets.decode_cache = std::make_unique<TextureDecodeCache>();
     ctx.asset_mgr->attachShared(&shared_assets);
-    ctx.asset_mgr->initWallpaper(ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
+    wallpaper_mgr.setSharedAssets(&shared_assets);
 
     wallpaper_engine::setVideoLoadInRam(cli.video_ram);
     {
@@ -233,9 +232,8 @@ static void cleanup(void) {
     RenderDiagnostics::instance().shutdown(terminationRequested());
 #endif
 
-    wallpaper_mgr.clear();
+    wallpaper_mgr.clear(ctx);
     wallpaper_mgr.shutdownTransition();
-    ctx.asset_mgr->clearVideoTextures();
     AudioEngine::instance().shutdown();
     renderer_cleanup(&ctx.renderer);
 
