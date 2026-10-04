@@ -292,7 +292,8 @@ target("script_corpus")
     set_warnings("all", "extra")
     add_includedirs("src")
     add_packages("cjson", "quickjs")
-    add_files("utils/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+    add_files("utils/script_corpus.cpp", "utils/script_corpus_scan.cpp",
+              "src/wallpaper/2d/script/scene_script.cpp",
               "src/wallpaper/2d/script/script_engine.cpp", "src/wallpaper/2d/script/script_engine_prelude.cpp",
               "src/wallpaper/2d/script/script_engine_host.cpp", "src/wallpaper/2d/script/script_runtime.cpp",
               "src/wallpaper/2d/script/script_value_js.cpp",
