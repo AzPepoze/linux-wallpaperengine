@@ -16,6 +16,9 @@ namespace {
 bool compile_hlsl_stage(SlangStage stage, const std::string& source, const char* source_name,
                         std::vector<uint32_t>& output) {
     SlangGlobalSessionDesc global_desc = {};
+    // Slang's HLSL prelude imports its `glsl` module even for HLSL sources;
+    // without GLSL support enabled the import fails with E38201.
+    global_desc.enableGLSL = true;
     ComPtr<slang::IGlobalSession> global;
     if (slang_createGlobalSession2(&global_desc, global.writeRef()) != SLANG_OK || !global) {
         return false;

@@ -26,6 +26,8 @@ const char* const kValueOptions[] = {"--gpu",
                                      "--diagnose-frame",
                                      "--particle-debug-velocity-scale",
                                      "--particle-debug-max-particles",
+                                     "--transition",
+                                     "--transition-duration",
                                      "--set-property"};
 }  // namespace
 

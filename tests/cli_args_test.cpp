@@ -47,5 +47,10 @@ int main() {
     CHECK(properties[2] == "c=3");
     CHECK(cli_args::optionValues(launcher, {"--set-property"}).empty());
 
+    const V transition = {"app", "--transition", "crt", "--transition-duration", "500", "/wp"};
+    CHECK(cli_args::positional(transition) == "/wp");
+    CHECK(cli_args::optionValue(transition, {"--transition"}, value) && value == "crt");
+    CHECK(cli_args::optionValue(transition, {"--transition-duration"}, value) && value == "500");
+
     return test::finish("cli args checks");
 }

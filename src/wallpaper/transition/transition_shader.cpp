@@ -372,6 +372,9 @@ void TransitionShader::shutdown() {
     clouds_image_ = GfxImage();
     brick_vertices_ = GfxBuffer();
     brick_indices_ = GfxBuffer();
+    shatter_vertices_ = GfxBuffer();
+    shatter_indices_ = GfxBuffer();
+    shatter_index_count_ = 0;
     pipeline_ = GfxPipeline();
     shader_ = GfxShader();
     effect_index_ = -1;
