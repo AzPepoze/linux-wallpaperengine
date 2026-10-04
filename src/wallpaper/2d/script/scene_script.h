@@ -5,10 +5,13 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
-// A property value passed to and from a script's init(value) / update(value). Vectors cross as Vec2 / Vec3 objects.
+// A property value passed to and from a script's init(value) / update(value). Vectors cross as Vec2 / Vec3 objects;
+// Json is only an input: nested data parsed into a JS object (events such as applyUserProperties).
 struct ScriptValue {
-    enum class Kind { Number, Bool, Vec2, Vec3, String };
+    enum class Kind { Number, Bool, Vec2, Vec3, String, Json };
     Kind kind = Kind::Number;
     double number = 0.0;  // Number, and Bool as 0 / 1
     double vec[3] = {0.0, 0.0, 0.0};
@@ -18,7 +21,12 @@ struct ScriptValue {
     static ScriptValue makeBool(bool value);
     static ScriptValue makeVec3(double x, double y, double z);
     static ScriptValue makeString(std::string value);
+    static ScriptValue makeVec2(double x, double y);
+    static ScriptValue makeJson(std::string json);
 };
+
+// The object passed to an event hook (cursorMove, mediaPropertiesChanged...): its named fields in order.
+using ScriptEvent = std::vector<std::pair<std::string, ScriptValue>>;
 
 // Minimal Wallpaper Engine SceneScript host backed by QuickJS. Text scripts
 // expose `update(value)` and the `createScriptProperties` builder.
@@ -51,6 +59,11 @@ class SceneScript {
 
     // The scene object `thisLayer` refers to while this script runs (0 = none). May be set before or after load().
     void setLayerId(uint32_t layer_id);
+    uint32_t layerId() const;
+
+    // Calls the exported event hook `name` with the event object (no argument when `event` is empty and
+    // `with_event` is false). True when the script defines the hook and it ran without throwing.
+    bool callHook(const char* name, const ScriptEvent& event, bool with_event = true);
 
     // Calls a single-string-argument hook such as `mediaPropertiesChanged`.
     void callWithString(const std::string& function, const std::string& argument);
@@ -63,6 +76,7 @@ class SceneScript {
     // Diagnostics: the most recent script exception ("hook: message"), how many have been seen, and whether the
     // script defines a global hook of that name.
     const std::string& lastError() const;
+    const std::string& lastStack() const;
     int errorCount() const;
     bool hasFunction(const char* name) const;
 

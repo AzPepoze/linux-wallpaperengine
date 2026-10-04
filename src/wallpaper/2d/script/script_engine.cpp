@@ -34,6 +34,13 @@ function hide(name, value) {
 }
 function vec2(x, y) { return typeof g.Vec2 === 'function' ? new g.Vec2(x, y) : { x: x, y: y }; }
 
+// `class Vec3 {}` in baseclasses.js is a global lexical binding, not a property of globalThis, so the host (and the
+// helpers below) could not find it. Expose the classes as properties; scripts still resolve the same objects.
+['Vec2', 'Vec3', 'Vec4', 'Mat3', 'Mat4', 'MediaPlaybackEvent'].forEach(function (name) {
+    if (Object.prototype.hasOwnProperty.call(g, name)) return;
+    try { hide(name, (0, eval)(name)); } catch (e) { /* baseclasses.js not loaded */ }
+});
+
 hide('__lweCurrent', { id: 0, layerId: 0, object: undefined });
 Object.defineProperty(g, 'thisLayer', { get: function () { return layerHandle(g.__lweCurrent.layerId); }, configurable: true });
 Object.defineProperty(g, 'thisObject', { get: function () { return g.__lweCurrent.object; }, configurable: true });
@@ -223,8 +230,13 @@ hide('thisScene', {
     createLayer: function () { return null; }, destroyLayer: function () { return false; },
     sortLayer: function () { return false; }
 });
-hide('input', {
-    cursorWorldPosition: vec2(0, 0), cursorScreenPosition: vec2(0, 0), cursorLeftDown: false
+function vec3(x, y, z) { return typeof g.Vec3 === 'function' ? new g.Vec3(x, y, z) : { x: x, y: y, z: z }; }
+var inputState = { cursorWorldPosition: vec3(0, 0, 0), cursorScreenPosition: vec2(0, 0), cursorLeftDown: false };
+hide('input', inputState);
+hide('__lweSetInput', function (worldX, worldY, screenX, screenY, leftDown) {
+    inputState.cursorWorldPosition = vec3(worldX, worldY, 0);
+    inputState.cursorScreenPosition = vec2(screenX, screenY);
+    inputState.cursorLeftDown = leftDown;
 });
 
 hide('__lweExports', {});
@@ -438,6 +450,13 @@ void scriptLogException(JSContext* ctx, const char* what) {
     LOG_TAG_W(TAG, "script %d %s error: %s", engine.currentScriptId(), what, message ? message : "(unknown)");
     if (ScriptErrors* errors = engine.currentErrors()) {
         errors->last = std::string(what) + ": " + (message ? message : "(unknown)");
+        errors->stack.clear();
+        JSValue stack = JS_GetPropertyStr(ctx, exception, "stack");
+        if (const char* frames = JS_IsString(stack) ? JS_ToCString(ctx, stack) : nullptr) {
+            errors->stack = frames;
+            JS_FreeCString(ctx, frames);
+        }
+        JS_FreeValue(ctx, stack);
         ++errors->count;
     }
     if (message) JS_FreeCString(ctx, message);
@@ -513,6 +532,69 @@ void ScriptEngine::destroy() {
     runtime_ = nullptr;
 }
 
+void ScriptEngine::registerScript(SceneScript* script) {
+    for (const ScriptEntry& entry : scripts_)
+        if (entry.script == script) return;
+    scripts_.push_back({script, false});
+}
+
+void ScriptEngine::unregisterScript(SceneScript* script) {
+    for (size_t i = 0; i < scripts_.size(); ++i) {
+        if (scripts_[i].script == script) {
+            scripts_.erase(scripts_.begin() + (long)i);
+            return;
+        }
+    }
+}
+
+int ScriptEngine::broadcast(const char* hook, const ScriptEvent& event, bool sticky) {
+    if (sticky) sticky_events_[hook] = event;
+    int delivered = 0;
+    const std::vector<ScriptEntry> entries = scripts_;  // a hook may load or free scripts
+    for (const ScriptEntry& entry : entries) {
+        if (!entry.script->callHook(hook, event)) continue;
+        ++delivered;
+    }
+    return delivered;
+}
+
+int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const ScriptEvent& event) {
+    int delivered = 0;
+    const std::vector<ScriptEntry> entries = scripts_;
+    for (const ScriptEntry& entry : entries)
+        if (entry.script->layerId() == layer_id && entry.script->callHook(hook, event)) ++delivered;
+    return delivered;
+}
+
+std::vector<uint32_t> ScriptEngine::layersWithHooks(const std::vector<const char*>& hooks) {
+    std::vector<uint32_t> ids;
+    for (const ScriptEntry& entry : scripts_) {
+        if (entry.script->layerId() == 0) continue;
+        for (const char* hook : hooks) {
+            if (!entry.script->hasFunction(hook)) continue;
+            ids.push_back(entry.script->layerId());
+            break;
+        }
+    }
+    return ids;
+}
+
+void ScriptEngine::setInput(float world_x, float world_y, float screen_x, float screen_y, bool left_down) {
+    if (!context_) return;
+    CallScope scope(*this, nullptr, 0, 10.0);
+    JSValue global = JS_GetGlobalObject(context_);
+    JSValue set_input = JS_GetPropertyStr(context_, global, "__lweSetInput");
+    JSValue args[5] = {JS_NewFloat64(context_, world_x), JS_NewFloat64(context_, world_y),
+                       JS_NewFloat64(context_, screen_x), JS_NewFloat64(context_, screen_y),
+                       JS_NewBool(context_, left_down)};
+    JSValue result = JS_Call(context_, set_input, JS_UNDEFINED, 5, args);
+    if (JS_IsException(result)) scriptLogException(context_, "input");
+    JS_FreeValue(context_, result);
+    for (JSValue& arg : args) JS_FreeValue(context_, arg);
+    JS_FreeValue(context_, set_input);
+    JS_FreeValue(context_, global);
+}
+
 bool ScriptEngine::deadlineExceeded() const {
     return deadline_ns_ != 0 && nowNs() > deadline_ns_;
 }
@@ -545,6 +627,15 @@ void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w,
     for (JSValue& arg : args) JS_FreeValue(context_, arg);
     JS_FreeValue(context_, tick);
     JS_FreeValue(context_, global);
+
+    // Scripts that loaded after a sticky event (media state...) get the current value once, like on a live scene.
+    for (size_t i = 0; i < scripts_.size(); ++i) {
+        if (scripts_[i].sticky_delivered) continue;
+        scripts_[i].sticky_delivered = true;
+        SceneScript* script = scripts_[i].script;
+        const std::map<std::string, ScriptEvent> events = sticky_events_;
+        for (const auto& [hook, event] : events) script->callHook(hook.c_str(), event);
+    }
 
     storage_flush_timer_ += dt;
     if (storage_flush_timer_ >= 2.0) {

@@ -2,7 +2,11 @@
 #define SCRIPT_ENGINE_H
 
 #include <cstdint>
+#include <map>
 #include <string>
+#include <vector>
+
+#include "scene_script.h"
 
 struct JSContext;
 struct JSRuntime;
@@ -10,6 +14,7 @@ struct JSRuntime;
 // Errors seen by one script, recorded from the shared QuickJS context.
 struct ScriptErrors {
     std::string last;
+    std::string stack;  // first stack frames of the last exception (script id, line), for diagnostics
     int count = 0;
 };
 
@@ -40,6 +45,19 @@ class ScriptEngine {
     const std::string& assetsDir() const {
         return assets_dir_;
     }
+    // Loaded scripts, for delivering events. SceneScript registers itself after a successful load().
+    void registerScript(SceneScript* script);
+    void unregisterScript(SceneScript* script);
+    // Calls `hook` on every script that exports it; returns how many ran. A sticky event is remembered per hook and
+    // also delivered once to scripts that load (or finish their first frame) later, like media state.
+    int broadcast(const char* hook, const ScriptEvent& event, bool sticky = false);
+    // Same, for the scripts owned by one scene object (cursor events).
+    int dispatchToLayer(uint32_t layer_id, const char* hook, const ScriptEvent& event);
+    // Scene objects that own a script exporting at least one of `hooks`.
+    std::vector<uint32_t> layersWithHooks(const std::vector<const char*>& hooks);
+    // The `input` global: cursor in scene-world coordinates (y up) and window pixels, and the left button.
+    void setInput(float world_x, float world_y, float screen_x, float screen_y, bool left_down);
+
     // The scene scripts may query and modify (thisLayer / thisScene); not owned, clear it before the scene goes away.
     void setSceneBackend(class ScriptSceneBackend* backend) {
         scene_backend_ = backend;
@@ -91,6 +109,13 @@ class ScriptEngine {
     std::string wallpaper_id_ = "default";
     std::string assets_dir_;
     class ScriptSceneBackend* scene_backend_ = nullptr;
+
+    struct ScriptEntry {
+        SceneScript* script = nullptr;
+        bool sticky_delivered = false;
+    };
+    std::vector<ScriptEntry> scripts_;
+    std::map<std::string, ScriptEvent> sticky_events_;
     double storage_flush_timer_ = 0.0;
 };
 

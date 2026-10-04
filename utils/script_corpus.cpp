@@ -176,6 +176,7 @@ struct ScriptResult {
     bool loaded = false;
     bool exercised = false;
     std::string error;
+    std::string at;  // the source line the error points at
     double max_update_us = 0.0;
 };
 
@@ -266,6 +267,26 @@ std::string normalise(const std::string& message) {
     return message.size() > 160 ? message.substr(0, 160) : message;
 }
 
+// The source line a stack trace ("... (script://<id>:<line>)") points at, trimmed for the report.
+std::string failingLine(const std::string& source, const std::string& stack) {
+    const size_t marker = stack.find("script://");
+    if (marker == std::string::npos) return "";
+    const size_t colon = stack.find(':', marker + 9);
+    if (colon == std::string::npos) return "";
+    int line = atoi(stack.c_str() + colon + 1);
+    size_t start = 0;
+    for (int current = 1; current < line && start != std::string::npos; ++current) {
+        start = source.find('\n', start);
+        if (start != std::string::npos) ++start;
+    }
+    if (start == std::string::npos || line < 1) return "";
+    const size_t end = source.find('\n', start);
+    std::string text = source.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    const size_t first = text.find_first_not_of(" \t");
+    text = first == std::string::npos ? "" : text.substr(first);
+    return "line " + std::to_string(line) + ": " + text.substr(0, 140);
+}
+
 ScriptResult run(const ScriptBlock& block, FakeScene& scene, int frames) {
     ScriptResult result;
     result.path = block.path;
@@ -297,7 +318,38 @@ ScriptResult run(const ScriptBlock& block, FakeScene& scene, int frames) {
             result.max_update_us = std::max(result.max_update_us, us);
         }
     }
-    if (script.errorCount() > 0) result.error = script.lastError();
+    // Every event hook once, with the shape the engine sends.
+    if (script.errorCount() == 0) {
+        const ScriptEvent cursor = {{"worldPosition", ScriptValue::makeVec3(960, 540, 0)},
+                                    {"localPosition", ScriptValue::makeVec3(10, 10, 0)}};
+        for (const char* hook : {"cursorEnter", "cursorMove", "cursorDown", "cursorUp", "cursorClick", "cursorLeave"})
+            script.callHook(hook, cursor);
+        script.callHook("mediaStatusChanged", {{"enabled", ScriptValue::makeBool(true)}});
+        script.callHook("mediaPlaybackChanged", {{"state", ScriptValue::makeNumber(1)}});
+        script.callHook("mediaPropertiesChanged", {{"title", ScriptValue::makeString("Title")},
+                                                   {"artist", ScriptValue::makeString("Artist")},
+                                                   {"albumTitle", ScriptValue::makeString("Album")},
+                                                   {"albumArtist", ScriptValue::makeString("Album Artist")},
+                                                   {"subTitle", ScriptValue::makeString("")},
+                                                   {"genres", ScriptValue::makeString("Genre")},
+                                                   {"contentType", ScriptValue::makeString("music")}});
+        script.callHook("mediaThumbnailChanged", {{"hasThumbnail", ScriptValue::makeBool(true)},
+                                                  {"primaryColor", ScriptValue::makeVec3(0.8, 0.2, 0.2)},
+                                                  {"secondaryColor", ScriptValue::makeVec3(0.2, 0.8, 0.2)},
+                                                  {"tertiaryColor", ScriptValue::makeVec3(0.2, 0.2, 0.8)},
+                                                  {"textColor", ScriptValue::makeVec3(1, 1, 1)},
+                                                  {"highContrastColor", ScriptValue::makeVec3(0, 0, 0)}});
+        script.callHook("mediaTimelineChanged",
+                        {{"position", ScriptValue::makeNumber(10)}, {"duration", ScriptValue::makeNumber(200)}});
+        script.callHook("applyUserProperties", {});
+        script.callHook("applyGeneralSettings", {{"language", ScriptValue::makeString("en")}});
+        script.callHook("resizeScreen", {{"x", ScriptValue::makeNumber(1920)}, {"y", ScriptValue::makeNumber(1080)}});
+        script.callHook("destroy", {}, false);
+    }
+    if (script.errorCount() > 0) {
+        result.error = script.lastError();
+        result.at = failingLine(block.source, script.lastStack());
+    }
     return result;
 }
 
@@ -399,6 +451,7 @@ int main(int argc, char** argv) {
             cJSON* failure = cJSON_CreateObject();
             cJSON_AddStringToObject(failure, "path", result.path.c_str());
             cJSON_AddStringToObject(failure, "error", key.c_str());
+            if (!result.at.empty()) cJSON_AddStringToObject(failure, "at", result.at.c_str());
             cJSON_AddItemToArray(failures, failure);
         }
         cJSON_AddNumberToObject(entry, "scripts", (double)blocks.size());

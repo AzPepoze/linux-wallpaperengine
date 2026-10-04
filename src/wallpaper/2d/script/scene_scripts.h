@@ -9,6 +9,7 @@
 
 #include "script_scene_backend.h"
 #include "shared/core/engine_context.h"
+#include "wallpaper/2d/input/pointer_input.h"
 #include "wallpaper/2d/script/scene_script.h"
 
 // ScriptSceneBackend over the running 2D scene: layers are looked up by scene object id, transforms live on the
@@ -63,10 +64,16 @@ class ScriptBindings {
 
     bool read(const Binding& binding, ScriptValue& value) const;
     void write(const Binding& binding, const ScriptValue& value) const;
+    // Publishes the cursor to `input` and turns it into cursorEnter / Leave / Move / Down / Up / Click events for the
+    // scripts of the solid layer under it.
+    void dispatchPointer();
 
     EngineContext& ctx_;
     SceneScriptBackend backend_;
     std::vector<Binding> bindings_;
+    PointerTracker pointer_;
+    std::vector<uint32_t> cursor_layers_;  // scene objects with a script that handles any cursor event
+    bool cursor_layers_ready_ = false;
 };
 
 #endif  // SCENE_SCRIPTS_H

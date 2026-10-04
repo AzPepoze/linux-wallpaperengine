@@ -63,6 +63,14 @@ JSValue toJsValue(JSContext* ctx, const ScriptValue& value) {
             return makeVector(ctx, "Vec3", value.vec, 3);
         case ScriptValue::Kind::String:
             return JS_NewStringLen(ctx, value.text.c_str(), value.text.size());
+        case ScriptValue::Kind::Json: {
+            JSValue parsed = JS_ParseJSON(ctx, value.text.c_str(), value.text.size(), "<event>");
+            if (JS_IsException(parsed)) {
+                JS_FreeValue(ctx, JS_GetException(ctx));
+                return JS_UNDEFINED;
+            }
+            return parsed;
+        }
     }
     return JS_UNDEFINED;
 }
@@ -96,6 +104,8 @@ bool fromJsValue(JSContext* ctx, JSValueConst result, ScriptValue& value) {
             value.number = number != 0.0 ? 1.0 : 0.0;
             return true;
         }
+        case ScriptValue::Kind::Json:
+            return false;
         case ScriptValue::Kind::String: {
             if (JS_IsUndefined(result) || JS_IsNull(result)) return false;
             const char* text = JS_ToCString(ctx, result);
@@ -195,6 +205,7 @@ SceneScript::SceneScript() : impl_(std::make_unique<Impl>()) {}
 SceneScript::~SceneScript() {
     if (!impl_ || !impl_->retained) return;
     ScriptEngine& engine = ScriptEngine::instance();
+    engine.unregisterScript(this);
     if (JSContext* c = engine.context()) {
         JS_FreeValue(c, impl_->exports);
         JS_FreeValue(c, impl_->init_fn);
@@ -216,6 +227,11 @@ SceneScript::~SceneScript() {
 const std::string& SceneScript::lastError() const {
     static const std::string none;
     return impl_ ? impl_->errors.last : none;
+}
+
+const std::string& SceneScript::lastStack() const {
+    static const std::string none;
+    return impl_ ? impl_->errors.stack : none;
 }
 
 int SceneScript::errorCount() const {
@@ -296,6 +312,7 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
         }
         impl_->init_fn = impl_->hook("init");
         impl_->update_fn = impl_->hook("update");
+        engine.registerScript(this);
         impl_->context_object = JS_NewObject(ctx);
         JS_SetPropertyStr(ctx, impl_->context_object, "id", JS_NewInt32(ctx, impl_->id));
         JS_SetPropertyStr(ctx, impl_->context_object, "layerId", JS_NewUint32(ctx, impl_->layer_id));
@@ -352,6 +369,45 @@ ScriptValue ScriptValue::makeVec3(double x, double y, double z) {
     result.vec[1] = y;
     result.vec[2] = z;
     return result;
+}
+
+ScriptValue ScriptValue::makeVec2(double x, double y) {
+    ScriptValue result;
+    result.kind = Kind::Vec2;
+    result.vec[0] = x;
+    result.vec[1] = y;
+    return result;
+}
+
+ScriptValue ScriptValue::makeJson(std::string json) {
+    ScriptValue result;
+    result.kind = Kind::Json;
+    result.text = std::move(json);
+    return result;
+}
+
+uint32_t SceneScript::layerId() const {
+    return impl_ ? impl_->layer_id : 0;
+}
+
+bool SceneScript::callHook(const char* name, const ScriptEvent& event, bool with_event) {
+    if (!impl_ || !impl_->retained) return false;
+    JSContext* ctx = impl_->ctx();
+    JSValue fn = impl_->hook(name);
+    bool ok = false;
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue argument = JS_UNDEFINED;
+        if (with_event || !event.empty()) {
+            argument = JS_NewObject(ctx);
+            for (const auto& [key, value] : event) JS_SetPropertyStr(ctx, argument, key.c_str(), toJsValue(ctx, value));
+        }
+        JSValue result;
+        ok = impl_->call(fn, name, JS_IsUndefined(argument) ? 0 : 1, &argument, result, kCallBudgetMs);
+        JS_FreeValue(ctx, result);
+        JS_FreeValue(ctx, argument);
+    }
+    JS_FreeValue(ctx, fn);
+    return ok;
 }
 
 ScriptValue ScriptValue::makeString(std::string value) {

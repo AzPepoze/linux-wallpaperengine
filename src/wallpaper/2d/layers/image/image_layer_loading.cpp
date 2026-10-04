@@ -28,6 +28,7 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
     layer->tint[2] = config.color[2];
     layer->tint[3] = config.alpha;
     layer->copy_background = doc.image.copy_background;
+    layer->cursor_solid = doc.image.solid;
     layer->color_blend_mode = doc.image.color_blend_mode;
     layer->alpha_document = doc.image;
     if (!doc.image.alpha_script.empty()) {

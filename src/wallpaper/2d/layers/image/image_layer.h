@@ -28,6 +28,7 @@ class ImageLayer : public Layer {
     bool is_fullscreen = false;
     bool is_compose_region = false;
     bool copy_background = false;
+    bool cursor_solid = false;  // scene `solid`: receives cursor events (not the plain-colour solid layer)
     int color_blend_mode = 0;
 
     ImageLayer(const char* name, GfxImage img);
