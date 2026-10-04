@@ -21,6 +21,7 @@ struct SceneTreeNode {
     std::array<float, 3> angles = {0.0f, 0.0f, 0.0f};
     std::array<float, 2> parallax_depth = {0.0f, 0.0f};
     bool propagate_to_children = true;
+    bool visible = true;  // groups only; layers keep their own flag
     std::vector<uint32_t> children;
 };
 
@@ -32,6 +33,8 @@ class SceneTree {
     // Children of a removed node become roots.
     void removeNode(uint32_t id);
     uint32_t maxId() const;
+    // False when a group above the node is hidden.
+    bool ancestorsVisible(uint32_t id) const;
 
     const SceneTreeNode* find(uint32_t id) const;
     SceneTreeNode* find(uint32_t id);

@@ -152,7 +152,13 @@ bool SceneScriptBackend::setVector(uint32_t id, const std::string& property, con
 
 bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool& out) {
     const Layer* layer = layerById(id);
-    if (!layer) return false;
+    if (!layer) {
+        // Groups have no layer; their visibility lives on the tree node.
+        const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
+        if (!node || property != "visible") return false;
+        out = node->visible;
+        return true;
+    }
     if (property == "visible") {
         out = layer->visible;
         return true;
@@ -167,7 +173,12 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
 bool SceneScriptBackend::setBool(uint32_t id, const std::string& property, bool value) {
     if (property != "visible") return false;
     Layer* layer = layerById(id);
-    if (!layer) return false;
+    if (!layer) {
+        SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
+        if (!node) return false;
+        node->visible = value;
+        return true;
+    }
     layer->setVisible(value);
     return true;
 }
@@ -689,7 +700,11 @@ bool ScriptBindings::read(const Binding& binding, ScriptValue& value) {
             return true;
         }
         case BoundProperty::Visible:
-            if (!binding.layer) return false;
+            if (!binding.layer) {
+                if (!node) return false;
+                value = ScriptValue::makeBool(node->visible);
+                return true;
+            }
             value = ScriptValue::makeBool(binding.layer->visible);
             return true;
         case BoundProperty::Color:
@@ -741,7 +756,10 @@ void ScriptBindings::write(const Binding& binding, const ScriptValue& value) {
             return;
         }
         case BoundProperty::Visible:
-            if (binding.layer) binding.layer->setVisible(value.number != 0.0);
+            if (binding.layer)
+                binding.layer->setVisible(value.number != 0.0);
+            else if (node)
+                node->visible = value.number != 0.0;
             return;
         case BoundProperty::Color:
             if (binding.layer)

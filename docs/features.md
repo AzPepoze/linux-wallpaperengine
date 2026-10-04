@@ -331,10 +331,10 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - `origin`, `scale`, `angles`, `visible`, `color` and image `size` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
     - Text content (`update(string)`, about four times per second)
+    - `visible` of a group (an object without a layer) hides everything beneath it
     - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect
   - Missing
     - Particle fields and camera properties
-    - `visible` on objects that have no layer (groups) is not applied
     - Scripts on text color, point size and other text properties
     - Four-component effect constants
 - [-] Globals

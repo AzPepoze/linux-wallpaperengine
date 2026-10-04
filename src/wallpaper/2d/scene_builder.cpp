@@ -50,6 +50,7 @@ SceneTreeNode SceneBuilder::treeNode(const wallpaper_engine::SceneObjectDocument
     for (float& angle : node.angles) angle *= (float)(180.0 / M_PI);
     node.parallax_depth = object.node.parallax_depth;
     node.propagate_to_children = object.node.propagate_to_children;
+    if (object.kind == wallpaper_engine::SceneObjectKind::Unknown) node.visible = object.visible;
     return node;
 }
 

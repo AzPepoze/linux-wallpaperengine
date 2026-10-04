@@ -39,6 +39,16 @@ void SceneTree::removeNode(uint32_t id) {
     rebuildHierarchy();
 }
 
+bool SceneTree::ancestorsVisible(uint32_t id) const {
+    const SceneTreeNode* node = find(id);
+    // The step bound keeps a malformed parent cycle from looping.
+    for (size_t steps = 0; node && node->parent_id != 0 && steps < nodes_.size(); ++steps) {
+        node = find(node->parent_id);
+        if (node && !node->visible) return false;
+    }
+    return true;
+}
+
 uint32_t SceneTree::maxId() const {
     uint32_t highest = 0;
     for (const auto& [id, node] : nodes_) {
