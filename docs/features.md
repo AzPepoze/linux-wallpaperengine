@@ -308,10 +308,13 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Hooks other than `init` and `update` (see Events)
 - [-] Properties that can host a script
   - Works
+    - `origin`, `scale`, `angles`, `visible` and `color` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
     - Text content (`update(string)`, about four times per second)
   - Missing
-    - `origin`, `scale`, `angles`, `visible`, `color`, `size`, effect constants, sound volume, particle fields, camera and scene settings
+    - `size` (parsed, not bound), effect constants, sound volume, particle fields, camera and scene settings
+    - `visible` on objects that have no layer (groups) is not applied
+    - Scripts on text color, alpha, point size and other text properties
 - [-] Globals
   - [-] `engine`
     - Works: `frametime`, `runtime`, `timeOfDay`, `canvasSize`, `screenResolution`, `AUDIO_RESOLUTION_16/32/64`, `registerAudioBuffers`, `setTimeout`, `setInterval` (returning cancel functions), device/orientation queries
@@ -319,10 +322,14 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - [x] `console` (`log`, `info`, `debug`, `warn`, `error`; rate-limited)
   - [x] `shared`, `localStorage` (global and per-screen areas, 100 KB each, persisted per wallpaper under `~/.local/share/linux-wallpaperengine/localstorage/`)
   - [x] `Vec2`, `Vec3`, `Vec4`, `Mat3`, `Mat4`, `WEMath`, `WEColor`, `WEVector`, `MediaPlaybackEvent` (from the install)
-  - [ ] `thisLayer` and `thisObject` (undefined; layer and animation handles do not exist)
+  - [-] `thisLayer`
+    - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `getParent()`, `getChildren()`
+    - Missing: `alpha`, `getTransformMatrix`, `getAnimation`, `getAnimationLayer`, `getTextureAnimation`, `getVideoTexture`, `setParent`, attachments, `rotateObjectSpace`, and the image/text/effect/sound layer members (`text`, `horizontalalign`, `getEffect`, `solid`, `volume`...)
+    - Not available for scripts on camera, effect or scene-level properties (no owning layer)
+  - [ ] `thisObject` (undefined; `getAnimation()` is the main missing member)
   - [-] `thisScene`
-    - Works: the object exists
-    - Missing: every method is a stub that returns null/false/empty (`getLayer`, `createLayer`, `destroyLayer`, `sortLayer`, camera and scene properties...)
+    - Works: `getLayer(name | index)`, `getLayerCount()`, `enumerateLayers()`, `getLayerIndex()`
+    - Missing: `createLayer`, `destroyLayer`, `sortLayer` (stubs that do nothing), `getInitialLayerConfig`, camera transforms, scene settings (`bloom*`, `clearcolor`, `camerashake*`...), model data
   - [-] `input`
     - Works: the object exists
     - Missing: always zero/false; pointer events and hit testing exist as a tested module (`src/wallpaper/2d/input/`) but are not connected
