@@ -16,7 +16,7 @@ ma_data_source_vtable AudioEngine::Impl::streamVtable = {AudioEngine::Impl::stre
                                                          nullptr,
                                                          0};
 
-AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32_t channels) {
+AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32_t channels, GroupId group) {
     if (impl->disabled) return kInvalidStream;
     if (channels == 0) channels = 2;
     if (sample_rate == 0) sample_rate = 48000;
@@ -24,6 +24,7 @@ AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32
     auto stream = std::make_unique<Impl::Stream>();
     stream->channels = channels;
     stream->sample_rate = sample_rate;
+    stream->group = group;
     if (ma_pcm_rb_init(ma_format_f32, channels, sample_rate / 2, nullptr, nullptr, &stream->rb) != MA_SUCCESS) {
         return kInvalidStream;
     }
@@ -39,7 +40,7 @@ AudioEngine::StreamHandle AudioEngine::createStream(uint32_t sample_rate, uint32
     if (impl->engine_ok &&
         ma_sound_init_from_data_source(&impl->engine, &stream->base, 0, nullptr, &stream->sound) == MA_SUCCESS) {
         stream->sound_ready = true;
-        ma_sound_set_volume(&stream->sound, 1.0f);
+        ma_sound_set_volume(&stream->sound, stream->volume * groupVolume(group));
         ma_sound_start(&stream->sound);
     }
 
@@ -104,7 +105,8 @@ void AudioEngine::setStreamMuted(StreamHandle handle, bool muted) {
     auto& stream = impl->streams[handle - 1];
     if (!stream) return;
     stream->muted = muted;
-    if (stream->sound_ready) ma_sound_set_volume(&stream->sound, muted ? 0.0f : stream->volume);
+    if (stream->sound_ready)
+        ma_sound_set_volume(&stream->sound, muted ? 0.0f : stream->volume * groupVolume(stream->group));
 }
 
 void AudioEngine::setStreamPaused(StreamHandle handle, bool paused) {
@@ -122,5 +124,6 @@ void AudioEngine::setStreamVolume(StreamHandle handle, float volume) {
     auto& stream = impl->streams[handle - 1];
     if (!stream) return;
     stream->volume = std::max(0.0f, volume);
-    if (stream->sound_ready) ma_sound_set_volume(&stream->sound, stream->muted ? 0.0f : stream->volume);
+    if (stream->sound_ready)
+        ma_sound_set_volume(&stream->sound, stream->muted ? 0.0f : stream->volume * groupVolume(stream->group));
 }

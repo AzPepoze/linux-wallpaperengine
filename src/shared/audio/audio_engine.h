@@ -17,6 +17,21 @@ class AudioEngine {
     using StreamHandle = uint32_t;
     static constexpr StreamHandle kInvalidStream = 0;
 
+    using GroupId = uint32_t;
+    static constexpr GroupId kDefaultGroup = 0;
+
+    // Groups multiply every voice/stream in them by a shared gain. kDefaultGroup
+    // always exists at gain 1.0 and is never destroyed.
+    GroupId createGroup();
+    void destroyGroup(GroupId group);
+    void setGroupVolume(GroupId group, float volume);
+    float groupVolume(GroupId group) const;
+    // While fading, stop() detaches the voice (keeps it playing, owned by the
+    // group) instead of destroying it, so it can fade out via the group gain.
+    void beginGroupFade(GroupId group);
+    bool groupFading(GroupId group) const;
+    void cancelGroupFade(GroupId group);
+
     void init();
     void shutdown();
     bool isAvailable() const;
@@ -24,7 +39,8 @@ class AudioEngine {
     void setAudioDisabled(bool disabled);
     bool isAudioDisabled() const;
 
-    SoundHandle play(const std::string& path, bool loop, float volume, bool start_paused = false);
+    SoundHandle play(const std::string& path, bool loop, float volume, bool start_paused = false,
+                     GroupId group = kDefaultGroup);
     void stop(SoundHandle handle);
     bool isPlaying(SoundHandle handle) const;
     void setVolume(SoundHandle handle, float volume);
@@ -32,7 +48,7 @@ class AudioEngine {
     float masterVolume() const;
 
     // Streaming PCM pushed from a decoder. Samples are interleaved float32 at the stream's rate.
-    StreamHandle createStream(uint32_t sample_rate, uint32_t channels);
+    StreamHandle createStream(uint32_t sample_rate, uint32_t channels, GroupId group = kDefaultGroup);
     void destroyStream(StreamHandle handle);
     void pushStream(StreamHandle handle, const float* samples, uint32_t frame_count);
     void clearStream(StreamHandle handle);

@@ -33,11 +33,20 @@ struct AudioEngine::Impl {
     bool disabled = false;
     float master_volume = 1.0f;
 
+    struct GroupState {
+        float volume = 1.0f;
+        bool fading = false;
+    };
+    std::vector<GroupState> groups = {GroupState{}};  // index 0 == kDefaultGroup
+    std::vector<GroupId> group_free;
+
     struct SoundSlot {
         ma_sound sound = {};
         ma_decoder decoder = {};
         bool has_decoder = false;
         bool active = false;
+        GroupId group = kDefaultGroup;
+        float base_volume = 1.0f;
 
         void shutdown() {
             if (!active) return;
@@ -60,6 +69,7 @@ struct AudioEngine::Impl {
         bool muted = false;
         bool sound_ready = false;
         bool rb_ready = false;
+        GroupId group = kDefaultGroup;
     };
     std::vector<std::unique_ptr<Stream>> streams;
     std::vector<StreamHandle> stream_free;

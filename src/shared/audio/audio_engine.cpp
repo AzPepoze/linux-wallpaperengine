@@ -128,6 +128,9 @@ void AudioEngine::shutdown() {
     impl->sound_slots.clear();
     impl->sound_free.clear();
 
+    impl->groups = {Impl::GroupState{}};
+    impl->group_free.clear();
+
     if (impl->capture_ok) {
         ma_device_uninit(&impl->capture_device);
         impl->capture_ok = false;
@@ -154,7 +157,76 @@ bool AudioEngine::isAudioDisabled() const {
     return impl->disabled;
 }
 
-AudioEngine::SoundHandle AudioEngine::play(const std::string& path, bool loop, float volume, bool start_paused) {
+AudioEngine::GroupId AudioEngine::createGroup() {
+    GroupId id;
+    if (!impl->group_free.empty()) {
+        id = impl->group_free.back();
+        impl->group_free.pop_back();
+        impl->groups[id] = Impl::GroupState{};
+    } else {
+        impl->groups.push_back(Impl::GroupState{});
+        id = (GroupId)(impl->groups.size() - 1);
+    }
+    return id;
+}
+
+void AudioEngine::destroyGroup(GroupId group) {
+    if (group == kDefaultGroup || group >= impl->groups.size()) return;
+    for (size_t i = 0; i < impl->sound_slots.size(); ++i) {
+        auto& slot = impl->sound_slots[i];
+        if (slot && slot->active && slot->group == group) {
+            ma_sound_stop(&slot->sound);
+            slot->shutdown();
+            impl->sound_free.push_back((SoundHandle)(i + 1));
+        }
+    }
+    for (size_t i = 0; i < impl->streams.size(); ++i) {
+        auto& stream = impl->streams[i];
+        if (!stream || stream->group != group) continue;
+        if (stream->sound_ready) ma_sound_uninit(&stream->sound);
+        if (stream->rb_ready) ma_pcm_rb_uninit(&stream->rb);
+        if (stream->base.vtable) ma_data_source_uninit(&stream->base);
+        stream.reset();
+        impl->stream_free.push_back((StreamHandle)(i + 1));
+    }
+    impl->groups[group] = Impl::GroupState{};
+    impl->group_free.push_back(group);
+}
+
+void AudioEngine::setGroupVolume(GroupId group, float volume) {
+    if (group >= impl->groups.size()) return;
+    impl->groups[group].volume = std::max(0.0f, volume);
+    const float gain = impl->groups[group].volume;
+    for (size_t i = 0; i < impl->sound_slots.size(); ++i) {
+        auto& slot = impl->sound_slots[i];
+        if (slot && slot->active && slot->group == group)
+            ma_sound_set_volume(&slot->sound, slot->base_volume * gain);
+    }
+    for (auto& stream : impl->streams) {
+        if (stream && stream->group == group && stream->sound_ready)
+            ma_sound_set_volume(&stream->sound, stream->muted ? 0.0f : stream->volume * gain);
+    }
+}
+
+float AudioEngine::groupVolume(GroupId group) const {
+    if (group >= impl->groups.size()) return 1.0f;
+    return impl->groups[group].volume;
+}
+
+void AudioEngine::beginGroupFade(GroupId group) {
+    if (group < impl->groups.size()) impl->groups[group].fading = true;
+}
+
+bool AudioEngine::groupFading(GroupId group) const {
+    return group < impl->groups.size() && impl->groups[group].fading;
+}
+
+void AudioEngine::cancelGroupFade(GroupId group) {
+    if (group < impl->groups.size()) impl->groups[group].fading = false;
+}
+
+AudioEngine::SoundHandle AudioEngine::play(const std::string& path, bool loop, float volume, bool start_paused,
+                                           GroupId group) {
     if (!impl->engine_ok || path.empty()) return kInvalidSound;
 
     std::unique_ptr<Impl::SoundSlot> slot;
@@ -190,8 +262,10 @@ AudioEngine::SoundHandle AudioEngine::play(const std::string& path, bool loop, f
         return kInvalidSound;
     }
     slot->active = true;
+    slot->group = group;
+    slot->base_volume = std::max(0.0f, volume);
     ma_sound_set_looping(&slot->sound, loop ? MA_TRUE : MA_FALSE);
-    ma_sound_set_volume(&slot->sound, std::max(0.0f, volume));
+    ma_sound_set_volume(&slot->sound, slot->base_volume * groupVolume(group));
     if (!start_paused) ma_sound_start(&slot->sound);
     impl->sound_slots[handle - 1] = std::move(slot);
     LOG_TAG_I("AUDIO", "Sound started (loop=%d, volume=%.2f): %s", loop ? 1 : 0, volume, path.c_str());
@@ -202,6 +276,7 @@ void AudioEngine::stop(SoundHandle handle) {
     if (handle == kInvalidSound || handle > impl->sound_slots.size()) return;
     auto& slot = impl->sound_slots[handle - 1];
     if (!slot || !slot->active) return;
+    if (groupFading(slot->group)) return;  // detached; destroyGroup() cleans up
     ma_sound_stop(&slot->sound);
     slot->shutdown();
     impl->sound_free.push_back(handle);
@@ -217,7 +292,10 @@ bool AudioEngine::isPlaying(SoundHandle handle) const {
 void AudioEngine::setVolume(SoundHandle handle, float volume) {
     if (handle == kInvalidSound || handle > impl->sound_slots.size()) return;
     auto& slot = impl->sound_slots[handle - 1];
-    if (slot && slot->active) ma_sound_set_volume(&slot->sound, std::max(0.0f, volume));
+    if (slot && slot->active) {
+        slot->base_volume = std::max(0.0f, volume);
+        ma_sound_set_volume(&slot->sound, slot->base_volume * groupVolume(slot->group));
+    }
 }
 
 void AudioEngine::setMasterVolume(float volume) {
