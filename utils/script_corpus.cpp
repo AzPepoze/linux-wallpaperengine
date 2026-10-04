@@ -4,6 +4,8 @@
 //
 //   xmake build script_corpus
 //   bin/debug/script_corpus <workshop-content-dir> [--out report.json] [--work dir] [--ids a,b] [--frames N]
+//
+// The report and the unpacked packages go to utils/out/ by default (git-ignored).
 #include <cjson/cJSON.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -154,7 +156,8 @@ ScriptResult run(const ScriptBlock& block, int frames) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string root, assets_dir, out_path = "script_corpus_report.json", work = "build/script_corpus_work";
+    std::string root, assets_dir, out_path = "utils/out/script_corpus_report.json",
+                                  work = "utils/out/script_corpus_work";
     std::set<std::string> only;
     int frames = 120;
     for (int i = 1; i < argc; ++i) {
@@ -273,6 +276,8 @@ int main(int argc, char** argv) {
     }
 
     char* printed = cJSON_Print(report);
+    const size_t slash = out_path.rfind('/');
+    if (slash != std::string::npos) makeDirs(out_path.substr(0, slash));
     if (FILE* file = fopen(out_path.c_str(), "w")) {
         fputs(printed, file);
         fclose(file);

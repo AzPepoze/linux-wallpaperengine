@@ -8,6 +8,9 @@ compile_commands.json
 # Diagnostics and Traces
 /diagnostics/
 
+# Output of the utils/ scripts and test tools (reports, screenshots, work files)
+/utils/out/
+
 # Temporary Assets (Generated)
 extracted/
 converted/

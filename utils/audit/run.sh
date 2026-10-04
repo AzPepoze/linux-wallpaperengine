@@ -1,7 +1,7 @@
 #!/bin/bash
 # Screenshot wallpapers with the release build by grabbing each app window with grim.
 # Windows must be visible to render, so run this on a workspace you are not using; it opens one window per wallpaper.
-# usage: tools/audit/run.sh <workshop-content-dir> <out-dir> [id ...]
+# usage: utils/audit/run.sh <workshop-content-dir> <out-dir> [id ...]   (utils/out/ is a git-ignored place for <out-dir>)
 # Needs: hyprctl, grim, ffmpeg, python3. Resumable: finished ids are skipped.
 # LWE_SETTLE=<secs> wait after init before the shot (default 0.5); LWE_MOTION=1 adds a second shot.
 set -u

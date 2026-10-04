@@ -229,7 +229,7 @@ add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
--- Loads every SceneScript block of a Workshop folder and reports script errors (no GPU). See tools/script_corpus.cpp.
+-- Loads every SceneScript block of a Workshop folder and reports script errors (no GPU). See utils/script_corpus.cpp.
 target("script_corpus")
     set_kind("binary")
     set_default(false)
@@ -237,7 +237,7 @@ target("script_corpus")
     set_warnings("all", "extra")
     add_includedirs("src")
     add_packages("cjson", "quickjs")
-    add_files("tools/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+    add_files("utils/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp",
               "src/wallpaper/2d/script/script_engine.cpp", "src/shared/assets/unpack.cpp",
               "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp")
     if is_mode("debug", "asan", "ubsan") then
