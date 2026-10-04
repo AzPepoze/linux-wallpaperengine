@@ -192,6 +192,8 @@ add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/
 
 add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
                                 "src/wallpaper/2d/script/script_engine.cpp",
+                                "src/wallpaper/2d/script/script_engine_prelude.cpp",
+                                "src/wallpaper/2d/script/script_engine_host.cpp",
                                 "src/wallpaper/2d/script/script_value_js.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})
 
@@ -266,7 +268,10 @@ add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/med
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
 add_test("media_events_tests", {"tests/media_events_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
-                                "src/wallpaper/2d/script/script_engine.cpp", "src/wallpaper/2d/script/media_events.cpp",
+                                "src/wallpaper/2d/script/script_engine.cpp",
+                                "src/wallpaper/2d/script/script_engine_prelude.cpp",
+                                "src/wallpaper/2d/script/script_engine_host.cpp",
+                                "src/wallpaper/2d/script/media_events.cpp",
                                 "src/wallpaper/2d/script/script_value_js.cpp",
                                 "src/shared/media/mpris_source.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})
@@ -280,7 +285,8 @@ target("script_corpus")
     add_includedirs("src")
     add_packages("cjson", "quickjs")
     add_files("utils/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp",
-              "src/wallpaper/2d/script/script_engine.cpp", "src/wallpaper/2d/script/script_value_js.cpp",
+              "src/wallpaper/2d/script/script_engine.cpp", "src/wallpaper/2d/script/script_engine_prelude.cpp",
+              "src/wallpaper/2d/script/script_engine_host.cpp", "src/wallpaper/2d/script/script_value_js.cpp",
               "src/shared/assets/unpack.cpp",
               "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp",
               "src/wallpaper/2d/parser/scene_parser.cpp", "src/wallpaper/user_properties.cpp",
