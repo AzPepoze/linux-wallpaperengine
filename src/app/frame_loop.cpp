@@ -1,5 +1,6 @@
 #include "app/frame_loop.h"
 
+#include "app/wallpaper_switch.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -104,6 +105,18 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     const uint64_t frame_start = stm_now();
 #endif
     ctx.renderer.draw_calls = 0;
+
+    // Runtime switch requests are applied before this frame's scene work so the
+    // new wallpaper is the one updated and rendered.
+    mgr.pollControl(ctx);
+    SwitchRequest request;
+    if (mgr.takePendingSwitch(request)) {
+        if (switchWallpaper(mgr, ctx, request.path, request.is_pkg, request.properties)) {
+            LOG_I("[CONTROL] switched wallpaper to %s", request.path.c_str());
+        } else {
+            LOG_E("[CONTROL] failed to switch to %s", request.path.c_str());
+        }
+    }
 
 #if DEBUG_BUILD
     RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);

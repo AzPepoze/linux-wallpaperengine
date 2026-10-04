@@ -1,5 +1,8 @@
 #include "wallpaper/wallpaper_manager.h"
 
+#include <utility>
+
+#include "app/control/control_server.h"
 #include "shared/core/logger.h"
 #include "wallpaper/wallpaper_loader.h"
 
@@ -55,4 +58,20 @@ void WallpaperManager::clear() {
         active_wallpaper_.reset();
         LOG_TAG_I("WALLPAPER_MGR", "Active wallpaper cleared.");
     }
+}
+
+void WallpaperManager::pollControl(EngineContext& ctx) {
+    (void)ctx;
+    if (!control_) return;
+    std::vector<SwitchRequest> requests;
+    control_->poll(requests);
+    // Keep only the newest request: an in-flight switch should not queue up.
+    for (SwitchRequest& request : requests) pending_switch_ = std::move(request);
+}
+
+bool WallpaperManager::takePendingSwitch(SwitchRequest& out) {
+    if (!pending_switch_) return false;
+    out = std::move(*pending_switch_);
+    pending_switch_.reset();
+    return true;
 }

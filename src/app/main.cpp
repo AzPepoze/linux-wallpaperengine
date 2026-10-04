@@ -6,6 +6,9 @@
 #include <sys/prctl.h>
 
 #include "app/cli_options.h"
+#include "app/control/control_client.h"
+#include "app/control/control_endpoint.h"
+#include "app/control/control_server.h"
 #include "app/frame_limiter.h"
 #include "app/frame_loop.h"
 #if LWE_LAYER_SHELL
@@ -31,6 +34,7 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/project_info.h"
+#include "wallpaper/transition/transition_catalog.h"
 #include "wallpaper/wallpaper_manager.h"
 
 #if DEBUG_BUILD
@@ -43,6 +47,7 @@ namespace {
 WallpaperManager wallpaper_mgr;
 CliOptions cli;
 WallpaperSource wallpaper_source;
+ControlServer control_server;
 }  // namespace
 
 static EngineContext ctx;
@@ -194,6 +199,7 @@ static void event(const sapp_event* e) {
 
 static void cleanup(void) {
     LOG_I("[APP] Shutting down");
+    control_server.close();
     lwe_vk_wait_idle();
 
 #if DEBUG_BUILD
@@ -262,6 +268,38 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     ctx.is_pkg = wallpaper_source.is_pkg;
 
     if (cli.extract_only && !wallpaper_source.path.empty()) exit(runExtractOnly(wallpaper_source, cli));
+
+    // Hand a switch to an existing instance on this display, or become that
+    // instance. Must run before any GPU work so a handoff process stays cheap.
+    if (!cli.no_control && !cli.sandbox && !cli.diagnostics.enabled) {
+        const std::string key = controlKey(cli.screen_root, cli.layer);
+        if (!wallpaper_source.path.empty()) {
+            int transition = 0;
+            int duration = cli.transition_duration_ms;
+            std::string resolve_error;
+            lwe::transition::resolveTransitionSetting(cli.transition, transition, duration, resolve_error);
+
+            SwitchRequest request;
+            request.path = wallpaper_source.path;
+            request.is_pkg = wallpaper_source.is_pkg;
+            request.properties = cli.set_properties;
+            request.transition = transition;
+            request.transition_time_ms = duration;
+
+            std::string handoff_error;
+            if (ControlClient::tryHandoff(key, request, &handoff_error)) {
+                LOG_I("[CONTROL] handed off wallpaper switch for %s: %s", key.c_str(), request.path.c_str());
+                exit(0);
+            }
+            LOG_D("[CONTROL] no live instance on %s (%s)", key.c_str(), handoff_error.c_str());
+        }
+
+        if (control_server.bind(key)) {
+            wallpaper_mgr.setControlServer(&control_server);
+        } else {
+            LOG_W("[CONTROL] another instance owns %s; running without runtime control", key.c_str());
+        }
+    }
 
     runDesktopLayerIfPossible();
 
