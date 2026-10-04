@@ -101,6 +101,7 @@ struct DebugState {
     uint32_t selected_node_id = 0;
     bool show_ui = true;
     bool test_mode = false;
+    bool show_node_ids = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.05f;
