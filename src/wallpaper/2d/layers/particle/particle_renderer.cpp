@@ -92,6 +92,8 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.texcoord[0] = u;
                 vertex.texcoord[1] = v;
                 vertex.texcoord[2] = particle.rotation;
+                // Sprite quads take the half-extent (size * 0.5); trails keep the full size so their aspect ratio
+                // is preserved.
                 vertex.texcoord[3] = is_trail ? particle.size : particle.size * 0.5f;
                 vertex.color[0] = particle.color[0];
                 vertex.color[1] = particle.color[1];

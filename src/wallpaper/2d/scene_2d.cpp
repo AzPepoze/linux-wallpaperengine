@@ -11,6 +11,7 @@
 #include "shared/graphics/passes/shader_pass.h"
 #include "shared/graphics/render.h"
 #include "sokol_app.h"
+#include "wallpaper/2d/animation_curve.h"
 #include "wallpaper/2d/effects/effect.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
@@ -178,8 +179,24 @@ void Scene2DRuntime::updateViewport() {
     // Zoom is part of the authored camera transform, not an editor-only hint.
     ctx.scene.render_scale *= std::max(ctx.scene.general.zoom, 0.001f);
 
-    ctx.scene.offset_x = (sw - ctx.scene.scene_w * ctx.scene.render_scale) * 0.5f;
-    ctx.scene.offset_y = (sh - ctx.scene.scene_h * ctx.scene.render_scale) * 0.5f;
+    // Camera-path entry animation: zoom about the view centre plus a relative origin pan (camera moves opposite to
+    // the content).
+    const wallpaper_engine::SceneCameraDocument& camera = ctx.scene.camera;
+    float pan_x = 0.0f, pan_y = 0.0f;
+    if (!camera.zoom_curve.keys.empty()) {
+        const auto& curve = camera.zoom_curve;
+        ctx.scene.render_scale *=
+            std::max(evaluateCurve(curve.keys, curve.fps, curve.length, curve.mode, ctx.time), 0.001f);
+    }
+    const auto& origin_x = camera.origin_curves[0];
+    const auto& origin_y = camera.origin_curves[1];
+    if (!origin_x.keys.empty())
+        pan_x = -evaluateCurve(origin_x.keys, origin_x.fps, origin_x.length, origin_x.mode, ctx.time);
+    if (!origin_y.keys.empty())
+        pan_y = evaluateCurve(origin_y.keys, origin_y.fps, origin_y.length, origin_y.mode, ctx.time);
+
+    ctx.scene.offset_x = (sw - ctx.scene.scene_w * ctx.scene.render_scale) * 0.5f + pan_x * ctx.scene.render_scale;
+    ctx.scene.offset_y = (sh - ctx.scene.scene_h * ctx.scene.render_scale) * 0.5f + pan_y * ctx.scene.render_scale;
 }
 
 void Scene2DRuntime::setOutputViewport(int x, int y, int width, int height) {

@@ -13,7 +13,22 @@ namespace {
 // object a script stores as `scriptProperties`.
 constexpr const char* kPrelude = R"JS(
 var __lweScriptProperties = {};
+var __lweAudioAverage = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+var WEMath = {
+    mix: function(a, b, t) { return a * (1 - t) + b * t; },
+    clamp: function(v, lo, hi) { return Math.min(Math.max(v, lo), hi); },
+    smoothStep: function(a, b, v) {
+        var t = Math.min(Math.max((v - a) / (b - a), 0), 1);
+        return t * t * (3 - 2 * t);
+    },
+    deg2rad: function(d) { return d * Math.PI / 180; },
+    rad2deg: function(r) { return r * 180 / Math.PI; }
+};
 var engine = {
+    frametime: 0.016,
+    registerAudioBuffers: function() {
+        return { average: __lweAudioAverage, left: __lweAudioAverage, right: __lweAudioAverage };
+    },
     registerAsset: function(path) { return path; },
     openUserShortcut: function() {},
     setTimeout: function() { return 0; },
@@ -50,12 +65,19 @@ constexpr const char* kMergeOverrides =
     "  });\n"
     "}\n";
 
-// Drops the ES module `export` keywords so the script runs in global scope.
+// Drops the ES module `export` keywords and `import` lines so the script runs in global scope (the imported
+// modules, e.g. WEMath, are globals in the prelude).
 std::string stripModuleSyntax(const std::string& source) {
     std::string out;
     out.reserve(source.size());
     size_t i = 0;
     while (i < source.size()) {
+        const bool line_start = i == 0 || source[i - 1] == '\n';
+        if (line_start && source.compare(i, 7, "import ") == 0) {
+            const size_t line_end = source.find('\n', i);
+            i = line_end == std::string::npos ? source.size() : line_end;
+            continue;
+        }
         if (source.compare(i, 7, "export ") == 0) {
             i += 7;
             continue;
@@ -146,6 +168,66 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
     JS_FreeValue(ctx, update_fn);
     JS_FreeValue(ctx, global);
     return true;
+}
+
+namespace {
+// Calls global `name` with `argc` numeric arguments already built by the caller; yields its numeric result.
+bool callNumeric(JSContext* ctx, const char* name, int argc, JSValue* argv, double& out) {
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue fn = JS_GetPropertyStr(ctx, global, name);
+    JS_FreeValue(ctx, global);
+    if (!JS_IsFunction(ctx, fn)) {
+        JS_FreeValue(ctx, fn);
+        return false;
+    }
+    JSValue result = JS_Call(ctx, fn, JS_UNDEFINED, argc, argv);
+    JS_FreeValue(ctx, fn);
+    if (JS_IsException(result)) {
+        logException(ctx, name);
+        JS_FreeValue(ctx, result);
+        return false;
+    }
+    double number = 0.0;
+    const bool ok = JS_ToFloat64(ctx, &number, result) == 0 && number == number;
+    JS_FreeValue(ctx, result);
+    if (ok) out = number;
+    return ok;
+}
+}  // namespace
+
+bool SceneScript::callInit(double& out) {
+    if (!impl_ || !impl_->context) return false;
+    return callNumeric(impl_->context, "init", 0, nullptr, out);
+}
+
+bool SceneScript::updateNumber(double value, double& out) {
+    if (!impl_ || !impl_->context) return false;
+    JSValue argument = JS_NewFloat64(impl_->context, value);
+    const bool ok = callNumeric(impl_->context, "update", 1, &argument, out);
+    JS_FreeValue(impl_->context, argument);
+    return ok;
+}
+
+void SceneScript::setFrameTime(double seconds) {
+    if (!impl_ || !impl_->context) return;
+    JSContext* ctx = impl_->context;
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue engine = JS_GetPropertyStr(ctx, global, "engine");
+    if (JS_IsObject(engine)) JS_SetPropertyStr(ctx, engine, "frametime", JS_NewFloat64(ctx, seconds));
+    JS_FreeValue(ctx, engine);
+    JS_FreeValue(ctx, global);
+}
+
+void SceneScript::setAudioAverage(const float* bands, int count) {
+    if (!impl_ || !impl_->context) return;
+    JSContext* ctx = impl_->context;
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue array = JS_GetPropertyStr(ctx, global, "__lweAudioAverage");
+    if (JS_IsObject(array)) {
+        for (int i = 0; i < count; ++i) JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, bands[i]));
+    }
+    JS_FreeValue(ctx, array);
+    JS_FreeValue(ctx, global);
 }
 
 bool SceneScript::update(const std::string& value, std::string& out) {

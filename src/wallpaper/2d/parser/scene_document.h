@@ -63,6 +63,9 @@ struct ImageObjectDocument {
     float alpha_fps = 30.0f;
     float alpha_length = 0.0f;
     std::string alpha_mode;
+    // SceneScript that drives alpha (`init()` start value, `update(value)` per frame).
+    std::string alpha_script;
+    std::string alpha_script_properties_json;
     int color_blend_mode = 0;
     bool solid = false;
     bool copy_background = false;
@@ -127,6 +130,10 @@ struct SceneCameraDocument {
     std::array<float, 3> center = {0.0f, 0.0f, -1.0f};
     std::array<float, 3> eye = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> up = {0.0f, 1.0f, 0.0f};
+
+    // Camera-path objects animate the zoom and a relative origin offset (the scene's entry animation).
+    AnimationCurve zoom_curve;
+    std::array<AnimationCurve, 3> origin_curves;
 };
 
 struct SceneBloomDocument {

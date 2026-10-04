@@ -258,6 +258,13 @@ void parseImageAlpha(const cJSON* alpha, ImageObjectDocument& image) {
     if (!cJSON_IsObject(alpha)) return;
 
     parseFloat(member(alpha, "value"), image.alpha);
+    readPlainString(alpha, "script", image.alpha_script);
+    if (const cJSON* properties = member(alpha, "scriptproperties"); cJSON_IsObject(properties)) {
+        if (char* printed = cJSON_PrintUnformatted(properties)) {
+            image.alpha_script_properties_json = printed;
+            cJSON_free(printed);
+        }
+    }
     const cJSON* animation = member(alpha, "animation");
     if (!cJSON_IsObject(animation)) return;
 
@@ -387,6 +394,39 @@ void parseEffects(const cJSON* object, std::vector<EffectInstanceDocument>& out)
     }
 }
 
+void parseCurve(const cJSON* animation, const char* channel, AnimationCurve& out) {
+    const cJSON* keys = member(animation, channel);
+    if (!cJSON_IsArray(keys)) return;
+    const cJSON* key = nullptr;
+    cJSON_ArrayForEach(key, keys) {
+        CurveKeyframe parsed;
+        if (!parseFloat(member(key, "frame"), parsed.frame) || !parseFloat(member(key, "value"), parsed.value))
+            continue;
+        out.keys.push_back(parsed);
+    }
+    const cJSON* options = member(animation, "options");
+    if (!cJSON_IsObject(options)) return;
+    parseFloat(member(options, "fps"), out.fps);
+    parseFloat(member(options, "length"), out.length);
+    const cJSON* mode = member(options, "mode");
+    if (cJSON_IsString(mode) && mode->valuestring) out.mode = mode->valuestring;
+}
+
+// A visible camera object may carry keyframed `zoom` / `origin` properties.
+void parseCameraPath(const cJSON* object, SceneCameraDocument& out) {
+    if (!cJSON_IsString(member(object, "camera"))) return;
+    if (!parseBool(member(object, "visible"), true)) return;
+
+    const cJSON* zoom = member(member(object, "zoom"), "animation");
+    if (cJSON_IsObject(zoom)) parseCurve(zoom, "c0", out.zoom_curve);
+    const cJSON* origin = member(member(object, "origin"), "animation");
+    if (cJSON_IsObject(origin)) {
+        parseCurve(origin, "c0", out.origin_curves[0]);
+        parseCurve(origin, "c1", out.origin_curves[1]);
+        parseCurve(origin, "c2", out.origin_curves[2]);
+    }
+}
+
 SceneObjectDocument parseObject(const cJSON* object) {
     SceneObjectDocument doc;
     doc.kind = detectObjectKind(object);
@@ -427,6 +467,7 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out) {
     if (cJSON_IsArray(objects)) {
         const cJSON* object;
         cJSON_ArrayForEach(object, objects) {
+            parseCameraPath(object, out.camera);
             out.objects.push_back(parseObject(object));
         }
     }

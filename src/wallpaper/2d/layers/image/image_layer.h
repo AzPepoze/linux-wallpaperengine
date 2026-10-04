@@ -3,6 +3,7 @@
 
 #include <array>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "wallpaper/2d/parser/scene_document.h"
 #include "wallpaper/2d/puppet/mdl_parser.h"
 #include "wallpaper/2d/puppet/puppet_pose.h"
+#include "wallpaper/2d/script/scene_script.h"
 
 class EngineContext;
 class Effect;
@@ -215,6 +217,9 @@ class ImageLayer : public Layer {
     virtual ScreenRect screenRect(EngineContext& ctx) const;
 
     wallpaper_engine::ImageObjectDocument alpha_document;
+    // Set when the object's alpha is driven by a SceneScript; `alpha_script_value` is its running result.
+    std::unique_ptr<SceneScript> alpha_script;
+    double alpha_script_value = 1.0;
 
    private:
     // Puppet mesh: the parsed model, its rest/skinned positions and the
