@@ -47,6 +47,8 @@ class SceneAnimations {
 
    private:
     void apply(const AnimatedValue& animated);
+    // `effect:<index>:<constant>` animations drive an effect's material constant.
+    void applyEffectConstant(Layer* layer, const AnimatedValue& animated);
     Layer* layerFor(uint32_t object_id) const;
 
     EngineContext& ctx_;

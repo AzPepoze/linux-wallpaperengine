@@ -399,6 +399,8 @@ void parseSoundFields(const cJSON* object, SoundObjectDocument& sound_doc) {
     parseFloat(member(object, "maxtime"), sound_doc.max_time);
 }
 
+void parsePropertyAnimation(const cJSON* object, const char* property, std::vector<PropertyAnimationDocument>& out);
+
 void parseEffectConstantScripts(const cJSON* effect_json, std::vector<EffectConstantScript>& out) {
     const cJSON* passes = member(effect_json, "passes");
     if (!cJSON_IsArray(passes)) return;
@@ -414,7 +416,13 @@ void parseEffectConstantScripts(const cJSON* effect_json, std::vector<EffectCons
                 entry.pass = pass_index;
                 entry.name = constant->string;
                 readScript(constant, entry.script);
-                if (!entry.script.empty()) out.push_back(std::move(entry));
+                std::vector<PropertyAnimationDocument> animations;
+                parsePropertyAnimation(values, constant->string, animations);
+                if (!animations.empty()) {
+                    entry.animation = std::move(animations.front());
+                    entry.has_animation = true;
+                }
+                if (!entry.script.empty() || entry.has_animation) out.push_back(std::move(entry));
             }
         }
         ++pass_index;

@@ -309,10 +309,9 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - A source module (`src/shared/media/`) reads track title, artist, album, playback state and timeline from MPRIS players over sd-bus, and decodes album art from `file://` URLs
     - Median-cut color extraction (primary, secondary, tertiary, text, high-contrast)
     - Built only when libsystemd is available (`mpris` option); otherwise it is a no-op
+    - Events reach scripts (`media*Changed`), and a material that lists `$mediaThumbnail` under `usertextures` samples the album art as a 256x256 texture
   - Missing
-    - Not connected to SceneScript (`media*Changed` events never fire) or to the `$mediaThumbnail` texture
     - `http(s)` album art URLs
-    - Not exercised against a live player yet
 
 ## SceneScript
 
@@ -330,7 +329,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
     - Text content (`update(string)`, about four times per second)
     - `visible` of a group (an object without a layer) hides everything beneath it
-    - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect
+    - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect, and its `getAnimation()` controls the constant's keyframe animation (`startpaused`, `play()`, `rate`...)
   - Missing
     - Particle fields and camera properties
     - Scripts on text color, point size and other text properties

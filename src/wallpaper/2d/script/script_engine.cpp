@@ -50,12 +50,19 @@ Object.defineProperty(g, 'thisObject', {
             var effect = /^effect:(\d+):/.exec(current.property || '');
             if (effect) {
                 current.thisObject = effectHandle(current.layerId, Number(effect[1]));
+                // The animation of the constant this script drives (`effect:<i>:<constant>`).
+                current.thisObject.getAnimation = function (name) {
+                    var key = name === undefined ? current.property : String(name);
+                    return animationHandle(__lweScene('animFind', current.layerId, 'timeline', key));
+                };
                 return current.thisObject;
             }
             current.thisObject = {
                 getAnimation: function (name) {
-                    return animationHandle(__lweScene('animFind', current.layerId, 'any',
-                                                      name === undefined ? (current.property || '') : String(name)));
+                    if (name !== undefined) return animationHandle(__lweScene('animFind', current.layerId, 'any', String(name)));
+                    // Without a name: the animation of the property this script drives, else the object's first one.
+                    return animationHandle(__lweScene('animFind', current.layerId, 'any', current.property || '')) ||
+                           animationHandle(__lweScene('animFind', current.layerId, 'any', ''));
                 }
             };
             Object.defineProperties(current.thisObject, {

@@ -195,6 +195,11 @@ add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d
                                 "src/wallpaper/2d/script/script_value_js.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})
 
+add_test("script_manifest_tests", {"tests/script_manifest_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+                                   "src/wallpaper/2d/script/script_engine.cpp",
+                                   "src/wallpaper/2d/script/script_value_js.cpp", "src/shared/core/logger.cpp"},
+         {"quickjs"})
+
 add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
                        "src/wallpaper/2d/puppet/puppet_pose.cpp", "src/wallpaper/2d/tree/scene_tree.cpp"},
          {"linmath.h"})

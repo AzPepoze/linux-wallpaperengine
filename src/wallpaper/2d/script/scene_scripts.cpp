@@ -506,9 +506,17 @@ void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& obje
         if (!effect.visible_script.empty())
             add(id, BoundProperty::EffectVisible, effect.visible_script.script, effect.visible_script.properties_json,
                 (int)i);
-        for (const auto& constant : effect.constant_scripts)
-            add(id, BoundProperty::EffectConstant, constant.script.script, constant.script.properties_json, (int)i,
-                constant.name);
+        for (const auto& constant : effect.constant_scripts) {
+            if (constant.has_animation) {
+                // The timeline drives the constant from now on; the key matches the script's `effect:<i>:<name>`.
+                wallpaper_engine::PropertyAnimationDocument animation = constant.animation;
+                animation.property = "effect:" + std::to_string(i) + ":" + constant.name;
+                animations_.add(id, {animation});
+            }
+            if (!constant.script.empty())
+                add(id, BoundProperty::EffectConstant, constant.script.script, constant.script.properties_json,
+                    (int)i, constant.name);
+        }
     }
 }
 

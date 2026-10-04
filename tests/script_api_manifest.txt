@@ -1,0 +1,111 @@
+# Every SceneScript member the host provides: "<expression> <typeof result>".
+# script_manifest_tests evaluates each one inside a running script; a missing member fails the test.
+# Members that Wallpaper Engine documents but the host lacks are listed in docs/features.md, not here.
+
+engine.frametime number
+engine.runtime number
+engine.timeOfDay number
+engine.canvasSize object
+engine.screenResolution object
+engine.userProperties object
+engine.registerAudioBuffers function
+engine.setTimeout function
+engine.setInterval function
+engine.AUDIO_RESOLUTION_16 number
+engine.AUDIO_RESOLUTION_32 number
+engine.AUDIO_RESOLUTION_64 number
+console.log function
+console.warn function
+console.error function
+shared object
+localStorage object
+input.cursorWorldPosition object
+input.cursorScreenPosition object
+input.cursorLeftDown boolean
+
+thisLayer.origin object
+thisLayer.scale object
+thisLayer.angles object
+thisLayer.parallaxDepth object
+thisLayer.size object
+thisLayer.visible boolean
+thisLayer.name string
+thisLayer.getParent function
+thisLayer.getChildren function
+thisLayer.setParent function
+thisLayer.getTransformMatrix function
+thisLayer.getAnimation function
+thisLayer.getAnimationLayer function
+thisLayer.getAnimationLayerCount function
+thisLayer.getTextureAnimation function
+thisLayer.getEffect function
+thisLayer.getEffectCount function
+thisLayer.getParticleSystem function
+thisLayer.getVideoTexture function
+thisLayer.getBoneCount function
+thisLayer.getBoneIndex function
+thisLayer.getBoneName function
+thisLayer.getBoneParentIndex function
+thisLayer.getBoneTransform function
+thisLayer.getBoneOrigin function
+thisLayer.setBoneOrigin function
+thisLayer.getBoneAngles function
+thisLayer.setBoneAngles function
+thisLayer.getBoneScale function
+thisLayer.setBoneScale function
+thisLayer.resetBone function
+thisLayer.play function
+thisLayer.stop function
+thisLayer.pause function
+thisLayer.isPlaying function
+
+thisObject.visible boolean
+thisObject.name stringthisObject.getAnimation function
+
+thisScene.getLayer function
+thisScene.getLayerCount function
+thisScene.enumerateLayers function
+thisScene.getLayerIndex function
+thisScene.createLayer function
+thisScene.destroyLayer function
+thisScene.sortLayer function
+thisScene.getInitialLayerConfig function
+thisScene.getCameraTransforms function
+thisScene.setCameraTransforms function
+thisScene.bloom boolean
+thisScene.bloomstrength number
+thisScene.bloomthreshold number
+thisScene.clearcolor object
+thisScene.ambientcolor object
+thisScene.skylightcolor object
+thisScene.cameraparallax boolean
+thisScene.cameraparallaxamount number
+thisScene.cameraparallaxdelay number
+thisScene.cameraparallaxmouseinfluence number
+thisScene.camerashake boolean
+thisScene.camerashakeamplitude number
+thisScene.camerashakespeed number
+thisScene.camerashakeroughness number
+
+thisLayer.getEffect(0).visible boolean
+thisLayer.getEffect(0).name string
+thisLayer.getEffect(0).getMaterial function
+thisLayer.getEffect(0).getMaterialProperty function
+thisLayer.getEffect(0).setMaterialProperty function
+
+thisLayer.getParticleSystem().alpha number
+thisLayer.getParticleSystem().size number
+thisLayer.getParticleSystem().count number
+thisLayer.getParticleSystem().speed number
+thisLayer.getParticleSystem().lifetime number
+thisLayer.getParticleSystem().rate number
+thisLayer.getParticleSystem().play function
+thisLayer.getParticleSystem().pause function
+thisLayer.getParticleSystem().stop function
+thisLayer.getParticleSystem().emitParticles function
+thisLayer.getParticleSystem().getInstanceCount function
+
+thisLayer.getVideoTexture().play function
+thisLayer.getVideoTexture().pause function
+thisLayer.getVideoTexture().stop function
+thisLayer.getVideoTexture().isPlaying function
