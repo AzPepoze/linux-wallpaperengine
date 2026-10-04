@@ -235,6 +235,9 @@ add_test("animation_timelines_tests", {"tests/animation_timelines_test.cpp",
 add_test("transition_catalog_tests", {"tests/transition_catalog_test.cpp",
                                       "src/wallpaper/transition/transition_catalog.cpp"})
 
+add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp"},
+         {"cjson"})
+
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
