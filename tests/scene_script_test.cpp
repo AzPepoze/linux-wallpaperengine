@@ -101,6 +101,17 @@ class EffectScene : public CountingScene {
         visible[effect] = value;
         return true;
     }
+    std::vector<double> clear = {0.0, 0.0, 0.0};
+    bool getSceneProperty(const std::string& name, std::vector<double>& out) override {
+        if (name != "clearcolor") return false;
+        out = clear;
+        return true;
+    }
+    bool setSceneProperty(const std::string& name, const std::vector<double>& value) override {
+        if (name != "clearcolor") return false;
+        clear = value;
+        return true;
+    }
     std::string created_json;
     std::string sorted;
     std::string destroyed;
@@ -321,6 +332,18 @@ export function update() {
         CHECK(updateText(dynamic, out) && out == "true");
         CHECK(scene.created_json.find("\"origin\":\"1 2 3\"") != std::string::npos);
         CHECK(scene.sorted == "3@0" && scene.destroyed == "3");
+
+        // Scene settings read and write through the backend; a number fills every component of a color.
+        SceneScript settings;
+        settings.setLayerId(3);
+        CHECK(settings.load(R"JS(
+export function update() {
+    thisScene.clearcolor = 0.5;
+    return String(thisScene.clearcolor.y);
+})JS",
+                            ""));
+        CHECK(updateText(settings, out) && out == "0.5");
+        CHECK(scene.clear.size() == 3 && scene.clear[2] == 0.5);
 
         // A script bound to an effect sees that effect as thisObject.
         SceneScript bound;

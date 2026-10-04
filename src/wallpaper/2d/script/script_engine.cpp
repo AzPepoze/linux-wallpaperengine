@@ -426,6 +426,31 @@ hide('thisScene', {
         return !!handle && __lweScene('sortLayer', handle.__id, Number(index) | 0);
     }
 });
+(function () {
+    var kinds = {
+        bloom: 'bool', cameraparallax: 'bool', camerashake: 'bool',
+        clearcolor: 'vec3', ambientcolor: 'vec3', skylightcolor: 'vec3',
+        bloomstrength: 'number', bloomthreshold: 'number', cameraparallaxamount: 'number',
+        cameraparallaxdelay: 'number', cameraparallaxmouseinfluence: 'number',
+        camerashakeamplitude: 'number', camerashakespeed: 'number', camerashakeroughness: 'number'
+    };
+    Object.keys(kinds).forEach(function (name) {
+        var kind = kinds[name];
+        Object.defineProperty(g.thisScene, name, {
+            enumerable: true,
+            get: function () {
+                var a = __lweScene('sceneGet', name);
+                if (!a) return undefined;
+                if (kind === 'bool') return a[0] !== 0;
+                if (kind === 'vec3') return vec3(a[0], a[1], a[2]);
+                return a[0];
+            },
+            set: function (value) {
+                __lweScene('sceneSet', name, kind === 'vec3' ? toArray(value, 3) : [Number(value)]);
+            }
+        });
+    });
+})();
 function vec3(x, y, z) { return typeof g.Vec3 === 'function' ? new g.Vec3(x, y, z) : { x: x, y: y, z: z }; }
 var inputState = { cursorWorldPosition: vec3(0, 0, 0), cursorScreenPosition: vec2(0, 0), cursorLeftDown: false };
 hide('input', inputState);
@@ -581,6 +606,30 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
             return JS_NewUint32(ctx, index >= 0 && (size_t)index < layers.size() ? layers[(size_t)index] : 0u);
         }
         return JS_NewUint32(ctx, scene->findLayerByName(stringArg(1)));
+    }
+
+    if (op == "sceneGet") {
+        std::vector<double> values;
+        if (!scene->getSceneProperty(stringArg(1), values)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (size_t i = 0; i < values.size(); ++i)
+            JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, values[i]));
+        return array;
+    }
+    if (op == "sceneSet" && argc > 2) {
+        std::vector<double> values;
+        JSValue length = JS_GetPropertyStr(ctx, argv[2], "length");
+        uint32_t count = 0;
+        JS_ToUint32(ctx, &count, length);
+        JS_FreeValue(ctx, length);
+        for (uint32_t i = 0; i < count && i < 4; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, argv[2], i);
+            double number = 0.0;
+            JS_ToFloat64(ctx, &number, item);
+            JS_FreeValue(ctx, item);
+            values.push_back(number);
+        }
+        return JS_NewBool(ctx, scene->setSceneProperty(stringArg(1), values));
     }
 
     const uint32_t id = idArg(1);

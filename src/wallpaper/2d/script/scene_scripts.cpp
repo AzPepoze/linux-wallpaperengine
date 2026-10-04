@@ -458,6 +458,68 @@ void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& obje
     }
 }
 
+namespace {
+struct SceneField {
+    std::vector<float*> floats;  // written together (a color, or a setting that has an HDR twin)
+    bool* flag = nullptr;
+};
+
+bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) {
+    auto& general = ctx.scene.general;
+    const auto numbers = [&](std::initializer_list<float*> list) {
+        field.floats = list;
+        return true;
+    };
+    const auto boolean = [&](bool* value) {
+        field.flag = value;
+        return true;
+    };
+    if (name == "bloom") return boolean(&general.bloom.enabled);
+    if (name == "bloomstrength") return numbers({&general.bloom.strength, &general.bloom.hdr_strength});
+    if (name == "bloomthreshold") return numbers({&general.bloom.threshold, &general.bloom.hdr_threshold});
+    if (name == "clearcolor") return numbers({&general.clear_color[0], &general.clear_color[1], &general.clear_color[2]});
+    if (name == "ambientcolor")
+        return numbers({&general.ambient_color[0], &general.ambient_color[1], &general.ambient_color[2]});
+    if (name == "skylightcolor")
+        return numbers({&general.skylight_color[0], &general.skylight_color[1], &general.skylight_color[2]});
+    if (name == "cameraparallax") return boolean(&ctx.parallax.enabled);
+    if (name == "cameraparallaxamount") return numbers({&ctx.parallax.amount});
+    if (name == "cameraparallaxdelay") return numbers({&ctx.parallax.delay});
+    if (name == "cameraparallaxmouseinfluence") return numbers({&ctx.parallax.mouse_influence});
+    if (name == "camerashake") return boolean(&ctx.shake.enabled);
+    if (name == "camerashakeamplitude") return numbers({&ctx.shake.amplitude});
+    if (name == "camerashakespeed") return numbers({&ctx.shake.speed});
+    if (name == "camerashakeroughness") return numbers({&ctx.shake.roughness});
+    return false;
+}
+}  // namespace
+
+bool SceneScriptBackend::getSceneProperty(const std::string& name, std::vector<double>& out) {
+    SceneField field;
+    if (!sceneField(ctx_, name, field)) return false;
+    out.clear();
+    if (field.flag) out.push_back(*field.flag ? 1.0 : 0.0);
+    // The first float is the live one for settings with an HDR twin.
+    const size_t count = name.rfind("bloom", 0) == 0 ? 1 : field.floats.size();
+    for (size_t i = 0; i < count && i < field.floats.size(); ++i) out.push_back(*field.floats[i]);
+    return true;
+}
+
+bool SceneScriptBackend::setSceneProperty(const std::string& name, const std::vector<double>& value) {
+    SceneField field;
+    if (!sceneField(ctx_, name, field) || value.empty()) return false;
+    if (field.flag) {
+        *field.flag = value[0] != 0.0;
+        return true;
+    }
+    if (name.rfind("bloom", 0) == 0) {
+        for (float* target : field.floats) *target = (float)value[0];
+        return true;
+    }
+    for (size_t i = 0; i < field.floats.size(); ++i) *field.floats[i] = (float)value[std::min(i, value.size() - 1)];
+    return true;
+}
+
 uint32_t SceneScriptBackend::createLayer(const std::string& config_json) {
     if (!ctx_.scene.scene_tree) return 0;
     cJSON* config = cJSON_Parse(config_json.c_str());
@@ -541,8 +603,11 @@ void ScriptBindings::setUserProperties(const UserProperties& properties) {
 }
 
 ScriptBindings::~ScriptBindings() {
+    ScriptEngine::instance().setActiveScope(this);
+    ScriptEngine::instance().broadcast("destroy", {});
     bindings_.clear();  // scripts first: they may still call back into the backend while shutting down
     ScriptEngine::instance().unregisterScope(this);
+    ScriptEngine::instance().setActiveScope(nullptr);
 }
 
 bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::string& script,
@@ -766,6 +831,15 @@ void ScriptBindings::removeDestroyed() {
 
 void ScriptBindings::update(float dt) {
     animations_.update(dt);
+    const float width = ctx_.renderer.view_width, height = ctx_.renderer.view_height;
+    if (width > 0.0f && height > 0.0f && (width != view_width_ || height != view_height_)) {
+        const bool first = view_width_ == 0.0f;
+        view_width_ = width;
+        view_height_ = height;
+        if (!first)
+            ScriptEngine::instance().broadcast(
+                "resizeScreen", {{"x", ScriptValue::makeNumber(width)}, {"y", ScriptValue::makeNumber(height)}});
+    }
     for (uint32_t handle : backend_.takeEndedAnimations()) ScriptEngine::instance().animationEnded(handle);
     dispatchPointer();
     updating_ = true;

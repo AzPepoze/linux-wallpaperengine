@@ -42,6 +42,8 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool animationCommand(uint32_t handle, const std::string& command) override;
     std::vector<uint32_t> takeEndedAnimations() override;
     int animationLayerCount(uint32_t layer_id) override;
+    bool getSceneProperty(const std::string& name, std::vector<double>& out) override;
+    bool setSceneProperty(const std::string& name, const std::vector<double>& value) override;
     uint32_t createLayer(const std::string& config_json) override;
     bool destroyLayer(uint32_t id) override;
     bool sortLayer(uint32_t id, int index) override;
@@ -130,6 +132,8 @@ class ScriptBindings {
     std::vector<Binding> bindings_;
     std::vector<Binding> pending_bindings_;
     bool updating_ = false;
+    float view_width_ = 0.0f;
+    float view_height_ = 0.0f;
     PointerTracker pointer_;
     std::vector<uint32_t> cursor_layers_;  // scene objects with a script that handles any cursor event
     bool cursor_layers_ready_ = false;

@@ -71,6 +71,14 @@ class ScriptSceneBackend {
         return 0;
     }
 
+    // Scene settings (bloomstrength, clearcolor, camerashake...), by the SceneScript property name; booleans are 0 / 1.
+    virtual bool getSceneProperty(const std::string& /*name*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setSceneProperty(const std::string& /*name*/, const std::vector<double>& /*value*/) {
+        return false;
+    }
+
     // Dynamic layers. `config_json` is a scene object (image, particle, text, sound...); returns the new object id, or 0.
     // Destruction is applied between frames; sortLayer moves a layer to a draw-order index.
     virtual uint32_t createLayer(const std::string& /*config_json*/) {
