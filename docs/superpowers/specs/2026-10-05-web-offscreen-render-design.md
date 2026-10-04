@@ -34,6 +34,18 @@ These were measured with a throwaway probe (not kept); they correct several assu
 4. **EGL DMA-BUF export is blocked on this Mesa.** `eglCreateImageKHR(EGL_GL_TEXTURE_2D_KHR)`
    segfaults in Mesa 26.2.3, reproduced with a standalone 40-line EGL test with no Qt involved.
    The zero-copy transport therefore cannot use EGL today.
+5. **The Vulkan external-memory transport works on all three devices.** A BGRA8 linear `VkImage`
+   allocated with `VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT` exported with `vkGetMemoryFdKHR`
+   and re-imported on a second `VkDevice` of the same physical device succeeds on **AMD RADV
+   (RX 6600)**, **Intel ANV (UHD 730)** and **llvmpipe**. This supersedes the EGL path.
+6. **Qt's Vulkan RHI can render WebEngine into that external image.** With
+   `QSGRendererInterface::Vulkan`, a `QQuickRenderControl` + QML `WebEngineView` rendering into an
+   externally-allocated BGRA8 linear `VkImage` (set via `QQuickRenderTarget::fromVulkanImage`)
+   painted the real wallpaper, and the image exported as a DMA-BUF. Verified on AMD, Intel and
+   llvmpipe. The device extensions are requested through
+   `QQuickGraphicsConfiguration::setDeviceExtensions({VK_KHR_external_memory_fd,
+   VK_EXT_external_memory_dma_buf})`; the `VkDevice` is taken from the RHI via
+   `QSGRendererInterface::getResource(DeviceResource)`.
 
 ## Approach ladder
 
@@ -117,6 +129,9 @@ Render offscreen on the GPU, then hand the frame to the engine without a CPU cop
   or the import fails.
 
 Tier B is gated behind its own runtime capability check, mirroring `gpu_set_zero_copy_video_supported`.
+The helper side (external image + RHI render + export) is **validated** on AMD, Intel and llvmpipe; the
+remaining work is the engine-side import/sampling path and the cross-process synchronisation, which is
+the subject of a separate plan.
 
 ## Testing
 
