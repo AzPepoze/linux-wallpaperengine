@@ -1,9 +1,10 @@
 // SceneScript runtime checks: the clock/date text pattern used by WE wallpapers.
 #include "wallpaper/2d/script/scene_script.h"
 
-#include <cassert>
 #include <cstdio>
 #include <string>
+
+#include "test_util.h"
 
 namespace {
 
@@ -40,26 +41,25 @@ int main() {
         SceneScript script;
         const bool loaded =
             script.load(kClockScript, R"({"delimiter":":","use24hFormat":{"user":"_24hourformat","value":false}})");
-        assert(loaded && script.valid());
+        CHECK(loaded && script.valid());
         std::string out;
-        assert(script.update("", out));
+        CHECK(script.update("", out));
         std::printf("12h clock => %s\n", out.c_str());
-        assert(out.find("AM") != std::string::npos || out.find("PM") != std::string::npos);
-        assert(out.find(".") != std::string::npos);  // month abbreviation
-        assert(out.find('\n') != std::string::npos);
+        CHECK(out.find("AM") != std::string::npos || out.find("PM") != std::string::npos);
+        CHECK(out.find(".") != std::string::npos);  // month abbreviation
+        CHECK(out.find('\n') != std::string::npos);
     }
 
     // Default (24h) leaves the meridiem off.
     {
         SceneScript script;
-        assert(script.load(kClockScript, ""));
+        CHECK(script.load(kClockScript, ""));
         std::string out;
-        assert(script.update("", out));
+        CHECK(script.update("", out));
         std::printf("24h clock => %s\n", out.c_str());
-        assert(out.find("AM") == std::string::npos);
-        assert(out.find("PM") == std::string::npos);
+        CHECK(out.find("AM") == std::string::npos);
+        CHECK(out.find("PM") == std::string::npos);
     }
 
-    std::printf("scene script tests passed\n");
-    return 0;
+    return test::finish("scene script tests");
 }

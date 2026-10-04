@@ -12,16 +12,10 @@
 
 #include "shared/assets/tex_decoder.h"
 
+#include "test_util.h"
+using test::check;
+
 namespace {
-
-int g_failures = 0;
-
-void check(bool condition, const char* what) {
-    if (!condition) {
-        fprintf(stderr, "FAIL: %s\n", what);
-        ++g_failures;
-    }
-}
 
 void appendU32(std::vector<uint8_t>& out, uint32_t value) {
     out.push_back((uint8_t)(value & 0xff));
@@ -216,10 +210,5 @@ int main() {
         unlink(tex_path.c_str());
     }
 
-    if (g_failures != 0) {
-        fprintf(stderr, "%d check(s) failed\n", g_failures);
-        return 1;
-    }
-    printf("tex video detection checks passed\n");
-    return 0;
+    return test::finish("tex video detection");
 }

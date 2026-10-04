@@ -7,18 +7,10 @@
 #include "shared/assets/media/video_rate.h"
 #include "wallpaper/video/video_properties.h"
 
+#include "test_util.h"
+using test::expect;
+
 namespace {
-
-int g_failures = 0;
-int g_checks = 0;
-
-void expect(const char* test, bool condition, const char* what) {
-    ++g_checks;
-    if (!condition) {
-        std::printf("FAIL %s: %s\n", test, what);
-        ++g_failures;
-    }
-}
 
 VideoProperties parse(const char* json) {
     cJSON* root = cJSON_Parse(json);
@@ -74,6 +66,5 @@ int main() {
     testRateAndVolume();
     testFit();
     testRateMath();
-    std::printf("%d checks, %d failures\n", g_checks, g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return test::finish("video tests");
 }

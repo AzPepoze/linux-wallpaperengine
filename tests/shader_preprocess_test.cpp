@@ -6,24 +6,23 @@
 
 #include "shared/graphics/shader/shader_processor.h"
 
+#include "test_util.h"
+
 namespace {
 
-int g_failures = 0;
-int g_checks = 0;
-
 void expectContains(const char* test, const std::string& text, const std::string& needle) {
-    ++g_checks;
+    ++test::checks;
     if (text.find(needle) == std::string::npos) {
         std::printf("FAIL %s: missing '%s'\n---\n%s\n---\n", test, needle.c_str(), text.c_str());
-        ++g_failures;
+        ++test::failures;
     }
 }
 
 void expectNotContains(const char* test, const std::string& text, const std::string& needle) {
-    ++g_checks;
+    ++test::checks;
     if (text.find(needle) != std::string::npos) {
         std::printf("FAIL %s: unexpected '%s'\n---\n%s\n---\n", test, needle.c_str(), text.c_str());
-        ++g_failures;
+        ++test::failures;
     }
 }
 
@@ -67,20 +66,20 @@ void testPreprocessorDefinedOperator() {
 void testPreprocessorUnmatchedEndifDropped() {
     std::string source = "int a;\n#endif\nint b;\n";
     ShaderSourceProcessor::normalizePreprocessor(source);
-    ++g_checks;
+    ++test::checks;
     if (countOccurrences(source, "#endif") != 0) {
         std::printf("FAIL preprocess.unmatched_endif: #endif was not dropped\n");
-        ++g_failures;
+        ++test::failures;
     }
 }
 
 void testPreprocessorUnclosedIfClosed() {
     std::string source = "#if X\nint a;\n";
     ShaderSourceProcessor::normalizePreprocessor(source);
-    ++g_checks;
+    ++test::checks;
     if (countOccurrences(source, "#endif") != 1) {
         std::printf("FAIL preprocess.unclosed_if: missing synthesized #endif\n");
-        ++g_failures;
+        ++test::failures;
     }
 }
 
@@ -215,6 +214,5 @@ int main() {
     testVectorFirstScalarPreserved();
     testHlslVectorToScalarInitializerWithCall();
 
-    std::printf("%d checks, %d failures\n", g_checks, g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return test::finish("shader preprocess tests");
 }

@@ -9,20 +9,12 @@
 #include <fstream>
 #include <string>
 
+#include "test_util.h"
+using test::expect;
+
 namespace fs = std::filesystem;
 
 namespace {
-
-int g_failures = 0;
-int g_checks = 0;
-
-void expect(const char* test, bool condition, const char* what) {
-    ++g_checks;
-    if (!condition) {
-        std::printf("FAIL %s: %s\n", test, what);
-        ++g_failures;
-    }
-}
 
 void writeFile(const fs::path& path, const std::string& content) {
     std::ofstream(path, std::ios::binary) << content;
@@ -124,6 +116,5 @@ int main() {
     testPackagePath();
 
     fs::remove_all(base);
-    std::printf("%d checks, %d failures\n", g_checks, g_failures);
-    return g_failures == 0 ? 0 : 1;
+    return test::finish("project info tests");
 }

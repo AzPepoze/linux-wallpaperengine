@@ -4,14 +4,7 @@
 #include <string>
 #include <vector>
 
-static int failures = 0;
-#define CHECK(cond)                                                             \
-    do {                                                                        \
-        if (!(cond)) {                                                          \
-            std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); \
-            ++failures;                                                         \
-        }                                                                       \
-    } while (0)
+#include "test_util.h"
 
 using namespace layer_options;
 
@@ -65,6 +58,5 @@ int main() {
     checkSizes();
     checkAnchors();
     checkOutputs();
-    if (failures == 0) std::printf("layer option checks passed\n");
-    return failures == 0 ? 0 : 1;
+    return test::finish("layer option checks");
 }

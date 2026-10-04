@@ -3,16 +3,8 @@
 
 #include "wallpaper/2d/tree/scene_tree.h"
 
-namespace {
-int g_failures = 0;
-
-void check(bool condition, const char* what) {
-    if (!condition) {
-        fprintf(stderr, "FAIL: %s\n", what);
-        ++g_failures;
-    }
-}
-}  // namespace
+#include "../test_util.h"
+using test::check;
 
 void runSceneRotationTests();
 
@@ -81,6 +73,3 @@ void runSceneRotationTests() {
           "scene node angles are degrees: 90 rotates (1,0) to (0,1)");
 }
 
-int sceneAttachmentFailures() {
-    return g_failures;
-}

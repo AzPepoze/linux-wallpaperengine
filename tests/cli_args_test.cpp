@@ -4,14 +4,7 @@
 #include <string>
 #include <vector>
 
-static int failures = 0;
-#define CHECK(cond)                                                             \
-    do {                                                                        \
-        if (!(cond)) {                                                          \
-            std::fprintf(stderr, "FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); \
-            ++failures;                                                         \
-        }                                                                       \
-    } while (0)
+#include "test_util.h"
 
 int main() {
     using V = std::vector<std::string>;
@@ -41,6 +34,5 @@ int main() {
     CHECK(cli_args::positional(layerDebug) == "/wp");
     CHECK(cli_args::optionValue(layerDebug, {"--layer-size"}, value) && value == "320x180");
 
-    if (failures == 0) std::printf("cli args checks passed\n");
-    return failures == 0 ? 0 : 1;
+    return test::finish("cli args checks");
 }

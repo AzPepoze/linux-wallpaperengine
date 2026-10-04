@@ -84,6 +84,7 @@ sudo pacman -S --needed clang cppcheck
 | Keep a video file in RAM instead of streaming it     | `bin/<mode>/linux-wallpaperengine --video-ram "/path/to/video.mp4"`   |
 | Clean build outputs                                  | `xmake clean`                                                         |
 | Validate formatting and static analysis              | `xmake check`                                                         |
+| Build and run all unit checks                        | `xmake test`                                                          |
 | Format source files                                  | `xmake format`                                                        |
 | Validate, build, and launch the debug effect sandbox | `xmake sandbox`                                                       |
 

@@ -120,120 +120,65 @@ if has_config("web") then
     target_end()
 end
 
--- Synthetic unit checks. Not built by default; run explicitly with `xmake build tests`.
-target("tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_packages("lz4", "stb")
-    add_includedirs("src")
-    add_files("tests/tex_video_detect_test.cpp", "src/shared/assets/tex_decoder.cpp",
-              "src/shared/assets/tex_format.cpp", "src/shared/assets/tex_header.cpp",
-              "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp", "src/shared/core/vfs.cpp")
+-- Plain-main unit checks. None build by default: `xmake build <name>` builds one, `xmake test` builds and runs them all.
+-- Each takes its own source list so it links only what it exercises.
+local function add_test(name, files, packages, syslinks)
+    target(name)
+        set_kind("binary")
+        set_default(false)
+        set_targetdir("bin/$(mode)")
+        set_warnings("all", "extra")
+        add_includedirs("src")
+        if packages then add_packages(table.unpack(packages)) end
+        if syslinks then add_syslinks(table.unpack(syslinks)) end
+        add_files(table.unpack(files))
+        add_tests("default")
+        if is_mode("debug", "asan", "ubsan") then
+            add_defines("DEBUG_BUILD=1")
+        else
+            add_defines("DEBUG_BUILD=0")
+        end
+    target_end()
+end
 
-    if is_mode("debug", "asan", "ubsan") then
-        add_defines("DEBUG_BUILD=1")
-    else
-        add_defines("DEBUG_BUILD=0")
-    end
+add_test("tests", {"tests/tex_video_detect_test.cpp", "src/shared/assets/tex_decoder.cpp",
+                   "src/shared/assets/tex_format.cpp", "src/shared/assets/tex_header.cpp",
+                   "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp", "src/shared/core/vfs.cpp"},
+         {"lz4", "stb"})
 
--- Alpha keyframe curve checks. Not built by default; run with `xmake build alpha_tests`.
-target("alpha_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_files("tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_curve.cpp",
-              "src/wallpaper/2d/animation_curve.cpp")
+add_test("alpha_tests", {"tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_curve.cpp",
+                         "src/wallpaper/2d/animation_curve.cpp"})
 
--- Command-line scanning checks. Not built by default; run with `xmake build cli_tests`.
-target("cli_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_files("tests/cli_args_test.cpp", "src/app/cli_args.cpp")
+add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
 
--- Layer-shell option parsing checks. Not built by default; run with `xmake build layer_tests`.
-target("layer_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_files("tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp")
+add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
--- SceneScript (QuickJS) runtime checks. Not built by default; run with `xmake build scene_script_tests`.
-target("scene_script_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_packages("quickjs")
-    add_files("tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
-              "src/shared/core/logger.cpp")
+add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+                                "src/shared/core/logger.cpp"},
+         {"quickjs"})
 
--- Synthetic MDLV parser checks. Not built by default; run with `xmake build mdl_tests`.
-target("mdl_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_packages("linmath.h")
-    add_files("tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
-              "src/wallpaper/2d/puppet/puppet_pose.cpp", "src/wallpaper/2d/tree/scene_tree.cpp")
+add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
+                       "src/wallpaper/2d/puppet/puppet_pose.cpp", "src/wallpaper/2d/tree/scene_tree.cpp"},
+         {"linmath.h"})
 
--- Synthetic shader preprocessing checks. Not built by default; run with `xmake build shader_tests`.
-target("shader_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_packages("sokol")
-    add_files("tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp",
-              "src/shared/graphics/shader/shader_processor_metadata.cpp",
-              "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
-              "src/shared/graphics/shader/shader_vector_rewrite.cpp",
-              "src/shared/graphics/shader/shader_swizzle_rewrite.cpp", "src/shared/core/vfs.cpp",
-              "src/shared/core/logger.cpp", "src/shared/core/disk_cache.cpp")
+add_test("shader_tests", {"tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp",
+                          "src/shared/graphics/shader/shader_processor_metadata.cpp",
+                          "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
+                          "src/shared/graphics/shader/shader_vector_rewrite.cpp",
+                          "src/shared/graphics/shader/shader_swizzle_rewrite.cpp", "src/shared/core/vfs.cpp",
+                          "src/shared/core/logger.cpp", "src/shared/core/disk_cache.cpp"},
+         {"sokol"})
 
--- Synthetic project detection checks. Not built by default; run with `xmake build project_tests`.
-target("project_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_packages("cjson")
-    add_includedirs("src")
-    add_files("tests/project_info_test.cpp", "src/wallpaper/project_info.cpp",
-              "src/wallpaper/video/video_properties.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp")
+add_test("project_tests", {"tests/project_info_test.cpp", "src/wallpaper/project_info.cpp",
+                           "src/wallpaper/video/video_properties.cpp", "src/shared/core/vfs.cpp",
+                           "src/shared/core/logger.cpp"},
+         {"cjson"})
 
--- Synthetic video property and rate checks. Not built by default; run with `xmake build video_tests`.
-target("video_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_packages("cjson")
-    add_includedirs("src")
-    add_files("tests/video_test.cpp", "src/wallpaper/video/video_properties.cpp")
+add_test("video_tests", {"tests/video_test.cpp", "src/wallpaper/video/video_properties.cpp"}, {"cjson"})
 
--- Video byte source checks (disk vs RAM, TEX-embedded MP4). Not built by default; run with `xmake build media_tests`.
-target("media_tests")
-    set_kind("binary")
-    set_default(false)
-    set_targetdir("bin/$(mode)")
-    set_warnings("all", "extra")
-    add_includedirs("src")
-    add_syslinks("avformat", "avutil")
-    add_files("tests/media_source_test.cpp", "src/shared/assets/media/media_source.cpp", "src/shared/core/vfs.cpp",
-              "src/shared/core/logger.cpp")
+add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media/media_source.cpp",
+                         "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
+         nil, {"avformat", "avutil"})
 
 task("check")
     set_menu {

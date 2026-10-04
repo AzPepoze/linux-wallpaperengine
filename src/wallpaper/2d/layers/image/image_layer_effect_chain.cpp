@@ -1,3 +1,4 @@
+#include <array>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -170,8 +171,10 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 shader_input_view = pass->pass_textures.texture0_view;
             }
 
-            std::vector<sg_image> override_images(11, sg_image{SG_INVALID_ID});
-            std::vector<sg_view> override_views(11, sg_view{SG_INVALID_ID});
+            std::array<sg_image, 11> override_images;
+            std::array<sg_view, 11> override_views;
+            override_images.fill(sg_image{SG_INVALID_ID});
+            override_views.fill(sg_view{SG_INVALID_ID});
             bool has_overrides = false;
             for (const auto& [slot, binding] : pass->render_texture_bindings) {
                 if (slot < 0 || slot > 11) continue;

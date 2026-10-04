@@ -7,21 +7,13 @@
 
 #include <vector>
 
+#include "../test_util.h"
+using test::check;
+
 void runPuppetPoseTests();
-int puppetPoseFailures();
 void runSceneAttachmentTests();
-int sceneAttachmentFailures();
 
 namespace {
-
-int g_failures = 0;
-
-void check(bool condition, const char* what) {
-    if (!condition) {
-        fprintf(stderr, "FAIL: %s\n", what);
-        ++g_failures;
-    }
-}
 
 void appendU32(std::vector<uint8_t>& out, uint32_t value) {
     out.push_back((uint8_t)(value & 0xff));
@@ -219,10 +211,5 @@ int main() {
 
     runPuppetPoseTests();
     runSceneAttachmentTests();
-    if (g_failures + puppetPoseFailures() + sceneAttachmentFailures() != 0) {
-        fprintf(stderr, "%d check(s) failed\n", g_failures + puppetPoseFailures() + sceneAttachmentFailures());
-        return 1;
-    }
-    printf("mdl parser checks passed\n");
-    return 0;
+    return test::finish("mdl tests");
 }

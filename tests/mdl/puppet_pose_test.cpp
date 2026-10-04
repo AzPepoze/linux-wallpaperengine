@@ -6,18 +6,12 @@
 
 #include <unordered_map>
 
+#include "../test_util.h"
+using test::check;
+
 using namespace wallpaper_engine;
 
 namespace {
-
-int g_failures = 0;
-
-void check(bool condition, const char* what) {
-    if (!condition) {
-        fprintf(stderr, "FAIL: %s\n", what);
-        ++g_failures;
-    }
-}
 
 MdlModel makeModel() {
     MdlModel model;
@@ -81,9 +75,5 @@ void runPuppetPoseTests() {
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 110.0f) < 1e-3f, "hidden layer leaves the rest pose");
 
-    if (g_failures != 0) fprintf(stderr, "%d pose check(s) failed\n", g_failures);
 }
 
-int puppetPoseFailures() {
-    return g_failures;
-}

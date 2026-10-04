@@ -4,18 +4,12 @@
 #include <math.h>
 #include <stdio.h>
 
+#include "test_util.h"
+using test::check;
+
 using wallpaper_engine::ImageObjectDocument;
 
 namespace {
-int g_failures = 0;
-
-void check(bool condition, const char* what) {
-    if (!condition) {
-        fprintf(stderr, "FAIL: %s\n", what);
-        ++g_failures;
-    }
-}
-
 bool near(float a, float b, float eps = 1e-3f) {
     return fabsf(a - b) < eps;
 }
@@ -72,10 +66,5 @@ int main() {
         check(near(evaluateCurve({}, 30.0f, 300.0f, "loop", 1.0f), 0.0f), "curve: empty keys evaluate to zero");
     }
 
-    if (g_failures != 0) {
-        fprintf(stderr, "%d alpha curve check(s) failed\n", g_failures);
-        return 1;
-    }
-    printf("alpha curve tests passed\n");
-    return 0;
+    return test::finish("alpha curve tests");
 }
