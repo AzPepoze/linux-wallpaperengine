@@ -92,9 +92,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 vertex.texcoord[0] = u;
                 vertex.texcoord[1] = v;
                 vertex.texcoord[2] = particle.rotation;
-                // ComputeParticlePosition applies UV offsets of +/-0.5, so
-                // its input is the full diameter, not a half-extent.
-                vertex.texcoord[3] = particle.size;
+                vertex.texcoord[3] = is_trail ? particle.size : particle.size * 0.5f;
                 vertex.color[0] = particle.color[0];
                 vertex.color[1] = particle.color[1];
                 vertex.color[2] = particle.color[2];
