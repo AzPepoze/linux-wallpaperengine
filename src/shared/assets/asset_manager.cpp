@@ -1,15 +1,20 @@
 #include "asset_manager.h"
 
 #include <cjson/cJSON.h>
+#include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <future>
+#include <mutex>
+#include <unordered_map>
 
 #include "shared/assets/media/video_rate.h"
 #include "shared/assets/tex_decoder.h"
 #include "shared/core/logger.h"
+#include "shared/core/task_pool.h"
 #include "shared/core/utils.h"
 #include "shared/core/vfs.h"
 #include "shared/graphics/backend/gpu_zero_copy.h"
@@ -37,7 +42,21 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
 
 }  // namespace
 
-AssetManager::AssetManager() : internal_provider(std::make_unique<InternalAssetProvider>()) {}
+// Decoded textures kept for the duration of a scene load. Entries are futures so a texture that is still being
+// decoded on the task pool can be waited for instead of decoded a second time.
+struct AssetManager::DecodeCache {
+    using Entry = std::shared_future<std::shared_ptr<const wallpaper_engine::DecodedImage>>;
+
+    std::mutex mutex;
+    std::unordered_map<std::string, Entry> entries;
+
+    static std::string key(const char* path, int image_index) {
+        return std::string(path) + "#" + std::to_string(image_index);
+    }
+};
+
+AssetManager::AssetManager()
+    : internal_provider(std::make_unique<InternalAssetProvider>()), decode_cache_(std::make_unique<DecodeCache>()) {}
 
 AssetManager::~AssetManager() {
     clearVideoTextures();
@@ -50,6 +69,63 @@ void AssetManager::init(const char* ep, const char* wp) {
     engine_provider = std::make_unique<EngineAssetProvider>(engine_path);
     wallpaper_provider = std::make_unique<WallpaperAssetProvider>(wallpaper_path);
     internal_provider = std::make_unique<InternalAssetProvider>();
+}
+
+void AssetManager::prefetchPackageTextures() const {
+    // Bounds the work queued up front: large packages are mostly video or audio, not textures worth racing for.
+    constexpr size_t kMaxTextureBytes = 32u << 20;
+    constexpr size_t kMaxTotalBytes = 192u << 20;
+    size_t total_bytes = 0;
+
+    vfs::forEachFile([&](const char* name) {
+        const size_t length = strlen(name);
+        if (length < 4 || strcasecmp(name + length - 4, ".tex") != 0) return false;
+
+        const std::string path = std::string(vfs::kRoot) + "/" + name;
+        const uint8_t* data = nullptr;
+        size_t size = 0;
+        if (!vfs::find(path.c_str(), data, size) || size > kMaxTextureBytes) return false;
+        if (total_bytes + size > kMaxTotalBytes) return true;
+        total_bytes += size;
+
+        auto task = TaskPool::instance().enqueue([path] {
+            return std::make_shared<const wallpaper_engine::DecodedImage>(
+                wallpaper_engine::decodeTexture(path.c_str()));
+        });
+        std::lock_guard<std::mutex> lock(decode_cache_->mutex);
+        decode_cache_->entries.emplace(DecodeCache::key(path.c_str(), 0), task.share());
+        return false;
+    });
+}
+
+void AssetManager::releaseDecodedTextures() const {
+    {
+        std::lock_guard<std::mutex> lock(decode_cache_->mutex);
+        decode_cache_->entries.clear();
+    }
+    // Decoded pixels are large and short-lived; return the freed pages instead of letting the allocator keep them.
+    malloc_trim(0);
+}
+
+std::shared_ptr<const wallpaper_engine::DecodedImage> AssetManager::decodeShared(const char* abs_path,
+                                                                                 int image_index) const {
+    const std::string key = DecodeCache::key(abs_path, image_index);
+    DecodeCache::Entry pending;
+    {
+        std::lock_guard<std::mutex> lock(decode_cache_->mutex);
+        const auto found = decode_cache_->entries.find(key);
+        if (found != decode_cache_->entries.end()) pending = found->second;
+    }
+    // Waits for a worker that is still decoding this texture; the lock is not held meanwhile.
+    if (pending.valid()) return pending.get();
+
+    auto image =
+        std::make_shared<const wallpaper_engine::DecodedImage>(wallpaper_engine::decodeTexture(abs_path, image_index));
+    std::promise<std::shared_ptr<const wallpaper_engine::DecodedImage>> ready;
+    ready.set_value(image);
+    std::lock_guard<std::mutex> lock(decode_cache_->mutex);
+    decode_cache_->entries.emplace(key, ready.get_future().share());
+    return image;
 }
 
 void AssetManager::setVideoPlayback(float rate, float volume) {
@@ -246,7 +322,8 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
                     strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
         if (!is_video) {
-            wallpaper_engine::DecodedImage image = wallpaper_engine::decodeTexture(abs_path, image_index);
+            const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, image_index);
+            const wallpaper_engine::DecodedImage& image = *decoded;
             if (!image.is_video && image.valid()) {
                 const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
                 if (pixel_format != SG_PIXELFORMAT_NONE) {

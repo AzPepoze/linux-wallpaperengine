@@ -57,6 +57,13 @@ std::unique_ptr<Wallpaper> WallpaperLoader::load(const ProjectInfo& info, Engine
     strncpy(ctx.asset_root, info.root.c_str(), sizeof(ctx.asset_root) - 1);
     ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
     ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+    ctx.asset_mgr.prefetchPackageTextures();
+    struct ReleaseDecoded {
+        AssetManager& assets;
+        ~ReleaseDecoded() {
+            assets.releaseDecodedTextures();
+        }
+    } release_decoded{ctx.asset_mgr};
 
     if (info.type == ProjectType::Video) applyVideoProperties(info.video, ctx);
     auto wallpaper = createWallpaper(info.type, ctx);

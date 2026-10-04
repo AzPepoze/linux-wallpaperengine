@@ -1,4 +1,5 @@
 #define SOKOL_VULKAN
+#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -247,6 +248,9 @@ static void runDesktopLayerIfPossible() {
 #endif
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
+    // Worker threads each get their own malloc arena by default, and memory freed on one rarely goes back to the OS;
+    // two arenas keep loading parallel without leaving tens of MB resident.
+    mallopt(M_ARENA_MAX, 2);
     logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
     selectRequestedGpu();

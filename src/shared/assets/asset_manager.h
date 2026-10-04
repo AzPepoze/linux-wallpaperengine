@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "providers/asset_provider.h"
+#include "shared/assets/decoded_image.h"
 #include "shared/assets/media/video_audio.h"
 #include "shared/assets/media/video_texture.h"
 #include "shared/audio/audio_engine.h"
@@ -21,6 +22,11 @@ class AssetManager : public IAssetResolver {
     ~AssetManager() override;
 
     void init(const char* engine_path, const char* wallpaper_path);
+
+    // Starts decoding every texture of the mounted package on the task pool so scene loading finds them ready, and
+    // lets repeated uses of one texture share a single decode. Call releaseDecodedTextures() once loading is done.
+    void prefetchPackageTextures() const;
+    void releaseDecodedTextures() const;
     void updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers = {});
     void clearVideoTextures();
     void setVideoPlayback(float rate, float volume);
@@ -72,6 +78,10 @@ class AssetManager : public IAssetResolver {
 
     GfxImage resolveTextureInternal(const char* name, std::string* out_path, int image_index,
                                     bool warn_on_failure) const;
+
+    struct DecodeCache;
+    std::unique_ptr<DecodeCache> decode_cache_;
+    std::shared_ptr<const wallpaper_engine::DecodedImage> decodeShared(const char* abs_path, int image_index) const;
 };
 
 #endif  // ASSET_MANAGER_H
