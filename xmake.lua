@@ -42,6 +42,19 @@ option("layer_shell")
     end)
 option_end()
 
+-- On by default when libsystemd is installed. Exposes the MPRIS media session
+-- source over sd-bus; disable with `xmake f --mpris=n`.
+option("mpris")
+    set_showmenu(true)
+    set_description("Enable the MPRIS (sd-bus) media session source")
+    on_check(function (option)
+        import("lib.detect.find_package")
+        if find_package("pkgconfig::libsystemd") then
+            option:enable(true)
+        end
+    end)
+option_end()
+
 -- Generates the client protocol C glue with wayland-scanner at configure time into the build tree.
 local function generate_wayland_protocols(target)
     local scanner = import("lib.detect.find_tool")("wayland-scanner")
@@ -77,6 +90,11 @@ target("linux-wallpaperengine")
     add_syslinks("slang-compiler", "slang-rt", "vulkan", "X11", "Xcursor", "Xi", "avformat", "avcodec", "avutil", "swscale", "swresample", "va", "va-drm", "drm", "dl", "m", "pthread")
     add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
     add_defines("LWE_LAYER_SHELL=" .. (has_config("layer_shell") and "1" or "0"))
+    add_defines("LWE_MPRIS=" .. (has_config("mpris") and "1" or "0"))
+
+    if has_config("mpris") then
+        add_syslinks("systemd")
+    end
 
     if has_config("layer_shell") then
         add_syslinks("wayland-client")
@@ -193,6 +211,9 @@ add_test("video_tests", {"tests/video_test.cpp", "src/wallpaper/video/video_prop
 add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media/media_source.cpp",
                          "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
          nil, {"avformat", "avutil"})
+
+add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
+                                 "src/shared/core/logger.cpp"}, {"stb"})
 
 -- Loads every SceneScript block of a Workshop folder and reports script errors (no GPU). See tools/script_corpus.cpp.
 target("script_corpus")
