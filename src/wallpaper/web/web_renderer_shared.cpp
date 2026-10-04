@@ -95,7 +95,7 @@ RenderEvent decodeInput(const WebInputMessage& msg) {
     return event;
 }
 
-bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, uint32_t height) {
+bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, uint32_t height, bool flip_y) {
     if (!frame || !bgra || width == 0 || height == 0) return false;
     if (frame->width != width || frame->height != height) return false;
 
@@ -104,7 +104,8 @@ bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, ui
 
     pthread_mutex_lock(&frame->mutex);
     for (uint32_t row = 0; row < height; ++row) {
-        memcpy(pixels + static_cast<size_t>(row) * stride, bgra + static_cast<size_t>(row) * stride, stride);
+        const uint32_t src_row = flip_y ? (height - 1 - row) : row;
+        memcpy(pixels + static_cast<size_t>(row) * stride, bgra + static_cast<size_t>(src_row) * stride, stride);
     }
     ++frame->frame_counter;
     pthread_mutex_unlock(&frame->mutex);

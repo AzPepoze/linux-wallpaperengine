@@ -34,6 +34,7 @@ option_end()
 
 if has_config("web") then
     add_requires("pkgconfig::Qt6WebEngineWidgets")
+    add_requires("pkgconfig::Qt6WebEngineQuick")
 end
 
 -- On by default when libwayland-client, wayland-scanner and the lib/wlr-protocols submodule are present. Draws the wallpaper
@@ -140,14 +141,16 @@ target("linux-wallpaperengine")
         on_load(generate_wayland_protocols)
     end
 
+    local web_helper_sources =
+        "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_renderer_shared.cpp"
     if is_mode("debug", "asan", "ubsan") then
-        add_files("src/**.cpp|wallpaper/web/web_renderer_main.cpp|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
+        add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
         -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.
         add_files("src/shared/graphics/diagnostics/**.cpp", {cxxflags = "-O2"})
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
-        add_files("src/**.cpp|ui/**.cpp|wallpaper/web/web_renderer_main.cpp" .. layer_exclude)
+        add_files("src/**.cpp|ui/**.cpp" .. web_helper_sources .. layer_exclude)
         add_defines("DEBUG_BUILD=0")
         set_symbols("hidden")
         set_optimize("fastest")
@@ -162,9 +165,10 @@ if has_config("web") then
         set_kind("binary")
         set_targetdir("bin/$(mode)")
         set_rundir("$(projectdir)")
-        add_files("src/wallpaper/web/web_renderer_main.cpp")
+        add_files("src/wallpaper/web/web_renderer_main.cpp", "src/wallpaper/web/web_widget_backend.cpp",
+                  "src/wallpaper/web/web_render_control.cpp", "src/wallpaper/web/web_renderer_shared.cpp")
         add_includedirs("src")
-        add_packages("pkgconfig::Qt6WebEngineWidgets")
+        add_packages("pkgconfig::Qt6WebEngineWidgets", "pkgconfig::Qt6WebEngineQuick")
         add_syslinks("pthread", "dl")
         -- Recent GCC emits copy relocations against Qt's protected
         -- staticMetaObject symbols; a PIC object avoids them.

@@ -32,8 +32,9 @@ struct RenderEvent {
 RenderEvent decodeInput(const WebInputMessage& msg);
 
 // Copies a BGRA8 frame into the shared buffer under its mutex and bumps the
-// frame counter. Returns false when the buffer or dimensions are unusable.
-bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, uint32_t height);
+// frame counter. flip_y reverses the row order (OpenGL readbacks are bottom-up).
+// Returns false when the buffer or dimensions are unusable.
+bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, uint32_t height, bool flip_y = false);
 
 }  // namespace web_renderer
 
