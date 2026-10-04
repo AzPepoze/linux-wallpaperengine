@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
     // offscreen QPA keeps the helper off the desktop; QtWebEngineProcess inherits
     // the same environment. Must be set before QApplication is constructed.
     prctl(PR_SET_PDEATHSIG, SIGKILL);
-    // Respect an externally supplied value (tests/tuning); default to GPU compositing.
+    // Externally supplied values win (tests/tuning); default to GPU compositing.
     setenv("QT_QPA_PLATFORM", "offscreen", 0);
     setenv("QTWEBENGINE_DISABLE_SANDBOX", "1", 0);
     if (!getenv("QTWEBENGINE_CHROMIUM_FLAGS")) {
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
                "--use-gl=angle --use-angle=gl",
                1);
     }
-    // Remote DevTools must be enabled before QApplication constructs the engine.
+    // Must be set before QApplication.
     const char* devtools_port = argValue(argc, argv, "--devtools", nullptr);
     if (devtools_port && devtools_port[0]) setenv("QTWEBENGINE_REMOTE_DEBUGGING", devtools_port, 1);
 

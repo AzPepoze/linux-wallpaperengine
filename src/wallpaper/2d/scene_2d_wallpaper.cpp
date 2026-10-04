@@ -19,6 +19,7 @@ bool Scene2DWallpaper::applyParsedScene(ParsedScene parsed, EngineContext& ctx) 
 
     ctx.scene.camera = parsed.camera;
     ctx.scene.general = parsed.general;
+    ctx.scene_type = parsed.type;
     ctx.scene.layers = std::move(parsed.layers);
     ctx.scene.scene_tree = parsed.scene_tree;
     ctx.scene.scripts = parsed.scripts;

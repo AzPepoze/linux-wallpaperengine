@@ -3,19 +3,17 @@
 
 namespace frame_rate {
 
-// Frame-rate policy derived from the --fps option. An unset (or non-positive)
-// limit means "no software cap": rely on vsync at the display refresh rate.
+// Software cap + vsync choice for --fps; <=0 means unset (vsync, no cap).
 struct Policy {
-    int software_limit;  // 0 = no software cap
+    int software_limit;
     bool vsync;
 };
 
 Policy policyFor(int fps_limit);
 
-// Measures the real presented frame rate over a short rolling window.
+// Real presented frame rate over a short rolling window.
 class Meter {
    public:
-    // Call once per presented frame with the wall-clock seconds since the last call.
     void tick(double dt_seconds);
     double fps() const { return fps_; }
 

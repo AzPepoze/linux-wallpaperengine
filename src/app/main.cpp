@@ -136,11 +136,11 @@ static void applyCliToContext() {
     transition_config.continue_previous = continue_previous;
     wallpaper_mgr.setTransitionConfig(transition_config);
 
-    // Web renderer: capture at the same rate the engine runs, and honour --web-devtools.
     const frame_rate::Policy web_policy = frame_rate::policyFor(cli.fps_limit);
     ctx.web_render_fps = web_policy.software_limit > 0 ? web_policy.software_limit : 60;
     ctx.web_devtools = cli.web_devtools;
     ctx.web_devtools_port = cli.web_devtools_port;
+    ctx.web_devtools_browser = cli.web_devtools_browser;
 }
 
 static void loadInitialWallpaper() {
@@ -225,7 +225,6 @@ static void init(void) {
 
 static void frame(void) {
     runFrame(ctx, wallpaper_mgr);
-    // --fps caps the loop in software; without it, vsync (FIFO) paces us instead.
     const frame_rate::Policy policy = frame_rate::policyFor(cli.fps_limit);
     if (policy.software_limit > 0) limitFrameRate(policy.software_limit);
 }

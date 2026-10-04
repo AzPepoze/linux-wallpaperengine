@@ -24,8 +24,9 @@ struct CliOptions {
     bool cover = false;
     std::string assets_dir;
     int fps_limit = 0;  // 0 = unset: rely on vsync, no software cap
-    bool web_devtools = false;
+    bool web_devtools = true;  // remote debugging on localhost, for the inspector's DevTools button
     int web_devtools_port = 9222;
+    std::string web_devtools_browser;  // empty -> xdg-open; else command, URL appended
     std::string scaling;
     std::string clamp;
     std::string screen_root;

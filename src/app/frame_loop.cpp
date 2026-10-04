@@ -138,8 +138,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 #endif
     ctx.renderer.draw_calls = 0;
 
-    // Real presented rate: the wall-clock duration of the previous loop iteration
-    // (frame build + present), independent of the CPU-only frame_ms below.
+    // Presented rate from the previous loop iteration (frame build + present).
     static frame_rate::Meter frame_meter;
     frame_meter.tick(surface::frameDuration());
     ctx.profiler.measured_fps = frame_meter.fps();

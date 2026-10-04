@@ -214,6 +214,8 @@ add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
 
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
 
+add_test("web_devtools_tests", {"tests/web_devtools_test.cpp", "src/shared/core/web_devtools.cpp"})
+
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
 add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/2d/input/pointer_input.cpp"})

@@ -49,8 +49,7 @@ VkSurfaceFormatKHR pickFormat(VkPhysicalDevice device, VkSurfaceKHR surface) {
     return formats.empty() ? VkSurfaceFormatKHR{} : formats[0];
 }
 
-// vsync -> FIFO (always supported). Otherwise prefer MAILBOX, then IMMEDIATE, so a
-// software --fps cap is not additionally throttled by the display refresh rate.
+// FIFO when vsyncing; else MAILBOX/IMMEDIATE so a software cap is not double-throttled.
 VkPresentModeKHR pickPresentMode(VkPhysicalDevice device, VkSurfaceKHR surface, bool vsync) {
     if (vsync) return VK_PRESENT_MODE_FIFO_KHR;
     uint32_t count = 0;

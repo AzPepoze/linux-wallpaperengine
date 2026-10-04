@@ -123,12 +123,14 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 #endif
     std::string fps;
     if (cli_args::optionValue(args, {"-f", "--fps"}, fps)) opts.fps_limit = atoi(fps.c_str());
-    opts.web_devtools = hasDashedFlag("web-devtools");
+    // On by default (localhost only); --no-web-devtools opts out.
+    opts.web_devtools = !hasDashedFlag("no-web-devtools");
     std::string devtools_port;
     if (cli_args::optionValue(args, {"--web-devtools-port"}, devtools_port)) {
         const int port = atoi(devtools_port.c_str());
         if (port > 0 && port < 65536) opts.web_devtools_port = port;
     }
+    cli_args::optionValue(args, {"--web-devtools-browser"}, opts.web_devtools_browser);
     opts.cover = hasFlag("cover");
     opts.particle_debug_bounds = hasFlag("particle-debug-bounds") || hasFlag("particle-debug");
     opts.particle_debug_velocity = hasFlag("particle-debug-velocity") || hasFlag("particle-debug");

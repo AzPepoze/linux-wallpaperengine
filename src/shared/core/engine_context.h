@@ -116,10 +116,10 @@ struct EngineContext {
     char asset_root[512] = {};
     UserProperties user_properties;
     std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
-    // Web wallpaper renderer options (passed to the out-of-process QtWebEngine helper).
     int web_render_fps = 60;
     bool web_devtools = false;
     int web_devtools_port = 9222;
+    std::string web_devtools_browser;
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;
