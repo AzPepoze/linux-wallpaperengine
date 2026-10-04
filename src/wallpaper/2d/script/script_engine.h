@@ -38,10 +38,9 @@ class ScriptEngine {
         return assets_dir_;
     }
     void setWallpaperId(const std::string& id);
-    // Two wallpapers can be alive during a transition, so each scene registers a scope with its own backend. A script
-    // keeps the scope that was being built when it loaded and runs against that backend; events go to the scripts of
-    // the active scope only. Without scopes (tests, the corpus runner) everything uses the null scope.
-    // `wallpaper_id` names the scene's localStorage; `shared` and localStorage are separate per scope.
+    // Two wallpapers are alive during a transition, so each scene registers a scope: its backend, its `shared` and
+    // its localStorage (named by `wallpaper_id`). Scripts run against the scope they loaded in; events reach the
+    // active scope only. Tests and the corpus runner use the null scope.
     void registerScope(const void* scope, class ScriptSceneBackend* backend, const std::string& wallpaper_id = "");
     void unregisterScope(const void* scope);
     int scopeKey(const void* scope) const;

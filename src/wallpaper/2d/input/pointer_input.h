@@ -6,8 +6,7 @@
 #include <optional>
 #include <vector>
 
-// Pure pointer geometry and hover/button state tracking. Kept free of GPU and
-// sokol includes so it can be unit-tested without a window.
+// Pointer geometry and hover/button tracking, free of GPU includes so it is unit-testable.
 
 struct WorldPoint {
     float x = 0.0f;
@@ -29,8 +28,7 @@ struct HitCandidate {
     // SceneTree world transform (mat4x4 flattened, column * 4 + row).
     float world[16] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
     float size[2] = {0.0f, 0.0f};
-    // Parallax shift in scene units, applied on top of the world transform.
-    // Zero until parallax is routed into the hit test.
+    // Parallax shift in scene units on top of the world transform (not routed in yet, so zero).
     float offset[2] = {0.0f, 0.0f};
     bool solid = false;
     bool visible = true;

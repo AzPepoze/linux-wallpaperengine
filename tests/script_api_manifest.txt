@@ -60,7 +60,8 @@ thisLayer.pause function
 thisLayer.isPlaying function
 
 thisObject.visible boolean
-thisObject.name stringthisObject.getAnimation function
+thisObject.name string
+thisObject.getAnimation function
 
 thisScene.getLayer function
 thisScene.getLayerCount function
