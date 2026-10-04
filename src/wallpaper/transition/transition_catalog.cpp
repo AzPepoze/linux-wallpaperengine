@@ -89,4 +89,20 @@ float transitionProgress(float elapsed_seconds, int duration_ms) {
     return progress;
 }
 
+bool resolveTransitionSetting(const std::string& raw, int& out_value, int& out_duration_ms, std::string& error) {
+    if (out_duration_ms <= 0) out_duration_ms = 1000;
+    if (raw.empty()) {
+        out_value = (int)Effect::Fade;
+        return true;
+    }
+    Selection selection;
+    if (!parseSelection(raw, selection)) {
+        error = "unknown transition '" + raw + "'";
+        return false;
+    }
+    out_value = selection.value;
+    error.clear();
+    return true;
+}
+
 }  // namespace lwe::transition

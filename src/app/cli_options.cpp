@@ -104,6 +104,11 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
+    cli_args::optionValue(args, {"--transition"}, opts.transition);
+    std::string transition_duration;
+    if (cli_args::optionValue(args, {"--transition-duration"}, transition_duration))
+        opts.transition_duration_ms = atoi(transition_duration.c_str());
+    opts.no_control = hasDashedFlag("no-control");
     for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
         const size_t equals = entry.find('=');
         if (equals == std::string::npos) continue;

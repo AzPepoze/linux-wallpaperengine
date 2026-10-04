@@ -29,6 +29,9 @@ struct CliOptions {
     std::string layer;
     std::string layer_size;
     std::string layer_anchor;
+    std::string transition;
+    int transition_duration_ms = 0;
+    bool no_control = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.0f;

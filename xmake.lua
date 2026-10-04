@@ -244,6 +244,9 @@ add_test("control_socket_tests", {"tests/control_socket_test.cpp", "src/app/cont
                                   "src/app/control/control_client.cpp", "src/app/control/control_protocol.cpp",
                                   "src/app/control/control_endpoint.cpp"}, {"cjson"})
 
+add_test("transition_cli_tests", {"tests/transition_cli_test.cpp",
+                                  "src/wallpaper/transition/transition_catalog.cpp"})
+
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 

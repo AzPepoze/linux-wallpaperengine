@@ -65,6 +65,10 @@ int pickRandomEffect(uint32_t seed);
 // Linear 0..1 progress for elapsed_seconds over duration_ms; 1.0 when the duration is non-positive.
 float transitionProgress(float elapsed_seconds, int duration_ms);
 
+// Resolves a raw `--transition` string. Empty means fade. Sets out_duration_ms to
+// 1000 when it is non-positive, and fills `error` on an unknown value.
+bool resolveTransitionSetting(const std::string& raw, int& out_value, int& out_duration_ms, std::string& error);
+
 }  // namespace lwe::transition
 
 #endif  // TRANSITION_CATALOG_H
