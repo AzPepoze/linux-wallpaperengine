@@ -35,7 +35,17 @@ struct AudioEngine::Impl {
 
     struct SoundSlot {
         ma_sound sound = {};
+        ma_decoder decoder = {};  // Backs `sound` when it plays from a mapped package file.
+        bool has_decoder = false;
         bool active = false;
+
+        void release() {
+            if (!active) return;
+            ma_sound_uninit(&sound);
+            if (has_decoder) ma_decoder_uninit(&decoder);
+            has_decoder = false;
+            active = false;
+        }
     };
     std::vector<std::unique_ptr<SoundSlot>> sound_slots;
     std::vector<SoundHandle> sound_free;

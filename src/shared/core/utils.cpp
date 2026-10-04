@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "logger.h"
+#include "vfs.h"
 
 namespace {
 bool hasEngineAssets(const char* path) {
@@ -25,6 +26,16 @@ void copyPath(char* out_path, size_t max_len, const char* path) {
 }  // namespace
 
 char* read_file_to_string(const char* path) {
+    if (vfs::isVirtual(path)) {
+        const uint8_t* data = nullptr;
+        size_t size = 0;
+        if (!vfs::find(path, data, size)) return NULL;
+        char* buf = (char*)malloc(size + 1);
+        if (!buf) return NULL;
+        memcpy(buf, data, size);
+        buf[size] = '\0';
+        return buf;
+    }
     FILE* f = fopen(path, "rb");
     if (!f) return NULL;
     fseek(f, 0, SEEK_END);

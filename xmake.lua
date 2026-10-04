@@ -130,7 +130,7 @@ target("tests")
     add_includedirs("src")
     add_files("tests/tex_video_detect_test.cpp", "src/shared/assets/tex_decoder.cpp",
               "src/shared/assets/tex_format.cpp", "src/shared/assets/tex_header.cpp",
-              "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp")
+              "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp", "src/shared/core/vfs.cpp")
 
     if is_mode("debug", "asan", "ubsan") then
         add_defines("DEBUG_BUILD=1")
@@ -200,7 +200,8 @@ target("shader_tests")
               "src/shared/graphics/shader/shader_processor_metadata.cpp",
               "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
               "src/shared/graphics/shader/shader_vector_rewrite.cpp",
-              "src/shared/graphics/shader/shader_swizzle_rewrite.cpp")
+              "src/shared/graphics/shader/shader_swizzle_rewrite.cpp", "src/shared/core/vfs.cpp",
+              "src/shared/core/logger.cpp")
 
 -- Synthetic project detection checks. Not built by default; run with `xmake build project_tests`.
 target("project_tests")
@@ -211,7 +212,7 @@ target("project_tests")
     add_packages("cjson")
     add_includedirs("src")
     add_files("tests/project_info_test.cpp", "src/wallpaper/project_info.cpp",
-              "src/wallpaper/video/video_properties.cpp")
+              "src/wallpaper/video/video_properties.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp")
 
 -- Synthetic video property and rate checks. Not built by default; run with `xmake build video_tests`.
 target("video_tests")

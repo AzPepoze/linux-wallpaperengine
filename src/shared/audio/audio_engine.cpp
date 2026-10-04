@@ -16,6 +16,7 @@
 
 #include "audio_engine_internal.h"
 #include "shared/core/logger.h"
+#include "shared/core/vfs.h"
 
 namespace {
 bool nameContains(const char* name, const char* needle) {
@@ -122,7 +123,7 @@ void AudioEngine::shutdown() {
     impl->stream_free.clear();
 
     for (auto& slot : impl->sound_slots) {
-        if (slot && slot->active) ma_sound_uninit(&slot->sound);
+        if (slot) slot->release();
     }
     impl->sound_slots.clear();
     impl->sound_free.clear();
@@ -168,8 +169,23 @@ AudioEngine::SoundHandle AudioEngine::play(const std::string& path, bool loop, f
         handle = (SoundHandle)impl->sound_slots.size();
     }
 
-    if (ma_sound_init_from_file(&impl->engine, path.c_str(), 0, nullptr, nullptr, &slot->sound) != MA_SUCCESS) {
+    const uint8_t* packaged = nullptr;
+    size_t packaged_size = 0;
+    bool loaded = false;
+    if (vfs::find(path.c_str(), packaged, packaged_size)) {
+        slot->has_decoder = ma_decoder_init_memory(packaged, packaged_size, nullptr, &slot->decoder) == MA_SUCCESS;
+        loaded = slot->has_decoder &&
+                 ma_sound_init_from_data_source(&impl->engine, &slot->decoder, 0, nullptr, &slot->sound) == MA_SUCCESS;
+        if (!loaded && slot->has_decoder) {
+            ma_decoder_uninit(&slot->decoder);
+            slot->has_decoder = false;
+        }
+    } else {
+        loaded = ma_sound_init_from_file(&impl->engine, path.c_str(), 0, nullptr, nullptr, &slot->sound) == MA_SUCCESS;
+    }
+    if (!loaded) {
         LOG_TAG_W("AUDIO", "Failed to decode sound: %s", path.c_str());
+        impl->sound_slots[handle - 1] = std::move(slot);
         impl->sound_free.push_back(handle);
         return kInvalidSound;
     }
@@ -187,8 +203,7 @@ void AudioEngine::stop(SoundHandle handle) {
     auto& slot = impl->sound_slots[handle - 1];
     if (!slot || !slot->active) return;
     ma_sound_stop(&slot->sound);
-    ma_sound_uninit(&slot->sound);
-    slot->active = false;
+    slot->release();
     impl->sound_free.push_back(handle);
 }
 

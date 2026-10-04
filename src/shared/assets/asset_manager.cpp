@@ -11,6 +11,7 @@
 #include "shared/assets/tex_decoder.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/core/vfs.h"
 #include "shared/graphics/backend/gpu_zero_copy.h"
 #include "wallpaper/2d/layers/layer.h"
 
@@ -236,7 +237,7 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
     else
         strncpy(name_with_ext, name, sizeof(name_with_ext) - 1);
 
-    const bool resolved_file = access(name, R_OK) == 0;
+    const bool resolved_file = vfs::exists(name);
     if (resolved_file) snprintf(abs_path, sizeof(abs_path), "%s", name);
     if (resolved_file || resolvePath(name_with_ext, abs_path, sizeof(abs_path))) {
         if (out_path) *out_path = abs_path;

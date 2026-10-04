@@ -12,6 +12,7 @@
 
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/core/vfs.h"
 #include "wallpaper/2d/alpha_curve.h"
 
 namespace {
@@ -37,19 +38,7 @@ const LoadedFont* loadFont(const std::string& path) {
     LoadedFont& font = fontCache()[path];
     if (font.ready) return &font;
 
-    FILE* file = fopen(path.c_str(), "rb");
-    if (!file) return nullptr;
-    fseek(file, 0, SEEK_END);
-    const long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    if (size <= 0) {
-        fclose(file);
-        return nullptr;
-    }
-    font.data.resize((size_t)size);
-    const size_t read = fread(font.data.data(), 1, font.data.size(), file);
-    fclose(file);
-    if (read != font.data.size()) return nullptr;
+    if (!vfs::readAll(path.c_str(), font.data) || font.data.empty()) return nullptr;
 
     const int offset = stbtt_GetFontOffsetForIndex(font.data.data(), 0);
     if (offset < 0 || !stbtt_InitFont(&font.info, font.data.data(), offset)) return nullptr;

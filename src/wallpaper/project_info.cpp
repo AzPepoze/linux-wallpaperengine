@@ -8,13 +8,21 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <vector>
+
+#include "shared/core/vfs.h"
 
 namespace {
 bool exists(const std::string& path) {
-    return access(path.c_str(), F_OK) == 0;
+    return vfs::exists(path.c_str());
 }
 
 std::string readFile(const std::string& path) {
+    std::vector<uint8_t> bytes;
+    if (vfs::isVirtual(path.c_str())) {
+        if (!vfs::readAll(path.c_str(), bytes)) return "";
+        return std::string(bytes.begin(), bytes.end());
+    }
     std::ifstream file(path, std::ios::binary);
     std::stringstream buffer;
     buffer << file.rdbuf();
@@ -27,6 +35,15 @@ const char* jsonString(cJSON* root, const char* key) {
 }
 
 std::string findVideoInDirectory(const std::string& directory) {
+    if (vfs::isVirtual((directory + "/").c_str())) {
+        std::string found;
+        vfs::forEachFile([&](const char* name) {
+            if (strchr(name, '/') || !isVideoFile(name)) return false;
+            found = directory + "/" + name;
+            return true;
+        });
+        return found;
+    }
     DIR* dir = opendir(directory.c_str());
     if (!dir) return "";
     std::string found;

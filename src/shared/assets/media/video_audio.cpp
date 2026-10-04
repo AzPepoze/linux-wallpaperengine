@@ -8,6 +8,7 @@
 
 #include "shared/assets/media/video_rate.h"
 #include "shared/core/logger.h"
+#include "shared/core/vfs.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -59,24 +60,18 @@ int64_t seekMemory(void* opaque, int64_t offset, int whence) {
 }
 
 bool readEmbeddedMp4(const char* path, std::vector<uint8_t>& mp4) {
-    FILE* file = fopen(path, "rb");
-    if (!file) return false;
-    fseek(file, 0, SEEK_END);
-    const long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    if (size <= 8) {
-        fclose(file);
-        return false;
+    std::vector<uint8_t> data;
+    if (!vfs::readAll(path, data) || data.size() <= 8) return false;
+    // ffmpeg cannot open a packaged file by name, so packaged videos always take the memory route.
+    if (vfs::isVirtual(path)) {
+        mp4 = std::move(data);
+        return true;
     }
-    std::vector<uint8_t> data((size_t)size);
-    const bool success = fread(data.data(), 1, data.size(), file) == data.size();
-    fclose(file);
-    if (!success) return false;
     static constexpr uint8_t marker[] = {'f', 't', 'y', 'p'};
     const auto ftyp = std::search(data.begin(), data.end(), std::begin(marker), std::end(marker));
     if (ftyp == data.end() || ftyp - data.begin() < 4) return false;
     const size_t offset = (size_t)(ftyp - data.begin() - 4);
-    mp4.assign(data.begin() + offset, data.end());
+    mp4.assign(data.begin() + (long)offset, data.end());
     return true;
 }
 

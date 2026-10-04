@@ -6,6 +6,8 @@
 
 #include <string>
 
+#include "shared/core/vfs.h"
+
 EngineAssetProvider::EngineAssetProvider(std::string engine_path) : engine_path(std::move(engine_path)) {}
 
 bool EngineAssetProvider::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {
@@ -46,10 +48,10 @@ bool WallpaperAssetProvider::resolvePath(const char* rel_path, char* out_abs_pat
     if (!rel_path || !out_abs_path || max_len <= 0 || wallpaper_path.empty()) return false;
 
     snprintf(out_abs_path, max_len, "%s/%s", wallpaper_path.c_str(), rel_path);
-    if (access(out_abs_path, F_OK) == 0) return true;
+    if (vfs::exists(out_abs_path)) return true;
 
     snprintf(out_abs_path, max_len, "%s/materials/%s", wallpaper_path.c_str(), rel_path);
-    return access(out_abs_path, F_OK) == 0;
+    return vfs::exists(out_abs_path);
 }
 
 bool InternalAssetProvider::resolvePath(const char* rel_path, char* out_abs_path, int max_len) const {

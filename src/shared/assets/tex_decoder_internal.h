@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "decoded_image.h"
+#include "shared/core/vfs.h"
 
 namespace wallpaper_engine {
 namespace tex_internal {
@@ -35,7 +36,7 @@ struct FormatInfo {
 struct ScopedFile {
     FILE* handle = nullptr;
 
-    explicit ScopedFile(const char* path, const char* mode = "rb") : handle(std::fopen(path, mode)) {}
+    explicit ScopedFile(const char* path) : handle(vfs::open(path)) {}
     ~ScopedFile() {
         if (handle) std::fclose(handle);
     }

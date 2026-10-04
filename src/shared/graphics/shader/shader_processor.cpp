@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "shader_processor_internal.h"
+#include "shared/core/vfs.h"
 
 using namespace shader_processor_internal;
 
@@ -91,7 +92,7 @@ bool readInclude(const std::string& include, const std::string& sourcePath, cons
     const size_t slash = sourcePath.rfind('/');
     if (slash != std::string::npos) {
         const std::string localPath = sourcePath.substr(0, slash + 1) + include;
-        if (access(localPath.c_str(), R_OK) == 0) {
+        if (vfs::exists(localPath.c_str())) {
             strncpy(path, localPath.c_str(), sizeof(path) - 1);
         }
     }
@@ -100,7 +101,7 @@ bool readInclude(const std::string& include, const std::string& sourcePath, cons
         if (!assets.resolvePath(stockPath.c_str(), path, sizeof(path))) return false;
     }
 
-    FILE* file = fopen(path, "rb");
+    FILE* file = vfs::open(path);
     if (!file) return false;
     fseek(file, 0, SEEK_END);
     const long size = ftell(file);

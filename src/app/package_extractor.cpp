@@ -7,7 +7,9 @@
 #include <unistd.h>
 
 #include "shared/assets/unpack.h"
+#include "shared/core/build_config.h"
 #include "shared/core/utils.h"
+#include "shared/core/vfs.h"
 #include "wallpaper/project_info.h"
 
 namespace {
@@ -50,9 +52,17 @@ int runExtractOnly(const WallpaperSource& source, const CliOptions& opts) {
 }
 
 std::string prepareAssetRoot(const WallpaperSource& source) {
-    mkdir("extracted", 0755);
     const std::string pkg_file = packageFile(source);
-    if (source.is_pkg || access(pkg_file.c_str(), F_OK) == 0) {
+    const bool has_package = source.is_pkg || access(pkg_file.c_str(), F_OK) == 0;
+#if !DEBUG_BUILD
+    // Scene packages are read in place from a memory map; other package kinds still need real files.
+    if (has_package && vfs::mount(pkg_file.c_str())) {
+        if (vfs::exists("pkg:/scene.json")) return vfs::kRoot;
+        vfs::unmount();
+    }
+#endif
+    mkdir("extracted", 0755);
+    if (has_package) {
         extract_pkg(pkg_file.c_str(), "extracted");
         return "extracted";
     }

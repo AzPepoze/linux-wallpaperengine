@@ -11,6 +11,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/core/vfs.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/render.h"
@@ -19,19 +20,7 @@
 
 namespace {
 bool readFileBytes(const char* path, std::vector<uint8_t>& out) {
-    FILE* file = fopen(path, "rb");
-    if (!file) return false;
-    fseek(file, 0, SEEK_END);
-    const long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    if (size <= 0) {
-        fclose(file);
-        return false;
-    }
-    out.resize((size_t)size);
-    const size_t read = fread(out.data(), 1, out.size(), file);
-    fclose(file);
-    return read == out.size();
+    return vfs::readAll(path, out) && !out.empty();
 }
 }  // namespace
 
