@@ -96,7 +96,8 @@ void WallpaperTransition::copySource(EngineContext& ctx, sg_view source, sg_imag
     sg_end_pass();
 }
 
-void WallpaperTransition::updateSource(EngineContext& ctx, sg_view source, sg_image source_image, int width, int height) {
+void WallpaperTransition::updateSource(EngineContext& ctx, sg_view source, sg_image source_image, int width,
+                                       int height) {
     if (!active_ || !live_) return;
     copySource(ctx, source, source_image, width, height);
 }
