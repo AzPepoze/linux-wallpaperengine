@@ -80,6 +80,7 @@ void ImageLayer::setPuppetLayers() {
     for (const wallpaper_engine::AnimationLayerDocument& entry : alpha_document.animation_layers) {
         wallpaper_engine::PuppetAnimationLayer layer;
         layer.animation_id = entry.animation;
+        layer.name = entry.name;
         layer.rate = entry.rate;
         layer.blend = entry.blend;
         layer.additive = entry.additive;

@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "shared/assets/tex_decoder.h"
-
 #include "test_util.h"
 using test::check;
 

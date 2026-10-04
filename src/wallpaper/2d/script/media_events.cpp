@@ -79,9 +79,12 @@ MediaScriptBridge::~MediaScriptBridge() {
 
 void MediaScriptBridge::update() {
     if (!started_) {
-        if (!ScriptEngine::instance().anyScriptExports({"mediaStatusChanged", "mediaPlaybackChanged",
-                                                        "mediaPropertiesChanged", "mediaThumbnailChanged",
-                                                        "mediaTimelineChanged"}))
+        // Scanning every script for its hooks is not free, so only look again when scripts were loaded or freed.
+        ScriptEngine& engine = ScriptEngine::instance();
+        if (engine.scriptCount() == checked_script_count_) return;
+        checked_script_count_ = engine.scriptCount();
+        if (!engine.anyScriptExports({"mediaStatusChanged", "mediaPlaybackChanged", "mediaPropertiesChanged",
+                                      "mediaThumbnailChanged", "mediaTimelineChanged"}))
             return;
         source_->start();
         started_ = true;

@@ -6,7 +6,8 @@
 #include "shared/graphics/render.h"
 
 void ImageLayer::updateAnimatedFrame(EngineContext& ctx) {
-    const auto* frame = wallpaper_engine::textureFrameAtTime(texture_metadata, ctx.time);
+    const float clock = sprite_clock.joined ? ctx.time : (float)sprite_clock.time;
+    const auto* frame = wallpaper_engine::textureFrameAtTime(texture_metadata, clock);
     if (!frame || frame == current_texture_frame) return;
     if (cached_view.id == SG_INVALID_ID) updateCachedView();
 
@@ -52,4 +53,182 @@ void ImageLayer::updateAnimatedFrame(EngineContext& ctx) {
     sg_end_pass();
     renderer_update_viewport(&ctx.renderer, saved_width, saved_height);
     current_texture_frame = frame;
+}
+
+namespace {
+double spriteDuration(const wallpaper_engine::TextureMetadata& metadata) {
+    double duration = 0.0;
+    for (const auto& frame : metadata.animation_frames) duration += frame.duration;
+    return duration;
+}
+
+double spriteTimeOfFrame(const wallpaper_engine::TextureMetadata& metadata, double frame_index) {
+    double time = 0.0;
+    const size_t whole = (size_t)std::max(0.0, std::floor(frame_index));
+    for (size_t i = 0; i < whole && i < metadata.animation_frames.size(); ++i)
+        time += metadata.animation_frames[i].duration;
+    return time;
+}
+
+int spriteFrameIndexAt(const wallpaper_engine::TextureMetadata& metadata, double seconds) {
+    const double duration = spriteDuration(metadata);
+    if (duration <= 0.0) return 0;
+    double phase = std::fmod(seconds, duration);
+    if (phase < 0.0) phase += duration;
+    for (size_t i = 0; i < metadata.animation_frames.size(); ++i) {
+        if (phase < metadata.animation_frames[i].duration) return (int)i;
+        phase -= metadata.animation_frames[i].duration;
+    }
+    return (int)metadata.animation_frames.size() - 1;
+}
+}  // namespace
+
+bool ImageLayer::spriteGet(const std::string& field, double now, double& out) const {
+    if (!hasSpriteAnimation()) return false;
+    const double duration = spriteDuration(texture_metadata);
+    const double time = sprite_clock.joined ? now : sprite_clock.time;
+    if (field == "rate") {
+        out = sprite_clock.rate;
+    } else if (field == "frameCount") {
+        out = (double)texture_metadata.animation_frames.size();
+    } else if (field == "duration") {
+        out = duration;
+    } else if (field == "fps") {
+        out = duration > 0.0 ? (double)texture_metadata.animation_frames.size() / duration : 0.0;
+    } else if (field == "frame") {
+        out = spriteFrameIndexAt(texture_metadata, time);
+    } else if (field == "playing") {
+        out = sprite_clock.joined || sprite_clock.playing ? 1.0 : 0.0;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool ImageLayer::spriteSet(const std::string& field, double value, double now) {
+    if (!hasSpriteAnimation()) return false;
+    if (field != "rate" && field != "frame") return false;
+    if (sprite_clock.joined) {  // taking control keeps the current position
+        sprite_clock.joined = false;
+        sprite_clock.time = now;
+    }
+    if (field == "rate")
+        sprite_clock.rate = value;
+    else
+        sprite_clock.time = spriteTimeOfFrame(texture_metadata, value);
+    return true;
+}
+
+bool ImageLayer::spriteCommand(const std::string& command, double now) {
+    if (!hasSpriteAnimation()) return false;
+    if (command == "join") {
+        sprite_clock.joined = true;
+        return true;
+    }
+    if (command != "play" && command != "pause" && command != "stop") return false;
+    if (sprite_clock.joined) {
+        sprite_clock.joined = false;
+        sprite_clock.time = now;
+    }
+    if (command == "play") {
+        sprite_clock.playing = true;
+    } else {
+        sprite_clock.playing = false;
+        if (command == "stop") sprite_clock.time = 0.0;
+    }
+    return true;
+}
+
+int ImageLayer::puppetLayerIndex(const std::string& name) const {
+    for (size_t i = 0; i < puppet_layers.size(); ++i)
+        if (puppet_layers[i].name == name) return (int)i;
+    return -1;
+}
+
+bool ImageLayer::puppetLayerGet(size_t index, const std::string& field, double& out) const {
+    if (index >= puppet_layers.size()) return false;
+    const wallpaper_engine::PuppetAnimationLayer& layer = puppet_layers[index];
+    const wallpaper_engine::MdlAnimationClip* clip = nullptr;
+    for (const auto& candidate : puppet.clips)
+        if (candidate.id == layer.animation_id) clip = &candidate;
+    if (field == "rate") {
+        out = layer.rate;
+    } else if (field == "blend") {
+        out = layer.blend;
+    } else if (field == "visible") {
+        out = layer.visible ? 1.0 : 0.0;
+    } else if (field == "playing") {
+        out = layer.playing ? 1.0 : 0.0;
+    } else if (clip && field == "fps") {
+        out = clip->fps;
+    } else if (clip && field == "frameCount") {
+        out = clip->frame_count;
+    } else if (clip && field == "duration") {
+        out = clip->fps > 0.0f ? (double)clip->frame_count / clip->fps : 0.0;
+    } else if (clip && field == "frame") {
+        out = layer.time * clip->fps;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool ImageLayer::puppetLayerGetString(size_t index, const std::string& field, std::string& out) const {
+    if (index >= puppet_layers.size() || field != "name") return false;
+    out = puppet_layers[index].name;
+    return true;
+}
+
+bool ImageLayer::puppetLayerSet(size_t index, const std::string& field, double value) {
+    if (index >= puppet_layers.size()) return false;
+    wallpaper_engine::PuppetAnimationLayer& layer = puppet_layers[index];
+    if (field == "rate") {
+        layer.rate = (float)value;
+    } else if (field == "blend") {
+        layer.blend = (float)value;
+    } else if (field == "visible") {
+        layer.visible = value != 0.0;
+    } else if (field == "frame") {
+        float fps = 0.0f;
+        for (const auto& candidate : puppet.clips)
+            if (candidate.id == layer.animation_id) fps = candidate.fps;
+        if (fps <= 0.0f) return false;
+        layer.time = (float)std::max(0.0, value / fps);
+        layer.ended = false;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool ImageLayer::puppetLayerCommand(size_t index, const std::string& command) {
+    if (index >= puppet_layers.size()) return false;
+    wallpaper_engine::PuppetAnimationLayer& layer = puppet_layers[index];
+    if (command == "play") {
+        // A finished one-shot clip starts over.
+        if (layer.ended || !layer.playing) {
+            for (const auto& clip : puppet.clips) {
+                if (clip.id == layer.animation_id && clip.loop_mode == "single" &&
+                    layer.time * clip.fps >= (float)clip.frame_count)
+                    layer.time = 0.0f;
+            }
+        }
+        layer.ended = false;
+        layer.playing = true;
+    } else if (command == "pause") {
+        layer.playing = false;
+    } else if (command == "stop") {
+        layer.playing = false;
+        layer.time = 0.0f;
+        layer.ended = false;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool ImageLayer::puppetLayerTakeEnded(size_t index) {
+    if (index >= puppet_layers.size() || !puppet_layers[index].ended) return false;
+    puppet_layers[index].ended = false;
+    return true;
 }

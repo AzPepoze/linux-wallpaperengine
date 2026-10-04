@@ -79,6 +79,11 @@ void SoundLayer::setVisible(bool v) {
     applyVolume();
 }
 
+void SoundLayer::setVolume(float volume) {
+    doc.volume = std::max(0.0f, volume);
+    applyVolume();
+}
+
 void SoundLayer::applyVolume() {
     if (current == AudioEngine::kInvalidSound) return;
     if (!AudioEngine::instance().isAvailable()) return;

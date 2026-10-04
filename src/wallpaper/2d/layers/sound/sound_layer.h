@@ -22,6 +22,14 @@ class SoundLayer : public Layer {
     void stop() override;
     void setVisible(bool v) override;
 
+    bool playing() const {
+        return started && current != AudioEngine::kInvalidSound;
+    }
+    float volume() const {
+        return doc.volume;
+    }
+    void setVolume(float volume);
+
    private:
     void playCurrent();
     void advance();

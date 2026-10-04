@@ -181,6 +181,8 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     layer->rebuild(ctx);
     if (!doc.text.script.empty()) {
         layer->script_ = std::make_unique<SceneScript>();
+        layer->script_->setLayerId(doc.node.id);
+        layer->script_->setProperty("text");
         if (layer->script_->load(doc.text.script, doc.text.script_properties_json)) {
             layer->script_timer_ = 1.0f;  // evaluate on the first update
             LOG_I("Text layer '%s': SceneScript loaded", config.name.c_str());
@@ -191,6 +193,70 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     LOG_I("Created text layer '%s' (font='%s', pointsize=%.1f)", config.name.c_str(), config.font.c_str(),
           config.pointsize);
     return layer;
+}
+
+bool TextLayer::propertyGetString(const std::string& name, std::string& out) const {
+    if (name == "text")
+        out = config_.text;
+    else if (name == "font")
+        out = config_.font;
+    else if (name == "horizontalalign")
+        out = config_.horizontal_align;
+    else if (name == "verticalalign")
+        out = config_.vertical_align;
+    else
+        return false;
+    return true;
+}
+
+bool TextLayer::propertySetString(const std::string& name, const std::string& value) {
+    if (name == "text") {
+        config_.text = value;
+        return true;
+    }
+    if (name == "font") {
+        config_.font = value;
+        font_path_.clear();
+    } else if (name == "horizontalalign") {
+        config_.horizontal_align = value;
+    } else if (name == "verticalalign") {
+        config_.vertical_align = value;
+    } else {
+        return false;
+    }
+    needs_rebuild_ = true;
+    return true;
+}
+
+bool TextLayer::propertyGetNumber(const std::string& name, double& out) const {
+    if (name == "pointsize")
+        out = config_.pointsize;
+    else if (name == "maxwidth")
+        out = config_.maxwidth;
+    else if (name == "maxrows")
+        out = config_.max_rows;
+    else if (name == "alpha")
+        out = config_.alpha;
+    else
+        return false;
+    return true;
+}
+
+bool TextLayer::propertySetNumber(const std::string& name, double value) {
+    if (name == "alpha") {
+        config_.alpha = (float)value;
+        return true;
+    }
+    if (name == "pointsize")
+        config_.pointsize = (float)value;
+    else if (name == "maxwidth")
+        config_.maxwidth = (float)value;
+    else if (name == "maxrows")
+        config_.max_rows = (int)value;
+    else
+        return false;
+    needs_rebuild_ = true;
+    return true;
 }
 
 ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
@@ -221,15 +287,16 @@ ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
 void TextLayer::update(float dt, EngineContext& ctx) {
     if (script_ && script_->valid()) {
         script_timer_ += dt;
-        if (script_timer_ >= 0.25f) {  // a few evaluations per second
+        if (script_timer_ >= 0.25f) {
             script_timer_ = 0.0f;
-            std::string evaluated;
-            if (script_->update(current_text_, evaluated) && !evaluated.empty()) {
-                config_.text = evaluated;
-            }
+            ScriptValue text = ScriptValue::makeString(current_text_);
+            if (script_->updateValue(text) && !text.text.empty()) config_.text = text.text;
         }
     }
-    if (config_.text != current_text_) rebuild(ctx);
+    if (config_.text != current_text_ || needs_rebuild_) {
+        needs_rebuild_ = false;
+        rebuild(ctx);
+    }
     tint[3] = std::clamp(config_.alpha, 0.0f, 1.0f) * evaluateImageAlpha(alpha_document, ctx.time);
     if (!is_fullscreen) renderEffectChain(ctx);
 }

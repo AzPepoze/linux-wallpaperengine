@@ -34,6 +34,13 @@ export function update(value) {
 }
 )JS";
 
+bool updateText(SceneScript& script, std::string& out) {
+    ScriptValue value = ScriptValue::makeString("");
+    if (!script.updateValue(value)) return false;
+    out = value.text;
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -44,7 +51,7 @@ int main() {
             script.load(kClockScript, R"({"delimiter":":","use24hFormat":{"user":"_24hourformat","value":false}})");
         CHECK(loaded && script.valid());
         std::string out;
-        CHECK(script.update("", out));
+        CHECK(updateText(script, out));
         std::printf("12h clock => %s\n", out.c_str());
         CHECK(out.find("AM") != std::string::npos || out.find("PM") != std::string::npos);
         CHECK(out.find(".") != std::string::npos);  // month abbreviation
@@ -56,7 +63,7 @@ int main() {
         SceneScript script;
         CHECK(script.load(kClockScript, ""));
         std::string out;
-        CHECK(script.update("", out));
+        CHECK(updateText(script, out));
         std::printf("24h clock => %s\n", out.c_str());
         CHECK(out.find("AM") == std::string::npos);
         CHECK(out.find("PM") == std::string::npos);
@@ -78,17 +85,17 @@ export function update(value) { return seen; }
 
         ScriptEvent media = {{"title", ScriptValue::makeString("Song")}, {"position", ScriptValue::makeVec2(3, 4)}};
         CHECK(a.callHook("mediaPropertiesChanged", media));
-        CHECK(a.update("", out) && out == "Song|3");
+        CHECK(updateText(a, out) && out == "Song|3");
         CHECK(!a.callHook("noSuchHook", media));
 
         ScriptEngine& engine = ScriptEngine::instance();
         CHECK(engine.broadcast("mediaPropertiesChanged", {{"title", ScriptValue::makeString("All")},
                                                           {"position", ScriptValue::makeVec2(1, 2)}}) == 2);
-        CHECK(b.update("", out) && out == "All|1");
+        CHECK(updateText(b, out) && out == "All|1");
 
         CHECK(engine.dispatchToLayer(9, "cursorClick", {{"worldPosition", ScriptValue::makeVec2(55, 0)}}) == 1);
-        CHECK(b.update("", out) && out == "click 55");
-        CHECK(a.update("", out) && out == "All|1");  // layer 7 was not addressed
+        CHECK(updateText(b, out) && out == "click 55");
+        CHECK(updateText(a, out) && out == "All|1");  // layer 7 was not addressed
 
         engine.broadcast("mediaPropertiesChanged",
                          {{"title", ScriptValue::makeString("Sticky")}, {"position", ScriptValue::makeVec2(9, 9)}},
@@ -96,7 +103,7 @@ export function update(value) { return seen; }
         SceneScript late;
         CHECK(late.load(source, ""));
         engine.beginFrame(0.016, 1.0, 1920, 1080, 1920, 1080);  // delivers remembered events to new scripts
-        CHECK(late.update("", out) && out == "Sticky|9");
+        CHECK(updateText(late, out) && out == "Sticky|9");
     }
 
     return test::finish("scene script tests");

@@ -28,7 +28,40 @@ class ImageLayer : public Layer {
     bool is_fullscreen = false;
     bool is_compose_region = false;
     bool copy_background = false;
-    bool cursor_solid = false;  // scene `solid`: receives cursor events (not the plain-colour solid layer)
+    // Sprite-sheet playback (TEXS frames). It follows the shared scene clock until a script takes control through
+    // getTextureAnimation(); join() hands it back.
+    struct SpriteClock {
+        bool joined = true;
+        double time = 0.0;
+        double rate = 1.0;
+        bool playing = true;
+    };
+    SpriteClock sprite_clock;
+    bool hasSpriteAnimation() const {
+        return !texture_metadata.animation_frames.empty();
+    }
+    bool spriteGet(const std::string& field, double now, double& out) const;
+    bool spriteSet(const std::string& field, double value, double now);
+    bool spriteCommand(const std::string& command, double now);
+
+    // Puppet animation layers, addressed by name or index (getAnimationLayer()).
+    int puppetLayerIndex(const std::string& name) const;
+    bool puppetLayerGet(size_t index, const std::string& field, double& out) const;
+    bool puppetLayerGetString(size_t index, const std::string& field, std::string& out) const;
+    bool puppetLayerSet(size_t index, const std::string& field, double value);
+    bool puppetLayerCommand(size_t index, const std::string& command);
+    size_t puppetLayerCount() const {
+        return puppet_layers.size();
+    }
+    // True once after the one-shot clip of that puppet layer ended.
+    bool puppetLayerTakeEnded(size_t index);
+
+    void setAlpha(float alpha) {
+        tint[3] = alpha;
+        alpha_script_value = alpha;
+    }
+    bool alpha_from_timeline = false;  // SceneAnimations writes tint[3]; the per-layer alpha curve is not evaluated
+    bool cursor_solid = false;         // scene `solid`: receives cursor events (not the plain-colour solid layer)
     int color_blend_mode = 0;
 
     ImageLayer(const char* name, GfxImage img);

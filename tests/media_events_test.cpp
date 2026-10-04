@@ -19,6 +19,13 @@ const ScriptValue* field(const ScriptEvent& event, const char* name) {
     return nullptr;
 }
 
+bool updateText(SceneScript& script, std::string& out) {
+    ScriptValue value = ScriptValue::makeString("");
+    if (!script.updateValue(value)) return false;
+    out = value.text;
+    return true;
+}
+
 bool hasString(const ScriptEvent& event, const char* name, const char* expected) {
     const ScriptValue* value = field(event, name);
     return value && value->kind == ScriptValue::Kind::String && value->text == expected;
@@ -154,7 +161,7 @@ void testBridgeDeliversEvents() {
     bridge.update();
 
     std::string out;
-    CHECK(script.update("", out));
+    CHECK(updateText(script, out));
     CHECK(out == "Synthetic Song|0.25|1");
 }
 
@@ -187,7 +194,7 @@ void testStickyReplayedToLateScript() {
     ScriptEngine::instance().beginFrame(0.016, 1.0, 1920, 1080, 1920, 1080);
 
     std::string out;
-    CHECK(late.update("", out));
+    CHECK(updateText(late, out));
     CHECK(out == "Late Song|0.5|2");
 }
 

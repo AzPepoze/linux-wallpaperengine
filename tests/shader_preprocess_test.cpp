@@ -5,7 +5,6 @@
 #include <string>
 
 #include "shared/graphics/shader/shader_processor.h"
-
 #include "test_util.h"
 
 namespace {

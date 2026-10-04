@@ -19,6 +19,11 @@ class TextLayer : public ImageLayer {
 
     void update(float dt, EngineContext& ctx) override;
 
+    bool propertyGetString(const std::string& name, std::string& out) const;
+    bool propertySetString(const std::string& name, const std::string& value);
+    bool propertyGetNumber(const std::string& name, double& out) const;
+    bool propertySetNumber(const std::string& name, double value);
+
    protected:
     ScreenRect screenRect(EngineContext& ctx) const override;
 
@@ -30,6 +35,7 @@ class TextLayer : public ImageLayer {
     TextObjectConfig config_;
     std::string current_text_;
     std::string font_path_;
+    bool needs_rebuild_ = false;
     std::unique_ptr<SceneScript> script_;
     float script_timer_ = 0.0f;
 };

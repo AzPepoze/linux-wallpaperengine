@@ -250,6 +250,9 @@ void parseAnimationLayers(const cJSON* array, std::vector<AnimationLayerDocument
         if (!parseFloat(cJSON_GetObjectItemCaseSensitive(entry, "animation"), animation)) continue;
         AnimationLayerDocument layer;
         layer.animation = (uint32_t)animation;
+        if (const cJSON* name = cJSON_GetObjectItemCaseSensitive(entry, "name");
+            cJSON_IsString(name) && name->valuestring)
+            layer.name = name->valuestring;
         parseFloat(cJSON_GetObjectItemCaseSensitive(entry, "rate"), layer.rate);
         parseFloat(cJSON_GetObjectItemCaseSensitive(entry, "blend"), layer.blend);
         layer.additive = parseBool(cJSON_GetObjectItemCaseSensitive(entry, "additive"), false);

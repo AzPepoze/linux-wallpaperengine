@@ -11,8 +11,6 @@
 
 namespace {
 
-// Event handlers a script may export; collected into __lweExports[id] by an epilogue appended to the module, because
-// this QuickJS version has no public module-namespace accessor.
 constexpr const char* kHooks[] = {"init",
                                   "update",
                                   "destroy",
@@ -31,7 +29,10 @@ constexpr const char* kHooks[] = {"init",
                                   "mediaThumbnailChanged",
                                   "mediaTimelineChanged"};
 
-// Builds a Vec2 / Vec3 through the global constructor from baseclasses.js, or a plain {x, y, z} object without it.
+constexpr int kMaxConsecutiveErrors = 3;
+constexpr double kLoadBudgetMs = 500.0;
+constexpr double kCallBudgetMs = 20.0;
+
 JSValue makeVector(JSContext* ctx, const char* constructor, const double* v, int count) {
     JSValue global = JS_GetGlobalObject(ctx);
     JSValue ctor = JS_GetPropertyStr(ctx, global, constructor);
@@ -89,7 +90,6 @@ bool readComponent(JSContext* ctx, JSValueConst object, const char* key, double&
     return ok;
 }
 
-// Replaces `value` with the script's result when it has a compatible type.
 bool fromJsValue(JSContext* ctx, JSValueConst result, ScriptValue& value) {
     switch (value.kind) {
         case ScriptValue::Kind::Number:
@@ -118,7 +118,7 @@ bool fromJsValue(JSContext* ctx, JSValueConst result, ScriptValue& value) {
         case ScriptValue::Kind::Vec3: {
             const int count = value.kind == ScriptValue::Kind::Vec3 ? 3 : 2;
             double parsed[3] = {value.vec[0], value.vec[1], value.vec[2]};
-            if (JS_IsNumber(result)) {  // a number broadcasts to every component
+            if (JS_IsNumber(result)) {  // Wallpaper Engine broadcasts a number to every component
                 double scalar = 0.0;
                 if (!readNumber(ctx, result, scalar)) return false;
                 for (int i = 0; i < count; ++i) parsed[i] = scalar;
@@ -136,16 +136,13 @@ bool fromJsValue(JSContext* ctx, JSValueConst result, ScriptValue& value) {
     return false;
 }
 
-constexpr int kMaxConsecutiveErrors = 3;
-constexpr double kLoadBudgetMs = 500.0;
-constexpr double kCallBudgetMs = 20.0;
-
+// This QuickJS has no public module-namespace accessor, so the module's exports are copied into a table by an
+// epilogue appended to its source.
 std::string buildModuleSource(const std::string& source, int id) {
     std::string text = source;
     text += "\n;globalThis.__lweExports[" + std::to_string(id) + "] = {";
-    for (const char* hook : kHooks) {
+    for (const char* hook : kHooks)
         text += std::string(hook) + ": typeof " + hook + " === 'function' ? " + hook + " : undefined,";
-    }
     text += "scriptProperties: typeof scriptProperties !== 'undefined' ? scriptProperties : undefined};\n";
     return text;
 }
@@ -159,16 +156,17 @@ struct SceneScript::Impl {
     JSValue exports = JS_UNDEFINED;
     JSValue init_fn = JS_UNDEFINED;
     JSValue update_fn = JS_UNDEFINED;
-    JSValue context_object = JS_UNDEFINED;  // selected as thisLayer/thisObject owner while this script runs
+    JSValue context_object = JS_UNDEFINED;
     int consecutive_errors = 0;
     bool disabled = false;
     uint32_t layer_id = 0;
+    std::string property;
 
     JSContext* ctx() const {
         return ScriptEngine::instance().context();
     }
 
-    // Calls `fn` (an exported hook) under this script's error and time budget. The result is owned by the caller.
+    // The result is owned by the caller.
     bool call(JSValueConst fn, const char* what, int argc, JSValue* argv, JSValue& result, double budget_ms) {
         result = JS_UNDEFINED;
         JSContext* c = ctx();
@@ -196,9 +194,53 @@ struct SceneScript::Impl {
     JSValue hook(const char* name) const {
         JSContext* c = ctx();
         if (!c || !JS_IsObject(exports)) return JS_UNDEFINED;
-        return JS_GetPropertyStr(c, exports, name);  // owned by the caller
+        return JS_GetPropertyStr(c, exports, name);
     }
 };
+
+ScriptValue ScriptValue::makeNumber(double value) {
+    ScriptValue result;
+    result.number = value;
+    return result;
+}
+
+ScriptValue ScriptValue::makeBool(bool value) {
+    ScriptValue result;
+    result.kind = Kind::Bool;
+    result.number = value ? 1.0 : 0.0;
+    return result;
+}
+
+ScriptValue ScriptValue::makeVec2(double x, double y) {
+    ScriptValue result;
+    result.kind = Kind::Vec2;
+    result.vec[0] = x;
+    result.vec[1] = y;
+    return result;
+}
+
+ScriptValue ScriptValue::makeVec3(double x, double y, double z) {
+    ScriptValue result;
+    result.kind = Kind::Vec3;
+    result.vec[0] = x;
+    result.vec[1] = y;
+    result.vec[2] = z;
+    return result;
+}
+
+ScriptValue ScriptValue::makeString(std::string value) {
+    ScriptValue result;
+    result.kind = Kind::String;
+    result.text = std::move(value);
+    return result;
+}
+
+ScriptValue ScriptValue::makeJson(std::string json) {
+    ScriptValue result;
+    result.kind = Kind::Json;
+    result.text = std::move(json);
+    return result;
+}
 
 SceneScript::SceneScript() : impl_(std::make_unique<Impl>()) {}
 
@@ -269,6 +311,7 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
         return false;
     }
 
+    // Module evaluation is a promise; a rejection (a throw at the top level) is recorded by __lweWatch.
     JSValue global = JS_GetGlobalObject(ctx);
     JSValue watch = JS_GetPropertyStr(ctx, global, "__lweWatch");
     JSValue watch_args[2] = {promise, JS_NewInt32(ctx, impl_->id)};
@@ -316,112 +359,11 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
         impl_->context_object = JS_NewObject(ctx);
         JS_SetPropertyStr(ctx, impl_->context_object, "id", JS_NewInt32(ctx, impl_->id));
         JS_SetPropertyStr(ctx, impl_->context_object, "layerId", JS_NewUint32(ctx, impl_->layer_id));
+        JS_SetPropertyStr(ctx, impl_->context_object, "property",
+                          JS_NewStringLen(ctx, impl_->property.c_str(), impl_->property.size()));
     }
     JS_FreeValue(ctx, global);
     return loaded;
-}
-
-bool SceneScript::callInit(double& value) {
-    if (!impl_ || !impl_->retained || !JS_IsFunction(impl_->ctx(), impl_->init_fn)) return false;
-    JSContext* ctx = impl_->ctx();
-    JSValue argument = JS_NewFloat64(ctx, value);
-    JSValue result;
-    bool ok = impl_->call(impl_->init_fn, "init", 1, &argument, result, kLoadBudgetMs);
-    JS_FreeValue(ctx, argument);
-    double number = 0.0;
-    ok = ok && JS_IsNumber(result) && JS_ToFloat64(ctx, &number, result) == 0 && number == number;
-    JS_FreeValue(ctx, result);
-    if (ok) value = number;
-    return ok;
-}
-
-bool SceneScript::updateNumber(double value, double& out) {
-    if (!valid()) return false;
-    JSContext* ctx = impl_->ctx();
-    JSValue argument = JS_NewFloat64(ctx, value);
-    JSValue result;
-    bool ok = impl_->call(impl_->update_fn, "update", 1, &argument, result, kCallBudgetMs);
-    JS_FreeValue(ctx, argument);
-    double number = 0.0;
-    ok = ok && JS_IsNumber(result) && JS_ToFloat64(ctx, &number, result) == 0 && number == number;
-    JS_FreeValue(ctx, result);
-    if (ok) out = number;
-    return ok;
-}
-
-ScriptValue ScriptValue::makeNumber(double value) {
-    ScriptValue result;
-    result.number = value;
-    return result;
-}
-
-ScriptValue ScriptValue::makeBool(bool value) {
-    ScriptValue result;
-    result.kind = Kind::Bool;
-    result.number = value ? 1.0 : 0.0;
-    return result;
-}
-
-ScriptValue ScriptValue::makeVec3(double x, double y, double z) {
-    ScriptValue result;
-    result.kind = Kind::Vec3;
-    result.vec[0] = x;
-    result.vec[1] = y;
-    result.vec[2] = z;
-    return result;
-}
-
-ScriptValue ScriptValue::makeVec2(double x, double y) {
-    ScriptValue result;
-    result.kind = Kind::Vec2;
-    result.vec[0] = x;
-    result.vec[1] = y;
-    return result;
-}
-
-ScriptValue ScriptValue::makeJson(std::string json) {
-    ScriptValue result;
-    result.kind = Kind::Json;
-    result.text = std::move(json);
-    return result;
-}
-
-uint32_t SceneScript::layerId() const {
-    return impl_ ? impl_->layer_id : 0;
-}
-
-bool SceneScript::callHook(const char* name, const ScriptEvent& event, bool with_event) {
-    if (!impl_ || !impl_->retained) return false;
-    JSContext* ctx = impl_->ctx();
-    JSValue fn = impl_->hook(name);
-    bool ok = false;
-    if (JS_IsFunction(ctx, fn)) {
-        JSValue argument = JS_UNDEFINED;
-        if (with_event || !event.empty()) {
-            argument = JS_NewObject(ctx);
-            for (const auto& [key, value] : event) JS_SetPropertyStr(ctx, argument, key.c_str(), toJsValue(ctx, value));
-        }
-        JSValue result;
-        ok = impl_->call(fn, name, JS_IsUndefined(argument) ? 0 : 1, &argument, result, kCallBudgetMs);
-        JS_FreeValue(ctx, result);
-        JS_FreeValue(ctx, argument);
-    }
-    JS_FreeValue(ctx, fn);
-    return ok;
-}
-
-ScriptValue ScriptValue::makeString(std::string value) {
-    ScriptValue result;
-    result.kind = Kind::String;
-    result.text = std::move(value);
-    return result;
-}
-
-void SceneScript::setLayerId(uint32_t layer_id) {
-    if (!impl_) return;
-    impl_->layer_id = layer_id;
-    if (impl_->retained && JS_IsObject(impl_->context_object))
-        JS_SetPropertyStr(impl_->ctx(), impl_->context_object, "layerId", JS_NewUint32(impl_->ctx(), layer_id));
 }
 
 bool SceneScript::initValue(ScriptValue& value) {
@@ -448,46 +390,41 @@ bool SceneScript::updateValue(ScriptValue& value) {
     return ok;
 }
 
-bool SceneScript::update(const std::string& value, std::string& out) {
-    if (!valid()) return false;
+bool SceneScript::callHook(const char* name, const ScriptEvent& event, bool with_event) {
+    if (!impl_ || !impl_->retained) return false;
     JSContext* ctx = impl_->ctx();
-    JSValue argument = JS_NewStringLen(ctx, value.c_str(), value.size());
-    JSValue result;
-    bool ok = impl_->call(impl_->update_fn, "update", 1, &argument, result, kCallBudgetMs);
-    JS_FreeValue(ctx, argument);
-    if (ok && !JS_IsUndefined(result)) {
-        if (const char* text = JS_ToCString(ctx, result)) {
-            out = text;
-            JS_FreeCString(ctx, text);
+    JSValue fn = impl_->hook(name);
+    bool ok = false;
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue argument = JS_UNDEFINED;
+        if (with_event || !event.empty()) {
+            argument = JS_NewObject(ctx);
+            for (const auto& [key, value] : event) JS_SetPropertyStr(ctx, argument, key.c_str(), toJsValue(ctx, value));
         }
-    } else {
-        ok = ok && !JS_IsUndefined(result);
+        JSValue result;
+        ok = impl_->call(fn, name, JS_IsUndefined(argument) ? 0 : 1, &argument, result, kCallBudgetMs);
+        JS_FreeValue(ctx, result);
+        JS_FreeValue(ctx, argument);
     }
-    JS_FreeValue(ctx, result);
+    JS_FreeValue(ctx, fn);
     return ok;
 }
 
-void SceneScript::callWithString(const std::string& function, const std::string& argument) {
-    if (!impl_ || !impl_->retained) return;
-    JSValue fn = impl_->hook(function.c_str());
-    JSContext* ctx = impl_->ctx();
-    JSValue value = JS_NewStringLen(ctx, argument.c_str(), argument.size());
-    JSValue result;
-    impl_->call(fn, function.c_str(), 1, &value, result, kCallBudgetMs);
-    JS_FreeValue(ctx, value);
-    JS_FreeValue(ctx, result);
-    JS_FreeValue(ctx, fn);
+void SceneScript::setLayerId(uint32_t layer_id) {
+    if (!impl_) return;
+    impl_->layer_id = layer_id;
+    if (impl_->retained && JS_IsObject(impl_->context_object))
+        JS_SetPropertyStr(impl_->ctx(), impl_->context_object, "layerId", JS_NewUint32(impl_->ctx(), layer_id));
 }
 
-void SceneScript::mediaPropertiesChanged(const std::string& title) {
-    if (!impl_ || !impl_->retained) return;
-    JSContext* ctx = impl_->ctx();
-    JSValue fn = impl_->hook("mediaPropertiesChanged");
-    JSValue event = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, event, "title", JS_NewStringLen(ctx, title.c_str(), title.size()));
-    JSValue result;
-    impl_->call(fn, "mediaPropertiesChanged", 1, &event, result, kCallBudgetMs);
-    JS_FreeValue(ctx, event);
-    JS_FreeValue(ctx, result);
-    JS_FreeValue(ctx, fn);
+uint32_t SceneScript::layerId() const {
+    return impl_ ? impl_->layer_id : 0;
+}
+
+void SceneScript::setProperty(const std::string& property) {
+    if (!impl_) return;
+    impl_->property = property;
+    if (impl_->retained && JS_IsObject(impl_->context_object))
+        JS_SetPropertyStr(impl_->ctx(), impl_->context_object, "property",
+                          JS_NewStringLen(impl_->ctx(), property.c_str(), property.size()));
 }

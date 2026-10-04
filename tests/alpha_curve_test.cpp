@@ -1,10 +1,10 @@
 #include "wallpaper/2d/alpha_curve.h"
-#include "wallpaper/2d/animation_curve.h"
 
 #include <math.h>
 #include <stdio.h>
 
 #include "test_util.h"
+#include "wallpaper/2d/animation_curve.h"
 using test::check;
 
 using wallpaper_engine::ImageObjectDocument;

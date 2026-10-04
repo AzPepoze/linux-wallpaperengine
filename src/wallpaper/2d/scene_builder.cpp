@@ -115,6 +115,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
             if (!scripted.empty())
                 out.scripts->add(object.node.id, property, scripted.script, scripted.properties_json);
         };
+        if (!object.animations.empty()) out.scripts->animations().add(object.node.id, object.animations);
         bind(object.node.origin_script, BoundProperty::Origin);
         bind(object.node.scale_script, BoundProperty::Scale);
         bind(object.node.angles_script, BoundProperty::Angles);

@@ -226,6 +226,10 @@ add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media
                          "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
          nil, {"avformat", "avutil"})
 
+add_test("animation_timelines_tests", {"tests/animation_timelines_test.cpp",
+                                       "src/wallpaper/2d/animation/animation_timelines.cpp",
+                                       "src/wallpaper/2d/animation_curve.cpp"})
+
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
@@ -244,7 +248,9 @@ target("script_corpus")
     add_packages("cjson", "quickjs")
     add_files("utils/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp",
               "src/wallpaper/2d/script/script_engine.cpp", "src/shared/assets/unpack.cpp",
-              "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp")
+              "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp",
+              "src/wallpaper/2d/parser/scene_parser.cpp", "src/wallpaper/2d/animation/animation_timelines.cpp",
+              "src/wallpaper/2d/animation_curve.cpp")
     if is_mode("debug", "asan", "ubsan") then
         add_defines("DEBUG_BUILD=1")
     else

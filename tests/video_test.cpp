@@ -5,9 +5,8 @@
 #include <cstdio>
 
 #include "shared/assets/media/video_rate.h"
-#include "wallpaper/video/video_properties.h"
-
 #include "test_util.h"
+#include "wallpaper/video/video_properties.h"
 using test::expect;
 
 namespace {

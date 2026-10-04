@@ -34,6 +34,7 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
     if (!doc.image.alpha_script.empty()) {
         auto script = std::make_unique<SceneScript>();
         script->setLayerId(doc.node.id);
+        script->setProperty("alpha");
         if (script->load(doc.image.alpha_script, doc.image.alpha_script_properties_json) && script->valid()) {
             layer->alpha_script_value = doc.image.alpha;
             layer->alpha_script = std::move(script);

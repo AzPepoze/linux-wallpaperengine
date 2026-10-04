@@ -9,14 +9,14 @@
 
 #include "script_scene_backend.h"
 #include "shared/core/engine_context.h"
+#include "wallpaper/2d/animation/scene_animations.h"
 #include "wallpaper/2d/input/pointer_input.h"
 #include "wallpaper/2d/script/scene_script.h"
 
-// ScriptSceneBackend over the running 2D scene: layers are looked up by scene object id, transforms live on the
-// SceneTree nodes (which is what the renderer draws from).
+// Transforms live on the SceneTree nodes because that is what the renderer draws from.
 class SceneScriptBackend : public ScriptSceneBackend {
    public:
-    explicit SceneScriptBackend(EngineContext& ctx) : ctx_(ctx) {}
+    SceneScriptBackend(EngineContext& ctx, SceneAnimations& animations) : ctx_(ctx), animations_(animations) {}
 
     bool layerExists(uint32_t id) override;
     std::string layerName(uint32_t id) override;
@@ -24,21 +24,46 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool setVector(uint32_t id, const std::string& property, const double value[3]) override;
     bool getBool(uint32_t id, const std::string& property, bool& out) override;
     bool setBool(uint32_t id, const std::string& property, bool value) override;
+    bool getWorldMatrix(uint32_t id, double out[16]) override;
+    bool layerCommand(uint32_t id, const std::string& command) override;
+    bool getNumber(uint32_t id, const std::string& property, double& out) override;
+    bool setNumber(uint32_t id, const std::string& property, double value) override;
+    bool getString(uint32_t id, const std::string& property, std::string& out) override;
+    bool setString(uint32_t id, const std::string& property, const std::string& value) override;
     uint32_t parentOf(uint32_t id) override;
     std::vector<uint32_t> childrenOf(uint32_t id) override;
     uint32_t findLayerByName(const std::string& name) override;
     std::vector<uint32_t> allLayers() override;
+    uint32_t findAnimation(uint32_t layer_id, const std::string& kind, const std::string& key) override;
+    bool animationGet(uint32_t handle, const std::string& field, double& out) override;
+    bool animationGetString(uint32_t handle, const std::string& field, std::string& out) override;
+    bool animationSet(uint32_t handle, const std::string& field, double value) override;
+    bool animationCommand(uint32_t handle, const std::string& command) override;
+    std::vector<uint32_t> takeEndedAnimations() override;
+    int animationLayerCount(uint32_t layer_id) override;
 
    private:
+    struct AnimationTarget {
+        bool sprite = false;  // otherwise a puppet animation layer
+        uint32_t layer_id = 0;
+        size_t index = 0;
+    };
+    static constexpr uint32_t kTargetBase = 0x40000000u;
+
     Layer* layerById(uint32_t id) const;
+    uint32_t targetHandle(const AnimationTarget& target);
+    const AnimationTarget* target(uint32_t handle) const;
+    class ImageLayer* imageById(uint32_t id) const;
+
     EngineContext& ctx_;
+    SceneAnimations& animations_;
+    std::vector<AnimationTarget> targets_;
 };
 
 enum class BoundProperty { Origin, Scale, Angles, Visible, Color };
 
-// The scene's SceneScript-driven properties. Each frame the script sees the property's current value and its result
-// is written back to the scene tree node or the layer. Owns the scene backend and registers it with the script engine
-// for as long as it lives.
+// The scene's script-driven properties: each frame the script gets the property's current value and its result is
+// written back. Owns the scene backend and keeps it registered with the script engine.
 class ScriptBindings {
    public:
     explicit ScriptBindings(EngineContext& ctx);
@@ -46,11 +71,13 @@ class ScriptBindings {
     ScriptBindings(const ScriptBindings&) = delete;
     ScriptBindings& operator=(const ScriptBindings&) = delete;
 
-    // Loads `script` for `property` of the object `object_id`; false (and nothing bound) when it does not compile.
     bool add(uint32_t object_id, BoundProperty property, const std::string& script, const std::string& properties_json);
-    void update();
+    void update(float dt);
     size_t size() const {
         return bindings_.size();
+    }
+    SceneAnimations& animations() {
+        return animations_;
     }
 
    private:
@@ -64,11 +91,10 @@ class ScriptBindings {
 
     bool read(const Binding& binding, ScriptValue& value) const;
     void write(const Binding& binding, const ScriptValue& value) const;
-    // Publishes the cursor to `input` and turns it into cursorEnter / Leave / Move / Down / Up / Click events for the
-    // scripts of the solid layer under it.
     void dispatchPointer();
 
     EngineContext& ctx_;
+    SceneAnimations animations_;
     SceneScriptBackend backend_;
     std::vector<Binding> bindings_;
     PointerTracker pointer_;

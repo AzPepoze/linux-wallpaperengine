@@ -64,6 +64,7 @@ struct EffectInstanceDocument {
 
 struct AnimationLayerDocument {
     uint32_t animation = 0;
+    std::string name;  // how scripts address the layer: getAnimationLayer("name")
     float rate = 1.0f;
     float blend = 1.0f;
     bool additive = false;

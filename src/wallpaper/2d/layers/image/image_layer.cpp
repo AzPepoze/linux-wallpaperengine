@@ -47,18 +47,23 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
     if (alpha_script) {
         if (!alpha_script_started) {
             alpha_script_started = true;
-            alpha_script->callInit(alpha_script_value);
+            ScriptValue start = ScriptValue::makeNumber(alpha_script_value);
+            if (alpha_script->initValue(start)) alpha_script_value = start.number;
         }
-        // A keyframed alpha feeds the script its animated value; otherwise the script carries its own state.
-        const double input = alpha_document.alpha_keys.empty() ? alpha_script_value
-                                                               : (double)evaluateImageAlpha(alpha_document, ctx.time);
-        alpha_script->updateNumber(input, alpha_script_value);
+        double input = alpha_script_value;
+        if (alpha_from_timeline)
+            input = tint[3];
+        else if (!alpha_document.alpha_keys.empty())
+            input = evaluateImageAlpha(alpha_document, ctx.time);
+        ScriptValue alpha = ScriptValue::makeNumber(input);
+        if (alpha_script->updateValue(alpha)) alpha_script_value = alpha.number;
         tint[3] = std::clamp((float)alpha_script_value, 0.0f, 1.0f);
-    } else {
+    } else if (!alpha_from_timeline) {
         tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
     }
     if (is_fullscreen || is_compose_region) return;
-    if (has_puppet_mesh) puppet_pose.advance(puppet_layers, dt);
+    if (has_puppet_mesh) puppet_pose.advance(puppet, puppet_layers, dt);
+    if (!sprite_clock.joined && sprite_clock.playing) sprite_clock.time += (double)dt * sprite_clock.rate;
     updateAnimatedFrame(ctx);
     if (has_puppet_mesh && scene_object_id != 0 && ctx.scene.scene_tree) {
         if (SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {

@@ -97,7 +97,7 @@ const MdlAnimationClip* findClip(const MdlModel& model, uint32_t id) {
 // Every layer contributes its motion relative to its own first frame, on top of
 // the first layer's first frame, which already holds the assembled pose.
 void accumulateLayer(const MdlAnimationClip& clip, const PuppetAnimationLayer& layer, std::vector<MdlKeyframe>& pose) {
-    const float frame = wrapFrame(layer.time * clip.fps * layer.rate, clip.frame_count, clip.loop_mode);
+    const float frame = wrapFrame(layer.time * clip.fps, clip.frame_count, clip.loop_mode);
     const size_t bones = std::min(pose.size(), clip.tracks.size());
     for (size_t b = 0; b < bones; ++b) {
         const std::vector<MdlKeyframe>& track = clip.tracks[b];
@@ -126,9 +126,17 @@ void PuppetPose::init(const MdlModel& model) {
     }
 }
 
-void PuppetPose::advance(std::vector<PuppetAnimationLayer>& layers, float dt) const {
+void PuppetPose::advance(const MdlModel& model, std::vector<PuppetAnimationLayer>& layers, float dt) const {
     for (PuppetAnimationLayer& layer : layers) {
-        if (layer.visible) layer.time += dt;
+        if (!layer.visible || !layer.playing) continue;
+        layer.time = std::max(0.0f, layer.time + dt * layer.rate);
+        const MdlAnimationClip* clip = findClip(model, layer.animation_id);
+        if (clip && clip->loop_mode == "single" && clip->fps > 0.0f &&
+            layer.time * clip->fps >= (float)clip->frame_count) {
+            layer.time = (float)clip->frame_count / clip->fps;
+            layer.playing = false;
+            layer.ended = true;
+        }
     }
 }
 

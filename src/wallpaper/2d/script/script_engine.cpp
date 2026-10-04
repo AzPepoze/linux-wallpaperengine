@@ -23,8 +23,6 @@ int64_t nowNs() {
         .count();
 }
 
-// Globals Wallpaper Engine scripts expect. Everything here is plain JS; the few natives it calls are registered in
-// ScriptEngine::create(). Per-script state (thisLayer/thisObject) is selected through `__lweCurrent`.
 constexpr const char* kPrelude = R"JS(
 (function () {
 'use strict';
@@ -34,8 +32,7 @@ function hide(name, value) {
 }
 function vec2(x, y) { return typeof g.Vec2 === 'function' ? new g.Vec2(x, y) : { x: x, y: y }; }
 
-// `class Vec3 {}` in baseclasses.js is a global lexical binding, not a property of globalThis, so the host (and the
-// helpers below) could not find it. Expose the classes as properties; scripts still resolve the same objects.
+// `class Vec3 {}` in baseclasses.js is a global lexical binding, not a property of globalThis; expose them as properties.
 ['Vec2', 'Vec3', 'Vec4', 'Mat3', 'Mat4', 'MediaPlaybackEvent'].forEach(function (name) {
     if (Object.prototype.hasOwnProperty.call(g, name)) return;
     try { hide(name, (0, eval)(name)); } catch (e) { /* baseclasses.js not loaded */ }
@@ -43,7 +40,30 @@ function vec2(x, y) { return typeof g.Vec2 === 'function' ? new g.Vec2(x, y) : {
 
 hide('__lweCurrent', { id: 0, layerId: 0, object: undefined });
 Object.defineProperty(g, 'thisLayer', { get: function () { return layerHandle(g.__lweCurrent.layerId); }, configurable: true });
-Object.defineProperty(g, 'thisObject', { get: function () { return g.__lweCurrent.object; }, configurable: true });
+Object.defineProperty(g, 'thisObject', {
+    get: function () {
+        var current = g.__lweCurrent;
+        if (!current.layerId) return undefined;
+        if (!current.thisObject) {
+            current.thisObject = {
+                getAnimation: function (name) {
+                    return animationHandle(__lweScene('animFind', current.layerId, 'any',
+                                                      name === undefined ? (current.property || '') : String(name)));
+                }
+            };
+            Object.defineProperties(current.thisObject, {
+                visible: {
+                    get: function () { return __lweScene('get', current.layerId, 'visible'); },
+                    set: function (value) { __lweScene('set', current.layerId, 'visible', !!value); },
+                    enumerable: true
+                },
+                name: { get: function () { return __lweScene('name', current.layerId); }, enumerable: true }
+            });
+        }
+        return current.thisObject;
+    },
+    configurable: true
+});
 
 function format(args) {
     return Array.prototype.map.call(args, function (v) {
@@ -62,7 +82,7 @@ hide('console', {
     error: function () { __lweLog(1, format(arguments)); }
 });
 
-// baseclasses.js from the Wallpaper Engine install defines these; the fallbacks only cover a missing assets folder.
+// Fallbacks for a missing assets folder; baseclasses.js defines the real ones.
 if (typeof g.shared === 'undefined') hide('shared', {});
 if (typeof g.createScriptProperties !== 'function') {
     hide('createScriptProperties', function () {
@@ -181,7 +201,6 @@ hide('__lweStorageFlush', function () {
     dirty = {};
 });
 
-// Layer handles: thin objects over the scene backend, one per layer id, so the same layer is always the same object.
 function toArray(value, count) {
     if (typeof value === 'number') return count === 2 ? [value, value] : [value, value, value];
     return count === 2 ? [value.x, value.y] : [value.x, value.y, value.z];
@@ -199,6 +218,13 @@ function vectorProperty(name, count) {
         enumerable: true
     };
 }
+function scalarProperty(name, Type) {
+    return {
+        get: function () { return __lweScene('get', this.__id, name); },
+        set: function (value) { __lweScene('set', this.__id, name, Type(value)); },
+        enumerable: true
+    };
+}
 var handles = {};
 function LayerHandle(id) { Object.defineProperty(this, '__id', { value: id }); }
 Object.defineProperties(LayerHandle.prototype, {
@@ -211,8 +237,75 @@ Object.defineProperties(LayerHandle.prototype, {
         get: function () { return __lweScene('get', this.__id, 'visible'); },
         set: function (value) { __lweScene('set', this.__id, 'visible', !!value); }, enumerable: true
     },
-    name: { get: function () { return __lweScene('name', this.__id); }, enumerable: true }
+    name: { get: function () { return __lweScene('name', this.__id); }, enumerable: true },
+    color: vectorProperty('color', 3),
+    alpha: scalarProperty('alpha', Number),
+    text: scalarProperty('text', String),
+    font: scalarProperty('font', String),
+    pointsize: scalarProperty('pointsize', Number),
+    maxwidth: scalarProperty('maxwidth', Number),
+    maxrows: scalarProperty('maxrows', Number),
+    horizontalalign: scalarProperty('horizontalalign', String),
+    verticalalign: scalarProperty('verticalalign', String)
 });
+var animationHandles = {};
+var endedCallbacks = {};
+function AnimationHandle(id) { Object.defineProperty(this, '__id', { value: id }); }
+function animationNumber(name, writable) {
+    var property = { get: function () { return __lweScene('animGet', this.__id, name); }, enumerable: true };
+    if (writable) property.set = function (value) { __lweScene('animSet', this.__id, name, Number(value)); };
+    return property;
+}
+Object.defineProperties(AnimationHandle.prototype, {
+    rate: animationNumber('rate', true),
+    fps: animationNumber('fps'),
+    frameCount: animationNumber('frameCount'),
+    duration: animationNumber('duration'),
+    blend: animationNumber('blend', true),
+    visible: {
+        get: function () { var v = __lweScene('animGet', this.__id, 'visible'); return v === undefined ? undefined : v !== 0; },
+        set: function (value) { __lweScene('animSet', this.__id, 'visible', value ? 1 : 0); }, enumerable: true
+    },
+    name: { get: function () { return __lweScene('animGet', this.__id, 'name'); }, enumerable: true }
+});
+AnimationHandle.prototype.join = function () { __lweScene('animCommand', this.__id, 'join'); };
+AnimationHandle.prototype.play = function () { __lweScene('animCommand', this.__id, 'play'); };
+AnimationHandle.prototype.stop = function () { __lweScene('animCommand', this.__id, 'stop'); };
+AnimationHandle.prototype.pause = function () { __lweScene('animCommand', this.__id, 'pause'); };
+AnimationHandle.prototype.isPlaying = function () { return __lweScene('animGet', this.__id, 'playing') === 1; };
+AnimationHandle.prototype.getFrame = function () { return __lweScene('animGet', this.__id, 'frame'); };
+AnimationHandle.prototype.setFrame = function (frame) { __lweScene('animSet', this.__id, 'frame', Number(frame)); };
+AnimationHandle.prototype.addEndedCallback = function (callback) {
+    (endedCallbacks[this.__id] = endedCallbacks[this.__id] || []).push(callback);
+};
+function animationHandle(id) {
+    if (!id) return undefined;
+    return animationHandles[id] || (animationHandles[id] = new AnimationHandle(id));
+}
+hide('__lweAnimationEnded', function (id) {
+    (endedCallbacks[id] || []).slice().forEach(function (callback) {
+        try { callback(); } catch (e) { __lweLog(1, 'animation ended callback: ' + e); }
+    });
+});
+LayerHandle.prototype.getAnimation = function (name) {
+    return animationHandle(__lweScene('animFind', this.__id, 'any', name === undefined ? '' : String(name)));
+};
+LayerHandle.prototype.getTextureAnimation = function () {
+    return animationHandle(__lweScene('animFind', this.__id, 'texture', ''));
+};
+LayerHandle.prototype.getAnimationLayer = function (nameOrIndex) {
+    return animationHandle(__lweScene('animFind', this.__id, 'layer', String(nameOrIndex)));
+};
+LayerHandle.prototype.getAnimationLayerCount = function () { return __lweScene('animCount', this.__id); };
+['play', 'stop', 'pause'].forEach(function (command) {
+    LayerHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, command); };
+});
+LayerHandle.prototype.isPlaying = function () { return __lweScene('get', this.__id, 'playing') === true; };
+Object.defineProperty(LayerHandle.prototype, 'volume', scalarProperty('volume', Number));
+LayerHandle.prototype.getTransformMatrix = function () {
+    var m = __lweScene('matrix', this.__id);
+    return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
+};
 LayerHandle.prototype.getParent = function () { return layerHandle(__lweScene('parent', this.__id)); };
 LayerHandle.prototype.getChildren = function () { return __lweScene('children', this.__id).map(layerHandle); };
 function layerHandle(id) {
@@ -244,8 +337,8 @@ hide('__lweErrors', {});
 hide('__lweWatch', function (promise, id) {
     promise.then(null, function (reason) { g.__lweErrors[id] = String(reason); });
 });
-// Scene `scriptproperties` overrides are applied after the module ran, the way the engine does it
-// (baseclasses.js `_Internal.updateScriptProperties` only touches properties the script declared).
+// Overrides are applied after the module ran and only touch declared properties, like the real engine's
+// _Internal.updateScriptProperties.
 hide('__lweApplyOverrides', function (exported, json) {
     if (!exported || !exported.scriptProperties || !json) return;
     var overrides = JSON.parse(json);
@@ -340,14 +433,12 @@ std::string readFile(const std::string& path) {
     return contents.str();
 }
 
-// `import ... from 'WEMath'` resolves to <assets>/scripts/jsmodules/wemath.js from the Wallpaper Engine install.
 JSValue idArray(JSContext* ctx, const std::vector<uint32_t>& ids) {
     JSValue array = JS_NewArray(ctx);
     for (size_t i = 0; i < ids.size(); ++i) JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewUint32(ctx, ids[i]));
     return array;
 }
 
-// __lweScene(op, ...): the single bridge from the JS layer handles to ScriptSceneBackend.
 JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     ScriptSceneBackend* scene = ScriptEngine::instance().sceneBackend();
     if (!scene || argc < 1) return JS_UNDEFINED;
@@ -385,7 +476,15 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
 
     const uint32_t id = idArg(1);
     if (op == "exists") return JS_NewBool(ctx, scene->layerExists(id));
+    if (op == "layerCommand") return JS_NewBool(ctx, scene->layerCommand(id, stringArg(2)));
     if (op == "name") return JS_NewString(ctx, scene->layerName(id).c_str());
+    if (op == "matrix") {
+        double m[16];
+        if (!scene->getWorldMatrix(id, m)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (uint32_t i = 0; i < 16; ++i) JS_SetPropertyUint32(ctx, array, i, JS_NewFloat64(ctx, m[i]));
+        return array;
+    }
     if (op == "parent") return JS_NewUint32(ctx, scene->parentOf(id));
     if (op == "children") return idArray(ctx, scene->childrenOf(id));
     if (op == "index") {
@@ -395,10 +494,31 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
         return JS_NewInt32(ctx, -1);
     }
 
+    if (op == "animFind") return JS_NewUint32(ctx, scene->findAnimation(id, stringArg(2), stringArg(3)));
+    if (op == "animCount") return JS_NewInt32(ctx, scene->animationLayerCount(id));
+    if (op == "animGet") {
+        const std::string field = stringArg(2);
+        double number = 0.0;
+        if (scene->animationGet(id, field, number)) return JS_NewFloat64(ctx, number);
+        std::string text;
+        if (scene->animationGetString(id, field, text)) return JS_NewString(ctx, text.c_str());
+        return JS_UNDEFINED;
+    }
+    if (op == "animSet" && argc > 3) {
+        double number = 0.0;
+        JS_ToFloat64(ctx, &number, argv[3]);
+        return JS_NewBool(ctx, scene->animationSet(id, stringArg(2), number));
+    }
+    if (op == "animCommand") return JS_NewBool(ctx, scene->animationCommand(id, stringArg(2)));
+
     const std::string property = stringArg(2);
     if (op == "get") {
         bool flag = false;
         if (scene->getBool(id, property, flag)) return JS_NewBool(ctx, flag);
+        double number = 0.0;
+        if (scene->getNumber(id, property, number)) return JS_NewFloat64(ctx, number);
+        std::string text;
+        if (scene->getString(id, property, text)) return JS_NewStringLen(ctx, text.c_str(), text.size());
         double v[3] = {0.0, 0.0, 0.0};
         int components = 0;
         if (!scene->getVector(id, property, v, components)) return JS_UNDEFINED;
@@ -408,6 +528,17 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
     if (op == "set" && argc > 3) {
         if (JS_IsBool(argv[3])) return JS_NewBool(ctx, scene->setBool(id, property, JS_ToBool(ctx, argv[3]) != 0));
+        if (JS_IsNumber(argv[3])) {
+            double number = 0.0;
+            JS_ToFloat64(ctx, &number, argv[3]);
+            return JS_NewBool(ctx, scene->setNumber(id, property, number));
+        }
+        if (JS_IsString(argv[3])) {
+            const char* text = JS_ToCString(ctx, argv[3]);
+            const bool ok = text && scene->setString(id, property, text);
+            if (text) JS_FreeCString(ctx, text);
+            return JS_NewBool(ctx, ok);
+        }
         double v[3] = {0.0, 0.0, 0.0};
         for (uint32_t i = 0; i < 3; ++i) {
             JSValue component = JS_GetPropertyUint32(ctx, argv[3], i);
@@ -500,7 +631,6 @@ void ScriptEngine::create() {
     JS_SetPropertyStr(context_, global, "__lweScene", JS_NewCFunction(context_, jsScene, "__lweScene", 4));
     JS_FreeValue(context_, global);
 
-    // The install's own base classes first (Vec2/3/4, Mat3/4, createScriptProperties, shared, MediaPlaybackEvent...).
     std::string base_classes;
     if (!assets_dir_.empty()) base_classes = readFile(assets_dir_ + "/scripts/jsclasses/baseclasses.js");
     if (base_classes.empty())
@@ -564,6 +694,20 @@ int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const Scr
     for (const ScriptEntry& entry : entries)
         if (entry.script->layerId() == layer_id && entry.script->callHook(hook, event)) ++delivered;
     return delivered;
+}
+
+void ScriptEngine::animationEnded(uint32_t handle) {
+    if (!context_) return;
+    CallScope scope(*this, nullptr, 0, 20.0);
+    JSValue global = JS_GetGlobalObject(context_);
+    JSValue notify = JS_GetPropertyStr(context_, global, "__lweAnimationEnded");
+    JSValue argument = JS_NewUint32(context_, handle);
+    JSValue result = JS_Call(context_, notify, JS_UNDEFINED, 1, &argument);
+    if (JS_IsException(result)) scriptLogException(context_, "animationEnded");
+    JS_FreeValue(context_, result);
+    JS_FreeValue(context_, argument);
+    JS_FreeValue(context_, notify);
+    JS_FreeValue(context_, global);
 }
 
 bool ScriptEngine::anyScriptExports(const std::vector<const char*>& hooks) {
@@ -635,7 +779,6 @@ void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w,
     JS_FreeValue(context_, tick);
     JS_FreeValue(context_, global);
 
-    // Scripts that loaded after a sticky event (media state...) get the current value once, like on a live scene.
     for (size_t i = 0; i < scripts_.size(); ++i) {
         if (scripts_[i].sticky_delivered) continue;
         scripts_[i].sticky_delivered = true;

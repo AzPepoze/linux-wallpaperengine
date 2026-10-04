@@ -40,7 +40,7 @@ void Scene2DRuntime::precompileBlendModes() {
 }
 
 void Scene2DRuntime::update(float dt) {
-    if (ctx.scene.scripts) ctx.scene.scripts->update();
+    if (ctx.scene.scripts) ctx.scene.scripts->update(dt);
     if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
         ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
         ctx.scene.layers[ctx.debug.selected_object]->update(dt, ctx);

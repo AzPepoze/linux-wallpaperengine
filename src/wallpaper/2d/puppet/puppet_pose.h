@@ -15,7 +15,10 @@ struct PuppetAnimationLayer {
     float blend = 1.0f;
     bool additive = false;
     bool visible = true;
-    float time = 0.0f;
+    float time = 0.0f;  // seconds on this layer's own clock (already scaled by rate), advanced while playing
+    std::string name;
+    bool playing = true;
+    bool ended = false;  // a "single" clip reached its last frame; scripts are told once, then it is cleared
 };
 
 // Column-major 4x4 matrix.
@@ -26,7 +29,9 @@ struct PuppetMatrix {
 class PuppetPose {
    public:
     void init(const MdlModel& model);
-    void advance(std::vector<PuppetAnimationLayer>& layers, float dt) const;
+    // Moves the clock of every visible, playing layer by dt * rate; a "single" clip stops (and flags `ended`) at its
+    // end.
+    void advance(const MdlModel& model, std::vector<PuppetAnimationLayer>& layers, float dt) const;
     void attachmentTransforms(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
                               std::unordered_map<std::string, PuppetMatrix>& out) const;
     // Writes skinned xyz positions for every vertex of the model.

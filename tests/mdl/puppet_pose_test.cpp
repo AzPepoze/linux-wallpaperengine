@@ -60,7 +60,7 @@ void runPuppetPoseTests() {
     pose.skin(model, layers, out);
     check(out.size() == 3 && fabsf(out[0] - 110.0f) < 1e-3f, "first frame keeps the bind position");
 
-    pose.advance(layers, 0.5f);
+    pose.advance(model, layers, 0.5f);
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 160.0f) < 1e-3f, "half a second moves the bone by 50 units");
     std::unordered_map<std::string, PuppetMatrix> attachments;
@@ -74,6 +74,18 @@ void runPuppetPoseTests() {
     layers[0].visible = false;
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 110.0f) < 1e-3f, "hidden layer leaves the rest pose");
+    layers[0].visible = true;
 
+    // Rate scales the clock as it advances, so changing it later speeds up smoothly instead of jumping.
+    layers[0].time = 0.0f;
+    layers[0].rate = 2.0f;
+    pose.advance(model, layers, 0.25f);
+    check(fabsf(layers[0].time - 0.5f) < 1e-5f, "rate 2 advances the clock twice as fast");
+    layers[0].rate = 1.0f;
+    pose.skin(model, layers, out);
+    check(fabsf(out[0] - 160.0f) < 1e-3f, "lowering the rate keeps the current pose");
+
+    layers[0].playing = false;
+    pose.advance(model, layers, 1.0f);
+    check(fabsf(layers[0].time - 0.5f) < 1e-5f, "a paused layer does not advance");
 }
-

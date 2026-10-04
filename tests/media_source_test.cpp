@@ -1,12 +1,12 @@
 
+#include "shared/assets/media/media_source.h"
+
 #include <unistd.h>
 
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
-
-#include "shared/assets/media/media_source.h"
 
 #include "test_util.h"
 using test::expect;

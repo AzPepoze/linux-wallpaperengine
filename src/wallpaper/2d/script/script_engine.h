@@ -11,15 +11,14 @@
 struct JSContext;
 struct JSRuntime;
 
-// Errors seen by one script, recorded from the shared QuickJS context.
 struct ScriptErrors {
     std::string last;
-    std::string stack;  // first stack frames of the last exception (script id, line), for diagnostics
+    std::string stack;
     int count = 0;
 };
 
-// One QuickJS runtime and context shared by every SceneScript of the scene, so `shared`, `localStorage`, timers and
-// the Wallpaper Engine globals exist once. The runtime is created on first retain() and freed with the last release().
+// One QuickJS runtime shared by every SceneScript, so `shared`, `localStorage` and timers exist once. It is created
+// by the first retain() and freed by the last release().
 class ScriptEngine {
    public:
     static ScriptEngine& instance();
@@ -30,46 +29,41 @@ class ScriptEngine {
         return context_;
     }
 
-    // Frame inputs read by scripts through `engine.*`; also fires due setTimeout/setInterval callbacks.
-    void beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w, float screen_h);
-    // Audio spectrum for engine.registerAudioBuffers(resolution) with resolution 16, 32 or 64.
-    void setAudioBands(int resolution, const float* left, const float* right);
-    // localStorage is persisted per wallpaper id under ~/.local/share/linux-wallpaperengine/localstorage.
-    void setWallpaperId(const std::string& id);
-    // The Wallpaper Engine `assets` folder. Its scripts/jsclasses/baseclasses.js (Vec2/3/4, Mat3/4,
-    // createScriptProperties, shared...) is evaluated at startup and scripts/jsmodules/*.js back `import ... from
-    // 'WEMath'` etc. Set before the first retain(); without it only a minimal built-in subset exists.
+    // The Wallpaper Engine assets folder supplies baseclasses.js and the WEMath/WEColor/WEVector modules; set it
+    // before the first retain().
     void setAssetsDir(const std::string& assets_dir) {
         assets_dir_ = assets_dir;
     }
     const std::string& assetsDir() const {
         return assets_dir_;
     }
-    // Loaded scripts, for delivering events. SceneScript registers itself after a successful load().
-    void registerScript(SceneScript* script);
-    void unregisterScript(SceneScript* script);
-    // Calls `hook` on every script that exports it; returns how many ran. A sticky event is remembered per hook and
-    // also delivered once to scripts that load (or finish their first frame) later, like media state.
-    int broadcast(const char* hook, const ScriptEvent& event, bool sticky = false);
-    // Same, for the scripts owned by one scene object (cursor events).
-    int dispatchToLayer(uint32_t layer_id, const char* hook, const ScriptEvent& event);
-    // True when any loaded script exports at least one of `hooks` (e.g. to start a media source only if needed).
-    bool anyScriptExports(const std::vector<const char*>& hooks);
-    // Scene objects that own a script exporting at least one of `hooks`.
-    std::vector<uint32_t> layersWithHooks(const std::vector<const char*>& hooks);
-    // The `input` global: cursor in scene-world coordinates (y up) and window pixels, and the left button.
-    void setInput(float world_x, float world_y, float screen_x, float screen_y, bool left_down);
-
-    // The scene scripts may query and modify (thisLayer / thisScene); not owned, clear it before the scene goes away.
+    void setWallpaperId(const std::string& id);
     void setSceneBackend(class ScriptSceneBackend* backend) {
         scene_backend_ = backend;
     }
     class ScriptSceneBackend* sceneBackend() const {
         return scene_backend_;
     }
+
+    void beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w, float screen_h);
+    void setAudioBands(int resolution, const float* left, const float* right);
+    void setInput(float world_x, float world_y, float screen_x, float screen_y, bool left_down);
     void flushStorage();
 
-    // Used by SceneScript around each script call.
+    void registerScript(SceneScript* script);
+    void unregisterScript(SceneScript* script);
+    size_t scriptCount() const {
+        return scripts_.size();
+    }
+    // Both return how many scripts handled the event. A sticky broadcast is also delivered once to scripts that
+    // load later.
+    int broadcast(const char* hook, const ScriptEvent& event, bool sticky = false);
+    int dispatchToLayer(uint32_t layer_id, const char* hook, const ScriptEvent& event);
+    bool anyScriptExports(const std::vector<const char*>& hooks);
+    std::vector<uint32_t> layersWithHooks(const std::vector<const char*>& hooks);
+    void animationEnded(uint32_t handle);
+
+    // Scopes one script call: where errors are recorded, which script is current, and its time budget.
     class CallScope {
        public:
         CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms);
@@ -121,7 +115,7 @@ class ScriptEngine {
     double storage_flush_timer_ = 0.0;
 };
 
-// Records the pending exception of `ctx` against the current script (log + SceneScript::lastError).
+// Records the pending exception of `ctx` against the current script.
 void scriptLogException(JSContext* ctx, const char* what);
 
 #endif  // SCRIPT_ENGINE_H

@@ -6,8 +6,7 @@
 #include <string>
 #include <vector>
 
-// What scripts can see and change of the running scene (`thisLayer`, `thisScene`). Layers are addressed by their
-// scene object id; an id of 0 is "none". Implemented by the 2D scene runtime, and faked in tests.
+// What scripts can see and change of the running scene. Layers are addressed by scene object id (0 = none).
 class ScriptSceneBackend {
    public:
     virtual ~ScriptSceneBackend() = default;
@@ -15,17 +14,62 @@ class ScriptSceneBackend {
     virtual bool layerExists(uint32_t id) = 0;
     virtual std::string layerName(uint32_t id) = 0;
 
-    // Properties: "origin", "scale", "angles" (degrees), "size", "parallaxDepth" as vectors, "visible" as a bool.
+    // Vector properties: origin, scale, angles (degrees), size, parallaxDepth. Bool property: visible.
     virtual bool getVector(uint32_t id, const std::string& property, double out[3], int& components) = 0;
     virtual bool setVector(uint32_t id, const std::string& property, const double value[3]) = 0;
     virtual bool getBool(uint32_t id, const std::string& property, bool& out) = 0;
     virtual bool setBool(uint32_t id, const std::string& property, bool value) = 0;
+
+    // Playback commands of sound layers (play, stop, pause).
+    virtual bool layerCommand(uint32_t /*id*/, const std::string& /*command*/) {
+        return false;
+    }
+    // World transform, column-major.
+    virtual bool getWorldMatrix(uint32_t /*id*/, double /*out*/[16]) {
+        return false;
+    }
+    virtual bool getNumber(uint32_t /*id*/, const std::string& /*property*/, double& /*out*/) {
+        return false;
+    }
+    virtual bool setNumber(uint32_t /*id*/, const std::string& /*property*/, double /*value*/) {
+        return false;
+    }
+    virtual bool getString(uint32_t /*id*/, const std::string& /*property*/, std::string& /*out*/) {
+        return false;
+    }
+    virtual bool setString(uint32_t /*id*/, const std::string& /*property*/, const std::string& /*value*/) {
+        return false;
+    }
 
     virtual uint32_t parentOf(uint32_t id) = 0;
     virtual std::vector<uint32_t> childrenOf(uint32_t id) = 0;
 
     virtual uint32_t findLayerByName(const std::string& name) = 0;
     virtual std::vector<uint32_t> allLayers() = 0;  // in scene (draw) order
+
+    // Animations are addressed by an opaque non-zero handle. `kind` is timeline, texture (sprite sheet), layer (puppet
+    // animation layer by name or index) or any (timeline, else puppet layer by name, else sprite sheet).
+    virtual uint32_t findAnimation(uint32_t /*layer_id*/, const std::string& /*kind*/, const std::string& /*key*/) {
+        return 0;
+    }
+    virtual bool animationGet(uint32_t /*handle*/, const std::string& /*field*/, double& /*out*/) {
+        return false;
+    }
+    virtual bool animationGetString(uint32_t /*handle*/, const std::string& /*field*/, std::string& /*out*/) {
+        return false;
+    }
+    virtual bool animationSet(uint32_t /*handle*/, const std::string& /*field*/, double /*value*/) {
+        return false;
+    }
+    virtual bool animationCommand(uint32_t /*handle*/, const std::string& /*command*/) {
+        return false;
+    }
+    virtual std::vector<uint32_t> takeEndedAnimations() {
+        return {};
+    }
+    virtual int animationLayerCount(uint32_t /*layer_id*/) {
+        return 0;
+    }
 };
 
 #endif  // SCRIPT_SCENE_BACKEND_H
