@@ -37,6 +37,7 @@ class SoundLayer : public Layer {
 
     wallpaper_engine::SoundObjectDocument doc;
     std::vector<std::string> paths;
+    AudioEngine::GroupId group_ = AudioEngine::kDefaultGroup;
     AudioEngine::SoundHandle current = AudioEngine::kInvalidSound;
     int current_index = 0;
     float timer = 0.0f;

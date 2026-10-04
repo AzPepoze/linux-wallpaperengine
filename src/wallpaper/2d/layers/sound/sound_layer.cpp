@@ -30,6 +30,7 @@ SoundLayer* SoundLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
 
     auto* layer = new SoundLayer(object.name.empty() ? "Sound Layer" : object.name.c_str(), object.sound);
     layer->initFromDocument(object, ctx);
+    layer->group_ = ctx.audio_group;
     if (layer->name.empty()) layer->name = "Sound Layer";
     for (const std::string& sound : object.sound.sounds) {
         char resolved[1024];
@@ -94,7 +95,8 @@ void SoundLayer::playCurrent() {
     if (!AudioEngine::instance().isAvailable()) return;
     if (current_index < 0 || current_index >= (int)paths.size()) return;
     const bool loop = doc.playback_mode == wallpaper_engine::SoundPlaybackMode::Loop && paths.size() == 1;
-    current = AudioEngine::instance().play(paths[current_index], loop, (doc.mute || !visible) ? 0.0f : doc.volume);
+    current = AudioEngine::instance().play(paths[current_index], loop, (doc.mute || !visible) ? 0.0f : doc.volume,
+                                           false, group_);
     pending_delay = 0.0f;
     timer = 0.0f;
     if (!loop && doc.playback_mode != wallpaper_engine::SoundPlaybackMode::Loop) {

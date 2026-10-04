@@ -233,7 +233,7 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
 
         if (video.audio && video.audio->hasAudio()) {
             if (video.audio_stream == AudioEngine::kInvalidStream && AudioEngine::instance().isAvailable()) {
-                video.audio_stream = AudioEngine::instance().createStream(48000, 2);
+                video.audio_stream = AudioEngine::instance().createStream(48000, 2, audio_group_);
                 if (video.audio_stream != AudioEngine::kInvalidStream)
                     AudioEngine::instance().setStreamVolume(video.audio_stream, video_volume_);
             }

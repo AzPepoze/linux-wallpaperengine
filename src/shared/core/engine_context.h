@@ -116,6 +116,7 @@ struct EngineContext {
     std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
+    AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;
 
     scene_type_t scene_type = SCENE_TYPE_2D;
     renderer_t renderer = {};

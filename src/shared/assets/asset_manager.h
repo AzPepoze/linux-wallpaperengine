@@ -23,6 +23,10 @@ class AssetManager : public IAssetResolver {
 
     void init(const char* engine_path, const char* wallpaper_path);
 
+    void setAudioGroup(AudioEngine::GroupId group) {
+        audio_group_ = group;
+    }
+
     void prefetchPackageTextures() const;
     void releaseDecodedTextures() const;
     void updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers = {});
@@ -70,6 +74,7 @@ class AssetManager : public IAssetResolver {
     float video_rate_ = 1.0f;
     float video_volume_ = 1.0f;
     bool video_paused_ = false;
+    AudioEngine::GroupId audio_group_ = AudioEngine::kDefaultGroup;
 
     sg_image makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
     void addVideoTexture(const char* path, sg_image image, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
