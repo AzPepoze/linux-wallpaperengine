@@ -43,6 +43,7 @@ class WallpaperTransition {
     GfxImage image_;
     GfxView texture_view_;
     GfxView attachment_view_;
+    TransitionShader shader_;
     int width_ = 0;
     int height_ = 0;
     float elapsed_ = 0.0f;

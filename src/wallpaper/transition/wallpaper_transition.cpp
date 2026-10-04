@@ -72,6 +72,10 @@ bool WallpaperTransition::begin(EngineContext& ctx, sg_view source, sg_image sou
                          white, false, nullptr, /*replace=*/true);
     sg_end_pass();
 
+    // Load the matching Wallpaper Engine transition shader; if the install
+    // lacks it the built-in fade in composite() takes over.
+    if (config.selection >= 0) shader_.init(ctx, config.selection);
+
     active_ = true;
     return true;
 }
@@ -93,6 +97,10 @@ void WallpaperTransition::composite(EngineContext& ctx) {
     sg_apply_scissor_rect(0, 0, width, height, true);
 
     float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f - progress_};
+    if (shader_.ready()) {
+        shader_.drawOldOverNew(ctx, texture_view_, progress_, width, height);
+        return;
+    }
     renderer_draw_sprite(ctx, &ctx.renderer, image_, texture_view_, 0.0f, 0.0f, (float)width, (float)height, 0.0f, tint,
                          false, nullptr);
 }
@@ -104,5 +112,6 @@ void WallpaperTransition::cancel() {
 
 void WallpaperTransition::shutdown() {
     active_ = false;
+    shader_.shutdown();
     destroyTarget();
 }

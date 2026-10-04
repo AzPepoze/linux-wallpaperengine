@@ -58,12 +58,33 @@ sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_
     return sg_make_shader(desc);
 }
 
+sg_shader create_backend_shader_hlsl(sg_shader_desc* desc, const std::string& vertex_source,
+                                     const std::string& fragment_source, const char* label) {
+    if (!desc) return {SG_INVALID_ID};
+    if (label) desc->label = label;
+    const std::string name = label ? label : "shader";
+
+    std::vector<uint32_t> vertex;
+    std::vector<uint32_t> fragment;
+    if (!get_or_compile_spirv_hlsl(SLANG_STAGE_VERTEX, vertex_source, (name + ".vert").c_str(), "vert", vertex))
+        return {SG_INVALID_ID};
+    if (!get_or_compile_spirv_hlsl(SLANG_STAGE_FRAGMENT, fragment_source, (name + ".frag").c_str(), "frag", fragment))
+        return {SG_INVALID_ID};
+
+    desc->vertex_func.source = nullptr;
+    desc->fragment_func.source = nullptr;
+    desc->vertex_func.bytecode = {vertex.data(), vertex.size() * sizeof(uint32_t)};
+    desc->fragment_func.bytecode = {fragment.data(), fragment.size() * sizeof(uint32_t)};
+    desc->vertex_func.entry = "main";
+    desc->fragment_func.entry = "main";
+    return sg_make_shader(desc);
+}
+
 bool prewarm_backend_shader(sg_shader_desc* desc, const std::string& vertex_source, const std::string& fragment_source,
                             const char* label) {
     ShaderSpirv spirv;
     return buildSpirv(desc, vertex_source, fragment_source, label, spirv);
 }
-
 void get_shader_cache_stats(uint64_t* out_hits, uint64_t* out_misses) {
     if (out_hits) *out_hits = shader_cache().cache_hits.load(std::memory_order_relaxed);
     if (out_misses) *out_misses = shader_cache().cache_misses.load(std::memory_order_relaxed);

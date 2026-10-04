@@ -80,6 +80,9 @@ bool compile_spirv_impl(SlangStage stage, const std::string& source, const char*
                         std::vector<uint32_t>& output);
 bool get_or_compile_spirv(SlangStage stage, const std::string& source, const char* source_name, const char* stage_str,
                           std::vector<uint32_t>& output);
+// Compiles raw HLSL (Wallpaper Engine's DX11 fallback shaders) to SPIR-V.
+bool get_or_compile_spirv_hlsl(SlangStage stage, const std::string& source, const char* source_name,
+                               const char* stage_str, std::vector<uint32_t>& output);
 }  // namespace shader_backend_internal
 
 #endif  // SHADER_BACKEND_INTERNAL_H

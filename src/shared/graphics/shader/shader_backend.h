@@ -8,6 +8,11 @@
 sg_shader create_backend_shader(sg_shader_desc* desc, const std::string& vertex_source,
                                 const std::string& fragment_source, const char* label = nullptr);
 
+// Compiles raw HLSL sources (already annotated with vk::binding) to SPIR-V and
+// builds the shader. The caller owns the binding layout in `desc`.
+sg_shader create_backend_shader_hlsl(sg_shader_desc* desc, const std::string& vertex_source,
+                                     const std::string& fragment_source, const char* label = nullptr);
+
 bool prewarm_backend_shader(sg_shader_desc* desc, const std::string& vertex_source, const std::string& fragment_source,
                             const char* label = nullptr);
 
