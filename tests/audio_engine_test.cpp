@@ -27,12 +27,9 @@ int main() {
     CHECK(!audio.groupFading(g1));
 
     audio.destroyGroup(g1);
-    audio.destroyGroup(AudioEngine::kDefaultGroup);  // must be a no-op
+    audio.destroyGroup(AudioEngine::kDefaultGroup); 
     CHECK(audio.groupVolume(AudioEngine::kDefaultGroup) == 1.0f);
 
-    // A video pump fills the stream to 24000 frames (0.5 s). The buffer must have
-    // headroom beyond that so a decoded frame is never discarded: pushing a full
-    // fill plus one frame must drop nothing.
     const AudioEngine::StreamHandle stream = audio.createStream(48000, 2);
     CHECK(stream != AudioEngine::kInvalidStream);
     const std::vector<float> frames((25000 + 1024) * 2, 0.0f);
