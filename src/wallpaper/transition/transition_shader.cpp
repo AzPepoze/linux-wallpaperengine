@@ -218,6 +218,10 @@ std::string annotateHlsl(std::string source, int effect_index, bool fragment) {
         // so give the vertex block its own set-0 binding to avoid colliding
         // with the fragment block.
         replaceAll(source, "cbuffer g_bufDynamic:register(b0)", "[[vk::binding(1,0)]] cbuffer g_bufDynamic");
+        if (effect_index == (int)lwe::transition::Effect::GlassShatter) {
+            // fxc truncates float3 -> float2 implicitly; Slang rejects it.
+            replaceAll(source, "nrand(IN.a_Center *", "nrand(IN.a_Center.xy *");
+        }
     }
     return source;
 }
@@ -373,7 +377,8 @@ void TransitionShader::shutdown() {
     effect_index_ = -1;
 }
 
-void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, float progress, int width, int height) {
+void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, float progress, int width, int height,
+                                      uint32_t hash_seed) {
     if (!ready() || old_frame.id == SG_INVALID_ID) return;
 
     sg_apply_pipeline(pipeline_);
@@ -404,9 +409,11 @@ void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, flo
 
     DynamicUniforms uniforms = {};
     uniforms.progress = progress;
-    uniforms.hash = 0.5f;
-    uniforms.hash2 = 0.25f;
-    uniforms.random = 0.0f;
+    // Per-switch randomness: the WE shaders use g_Hash/g_Hash2 for direction,
+    // impact position and noise offsets, so each switch should look different.
+    uniforms.hash = (float)(hash_seed & 0xffffu) / 65535.0f;
+    uniforms.hash2 = (float)((hash_seed >> 16) & 0xffffu) / 65535.0f;
+    uniforms.random = (float)(hash_seed % 97u) / 97.0f;
     uniforms.aspect = height > 0 ? (float)width / (float)height : 1.0f;
     uniforms.width = (float)width;
     uniforms.height = (float)height;

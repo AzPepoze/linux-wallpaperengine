@@ -159,3 +159,34 @@ void detect_default_wallpaper(char* out_path, size_t max_len) {
         }
     }
 }
+
+bool read_config_transition(char* out_effect, size_t effect_len, int* out_duration_ms) {
+    bool found = false;
+    const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
+                                       "../../../../config.json"};
+    for (const char* cfg : config_candidates) {
+        char* config_str = read_file_to_string(cfg);
+        if (!config_str) continue;
+        cJSON* config_json = cJSON_Parse(config_str);
+        if (config_json) {
+            if (out_effect && effect_len > 0) {
+                cJSON* transition = cJSON_GetObjectItemCaseSensitive(config_json, "transition");
+                if (cJSON_IsString(transition) && transition->valuestring[0] != '\0') {
+                    copyPath(out_effect, effect_len, transition->valuestring);
+                    found = true;
+                }
+            }
+            if (out_duration_ms) {
+                cJSON* duration = cJSON_GetObjectItemCaseSensitive(config_json, "transition_duration_ms");
+                if (cJSON_IsNumber(duration) && duration->valuedouble > 0.0) {
+                    *out_duration_ms = (int)duration->valuedouble;
+                    found = true;
+                }
+            }
+            cJSON_Delete(config_json);
+        }
+        free(config_str);
+        if (found) break;
+    }
+    return found;
+}

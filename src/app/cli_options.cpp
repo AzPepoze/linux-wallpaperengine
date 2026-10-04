@@ -8,6 +8,7 @@
 
 #include "app/cli_args.h"
 #include "shared/core/build_config.h"
+#include "shared/core/utils.h"
 #include "sokol_args.h"
 
 namespace {
@@ -137,6 +138,13 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         opts.pkg_flag = true;
     } else if (!opts.sandbox) {
         opts.wallpaper_arg = cli_args::positional(args);
+    }
+    // config.json fills in transition settings only when the flags are absent.
+    char config_effect[64] = {};
+    int config_duration = 0;
+    if (read_config_transition(config_effect, sizeof(config_effect), &config_duration)) {
+        if (opts.transition.empty() && config_effect[0] != '\0') opts.transition = config_effect;
+        if (opts.transition_duration_ms <= 0 && config_duration > 0) opts.transition_duration_ms = config_duration;
     }
     sargs_shutdown();
     return opts;

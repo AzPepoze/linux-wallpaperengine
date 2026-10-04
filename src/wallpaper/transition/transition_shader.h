@@ -27,7 +27,8 @@ class TransitionShader {
 
     // Draws the outgoing frame over the currently bound target with
     // premultiplied alpha. progress runs 0 (outgoing visible) .. 1 (gone).
-    void drawOldOverNew(EngineContext& ctx, sg_view old_frame, float progress, int width, int height);
+    void drawOldOverNew(EngineContext& ctx, sg_view old_frame, float progress, int width, int height,
+                        uint32_t hash_seed);
 
    private:
     struct DynamicUniforms {

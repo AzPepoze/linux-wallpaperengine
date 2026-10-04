@@ -1,5 +1,7 @@
 #include "wallpaper/transition/wallpaper_transition.h"
 
+#include <chrono>
+
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
@@ -17,8 +19,13 @@ bool WallpaperTransition::ensureTarget(int width, int height) {
     image_desc.usage.color_attachment = true;
     image_desc.width = width;
     image_desc.height = height;
-    image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+    image_desc.pixel_format = SG_PIXELFORMAT_RGBA16F;
     image_ = sg_make_image(&image_desc);
+    if (image_.id == SG_INVALID_ID) {
+        // Drivers without a float attachment fall back to LDR.
+        image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+        image_ = sg_make_image(&image_desc);
+    }
     if (image_.id == SG_INVALID_ID) return false;
 
     sg_view_desc texture_desc = {};
@@ -58,6 +65,7 @@ bool WallpaperTransition::begin(EngineContext& ctx, sg_view source, sg_image sou
     elapsed_ = 0.0f;
     progress_ = 0.0f;
     hold_ = false;
+    switch_seed_ = (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count();
 
     sg_pass pass = {};
     pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
@@ -98,7 +106,7 @@ void WallpaperTransition::composite(EngineContext& ctx) {
 
     float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f - progress_};
     if (shader_.ready()) {
-        shader_.drawOldOverNew(ctx, texture_view_, progress_, width, height);
+        shader_.drawOldOverNew(ctx, texture_view_, progress_, width, height, switch_seed_);
         return;
     }
     renderer_draw_sprite(ctx, &ctx.renderer, image_, texture_view_, 0.0f, 0.0f, (float)width, (float)height, 0.0f, tint,

@@ -1,5 +1,6 @@
 #include "wallpaper/wallpaper_manager.h"
 
+#include <chrono>
 #include <utility>
 
 #include "app/control/control_server.h"
@@ -87,8 +88,9 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     config.selection = request.transition;
     config.duration_ms = request.transition_time_ms > 0 ? request.transition_time_ms : 1000;
     if (config.selection == lwe::transition::kSelectionRandom) {
-        config.selection = lwe::transition::pickRandomEffect(random_seed_);
+        random_seed_ += (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count();
         random_seed_ = random_seed_ * 1664525u + 1013904223u;
+        config.selection = lwe::transition::pickRandomEffect(random_seed_);
     }
 
     // Capture the outgoing frame before unloading it. The switch itself always
@@ -104,6 +106,9 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
             }
         }
     }
+    // No new transition (hard cut, or nothing to capture): drop any in-flight
+    // or held snapshot so it cannot stick on top of the new wallpaper.
+    if (!captured) transition_.cancel();
 
     if (!switchWallpaper(*this, ctx, request.path, request.is_pkg, request.properties)) {
         LOG_TAG_E("WALLPAPER_MGR", "Switch to %s failed; holding the previous frame", request.path.c_str());

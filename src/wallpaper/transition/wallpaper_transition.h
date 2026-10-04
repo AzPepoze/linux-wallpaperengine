@@ -50,6 +50,7 @@ class WallpaperTransition {
     float progress_ = 0.0f;
     bool active_ = false;
     bool hold_ = false;
+    uint32_t switch_seed_ = 0;
     TransitionConfig config_ = {};
 };
 
