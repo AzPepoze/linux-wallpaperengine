@@ -318,14 +318,11 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 
 Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/scenescript/reference.html). Scripts run on one shared QuickJS runtime as ES modules, using the install's own `baseclasses.js` and `jsmodules`. `utils/script_corpus.cpp` loads every script of a Workshop folder and reports what fails.
 
-- [-] Script runtime
-  - Works
-    - Shared runtime, per-script module scope, `import ... from 'WEMath' | 'WEColor' | 'WEVector'`
-    - 64 MB memory limit, per-call time budgets, and a script is disabled after three consecutive errors
-    - `scriptproperties` overrides applied the way the real engine does
-    - Scripts are scoped per scene: each wallpaper has its own `shared`, `localStorage` and layer ids, and events only reach the scripts of the active scene (needed while two wallpapers are alive in a transition)
-  - Missing
-    - `createScriptProperties` extras used by a few Workshop wallpapers (`addTask`, `addListener`, `addAniMapper`, `addInterpolator`, `addChangedUserProperty`)
+- [x] Script runtime
+  - Shared runtime, per-script module scope, `import ... from 'WEMath' | 'WEColor' | 'WEVector'`
+  - 64 MB memory limit, per-call time budgets, and a script is disabled after three consecutive errors
+  - `scriptproperties` overrides applied the way the real engine does
+  - Scripts are scoped per scene: each wallpaper has its own `shared`, `localStorage` and layer ids, and events only reach the scripts of the active scene (needed while two wallpapers are alive in a transition)
 - [-] Properties that can host a script
   - Works
     - `origin`, `scale`, `angles`, `visible`, `color` and image `size` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
