@@ -355,7 +355,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: `getLayer(name | index)`, `getLayerCount()`, `enumerateLayers()`, `getLayerIndex()`
     - Works: `createLayer(config)` (an asset path, or an object shaped like a scene.json object: image, particle, text or sound; its own scripts and animations are bound), `destroyLayer`, `sortLayer`
     - Works: scene settings `bloom`, `bloomstrength`, `bloomthreshold`, `clearcolor`, `ambientcolor`, `skylightcolor`, `cameraparallax*` and `camerashake*` (read/write; bloom values apply live in HDR scenes only, other scenes bake them when the bloom passes are created)
-    - Missing: `getInitialLayerConfig`, camera transforms, `fov`, `nearz`, `farz` and the other scene settings, model data
+    - Works: `getInitialLayerConfig(layer)` returns the object as authored in scene.json
+    - Missing: camera transforms, `fov`, `nearz`, `farz` and the other scene settings, model data
   - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
 - [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`)
 - [-] Events

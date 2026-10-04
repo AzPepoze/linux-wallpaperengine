@@ -490,7 +490,8 @@ ScriptBindings::ScriptBindings(EngineContext& ctx) : ctx_(ctx), animations_(ctx)
 void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& object) {
     if (!object.node.valid) return;
     const uint32_t id = object.node.id;
-    const auto bind = [&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
+    backend_.rememberConfig(id, object.raw_json);
+    const auto bind =[&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
         if (!scripted.empty()) add(id, property, scripted.script, scripted.properties_json);
     };
     if (!object.animations.empty()) animations_.add(id, object.animations);
@@ -546,6 +547,11 @@ bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) 
     return false;
 }
 }  // namespace
+
+std::string SceneScriptBackend::initialLayerConfig(uint32_t id) {
+    const auto it = initial_configs_.find(id);
+    return it == initial_configs_.end() ? "" : it->second;
+}
 
 int SceneScriptBackend::boneCount(uint32_t layer_id) {
     const ImageLayer* image = imageById(layer_id);

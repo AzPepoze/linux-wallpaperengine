@@ -443,6 +443,11 @@ hide('thisScene', {
         var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
         return handle ? __lweScene('index', handle.__id) : -1;
     },
+    getInitialLayerConfig: function (layer) {
+        var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
+        var json = handle ? __lweScene('initialConfig', handle.__id) : '';
+        try { return json ? JSON.parse(json) : undefined; } catch (e) { return undefined; }
+    },
     // `config` is an asset path or an object shaped like an entry of scene.json `objects`.
     createLayer: function (config) {
         var json;
@@ -712,6 +717,7 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
     if (op == "animCommand") return JS_NewBool(ctx, scene->animationCommand(id, stringArg(2)));
 
+    if (op == "initialConfig") return JS_NewString(ctx, scene->initialLayerConfig(id).c_str());
     if (op == "boneCount") return JS_NewInt32(ctx, scene->boneCount(id));
     if (op == "boneFind") return JS_NewInt32(ctx, scene->findBone(id, stringArg(2)));
     if (op == "boneName") return JS_NewString(ctx, scene->boneName(id, (int)idArg(2)).c_str());

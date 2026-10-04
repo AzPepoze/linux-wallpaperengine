@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "script_scene_backend.h"
@@ -43,6 +44,10 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool animationCommand(uint32_t handle, const std::string& command) override;
     std::vector<uint32_t> takeEndedAnimations() override;
     int animationLayerCount(uint32_t layer_id) override;
+    std::string initialLayerConfig(uint32_t id) override;
+    void rememberConfig(uint32_t id, const std::string& json) {
+        initial_configs_[id] = json;
+    }
     int boneCount(uint32_t layer_id) override;
     int findBone(uint32_t layer_id, const std::string& name) override;
     std::string boneName(uint32_t layer_id, int bone) override;
@@ -87,6 +92,7 @@ class SceneScriptBackend : public ScriptSceneBackend {
     EngineContext& ctx_;
     SceneAnimations& animations_;
     std::vector<AnimationTarget> targets_;
+    std::unordered_map<uint32_t, std::string> initial_configs_;
     std::vector<uint32_t> destroyed_;
     uint32_t next_object_id_ = 0;
     std::function<void(const wallpaper_engine::SceneObjectDocument&)> created_handler_;

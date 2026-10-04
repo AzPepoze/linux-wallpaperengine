@@ -100,6 +100,11 @@ class ScriptSceneBackend {
         return false;
     }
 
+    // The scene object's JSON as authored; empty for unknown layers.
+    virtual std::string initialLayerConfig(uint32_t /*id*/) {
+        return "";
+    }
+
     // Scene settings (bloomstrength, clearcolor, camerashake...), by the SceneScript property name; booleans are 0 / 1.
     virtual bool getSceneProperty(const std::string& /*name*/, std::vector<double>& /*out*/) {
         return false;

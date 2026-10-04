@@ -158,6 +158,7 @@ struct SceneObjectDocument {
     SoundObjectDocument sound;
     std::vector<EffectInstanceDocument> effects;
     std::vector<PropertyAnimationDocument> animations;
+    std::string raw_json;  // the object as authored (getInitialLayerConfig)
 };
 
 struct SceneCameraDocument {

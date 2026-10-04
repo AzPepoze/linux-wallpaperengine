@@ -530,6 +530,10 @@ SceneObjectDocument parseObject(const cJSON* object) {
     for (const char* property : {"origin", "scale", "angles", "color", "alpha"}) {
         parsePropertyAnimation(object, property, doc.animations);
     }
+    if (char* serialized = cJSON_PrintUnformatted(object)) {
+        doc.raw_json = serialized;
+        cJSON_free(serialized);
+    }
     return doc;
 }
 
