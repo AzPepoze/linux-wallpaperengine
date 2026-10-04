@@ -8,6 +8,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/phase_timer.h"
+#include "shared/core/task_pool.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
@@ -89,16 +90,6 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     if (instance_config) pass_textures.applyInstanceOverrides(instance_config, shader_name, ctx);
     if (owned_base_config) cJSON_Delete(owned_base_config);
 }
-
-// Every stage of one pass's shader source, kept together for the diagnostics dump.
-struct ShaderSourceSet {
-    std::string raw_vs;
-    std::string raw_fs;
-    std::string processed_vs;
-    std::string processed_fs;
-    std::string full_vs;
-    std::string full_fs;
-};
 
 namespace {
 // Reads one shader stage from the wallpaper package or the engine assets, falling back to an extraction directory.
@@ -237,9 +228,26 @@ std::string ShaderPass::buildComboDefines(const ShaderSourceSet& sources) const 
 }
 
 void ShaderPass::init(EngineContext& ctx) {
+    if (prepare(ctx, false)) finish(ctx);
+}
+
+void ShaderPass::initAsync(EngineContext& ctx) {
+    pending_ = TaskPool::instance().enqueue([this, &ctx] { return prepare(ctx, true); }).share();
+}
+
+void ShaderPass::completeInit(EngineContext& ctx) {
+    if (!pending_.valid()) return;
+    const bool prepared = pending_.get();
+    pending_ = {};
+    if (prepared) finish(ctx);
+}
+
+// Everything up to the compile: it reads files and processes text, never touches the GPU, so it can run on a worker.
+// With `warm_cache` the SPIR-V is generated too, so finish() only has to create GPU objects.
+bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     if (shader_name.empty()) {
         effect_log.warn("Skipping effect pass with no shader");
-        return;
+        return false;
     }
 
     char vert_path[256], frag_path[256];
@@ -251,13 +259,14 @@ void ShaderPass::init(EngineContext& ctx) {
         snprintf(frag_path, sizeof(frag_path), "shaders/%s.frag", shader_name.c_str());
     }
 
-    ShaderSourceSet sources;
+    auto prepared = std::make_shared<PreparedShader>();
+    ShaderSourceSet& sources = prepared->sources;
     char abs_vert[1024], abs_frag[1024];
     const bool has_vertex = readShaderStage(ctx, vert_path, abs_vert, sizeof(abs_vert), sources.raw_vs);
     const bool has_fragment = readShaderStage(ctx, frag_path, abs_frag, sizeof(abs_frag), sources.raw_fs);
     if (!has_vertex || !has_fragment) {
         effect_log.warn("ShaderPass %s: missing vertex or fragment shader source", shader_name.c_str());
-        return;
+        return false;
     }
 
     const bool has_mvp = sources.raw_vs.find("g_ModelViewProjectionMatrix") != std::string::npos;
@@ -269,7 +278,8 @@ void ShaderPass::init(EngineContext& ctx) {
     sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, ctx.asset_mgr, false);
 
     // Shared includes can declare material uniforms, so inspect the expanded sources.
-    std::vector<ShaderUniformConfig> shader_uniforms = EffectParser::extractShaderUniforms(sources.processed_vs);
+    std::vector<ShaderUniformConfig>& shader_uniforms = prepared->shader_uniforms;
+    shader_uniforms = EffectParser::extractShaderUniforms(sources.processed_vs);
     std::vector<ShaderUniformConfig> fragment_uniforms = EffectParser::extractShaderUniforms(sources.processed_fs);
     shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
     resolveUniforms(shader_uniforms);
@@ -291,10 +301,24 @@ void ShaderPass::init(EngineContext& ctx) {
         (void)binding;
         if (slot > 0) texture_count = std::max(texture_count, slot);
     }
-    compiled = ShaderCompiler::compile(shader_name, sources.full_vs, sources.full_fs, uniforms, texture_count);
+    prepared->texture_count = texture_count;
+    if (warm_cache) {
+        ShaderCompiler::prewarm(shader_name, sources.full_vs, sources.full_fs, uniforms, texture_count);
+    }
+    prepared_ = std::move(prepared);
+    return true;
+}
+
+void ShaderPass::finish(EngineContext& ctx) {
+    (void)ctx;
+    const std::shared_ptr<PreparedShader> prepared = std::move(prepared_);
+    if (!prepared) return;
+    const ShaderSourceSet& sources = prepared->sources;
+    compiled =
+        ShaderCompiler::compile(shader_name, sources.full_vs, sources.full_fs, uniforms, prepared->texture_count);
 
     pass_textures.buildCachedViews();
-    if (renderObserver().isCollectingShaderInfo()) registerDiagnostics(sources, shader_uniforms);
+    if (renderObserver().isCollectingShaderInfo()) registerDiagnostics(sources, prepared->shader_uniforms);
 
     if (compiled.pipeline.id == SG_INVALID_ID) {
         effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped",

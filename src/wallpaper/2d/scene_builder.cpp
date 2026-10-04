@@ -44,7 +44,10 @@ ParsedScene SceneBuilder::load(const char* scene_json_path, EngineContext& ctx) 
         if (!wallpaper_engine::parseSceneFile(scene_json_path, document)) return {};
     }
     PhaseTimer timer("scene build (layers, textures, effects)");
-    return buildFromDocument(document, ctx);
+    EffectLoadBatch batch(ctx);
+    ParsedScene scene = buildFromDocument(document, ctx);
+    batch.finish();
+    return scene;
 }
 
 ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocument& document, EngineContext& ctx) {

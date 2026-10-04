@@ -39,6 +39,7 @@ bool Scene2DWallpaper::applyParsedScene(ParsedScene parsed, EngineContext& ctx) 
                                                  parsed.general.clear_color[2], parsed.general.clear_color[3]};
     }
 
+    runtime_->precompileBlendModes();
     runtime_->updateViewport();
     return true;
 }

@@ -16,46 +16,24 @@
 #include "shared/core/logger.h"
 
 namespace {
-struct SlangGlobalContext {
-    Slang::ComPtr<slang::IGlobalSession> global_session;
-    std::mutex init_mutex;
-
-    void reset() {
-        std::lock_guard<std::mutex> lock(init_mutex);
-        global_session = nullptr;
-    }
-
-    slang::IGlobalSession* get() {
-        std::lock_guard<std::mutex> lock(init_mutex);
-        if (!global_session) {
-            SlangGlobalSessionDesc global_desc = {};
-            global_desc.enableGLSL = true;
-            if (slang_createGlobalSession2(&global_desc, global_session.writeRef()) != SLANG_OK || !global_session) {
-                core_log.error("Failed to initialize Slang global session");
-                return nullptr;
-            }
-        }
-        return global_session.get();
-    }
-};
-
-SlangGlobalContext& slang_global() {
-    static SlangGlobalContext ctx;
-    return ctx;
-}
-
-// Slang sessions are not thread safe but are cheap to reuse from one thread at a time. Every module a session loads
-// stays resident under its own name, so a session is retired after a few compiles instead of growing without bound.
+// Slang is not safe when threads share one global session: concurrent module loads trip an assertion in its
+// dictionary ("The key already exists"), even with a separate session per thread. A global session per concurrent
+// compile works, so each lease owns its own pair. Every module a session loads stays resident under its own name,
+// so a lease is retired after a few compiles instead of growing without bound.
 class SessionPool {
    public:
     struct Lease {
+        Slang::ComPtr<slang::IGlobalSession> global;
         Slang::ComPtr<slang::ISession> session;
         int uses = 0;
     };
 
+    // Blocks while kMaxConcurrent compiles are already running; each one holds a few hundred MB.
     Lease acquire() {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::unique_lock<std::mutex> lock(mutex_);
+            slot_free_.wait(lock, [this] { return active_ < kMaxConcurrent; });
+            ++active_;
             if (!idle_.empty()) {
                 Lease lease = std::move(idle_.back());
                 idle_.pop_back();
@@ -66,34 +44,42 @@ class SessionPool {
     }
 
     void release(Lease lease) {
-        if (!lease.session) return;
-        if (++lease.uses >= kMaxUsesPerSession) return;
         std::lock_guard<std::mutex> lock(mutex_);
-        idle_.push_back(std::move(lease));
+        --active_;
+        if (lease.session && ++lease.uses < kMaxUsesPerSession) idle_.push_back(std::move(lease));
+        slot_free_.notify_one();
     }
 
-    void clear() {
+    // Drops every idle compiler; does nothing while a compile is running.
+    bool clearIfUnused() {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (active_ != 0) return false;
         idle_.clear();
+        return true;
     }
 
    private:
     static constexpr int kMaxUsesPerSession = 8;
+    static constexpr int kMaxConcurrent = 4;
 
-    Lease create() {
+    static Lease create() {
         Lease lease;
-        slang::IGlobalSession* global = slang_global().get();
-        if (!global) return lease;
+        SlangGlobalSessionDesc global_desc = {};
+        global_desc.enableGLSL = true;
+        if (slang_createGlobalSession2(&global_desc, lease.global.writeRef()) != SLANG_OK || !lease.global) {
+            core_log.error("Failed to initialize Slang global session");
+            return lease;
+        }
 
         slang::TargetDesc target_desc = {};
         target_desc.format = SLANG_SPIRV;
-        target_desc.profile = global->findProfile("glsl_450");
+        target_desc.profile = lease.global->findProfile("glsl_450");
 
         slang::SessionDesc session_desc = {};
         session_desc.targetCount = 1;
         session_desc.targets = &target_desc;
         session_desc.allowGLSLSyntax = true;
-        if (global->createSession(session_desc, lease.session.writeRef()) != SLANG_OK || !lease.session) {
+        if (lease.global->createSession(session_desc, lease.session.writeRef()) != SLANG_OK || !lease.session) {
             core_log.error("Failed to initialize Slang session");
             lease.session = nullptr;
         }
@@ -101,20 +87,17 @@ class SessionPool {
     }
 
     std::mutex mutex_;
+    std::condition_variable slot_free_;
     std::vector<Lease> idle_;
+    int active_ = 0;
 };
 
-std::atomic<int> g_active_compiles{0};
 std::atomic<int64_t> g_last_use_ms{0};
 
 int64_t now_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
-
-// Slang shares mutable state between sessions (concurrent module loads trip a dictionary assertion), so only one
-// compile runs at a time even though sessions are pooled.
-std::mutex g_compile_mutex;
 
 void release_if_idle(int idle_seconds);
 
@@ -168,11 +151,9 @@ void log_slang_diagnostics(const char* source_name, slang::IBlob* diagnostics) {
 }
 
 void release_if_idle(int idle_seconds) {
-    std::lock_guard<std::mutex> compile_lock(g_compile_mutex);
     const int64_t last_use = g_last_use_ms.load();
     if (last_use == 0 || now_ms() - last_use < (int64_t)idle_seconds * 1000) return;
-    session_pool().clear();
-    slang_global().reset();
+    if (!session_pool().clearIfUnused()) return;
     // Slang allocates heavily while compiling; hand the freed pages back to the OS.
     malloc_trim(0);
     g_last_use_ms.store(0);
@@ -183,16 +164,13 @@ void release_if_idle(int idle_seconds) {
 namespace shader_backend_internal {
 bool compile_spirv_impl(SlangStage stage, const std::string& source, const char* source_name,
                         std::vector<uint32_t>& output) {
-    std::lock_guard<std::mutex> compile_lock(g_compile_mutex);
     static CompilerJanitor janitor;
     SessionPool::Lease lease = session_pool().acquire();
-    g_active_compiles.fetch_add(1);
     struct Returner {
         SessionPool::Lease& lease;
         ~Returner() {
-            session_pool().release(std::move(lease));
             g_last_use_ms.store(now_ms());
-            g_active_compiles.fetch_sub(1);
+            session_pool().release(std::move(lease));
         }
     } returner{lease};
     try {

@@ -1,5 +1,6 @@
 #include <math.h>
 
+#include <algorithm>
 #include <future>
 #include <string>
 #include <vector>
@@ -376,12 +377,13 @@ void renderer_init(renderer_t* r, float w, float h) {
 }
 
 // Precompiles all blend pipelines during init; creating them mid-render caused GPU context loss.
-void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r) {
+void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r, const std::vector<int>& modes) {
     const int count = kLastWallpaperBlendMode - kFirstWallpaperBlendMode + 1;
 
     std::vector<std::future<BlendShaderSources>> futures;
     futures.reserve(count);
     for (int mode = kFirstWallpaperBlendMode; mode <= kLastWallpaperBlendMode; ++mode) {
+        if (!modes.empty() && std::find(modes.begin(), modes.end(), mode) == modes.end()) continue;
         if (r->pip_image_composite[mode].id != SG_INVALID_ID) continue;
         futures.push_back(TaskPool::instance().enqueue(prepareBlendShaderSources, std::ref(ctx), mode));
     }

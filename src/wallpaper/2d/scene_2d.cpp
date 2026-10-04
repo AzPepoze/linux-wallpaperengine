@@ -19,8 +19,22 @@
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height());
-    // DO NOT EDIT: must precompile all blend pipelines here to prevent GPU context loss mid-render (crash fix)
+#if DEBUG_BUILD
+    // The inspector can switch a layer to any blend mode at runtime, and creating a pipeline mid-render caused GPU
+    // context loss, so debug builds build them all up front.
     renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
+#endif
+}
+
+void Scene2DRuntime::precompileBlendModes() {
+    // Release builds fix every layer's blend mode when the scene loads, so only those pipelines are needed. Each
+    // costs two Slang compiles on a cold shader cache, which dominated first-launch time with all 30 built.
+    std::vector<int> modes;
+    for (const Layer* layer : ctx.scene.layers) {
+        if (const auto* image = dynamic_cast<const ImageLayer*>(layer)) modes.push_back(image->color_blend_mode);
+    }
+    if (modes.empty()) return;
+    renderer_precompile_blend_pipelines(ctx, &ctx.renderer, modes);
 }
 
 void Scene2DRuntime::update(float dt) {

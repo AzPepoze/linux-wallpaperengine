@@ -3,7 +3,9 @@
 
 #include <cjson/cJSON.h>
 
+#include <future>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -15,10 +17,24 @@
 #include "shared/graphics/shader/shader_compiler.h"
 #include "sokol_gfx.h"
 #include "wallpaper/2d/animation_curve.h"
+#include "wallpaper/2d/effects/effect_parser.h"
 
 class EngineContext;
-struct ShaderSourceSet;
-struct ShaderUniformConfig;
+
+struct ShaderSourceSet {
+    std::string raw_vs;
+    std::string raw_fs;
+    std::string processed_vs;
+    std::string processed_fs;
+    std::string full_vs;
+    std::string full_fs;
+};
+
+struct PreparedShader {
+    ShaderSourceSet sources;
+    std::vector<ShaderUniformConfig> shader_uniforms;
+    int texture_count = 0;
+};
 
 class ShaderPass {
    public:
@@ -48,9 +64,15 @@ class ShaderPass {
     std::map<std::string, int> inst_combos;
 
     ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx);
-    ~ShaderPass() = default;
+    ~ShaderPass() {
+        if (pending_.valid()) pending_.wait();
+    }
 
     void init(EngineContext& ctx);
+    // Starts preparing and warming the shader cache on the task pool; completeInit() finishes it on the render
+    // thread. Lets a scene's shaders compile in parallel instead of one at a time.
+    void initAsync(EngineContext& ctx);
+    void completeInit(EngineContext& ctx);
     void rebuildWithDebugMode(int mode, EngineContext& ctx);
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
@@ -103,6 +125,10 @@ class ShaderPass {
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
 
    private:
+    bool prepare(EngineContext& ctx, bool warm_cache);
+    void finish(EngineContext& ctx);
+    std::shared_ptr<PreparedShader> prepared_;
+    std::shared_future<bool> pending_;
     void resolveUniforms(const std::vector<ShaderUniformConfig>& shader_uniforms);
     std::string buildComboDefines(const ShaderSourceSet& sources) const;
     void warnAboutMissingTextures() const;

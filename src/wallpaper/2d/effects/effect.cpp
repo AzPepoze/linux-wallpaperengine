@@ -1,5 +1,6 @@
 #include "effect.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <map>
 
@@ -48,7 +49,10 @@ Effect::Effect(cJSON* config, EngineContext& ctx) {
 }
 
 Effect::~Effect() {
-    for (auto p : passes) delete p;
+    for (auto p : passes) {
+        EffectLoadBatch::forget(p);
+        delete p;
+    }
     passes.clear();
 }
 
@@ -126,6 +130,37 @@ Effect* Effect::loadFromDocument(const wallpaper_engine::EffectInstanceDocument&
     return eff;
 }
 
+namespace {
+EffectLoadBatch* g_active_batch = nullptr;
+}
+
+EffectLoadBatch::EffectLoadBatch(EngineContext& ctx) : ctx_(ctx) {
+    g_active_batch = this;
+}
+
+EffectLoadBatch::~EffectLoadBatch() {
+    finish();
+    g_active_batch = nullptr;
+}
+
+void EffectLoadBatch::forget(ShaderPass* pass) {
+    if (!g_active_batch) return;
+    auto& list = g_active_batch->pending_;
+    list.erase(std::remove(list.begin(), list.end(), pass), list.end());
+}
+
+void EffectLoadBatch::finish() {
+    for (ShaderPass* pass : pending_) pass->completeInit(ctx_);
+    pending_.clear();
+}
+
 void Effect::init(EngineContext& ctx) {
-    for (auto p : passes) p->init(ctx);
+    for (auto p : passes) {
+        if (g_active_batch) {
+            p->initAsync(ctx);
+            g_active_batch->pending_.push_back(p);
+        } else {
+            p->init(ctx);
+        }
+    }
 }
