@@ -28,7 +28,7 @@ if has_config("web") then
     add_requires("pkgconfig::Qt6WebEngineWidgets")
 end
 
--- On by default when libwayland-client and wayland-scanner are installed. Draws the wallpaper
+-- On by default when libwayland-client, wayland-scanner and the lib/wlr-protocols submodule are present. Draws the wallpaper
 -- on a wlr-layer-shell surface when --screen-root/--layer is given and a Wayland session is running.
 option("layer_shell")
     set_showmenu(true)
@@ -36,6 +36,10 @@ option("layer_shell")
     on_check(function (option)
         import("lib.detect.find_tool")
         import("lib.detect.find_package")
+        if not os.isfile(path.join(os.projectdir(), "lib/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml")) then
+            cprint("${yellow}layer_shell disabled: run `git submodule update --init` to fetch lib/wlr-protocols")
+            return
+        end
         if find_tool("wayland-scanner") and find_package("pkgconfig::wayland-client") then
             option:enable(true)
         end
@@ -59,12 +63,22 @@ option_end()
 local function generate_wayland_protocols(target)
     local scanner = import("lib.detect.find_tool")("wayland-scanner")
     local shared = os.iorunv("pkg-config", {"--variable=pkgdatadir", "wayland-protocols"}):trim()
-    local protocols = {
-        path.join(os.projectdir(), "third_party/wayland-protocols/wlr-layer-shell-unstable-v1.xml"),
-        path.join(shared, "stable/xdg-shell/xdg-shell.xml")
-    }
     local outdir = path.join(target:autogendir(), "wayland")
     os.mkdir(outdir)
+
+    -- The request argument "namespace" is a C++ keyword in the generated header, so the build uses a copy of the
+    -- upstream XML (lib/wlr-protocols submodule) with that argument spelled "namespace_".
+    local layer_shell = path.join(outdir, "wlr-layer-shell-unstable-v1.xml")
+    local patched = (io.readfile(path.join(os.projectdir(), "lib/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"))
+                         :gsub('name="namespace"', 'name="namespace_"'))
+    if not os.isfile(layer_shell) or io.readfile(layer_shell) ~= patched then
+        io.writefile(layer_shell, patched)
+    end
+
+    local protocols = {
+        layer_shell,
+        path.join(shared, "stable/xdg-shell/xdg-shell.xml")
+    }
     for _, xml in ipairs(protocols) do
         local name = path.basename(xml)
         local header = path.join(outdir, name .. "-client-protocol.h")

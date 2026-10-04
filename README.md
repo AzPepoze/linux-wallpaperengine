@@ -71,6 +71,8 @@ sudo pacman -S --needed clang cppcheck
 
 ## Build and run
 
+The Wayland layer-shell protocol XML comes from the `lib/wlr-protocols` git submodule. Clone with `git clone --recurse-submodules`, or run `git submodule update --init` in an existing checkout; without it the `layer_shell` option is disabled.
+
 | Goal                                                 | Command                                                               |
 | ---------------------------------------------------- | --------------------------------------------------------------------- |
 | Build the default configuration                      | `xmake`                                                               |
