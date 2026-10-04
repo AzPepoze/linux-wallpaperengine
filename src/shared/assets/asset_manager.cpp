@@ -18,6 +18,7 @@
 #include "shared/core/utils.h"
 #include "shared/core/vfs.h"
 #include "shared/graphics/backend/gpu_zero_copy.h"
+#include "shared/media/media_thumbnail_texture.h"
 #include "wallpaper/2d/layers/layer.h"
 
 namespace {
@@ -239,7 +240,16 @@ void AssetManager::updateVideoTextures(float elapsed_seconds, const std::vector<
             }
         }
 
-        video.elapsed_seconds += elapsed_seconds * video_rate_;
+        const float step = elapsed_seconds * video_rate_ * video.rate;
+        if (video.decoder->loopCount() != video.position_loop) {
+            video.position_loop = video.decoder->loopCount();
+            video.position = 0.0;
+        }
+        if (video.decoder->isPlaying()) {
+            const double length = video.decoder->duration();
+            video.position = length > 0.0 ? std::min(video.position + step, length) : video.position + step;
+        }
+        video.elapsed_seconds += step;
         const float frame_dur = video.decoder->frameDuration();
         if (video.elapsed_seconds < frame_dur) continue;
 
@@ -292,7 +302,11 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
 GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out_path, int image_index,
                                               bool warn_on_failure) const {
     if (!name || name[0] == '\0') return {};
-    if (strncmp(name, "_rt_", 4) == 0 || strstr(name, "/_rt_") != nullptr) return {};
+    if (strcmp(name, "$mediaThumbnail") == 0) {
+        if (out_path) *out_path = name;
+        return GfxImage(wallpaper_engine::MediaThumbnailTexture::instance().create());
+    }
+    if (strncmp(name, "_rt_", 4) == 0|| strstr(name, "/_rt_") != nullptr) return {};
 
     char abs_path[1024];
     char name_with_ext[256] = {};
@@ -363,10 +377,21 @@ GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::str
     if (cJSON_IsArray(passes)) {
         cJSON* pass = cJSON_GetArrayItem(passes, 0);
         cJSON* textures = cJSON_GetObjectItemCaseSensitive(pass, "textures");
-        if (cJSON_IsArray(textures)) {
+        cJSON* user_textures = cJSON_GetObjectItemCaseSensitive(pass, "usertextures");
+        cJSON* first_user = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, 0) : nullptr;
+        cJSON* user_name = cJSON_IsObject(first_user) ? cJSON_GetObjectItemCaseSensitive(first_user, "name") : nullptr;
+        const bool media_thumbnail =
+            cJSON_IsString(user_name) && user_name->valuestring && strcmp(user_name->valuestring, "$mediaThumbnail") == 0;
+        if (media_thumbnail) img = resolveTextureInternal("$mediaThumbnail", out_path, 0, false);
+        if (!media_thumbnail && cJSON_IsArray(textures)) {
             cJSON* tex_node = cJSON_GetArrayItem(textures, 0);
             if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {
                 const std::string texture_ref = tex_node->valuestring;
+                // Render targets (`_rt_*`) are bound by the effect chain at draw time, not loaded as textures.
+                if (texture_ref.rfind("_rt_", 0) == 0 || texture_ref.find("/_rt_") != std::string::npos) {
+                    cJSON_Delete(mat_json);
+                    return img;
+                }
                 const bool material_rooted = texture_ref.rfind("materials/", 0) == 0 ||
                                              texture_ref.rfind("assets/", 0) == 0 || texture_ref[0] == '/';
                 if (material_rooted) img = resolveTextureInternal(texture_ref.c_str(), out_path, 0, false);

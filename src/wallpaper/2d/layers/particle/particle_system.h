@@ -103,6 +103,14 @@ class ParticleSystem {
     bool has_override_color = false;
     bool override_color_is_legacy = false;
 
+    // Script playback control: `stop` ends emission and lets live particles finish, `pause` freezes the simulation.
+    bool emitting = true;
+    bool paused = false;
+    // Control points are stored for scripts; nothing in the simulation reads them yet.
+    float control_points[8][3] = {};
+    void emitParticles(int count);
+    void clearParticles();
+
     ParticleSystem(ParticleSystemConfig config, float sw, float h);
     ~ParticleSystem();
     ParticleSystem(const ParticleSystem&) = delete;

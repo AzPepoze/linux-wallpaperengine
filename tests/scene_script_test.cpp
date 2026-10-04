@@ -6,6 +6,7 @@
 
 #include "test_util.h"
 #include "wallpaper/2d/script/script_engine.h"
+#include "wallpaper/2d/script/script_scene_backend.h"
 
 namespace {
 
@@ -33,6 +34,219 @@ export function update(value) {
     return head + '\n' + months[time.getMonth()] + ' ' + time.getDate() + ' ' + time.getFullYear();
 }
 )JS";
+
+class CountingScene : public ScriptSceneBackend {
+   public:
+    explicit CountingScene(size_t layers) : layers_(layers) {}
+    bool layerExists(uint32_t) override {
+        return false;
+    }
+    std::string layerName(uint32_t) override {
+        return "";
+    }
+    bool getVector(uint32_t, const std::string&, double[3], int&) override {
+        return false;
+    }
+    bool setVector(uint32_t, const std::string&, const double[3]) override {
+        return false;
+    }
+    bool getBool(uint32_t, const std::string&, bool&) override {
+        return false;
+    }
+    bool setBool(uint32_t, const std::string&, bool) override {
+        return false;
+    }
+    uint32_t parentOf(uint32_t) override {
+        return 0;
+    }
+    std::vector<uint32_t> childrenOf(uint32_t) override {
+        return {};
+    }
+    uint32_t findLayerByName(const std::string&) override {
+        return 0;
+    }
+    std::vector<uint32_t> allLayers() override {
+        return std::vector<uint32_t>(layers_, 1);
+    }
+
+   private:
+    size_t layers_;
+};
+
+// One layer (id 3) with effects "glow" and "ripple"; "ripple" owns the material constant "speed".
+class EffectScene : public CountingScene {
+   public:
+    EffectScene() : CountingScene(1) {}
+    bool visible[2] = {true, true};
+    std::vector<double> speed = {1.0};
+
+    bool layerExists(uint32_t id) override {
+        return id == 3;
+    }
+    int effectCount(uint32_t id) override {
+        return id == 3 ? 2 : 0;
+    }
+    int findEffect(uint32_t id, const std::string& name) override {
+        if (id != 3) return -1;
+        return name == "glow" ? 0 : name == "ripple" ? 1 : -1;
+    }
+    std::string effectName(uint32_t, int effect) override {
+        return effect == 0 ? "glow" : "ripple";
+    }
+    bool effectVisible(uint32_t, int effect, bool& out) override {
+        out = visible[effect];
+        return true;
+    }
+    bool setEffectVisible(uint32_t, int effect, bool value) override {
+        visible[effect] = value;
+        return true;
+    }
+    uint32_t findLayerByName(const std::string&) override {
+        return 3;
+    }
+    std::vector<ShapePatch> model_shapes;
+    std::vector<ShapePatch> model_update;
+    bool model_replace = false;
+    uint32_t created_model = 0;
+    uint32_t createModelData(const std::vector<ShapePatch>& shapes) override {
+        model_shapes = shapes;
+        return 5;
+    }
+    bool updateModelData(uint32_t model, const std::vector<ShapePatch>& shapes, bool replace) override {
+        created_model = model;
+        model_update = shapes;
+        model_replace = replace;
+        return true;
+    }
+    std::string parent_call;
+    bool setParent(uint32_t id, uint32_t parent, const std::string& attachment, bool adjust) override {
+        parent_call = std::to_string(id) + ">" + std::to_string(parent) + "@" + attachment + (adjust ? "+" : "-");
+        return true;
+    }
+    std::vector<double> rotated;
+    bool rotateObjectSpace(uint32_t, const double angles[3]) override {
+        rotated.assign(angles, angles + 3);
+        return true;
+    }
+    int findAttachment(uint32_t, const std::string& name) override {
+        return name == "socket" ? 2 : -1;
+    }
+    bool getAttachment(uint32_t, const std::string& key, const std::string& field, std::vector<double>& out) override {
+        if (key != "socket" || field != "origin") return false;
+        out = {7.0, 8.0, 9.0};
+        return true;
+    }
+    std::string animation_layer_config;
+    uint32_t createAnimationLayer(uint32_t, const std::string& config) override {
+        animation_layer_config = config;
+        return 0;
+    }
+    std::vector<double> bone_origin = {1.0, 2.0, 3.0};
+    int boneCount(uint32_t) override {
+        return 2;
+    }
+    int findBone(uint32_t, const std::string& name) override {
+        return name == "head" ? 1 : -1;
+    }
+    bool getBone(uint32_t, int bone, const std::string& field, std::vector<double>& out) override {
+        if (bone != 1 || field != "origin") return false;
+        out = bone_origin;
+        return true;
+    }
+    bool setBone(uint32_t, int bone, const std::string& field, const std::vector<double>& value) override {
+        if (bone != 1 || field != "origin") return false;
+        bone_origin = value;
+        return true;
+    }
+    std::vector<double> clear = {0.0, 0.0, 0.0};
+    bool getSceneProperty(const std::string& name, std::vector<double>& out) override {
+        if (name != "clearcolor") return false;
+        out = clear;
+        return true;
+    }
+    bool setSceneProperty(const std::string& name, const std::vector<double>& value) override {
+        if (name != "clearcolor") return false;
+        clear = value;
+        return true;
+    }
+    std::string created_json;
+    std::string sorted;
+    std::string destroyed;
+    uint32_t createLayer(const std::string& config) override {
+        created_json = config;
+        return 3;
+    }
+    bool destroyLayer(uint32_t id) override {
+        destroyed = std::to_string(id);
+        return true;
+    }
+    bool sortLayer(uint32_t id, int index) override {
+        sorted = std::to_string(id) + "@" + std::to_string(index);
+        return true;
+    }
+    double particle_rate = 1.0;
+    std::string last_command;
+    bool getNumber(uint32_t id, const std::string& property, double& out) override {
+        if (id != 3 || property != "particle.rate") return false;
+        out = particle_rate;
+        return true;
+    }
+    bool setNumber(uint32_t, const std::string& property, double value) override {
+        if (property != "particle.rate") return false;
+        particle_rate = value;
+        return true;
+    }
+    bool getBool(uint32_t, const std::string& property, bool& out) override {
+        if (property != "particle.playing") return false;
+        out = true;
+        return true;
+    }
+    // A video texture on layer 3 is animation handle 7.
+    double video_rate = 1.0;
+    double video_loop = 1.0;
+    std::string video_command;
+    uint32_t findAnimation(uint32_t, const std::string& kind, const std::string&) override {
+        return kind == "video" ? 7 : 0;
+    }
+    bool animationGet(uint32_t, const std::string& field, double& out) override {
+        if (field == "duration")
+            out = 120.0;
+        else if (field == "rate")
+            out = video_rate;
+        else if (field == "loop")
+            out = video_loop;
+        else if (field == "currentTime")
+            out = 30.0;
+        else if (field == "playing")
+            out = 1.0;
+        else
+            return false;
+        return true;
+    }
+    bool animationSet(uint32_t, const std::string& field, double value) override {
+        if (field == "rate") video_rate = value;
+        if (field == "loop") video_loop = value;
+        return true;
+    }
+    bool animationCommand(uint32_t, const std::string& command) override {
+        video_command = command;
+        return true;
+    }
+    bool layerCommand(uint32_t, const std::string& command) override {
+        last_command = command;
+        return true;
+    }
+    bool getMaterialProperty(uint32_t, int effect, const std::string& name, std::vector<double>& out) override {
+        if (effect != 1 || name != "speed") return false;
+        out = speed;
+        return true;
+    }
+    bool setMaterialProperty(uint32_t, int effect, const std::string& name, const std::vector<double>& value) override {
+        if (effect != 1 || name != "speed") return false;
+        speed = value;
+        return true;
+    }
+};
 
 bool updateText(SceneScript& script, std::string& out) {
     ScriptValue value = ScriptValue::makeString("");
@@ -104,6 +318,247 @@ export function update(value) { return seen; }
         CHECK(late.load(source, ""));
         engine.beginFrame(0.016, 1.0, 1920, 1080, 1920, 1080);  // delivers remembered events to new scripts
         CHECK(updateText(late, out) && out == "Sticky|9");
+    }
+
+    // Two scenes alive at once (a transition): each script sees its own scene and only the active scene gets events.
+    {
+        CountingScene first(2), second(5);
+        ScriptEngine& engine = ScriptEngine::instance();
+        const int first_scope = 0, second_scope = 0;
+        engine.registerScope(&first_scope, &first);
+        engine.registerScope(&second_scope, &second);
+        const char* source = R"JS(
+let clicks = 0;
+export function cursorClick() { clicks++; }
+export function update() { return thisScene.getLayerCount() + ':' + clicks; }
+)JS";
+        SceneScript a, b;
+        a.setLayerId(7);
+        b.setLayerId(7);  // object ids collide across wallpapers
+        engine.setCreationScope(&first_scope);
+        CHECK(a.load(source, ""));
+        engine.setCreationScope(&second_scope);
+        CHECK(b.load(source, ""));
+        std::string out;
+
+        engine.setActiveScope(&first_scope);
+        CHECK(engine.dispatchToLayer(7, "cursorClick", {}) == 1);
+        CHECK(updateText(a, out) && out == "2:1");
+        CHECK(updateText(b, out) && out == "5:0");  // own backend even though the other scene is active
+
+        engine.setActiveScope(&second_scope);
+        CHECK(engine.broadcast("cursorClick", {}) == 1);
+        CHECK(updateText(b, out) && out == "5:1");
+        CHECK(updateText(a, out) && out == "2:1");
+
+        // `shared` is separate per scene.
+        const char* shared_source = R"JS(
+export function init() { if (shared.mark === undefined) shared.mark = thisScene.getLayerCount(); }
+export function update() { return String(shared.mark); }
+)JS";
+        SceneScript sa, sb;
+        engine.setCreationScope(&first_scope);
+        CHECK(sa.load(shared_source, ""));
+        engine.setCreationScope(&second_scope);
+        CHECK(sb.load(shared_source, ""));
+        ScriptValue unused = ScriptValue::makeString("");
+        sa.initValue(unused);
+        sb.initValue(unused);
+        CHECK(updateText(sa, out) && out == "2");
+        CHECK(updateText(sb, out) && out == "5");
+
+        engine.unregisterScope(&first_scope);
+        engine.unregisterScope(&second_scope);
+        engine.setCreationScope(nullptr);
+        engine.setActiveScope(nullptr);
+    }
+
+    // Profiling only observes: a report after 10 s of frame time must not disturb the scripts.
+    {
+        ScriptEngine& engine = ScriptEngine::instance();
+        engine.setProfiling(true);
+        SceneScript script;
+        CHECK(script.load(kClockScript, ""));
+        std::string out;
+        CHECK(updateText(script, out));
+        engine.beginFrame(11.0, 20.0, 1920, 1080, 1920, 1080);
+        CHECK(updateText(script, out));
+        engine.setProfiling(false);
+    }
+
+    // Effects: look up by name or index, toggle visibility, read and write material constants.
+    {
+        EffectScene scene;
+        ScriptEngine& engine = ScriptEngine::instance();
+        const int scope = 0;
+        engine.registerScope(&scope, &scene);
+        engine.setCreationScope(&scope);
+        const char* source = R"JS(
+export function update() {
+    var glow = thisLayer.getEffect('glow');
+    var ripple = thisLayer.getEffect(1);
+    glow.visible = false;
+    ripple.setMaterialProperty('speed', ripple.getMaterialProperty('speed') * 3);
+    return thisLayer.getEffectCount() + ':' + glow.name + ':' + ripple.name + ':' + (thisLayer.getEffect('none') === undefined);
+}
+)JS";
+        SceneScript script;
+        script.setLayerId(3);
+        CHECK(script.load(source, ""));
+        std::string out;
+        CHECK(updateText(script, out) && out == "2:glow:ripple:true");
+        CHECK(!scene.visible[0] && scene.visible[1]);
+        CHECK(scene.speed.size() == 1 && scene.speed[0] == 3.0);
+
+        // Particle systems: scalar fields and commands reach the backend.
+        SceneScript particles;
+        particles.setLayerId(3);
+        CHECK(particles.load(R"JS(
+export function update() {
+    var system = thisLayer.getParticleSystem();
+    system.instance.rate = system.instance.rate * 2;
+    system.emitParticles(5);
+    return String(system.isPlaying());
+})JS",
+                             ""));
+        CHECK(updateText(particles, out) && out == "true");
+        CHECK(scene.particle_rate == 2.0 && scene.last_command == "particle.emit:5");
+
+        // Dynamic layers: the config reaches the scene as scene.json text (vectors as "x y z").
+        SceneScript dynamic;
+        dynamic.setLayerId(3);
+        CHECK(dynamic.load(R"JS(
+export function update() {
+    var layer = thisScene.createLayer({ image: 'models/x.json', origin: { x: 1, y: 2, z: 3 }, name: 'made' });
+    thisScene.sortLayer(layer, 0);
+    thisScene.destroyLayer(layer);
+    return String(layer && layer.name !== undefined);
+})JS",
+                           ""));
+        CHECK(updateText(dynamic, out) && out == "true");
+        CHECK(scene.created_json.find("\"origin\":\"1 2 3\"") != std::string::npos);
+        CHECK(scene.sorted == "3@0" && scene.destroyed == "3");
+
+        // Scene settings read and write through the backend; a number fills every component of a color.
+        SceneScript settings;
+        settings.setLayerId(3);
+        CHECK(settings.load(R"JS(
+export function update() {
+    thisScene.clearcolor = 0.5;
+    return String(thisScene.clearcolor.y);
+})JS",
+                            ""));
+        CHECK(updateText(settings, out) && out == "0.5");
+        CHECK(scene.clear.size() == 3 && scene.clear[2] == 0.5);
+
+        // Video textures: playback commands.
+        SceneScript video;
+        video.setLayerId(3);
+        CHECK(video.load(R"JS(
+export function update() {
+    var texture = thisLayer.getVideoTexture();
+    texture.pause();
+    texture.rate = 2;
+    texture.loop = false;
+    return texture.isPlaying() + ':' + texture.duration + ':' + texture.getCurrentTime() + ':' + texture.loop;
+})JS",
+                         ""));
+        CHECK(updateText(video, out) && out == "true:120:30:false");
+        CHECK(scene.video_command == "pause" && scene.video_rate == 2.0 && scene.video_loop == 0.0);
+
+        // IModelData: shapes reach the scene with typed buffers decoded, and the layer refers to the model by id.
+        SceneScript model_api;
+        model_api.setLayerId(3);
+        CHECK(model_api.load(R"JS(
+export function update() {
+    var model = thisScene.createModelData({ shapes: [{
+        vertexBuffer: new Float32Array([0, 300, 0, 0, 0, 1, 0.5, 1,  -300, 0, 0, 0, 0, 1, 0, 0,  300, 0, 0, 0, 0, 1, 1, 0]),
+        vertexFormat: [IModelData.POSITION, IModelData.NORMAL, IModelData.UV],
+        indexBuffer: new Uint16Array([0, 1, 2]),
+        material: engine.registerAsset('materials/mine.json', true),
+        origin: { x: 1, y: 2, z: 3 }
+    }] });
+    model.applyData({ vertexBuffer: new Float32Array([9, 9, 9]) });
+    model.replaceData([null, { indexBuffer: null }]);
+    thisScene.createLayer({ model: model, origin: { x: 4, y: 5, z: 0 } });
+    thisScene.destroyModelData(model);
+    return String(IModelData.TANGENT_SIGNED);
+})JS",
+                              ""));
+        CHECK(updateText(model_api, out) && out == "tangent_signed");
+        CHECK(scene.model_shapes.size() == 1 && scene.model_shapes[0].data.vertices.size() == 24 &&
+              scene.model_shapes[0].data.vertices[1] == 300.0f && scene.model_shapes[0].data.format.size() == 3 &&
+              scene.model_shapes[0].data.format[2] == VertexAttribute::Uv &&
+              scene.model_shapes[0].data.indices.size() == 3 && scene.model_shapes[0].data.indices[2] == 2 &&
+              scene.model_shapes[0].data.material == "materials/mine.json" &&
+              scene.model_shapes[0].data.origin[2] == 3.0f);
+        CHECK(scene.model_update.size() == 2 && scene.model_update[0].remove && scene.model_update[1].remove_indices &&
+              scene.model_replace && scene.created_model == 5);
+        CHECK(scene.created_json.find("\"model\":5") != std::string::npos);
+
+        // Patches merge field by field unless the shape is replaced.
+        ModelShape shape;
+        ShapePatch full;
+        full.has_vertices = full.has_material = true;
+        full.data.vertices = {1, 2, 3};
+        full.data.material = "a";
+        applyShapePatch(shape, full, true);
+        ShapePatch only_vertices;
+        only_vertices.has_vertices = true;
+        only_vertices.data.vertices = {4, 5, 6};
+        applyShapePatch(shape, only_vertices, false);
+        CHECK(shape.vertices[0] == 4.0f && shape.material == "a");
+        applyShapePatch(shape, only_vertices, true);
+        CHECK(shape.material.empty());
+
+        // Layer API: both setParent forms, object-space rotation, attachments, one-shot animation layers.
+        SceneScript layer_api;
+        layer_api.setLayerId(3);
+        CHECK(layer_api.load(R"JS(
+export function update() {
+    thisLayer.setParent(thisScene.getLayer('parent'), true);
+    thisLayer.rotateObjectSpace({ x: 0, y: 90, z: 0 });
+    var origin = thisLayer.getAttachmentOrigin('socket');
+    thisLayer.playSingleAnimation('wave', { rate: 2 });
+    return thisLayer.getAttachmentIndex('socket') + ':' + origin.x + ':' + origin.z;
+})JS",
+                             ""));
+        CHECK(updateText(layer_api, out) && out == "2:7:9");
+        CHECK(scene.parent_call == "3>3@+");
+        CHECK(scene.rotated.size() == 3 && scene.rotated[1] == 90.0);
+        CHECK(scene.animation_layer_config.find("\"once\":true") != std::string::npos &&
+              scene.animation_layer_config.find("\"autoRemove\":true") != std::string::npos &&
+              scene.animation_layer_config.find("\"animation\":\"wave\"") != std::string::npos);
+
+        SceneScript attached;
+        attached.setLayerId(3);
+        CHECK(attached.load("export function update() { thisLayer.setParent(thisScene.getLayer('p'), 'socket', true); return ''; }", ""));
+        CHECK(updateText(attached, out) && scene.parent_call == "3>3@socket+");
+
+        // Bones by name or index.
+        SceneScript bones;
+        bones.setLayerId(3);
+        CHECK(bones.load(R"JS(
+export function update() {
+    var origin = thisLayer.getLocalBoneOrigin('head');
+    thisLayer.setLocalBoneOrigin(1, { x: origin.x + 10, y: origin.y, z: origin.z });
+    return thisLayer.getBoneCount() + ':' + thisLayer.getBoneIndex('head') + ':' +
+           thisLayer.getBlendShapeIndex('smile') + ':' + thisLayer.getBlendShapeWeight(0);
+})JS",
+                         ""));
+        CHECK(updateText(bones, out) && out == "2:1:-1:0");
+        CHECK(scene.bone_origin[0] == 11.0 && scene.bone_origin[2] == 3.0);
+
+        // A script bound to an effect sees that effect as thisObject.
+        SceneScript bound;
+        bound.setLayerId(3);
+        bound.setProperty("effect:1:visible");
+        CHECK(bound.load("export function update(v) { return thisObject.name === 'ripple'; }", ""));
+        ScriptValue flag = ScriptValue::makeBool(false);
+        CHECK(bound.updateValue(flag) && flag.number == 1.0);
+
+        engine.unregisterScope(&scope);
+        engine.setCreationScope(nullptr);
     }
 
     return test::finish("scene script tests");

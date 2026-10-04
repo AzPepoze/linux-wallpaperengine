@@ -46,6 +46,18 @@ option("layer_shell")
     end)
 option_end()
 
+-- On by default when libxkbcommon is installed. Turns layer-surface key codes into text for the debug UI.
+option("xkbcommon")
+    set_showmenu(true)
+    set_description("Use libxkbcommon to type into the debug UI on a layer surface")
+    on_check(function (option)
+        import("lib.detect.find_package")
+        if find_package("pkgconfig::xkbcommon") then
+            option:enable(true)
+        end
+    end)
+option_end()
+
 -- On by default when libsystemd is installed. Exposes the MPRIS media session
 -- source over sd-bus; disable with `xmake f --mpris=n`.
 option("mpris")
@@ -112,6 +124,11 @@ target("linux-wallpaperengine")
 
     if has_config("layer_shell") then
         add_syslinks("wayland-client")
+        if has_config("xkbcommon") then
+            add_packages("pkgconfig::xkbcommon")
+            add_syslinks("xkbcommon")
+            add_defines("LWE_HAVE_XKBCOMMON=1")
+        end
         on_load(generate_wayland_protocols)
     end
 
@@ -162,6 +179,7 @@ local function add_test(name, files, packages, syslinks)
         set_kind("binary")
         set_default(false)
         set_targetdir("bin/$(mode)")
+        set_rundir("$(projectdir)")
         set_warnings("all", "extra")
         add_includedirs("src")
         if packages then add_packages(table.unpack(packages)) end
@@ -196,6 +214,14 @@ add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d
                                 "src/wallpaper/2d/script/script_engine_host.cpp",
                                 "src/wallpaper/2d/script/script_runtime.cpp",
                                 "src/wallpaper/2d/script/script_value_js.cpp", "src/shared/core/logger.cpp"},
+         {"quickjs"})
+
+add_test("script_manifest_tests", {"tests/script_manifest_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
+                                   "src/wallpaper/2d/script/script_engine.cpp",
+                                   "src/wallpaper/2d/script/script_engine_prelude.cpp",
+                                   "src/wallpaper/2d/script/script_engine_host.cpp",
+                                   "src/wallpaper/2d/script/script_runtime.cpp",
+                                   "src/wallpaper/2d/script/script_value_js.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})
 
 add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",

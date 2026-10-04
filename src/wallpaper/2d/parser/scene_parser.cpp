@@ -184,6 +184,14 @@ void resolveUserBindings(cJSON* node, const UserProperties& properties) {
 
 }  // namespace
 
+bool parseSceneObject(const char* object_json, SceneObjectDocument& out) {
+    cJSON* root = cJSON_Parse(object_json);
+    if (!root) return false;
+    out = parseObject(root);
+    cJSON_Delete(root);
+    return out.node.valid;
+}
+
 bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserProperties* user_properties) {
     char* json_str = read_file_to_string(scene_json_path);
     if (!json_str) {

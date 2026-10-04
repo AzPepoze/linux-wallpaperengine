@@ -1,6 +1,7 @@
 #ifndef MEDIA_EVENTS_H
 #define MEDIA_EVENTS_H
 
+#include <functional>
 #include <memory>
 
 #include "scene_script.h"
@@ -18,7 +19,9 @@ class MediaScriptBridge {
     MediaScriptBridge(const MediaScriptBridge&) = delete;
     MediaScriptBridge& operator=(const MediaScriptBridge&) = delete;
 
-    void update();
+    // `wants_thumbnail` starts the source even when no script listens (a material samples $mediaThumbnail);
+    // `on_thumbnail` receives every thumbnail event.
+    void update(bool wants_thumbnail = false, const std::function<void(const ThumbnailColors&)>& on_thumbnail = {});
 
    private:
     std::unique_ptr<MediaSource> source_;

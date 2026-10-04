@@ -54,7 +54,17 @@ class AssetManager : public IAssetResolver {
         std::unique_ptr<VideoAudioStream> audio;
         AudioEngine::StreamHandle audio_stream = AudioEngine::kInvalidStream;
         uint32_t audio_loop_seen = 0;
+        float rate = 1.0f;       // set by scripts (IVideoTexture.rate), on top of the global video rate
+        double position = 0.0;   // seconds into the current pass through the file
+        uint32_t position_loop = 0;
     };
+
+    // The playback state scripts read and write for a video's decoder.
+    ActiveVideoTexture* findVideoTexture(const wallpaper_engine::VideoTexture* decoder) {
+        for (ActiveVideoTexture& video : video_textures)
+            if (video.decoder.get() == decoder) return &video;
+        return nullptr;
+    }
 
     const std::vector<ActiveVideoTexture>& getVideoTextures() const {
         return video_textures;

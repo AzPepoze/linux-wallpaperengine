@@ -191,13 +191,14 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
   - Light Shafts, God Rays, Shine
   - Depth Parallax
   - VHS, Skew, Film Grain, Perspective, Reflection, Chromatic Aberration, Twirl, Spin, Clouds, Fisheye, Local Contrast, Refraction, Swing, Shimmer, Nitro, Edge Detection, Transform
-  - Known failing: some Pulse variants, Cloud Motion, Cursor Ripple, Water Caustics, and Workshop effects that use GLSL constructs Slang rejects (audio bars, hue shift, auto sway, clipping mask, pixelate and others)
+  - Known failing: some Pulse variants, Cloud Motion, Water Caustics, and Workshop effects that use GLSL constructs Slang rejects (audio bars, hue shift, auto sway, clipping mask, pixelate and others)
   - Untested: Radial Blur, X-Ray, Glitter, Fire, Advanced Fluid Simulation
 - [-] Shader pipeline
   - Works
     - Wallpaper Engine GLSL preprocessing with `#include` from the install's `shaders/`
     - Rewrites for Slang: scalar/vector mismatches, out-of-range swizzles, narrowing conversions, vector width mismatches, `mix` differences, HLSL-style initializers
     - Runtime Slang compilation to SPIR-V with a persistent on-disk cache (under `$XDG_CACHE_HOME`)
+    - Pointer uniforms `g_PointerPosition`, `g_PointerPositionLast` and `g_PointerState` (normalized to the output surface), which Cursor Ripple needs; its projection back into layer space assumes the layer fills the screen
     - Built-in uniforms: time, texture resolutions, `g_ParallaxPosition`, effect texture projection matrices, pointer position, ambient and skylight colors, screen size, texel size, model-view-projection, audio spectrum (16/32/64 bands)
     - Texture bindings `g_Texture0..N`
   - Missing
@@ -235,7 +236,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Control points (only `controlpointstartindex` for child systems is read)
     - Mouse-interactive and audio-responsive particles
     - World-space particles, material lighting
-    - Script control of particle systems
+    - Script control of particle systems (control points)
 
 ## Animations
 
@@ -261,7 +262,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
   - Missing
     - Blend shapes (morph targets), bone constraints, inverse kinematics, spring and rigid simulation, interactive bones
     - Character sheets and texture channels
-    - Script control (`getAnimationLayer`, bone and blend-shape APIs)
+    - Script control of blend shapes
 
 ## Lighting and 3D
 
@@ -309,58 +310,85 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - A source module (`src/shared/media/`) reads track title, artist, album, playback state and timeline from MPRIS players over sd-bus, and decodes album art from `file://` URLs
     - Median-cut color extraction (primary, secondary, tertiary, text, high-contrast)
     - Built only when libsystemd is available (`mpris` option); otherwise it is a no-op
+    - Events reach scripts (`media*Changed`), and a material that lists `$mediaThumbnail` under `usertextures` samples the album art as a 256x256 texture
   - Missing
-    - Not connected to SceneScript (`media*Changed` events never fire) or to the `$mediaThumbnail` texture
     - `http(s)` album art URLs
-    - Not exercised against a live player yet
 
 ## SceneScript
 
 Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/scenescript/reference.html). Scripts run on one shared QuickJS runtime as ES modules, using the install's own `baseclasses.js` and `jsmodules`. `utils/script_corpus.cpp` loads every script of a Workshop folder and reports what fails.
 
-- [-] Script runtime
-  - Works
-    - Shared runtime, per-script module scope, `import ... from 'WEMath' | 'WEColor' | 'WEVector'`
-    - 64 MB memory limit, per-call time budgets, and a script is disabled after three consecutive errors
-    - `scriptproperties` overrides applied the way the real engine does
-  - Missing
-    - Hooks other than `init` and `update` (see Events)
+- [x] Script runtime
+  - Shared runtime, per-script module scope, `import ... from 'WEMath' | 'WEColor' | 'WEVector'`
+  - 64 MB memory limit, per-call time budgets, and a script is disabled after three consecutive errors
+  - `scriptproperties` overrides applied the way the real engine does
+  - `--script-profile` logs the five scripts that spent the most time every 10 seconds
+  - Scripts are scoped per scene: each wallpaper has its own `shared`, `localStorage` and layer ids, and events only reach the scripts of the active scene (needed while two wallpapers are alive in a transition)
 - [-] Properties that can host a script
   - Works
-    - `origin`, `scale`, `angles`, `visible` and `color` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
+    - `origin`, `scale`, `angles`, `visible`, `color` and image `size` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
     - Text content (`update(string)`, about four times per second)
+    - `visible` of a group (an object without a layer) hides everything beneath it
+    - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect, and its `getAnimation()` controls the constant's keyframe animation (`startpaused`, `play()`, `rate`...)
   - Missing
-    - `size` (parsed, not bound), effect constants, sound volume, particle fields, camera and scene settings
-    - `visible` on objects that have no layer (groups) is not applied
-    - Scripts on text color, alpha, point size and other text properties
+    - Particle fields and camera properties
+    - Scripts on text color, point size and other text properties
+    - Four-component effect constants
 - [-] Globals
   - [-] `engine`
     - Works: `frametime`, `runtime`, `timeOfDay`, `canvasSize`, `screenResolution`, `AUDIO_RESOLUTION_16/32/64`, `registerAudioBuffers`, `setTimeout`, `setInterval` (returning cancel functions), device/orientation queries
-    - Missing: `userProperties` is empty, `openUserShortcut` and `registerAsset` are stubs
+    - `userProperties` holds every project property (colors as `Vec3`), resolved from `project.json`, the GUI config and `--set-property`
+    - Missing: `openUserShortcut` and `registerAsset` are stubs
   - [x] `console` (`log`, `info`, `debug`, `warn`, `error`; rate-limited)
   - [x] `shared`, `localStorage` (global and per-screen areas, 100 KB each, persisted per wallpaper under `~/.local/share/linux-wallpaperengine/localstorage/`)
   - [x] `Vec2`, `Vec3`, `Vec4`, `Mat3`, `Mat4`, `WEMath`, `WEColor`, `WEVector`, `MediaPlaybackEvent` (from the install)
   - [-] `thisLayer`
-    - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `getParent()`, `getChildren()`
-    - Missing: `alpha`, `getTransformMatrix`, `getAnimation`, `getAnimationLayer`, `getTextureAnimation`, `getVideoTexture`, `setParent`, attachments, `rotateObjectSpace`, and the image/text/effect/sound layer members (`text`, `horizontalalign`, `getEffect`, `solid`, `volume`...)
-    - Not available for scripts on camera, effect or scene-level properties (no owning layer)
-  - [ ] `thisObject` (undefined; `getAnimation()` is the main missing member)
+    - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `color`, `alpha`, `getParent()`, `getChildren()`, `getTransformMatrix()` (`Mat4`), `getAnimation`, `getAnimationLayer`, `getAnimationLayerCount`, `getTextureAnimation`
+    - Works: text layers (`text`, `color`, `alpha`, `font`, `pointsize`, `padding`, `horizontalalign`, `verticalalign`, `limitwidth`, `maxwidth`, `limitrows`, `maxrows`, `opaquebackground`, `backgroundcolor`; `anchor` is kept but the layout does not follow screen edges) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
+    - Works: `solid` (the layer receives cursor events)
+    - Works: `getEffect(name | index)` and `getEffectCount()`; an effect has `visible`, `name`, `getMaterialCount()`, `getMaterial(index)` (every shader constant of that pass is a property), `setMaterialProperty(name, value)`, `getMaterialProperty(name)` and `executeMaterialFunction(name)` (functions an effect defines to clear its buffers); a value set by a script replaces the constant's keyframes
+    - Works: `transformAttachmentToTexture(layer, attachment)` (a `Mat3` into this layer's texture space)
+    - Works: `setParent(parent, adjustTransforms?)` and `setParent(parent, attachment, adjustTransform?)` (with adjust, the layer stays where it is in the world), `rotateObjectSpace`, `getAttachmentIndex`, `getAttachmentMatrix`, `getAttachmentOrigin`, `getAttachmentAngles` (puppet attachments, world space)
+    - Works: model layers (puppet): `createAnimationLayer`, `destroyAnimationLayer` (later layers shift down one index), `playSingleAnimation` (plays once and removes itself), `rootmotion` (off ignores the root bone's animated translation); `perspective` is kept but the 2D renderer ignores it
+    - Not available for scripts on camera or scene-level properties (no owning layer)
+  - [-] `thisObject`
+    - Works: `visible`, `name`, `getAnimation()`; the effect itself for scripts on an effect property
   - [-] `thisScene`
     - Works: `getLayer(name | index)`, `getLayerCount()`, `enumerateLayers()`, `getLayerIndex()`
-    - Missing: `createLayer`, `destroyLayer`, `sortLayer` (stubs that do nothing), `getInitialLayerConfig`, camera transforms, scene settings (`bloom*`, `clearcolor`, `camerashake*`...), model data
-  - [-] `input`
-    - Works: the object exists
-    - Missing: always zero/false; pointer events and hit testing exist as a tested module (`src/wallpaper/2d/input/`) but are not connected
+    - Works: `createLayer(config)` (an asset path, or an object shaped like a scene.json object: image, particle, text or sound; its own scripts and animations are bound), `destroyLayer`, `sortLayer`
+    - Works: scene settings `bloom`, `bloomstrength`, `bloomthreshold`, `clearcolor`, `ambientcolor`, `skylightcolor`, `cameraparallax*` and `camerashake*` (read/write; bloom values apply live in HDR scenes only, other scenes bake them when the bloom passes are created)
+    - Works: `getInitialLayerConfig(layer)` returns the object as authored in scene.json
+    - Works: `getCameraTransforms()` and `setCameraTransforms({eye, center, up, zoom})`; `zoom` zooms the 2D view, while `eye`, `center` and `up` are stored but the orthographic renderer does not use them
+    - Works: `clearenabled`, `camerafade`, `fov`, `nearz`, `farz` (read/write; `fov`, `nearz` and `farz` are kept but the orthographic renderer does not use them)
+  - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
+- [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`); `getAnimation` / `getTextureAnimation` return an object even when the layer has no such animation, so unguarded calls do not throw
 - [-] Events
-  - Works: `init(value)` and `update(value)` for property scripts
-  - Missing: `destroy`, `resizeScreen`, `applyUserProperties`, `applyGeneralSettings`, `cursorEnter/Leave/Move/Down/Up/Click`, `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged` (only a title-only stub), `mediaThumbnailChanged`, `mediaTimelineChanged`
-- [ ] Layer API (`ILayer`, `IImageLayer`, `ITextLayer`, `IEffectLayer`, `ISoundLayer`): transforms, parenting, attachments
-- [ ] Animation handles (`IAnimation`, `IAnimationLayer`, `ITextureAnimation`, `IVideoTexture`)
-- [ ] Effect and material handles (`IEffect`, `IMaterial`)
-- [ ] Particle handles (`IParticleSystem`, `IParticleSystemInstance`)
-- [ ] Dynamic layers (`createLayer`, `destroyLayer`, `sortLayer`) and model data (`IModelData`)
-- [ ] Bone, blend-shape and physics APIs
+  - Works: `init`, `update`, `applyUserProperties` (once after the first init), `cursorEnter/Leave/Move/Down/Up/Click` on solid image layers, and `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged`, `mediaThumbnailChanged`, `mediaTimelineChanged` from MPRIS
+  - Works: `destroy` (when the scene is unloaded), `resizeScreen` (receives the new size as `x`, `y`) and `applyGeneralSettings` (once at start, with `language` taken from the locale)
+- [x] Video texture handle (`thisLayer.getVideoTexture()`)
+  - Works: `play()`, `pause()`, `stop()` (back to the first frame), `isPlaying()`, `duration`, `rate`, `loop` (off stops at the end), `getCurrentTime()`, `setCurrentTime(t)` (seeks the video and its audio track), `addEndedCallback()`
+- [-] Particle handles (`thisLayer.getParticleSystem()`)
+  - Works
+    - System: `play()`, `pause()`, `stop()` (stops emission and clears the live particles), `isPlaying()`, `emitParticles(n)`
+    - `instance`: `alpha`, `size`, `count`, `speed`, `lifetime`, `rate`, `colorn`
+  - Missing
+    - `instance.controlpoint0` to `controlpoint7` are stored, but nothing in the simulation reads them
+    - Child systems are not separate instances
+- [-] Bones, blend shapes and bone physics (`thisLayer`, puppet models)
+  - Works
+    - `getBoneCount`, `getBoneIndex`, `getBoneParentIndex`, `getBoneTransform` / `setBoneTransform` (world), `getLocalBoneTransform` / `setLocalBoneTransform`, `getLocalBoneOrigin` / `Angles` and their setters; a set replaces the animated pose of that bone
+    - `getBlendShapeIndex`, `getBlendShapeWeight`, `setBlendShapeWeight`, `applyBonePhysicsImpulse` and `resetBonePhysicsSimulation` answer for a model without blend shapes or physics bones (index -1, weight 0, no effect), which is every model in the supported `.mdl` formats
+  - Missing
+    - Models with morph targets or physics bones: the `.mdl` parser reads neither
+- [-] Model data (`IModelData`)
+  - Works
+    - `thisScene.createModelData({ shapes })`, `applyData`, `replaceData`, `destroyModelData`, the `IModelData.POSITION / NORMAL / UV / TANGENT_SIGNED / COLOR` constants, and `thisScene.createLayer({ model })`; asset handles from `engine.registerAsset()` work as materials and as `createLayer` arguments
+    - The mesh is drawn flat into the layer's picture: each shape is textured with its material's first texture (white when it has none)
+    - Confirmed on screen: a script-made triangle renders as a solid white shape of the expected size and position on the layer origin (deterministic `--diagnose` capture of a test scene)
+  - Missing
+    - Depth, lighting, normals, tangents, vertex colors and the material's own shader; `perspective`
+    - Shapes with more than 65535 vertices
 
 ## Interaction
 
@@ -369,8 +397,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works
     - Wayland layer-shell surfaces forward `wl_pointer` button and enter/leave events; the frame loop tracks the pressed-button mask and the cursor's scene-world position
     - A tested hit-test module finds the topmost visible solid layer under the cursor (rotation, non-uniform and negative scale, parents) and a tracker produces enter, leave, move, down, up and click
+    - Solid image layers with cursor hooks are hit targets and their scripts receive the events
   - Missing
-    - Layers are not registered as hit targets and no events reach scripts
     - Live delivery to a background layer-shell surface has not been confirmed
 - [ ] Keyboard, touch and gamepad input
 - [ ] Interactive effects, particles and puppet bones

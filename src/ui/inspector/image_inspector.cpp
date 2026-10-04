@@ -127,7 +127,7 @@ namespace Inspector {
 
 void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
     ImGui::Text("Type: %s",
-                il.is_fullscreen ? "Fullscreen Post-Process" : (il.solid_layer ? "Solid Layer" : "Image Layer"));
+                (il.is_fullscreen || il.is_compose_region) ? "Post-Process" : (il.solid_layer ? "Solid Layer" : "Image Layer"));
     if (!il.is_fullscreen) {
         showBlendModeSelector("Blend Mode", il.color_blend_mode);
     }
@@ -136,6 +136,11 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
     if (il.img.id != SG_INVALID_ID) {
         sg_image_desc desc = sg_query_image_desc(il.img);
         showTextureSlot(0, "Base Albedo", il.cached_view, il.path, desc.width, desc.height);
+    }
+    // A post-process layer has no texture of its own; show the scene image the effect chain actually read.
+    if ((il.is_fullscreen || il.is_compose_region) && il.effect_source_view.id != SG_INVALID_ID) {
+        const sg_image_desc desc = sg_query_image_desc(il.effect_source_image);
+        showTextureSlot(0, "Post-Process Source (scene)", il.effect_source_view, "", desc.width, desc.height);
     }
 
     SceneTreeNode* node =

@@ -48,14 +48,28 @@ struct SceneNodeDocument {
     bool propagate_to_children = true;
 };
 
+struct PropertyAnimationDocument {
+    std::string property;               // "origin", "scale", "angles", "color" or "alpha"
+    AnimationCurve curves[3];           // c0, c1, c2; alpha uses curves[0] only; a missing channel has no keys
+    std::string name;                   // options.name, may be empty
+    std::string parent;                 // options.parent.key, empty for a timeline root
+    std::vector<std::string> children;  // options.children[].key
+    bool start_paused = false;          // options.startpaused
+    bool relative = false;              // animation.relative
+};
+
+// A material constant that carries a script, a keyframe animation, or both.
 struct EffectConstantScript {
     int pass = 0;      // index into the effect's `passes`
     std::string name;  // the constant's key in constantshadervalues
     ScriptedValue script;
+    PropertyAnimationDocument animation;  // `property` holds the constant's name
+    bool has_animation = false;
 };
 
 struct EffectInstanceDocument {
     std::string file;
+    std::string name;  // how scripts address the effect: getEffect("name")
     bool visible = true;
     ScriptedValue visible_script;
     std::string instance_config_json;
@@ -121,6 +135,10 @@ struct TextObjectDocument {
     int max_rows = 1;
     std::string horizontal_align = "center";
     std::string vertical_align = "center";
+    bool opaque_background = false;
+    std::array<float, 3> background_color = {0.0f, 0.0f, 0.0f};
+    float padding = 0.0f;
+    std::string anchor = "center";
 };
 
 struct SoundObjectDocument {
@@ -134,16 +152,6 @@ struct SoundObjectDocument {
 };
 
 // One animated scene property. Properties of an object that link via parent/children share a single timeline.
-struct PropertyAnimationDocument {
-    std::string property;               // "origin", "scale", "angles", "color" or "alpha"
-    AnimationCurve curves[3];           // c0, c1, c2; alpha uses curves[0] only; a missing channel has no keys
-    std::string name;                   // options.name, may be empty
-    std::string parent;                 // options.parent.key, empty for a timeline root
-    std::vector<std::string> children;  // options.children[].key
-    bool start_paused = false;          // options.startpaused
-    bool relative = false;              // animation.relative
-};
-
 struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
     SceneNodeDocument node;
@@ -157,6 +165,7 @@ struct SceneObjectDocument {
     SoundObjectDocument sound;
     std::vector<EffectInstanceDocument> effects;
     std::vector<PropertyAnimationDocument> animations;
+    std::string raw_json;  // the object as authored (getInitialLayerConfig)
 };
 
 struct SceneCameraDocument {

@@ -24,7 +24,13 @@ void parseEffectConstantScripts(const cJSON* effect_json, std::vector<EffectCons
                 entry.pass = pass_index;
                 entry.name = constant->string;
                 readScript(constant, entry.script);
-                if (!entry.script.empty()) out.push_back(std::move(entry));
+                std::vector<PropertyAnimationDocument> animations;
+                parsePropertyAnimation(values, constant->string, animations);
+                if (!animations.empty()) {
+                    entry.animation = std::move(animations.front());
+                    entry.has_animation = true;
+                }
+                if (!entry.script.empty() || entry.has_animation) out.push_back(std::move(entry));
             }
         }
         ++pass_index;
@@ -43,6 +49,8 @@ void parseEffects(const cJSON* object, std::vector<EffectInstanceDocument>& out)
 
         EffectInstanceDocument effect;
         effect.file = file->valuestring;
+        const cJSON* name = member(effect_json, "name");
+        if (cJSON_IsString(name) && name->valuestring) effect.name = name->valuestring;
         effect.visible = parseBool(member(effect_json, "visible"), true);
         readScript(member(effect_json, "visible"), effect.visible_script);
         if (char* serialized = cJSON_PrintUnformatted(effect_json)) {

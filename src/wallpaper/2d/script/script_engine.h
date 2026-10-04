@@ -36,12 +36,26 @@ class ScriptEngine {
         return assets_dir_;
     }
     void setWallpaperId(const std::string& id);
+    // Two wallpapers are alive during a transition, so each scene registers a scope: its backend, its `shared` and
+    // its localStorage (named by `wallpaper_id`). Scripts run against the scope they loaded in; events reach the
+    // active scope only. Tests and the corpus runner use the null scope.
+    void registerScope(const void* scope, class ScriptSceneBackend* backend, const std::string& wallpaper_id = "");
+    void unregisterScope(const void* scope);
+    int scopeKey(const void* scope) const;
+    std::string wallpaperIdForKey(int key) const;
+    void setActiveScope(const void* scope) {
+        active_scope_ = scope;
+    }
+    void setCreationScope(const void* scope) {
+        creation_scope_ = scope;
+    }
+    const void* creationScope() const {
+        return creation_scope_;
+    }
     void setSceneBackend(class ScriptSceneBackend* backend) {
-        scene_backend_ = backend;
+        registerScope(nullptr, backend);
     }
-    class ScriptSceneBackend* sceneBackend() const {
-        return scene_backend_;
-    }
+    class ScriptSceneBackend* sceneBackend() const;
 
     void beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w, float screen_h);
     void setAudioBands(int resolution, const float* left, const float* right);
@@ -49,6 +63,10 @@ class ScriptEngine {
     // engine.userProperties: one field per property (colors as Vec3).
     void setUserProperties(const ScriptEvent& properties);
     void flushStorage();
+    // With profiling on, the scripts that spent the most time are logged every 10 seconds.
+    void setProfiling(bool enabled) {
+        profiling_ = enabled;
+    }
 
     void registerScript(SceneScript* script);
     void unregisterScript(SceneScript* script);
@@ -66,7 +84,9 @@ class ScriptEngine {
     // Scopes one script call: where errors are recorded, which script is current, and its time budget.
     class CallScope {
        public:
+        // Engine-internal calls (no owning script) run in the active scope.
         CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms);
+        CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms, const void* scope);
         ~CallScope();
         CallScope(const CallScope&) = delete;
         CallScope& operator=(const CallScope&) = delete;
@@ -75,6 +95,9 @@ class ScriptEngine {
         ScriptEngine& engine_;
         ScriptErrors* previous_errors_;
         int previous_id_;
+        const void* previous_scope_;
+        int script_id_;
+        int64_t started_ns_ = 0;
     };
     ScriptErrors* currentErrors() const {
         return current_errors_;
@@ -102,7 +125,16 @@ class ScriptEngine {
     ScriptErrors* current_errors_ = nullptr;
     std::string wallpaper_id_ = "default";
     std::string assets_dir_;
-    class ScriptSceneBackend* scene_backend_ = nullptr;
+    struct ScopeInfo {
+        int key = 0;
+        class ScriptSceneBackend* backend = nullptr;
+        std::string wallpaper_id;
+    };
+    std::map<const void*, ScopeInfo> scopes_;
+    int next_scope_key_ = 0;
+    const void* active_scope_ = nullptr;
+    const void* creation_scope_ = nullptr;
+    const void* current_scope_ = nullptr;
 
     struct ScriptEntry {
         SceneScript* script = nullptr;
@@ -111,6 +143,15 @@ class ScriptEngine {
     std::vector<ScriptEntry> scripts_;
     std::map<std::string, ScriptEvent> sticky_events_;
     double storage_flush_timer_ = 0.0;
+
+    struct ProfileEntry {
+        int64_t ns = 0;
+        int calls = 0;
+    };
+    bool profiling_ = false;
+    std::map<int, ProfileEntry> profile_;
+    double profile_timer_ = 0.0;
+    void reportProfile();
 };
 
 // Records the pending exception of `ctx` against the current script.

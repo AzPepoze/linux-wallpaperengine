@@ -72,6 +72,9 @@ void forEachDrawnLayer(EngineContext& ctx, Draw&& draw) {
     const bool any_solo =
         std::any_of(ctx.scene.layers.begin(), ctx.scene.layers.end(), [](const Layer* layer) { return layer->solo; });
     for (Layer* layer : ctx.scene.layers) {
+        if (!any_solo && layer->visible && ctx.scene.scene_tree &&
+            !ctx.scene.scene_tree->ancestorsVisible(layer->scene_object_id))
+            continue;
         if (any_solo ? layer->solo : layer->visible) draw(layer);
     }
 }

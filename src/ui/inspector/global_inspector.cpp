@@ -20,6 +20,7 @@ void GlobalInspector::show(EngineContext& ctx) {
                 ctx.scene.offset_y);
     ImGui::Text("FPS: %.1f | Frame Time: %.2f ms", ImGui::GetIO().Framerate,
                 1000.0f / (ImGui::GetIO().Framerate > 0.0f ? ImGui::GetIO().Framerate : 60.0f));
+    ImGui::Checkbox("Show node IDs in scene tree", &ctx.debug.show_node_ids);
 
     ImGui::Separator();
     ImGui::TextDisabled("Wallpaper Path");

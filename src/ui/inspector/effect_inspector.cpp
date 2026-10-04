@@ -4,6 +4,7 @@
 
 #include "imgui.h"
 #include "shared/graphics/passes/shader_pass.h"
+#include "shared/graphics/pointer_state.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "ui/widgets/visibility_solo_controls.h"
@@ -89,7 +90,9 @@ void showResolvedTextureSlots(::ShaderPass& pass) {
                                       const char* source) {
             const char* label = pass.texture_labels.count(slot) ? pass.texture_labels[slot].c_str() : "Texture";
             const bool valid = view.id != SG_INVALID_ID;
-            ImGui::Text("g_Texture%d [%s] — %s", slot, label, valid ? "bound" : "INVALID / fallback");
+            const bool chained = source && (strncmp(source, "_rt_", 4) == 0 || strcmp(source, "previous") == 0);
+            ImGui::Text("g_Texture%d [%s] — %s", slot, label,
+                        valid ? "bound" : (chained ? "resolved at draw" : "INVALID / fallback"));
             ImGui::SameLine();
             ImGui::TextDisabled("source: %s", source);
             if (valid) {
@@ -233,6 +236,17 @@ void showUniformEditors(::ShaderPass& pass) {
     }
 }
 
+// Values the engine fills every frame (pointer, time); shown read-only so they can be watched while moving the mouse.
+void showLiveUniforms(const EngineContext& ctx) {
+    if (!ImGui::TreeNodeEx("Live Uniforms (per-frame)", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    ImGui::Text("g_PointerPosition:     (%.4f, %.4f)", g_shader_pointer.x, g_shader_pointer.y);
+    ImGui::Text("g_PointerPositionLast: (%.4f, %.4f)", g_shader_pointer.last_x, g_shader_pointer.last_y);
+    ImGui::Text("g_PointerState:        (%.4f, %.4f, %.4f)", g_shader_pointer.x, g_shader_pointer.y,
+                g_shader_pointer.pressed);
+    ImGui::Text("engine.time:           %.3f s", ctx.time);
+    ImGui::TreePop();
+}
+
 void showCombos(::ShaderPass& pass) {
     if (!pass.combos.empty() && ImGui::TreeNode("Shader Combos")) {
         for (const auto& combo : pass.combos) ImGui::BulletText("%s = %d", combo.first.c_str(), combo.second);
@@ -260,6 +274,7 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
         showTextureSlotToggles(pass);
     }
     showUniformEditors(pass);
+    showLiveUniforms(ctx);
     showCombos(pass);
     ImGui::Unindent();
     ImGui::PopID();

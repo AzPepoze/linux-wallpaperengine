@@ -17,6 +17,7 @@
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/script/scene_scripts.h"
+#include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 void Scene2DRuntime::init() {
@@ -40,6 +41,7 @@ void Scene2DRuntime::precompileBlendModes() {
 }
 
 void Scene2DRuntime::update(float dt) {
+    ScriptEngine::instance().setActiveScope(ctx.scene.scripts);
     if (ctx.scene.scripts) ctx.scene.scripts->update(dt);
     if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
         ctx.debug.selected_object < (int)ctx.scene.layers.size()) {

@@ -1,7 +1,9 @@
 #include "scene_animations.h"
 
 #include <algorithm>
+#include <cstdlib>
 
+#include "wallpaper/2d/effects/effect.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
@@ -16,6 +18,24 @@ Layer* SceneAnimations::layerFor(uint32_t object_id) const {
     return nullptr;
 }
 
+void SceneAnimations::applyEffectConstant(Layer* layer, const AnimatedValue& animated) {
+    if (!layer) return;
+    const size_t separator = animated.property.find(':', 7);
+    if (separator == std::string::npos) return;
+    const size_t index = (size_t)std::atoi(animated.property.c_str() + 7);
+    const std::string constant = animated.property.substr(separator + 1);
+    if (index >= layer->effects.size() || !layer->effects[index]) return;
+
+    for (ShaderPass* pass : layer->effects[index]->passes) {
+        const std::vector<float>* current = pass ? pass->materialConstant(constant) : nullptr;
+        if (!current) continue;
+        std::vector<float> next = *current;
+        for (size_t i = 0; i < next.size() && i < 3; ++i)
+            if (animated.has[i]) next[i] = (float)animated.value[i];
+        pass->setMaterialConstant(constant, next);
+    }
+}
+
 void SceneAnimations::update(float dt) {
     timelines_.update(dt, [this](const AnimatedValue& animated) { apply(animated); });
 }
@@ -23,6 +43,11 @@ void SceneAnimations::update(float dt) {
 void SceneAnimations::apply(const AnimatedValue& animated) {
     SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(animated.object_id) : nullptr;
     Layer* layer = layerFor(animated.object_id);
+
+    if (animated.property.compare(0, 7, "effect:") == 0) {
+        applyEffectConstant(layer, animated);
+        return;
+    }
 
     std::array<float, 3> current = {0.0f, 0.0f, 0.0f};
     std::array<float, 3>* target = nullptr;

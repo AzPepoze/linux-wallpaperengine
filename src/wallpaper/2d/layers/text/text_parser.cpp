@@ -11,9 +11,15 @@ TextObjectConfig TextParser::parse(const wallpaper_engine::SceneObjectDocument& 
     config.color = document.text.color;
     config.alpha = document.text.alpha;
     config.size = document.text.size;
-    config.maxwidth = document.text.limit_width ? document.text.maxwidth : 0.0f;
-    config.max_rows = document.text.limit_rows ? std::max(1, document.text.max_rows) : 0;
+    config.maxwidth = document.text.maxwidth;
+    config.limit_width = document.text.limit_width;
+    config.max_rows = std::max(1, document.text.max_rows);
+    config.limit_rows = document.text.limit_rows;
     config.horizontal_align = document.text.horizontal_align;
     config.vertical_align = document.text.vertical_align;
+    config.opaque_background = document.text.opaque_background;
+    config.background_color = document.text.background_color;
+    config.padding = document.text.padding;
+    config.anchor = document.text.anchor;
     return config;
 }

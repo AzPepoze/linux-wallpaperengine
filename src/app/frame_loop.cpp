@@ -1,9 +1,13 @@
 #include "app/frame_loop.h"
 
+#include <algorithm>
+
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
+#include "shared/graphics/pointer_state.h"
+#include "shared/media/media_thumbnail_texture.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_time.h"
@@ -44,6 +48,28 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
         ctx.input.mouse_world_y = world.y;
     }
 
+    if (ctx.input.mouse_position_valid && surface::width() > 0 && surface::height() > 0) {
+        const float nx = std::clamp(ctx.input.mouse_x / (float)surface::width(), 0.0f, 1.0f);
+        const float ny = std::clamp(ctx.input.mouse_y / (float)surface::height(), 0.0f, 1.0f);
+        // On the first frame (or after the pointer re-enters) start "last" at the current spot so the
+        // ripple's pointer-ray does not sweep in from a stale origin.
+        if (g_shader_pointer.valid) {
+            g_shader_pointer.last_x = g_shader_pointer.x;
+            g_shader_pointer.last_y = g_shader_pointer.y;
+        } else {
+            g_shader_pointer.last_x = nx;
+            g_shader_pointer.last_y = ny;
+        }
+        g_shader_pointer.x = nx;
+        g_shader_pointer.y = ny;
+        g_shader_pointer.valid = true;
+    } else {
+        g_shader_pointer.last_x = g_shader_pointer.x;
+        g_shader_pointer.last_y = g_shader_pointer.y;
+        g_shader_pointer.valid = false;
+    }
+    g_shader_pointer.pressed = ctx.input.left_down() ? 1.0f : 0.0f;
+
     // Inspector edits are intentionally runtime-only. Rebuild the clear pass
     // every frame so direct and offscreen composition see the same live state.
     ctx.pass_action.colors[0].load_action =
@@ -54,11 +80,13 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
 #if DEBUG_BUILD
     if (RenderDiagnostics::instance().getConfig().fixed_step) dt = 1.0f / 60.0f;
 #endif
+    ctx.frametime = dt;
     ctx.time += dt;
     AudioEngine::instance().update(dt);
     {
         const AudioEngine::Spectrum& spectrum = AudioEngine::instance().spectrum();
         ScriptEngine& scripts = ScriptEngine::instance();
+        scripts.setActiveScope(ctx.scene.scripts);
         scripts.setAudioBands(16, spectrum.bands16_left, spectrum.bands16_right);
         scripts.setAudioBands(32, spectrum.bands32_left, spectrum.bands32_right);
         scripts.setAudioBands(64, spectrum.bands64_left, spectrum.bands64_right);
@@ -67,7 +95,11 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     }
 
     static wallpaper_engine::MediaScriptBridge media_bridge;
-    media_bridge.update();
+    auto& thumbnail_texture = wallpaper_engine::MediaThumbnailTexture::instance();
+    media_bridge.update(thumbnail_texture.inUse(), [&](const wallpaper_engine::ThumbnailColors& thumbnail) {
+        thumbnail_texture.setThumbnail(thumbnail);
+    });
+    thumbnail_texture.flush();
 
     ctx.asset_mgr->updateVideoTextures(dt, ctx.scene.layers);
     parallax_update(ctx, dt, surface::width(), surface::height());

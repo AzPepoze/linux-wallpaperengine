@@ -29,6 +29,10 @@ class WaylandLayerSurface {
     // Reports the raw linux evdev button code and whether it went down.
     using ButtonHandler = std::function<void(uint32_t button, bool pressed)>;
     using EnterLeaveHandler = std::function<void(bool entered)>;
+    // Reports the raw linux evdev key code and whether it went down.
+    using KeyHandler = std::function<void(uint32_t key, bool pressed)>;
+    // Reports the Unicode code point a key press produced (for text input).
+    using CharHandler = std::function<void(uint32_t codepoint)>;
 
     static std::unique_ptr<WaylandLayerSurface> create(const LayerSurfaceConfig& config);
     ~WaylandLayerSurface();
@@ -45,6 +49,8 @@ class WaylandLayerSurface {
     void setPointerHandler(PointerHandler handler);
     void setButtonHandler(ButtonHandler handler);
     void setEnterLeaveHandler(EnterLeaveHandler handler);
+    void setKeyHandler(KeyHandler handler);
+    void setCharHandler(CharHandler handler);
 
     // Reads and dispatches pending events without blocking. False once the connection is broken.
     bool pump();

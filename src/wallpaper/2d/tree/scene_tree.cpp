@@ -1,6 +1,7 @@
 #include "scene_tree.h"
 
 #include <algorithm>
+#include <cmath>
 #include <unordered_set>
 #include <vector>
 
@@ -28,6 +29,71 @@ void SceneTree::clear() {
 void SceneTree::addNode(const SceneTreeNode& node) {
     if (node.id == 0) return;
     nodes_[node.id] = node;
+}
+
+void SceneTree::removeNode(uint32_t id) {
+    if (nodes_.erase(id) == 0) return;
+    for (auto& [node_id, node] : nodes_) {
+        (void)node_id;
+        if (node.parent_id == id) node.parent_id = 0;
+    }
+    rebuildHierarchy();
+}
+
+void SceneTree::rotationFromAngles(const float angles[3], mat4x4 out) {
+    constexpr float kDegToRad = 0.01745329251994329577f;
+    mat4x4_identity(out);
+    mat4x4_rotate_Z(out, out, angles[2] * kDegToRad);
+    mat4x4_rotate_Y(out, out, angles[1] * kDegToRad);
+    mat4x4_rotate_X(out, out, angles[0] * kDegToRad);
+}
+
+void SceneTree::anglesFromRotation(const mat4x4 m, float angles[3]) {
+    constexpr float kRadToDeg = 57.29577951308232f;
+    const float sin_y = std::clamp(-m[0][2], -1.0f, 1.0f);
+    angles[1] = std::asin(sin_y) * kRadToDeg;
+    if (std::fabs(sin_y) < 0.99999f) {
+        angles[0] = std::atan2(m[1][2], m[2][2]) * kRadToDeg;
+        angles[2] = std::atan2(m[0][1], m[0][0]) * kRadToDeg;
+    } else {
+        // Looking straight up or down: x and z are one rotation, so it all goes on z.
+        angles[0] = 0.0f;
+        angles[2] = std::atan2(-m[1][0], m[1][1]) * kRadToDeg;
+    }
+}
+
+void SceneTree::decompose(const mat4x4 m, SceneTreeNode& node) {
+    mat4x4 rotation;
+    mat4x4_identity(rotation);
+    for (int column = 0; column < 3; ++column) {
+        const float length =
+            std::sqrt(m[column][0] * m[column][0] + m[column][1] * m[column][1] + m[column][2] * m[column][2]);
+        node.scale[(size_t)column] = length;
+        for (int row = 0; row < 3; ++row) rotation[column][row] = length > 1e-8f ? m[column][row] / length : 0.0f;
+    }
+    for (int row = 0; row < 3; ++row) node.origin[(size_t)row] = m[3][row];
+    float angles[3];
+    anglesFromRotation(rotation, angles);
+    for (size_t i = 0; i < 3; ++i) node.angles[i] = angles[i];
+}
+
+bool SceneTree::ancestorsVisible(uint32_t id) const {
+    const SceneTreeNode* node = find(id);
+    // The step bound keeps a malformed parent cycle from looping.
+    for (size_t steps = 0; node && node->parent_id != 0 && steps < nodes_.size(); ++steps) {
+        node = find(node->parent_id);
+        if (node && !node->visible) return false;
+    }
+    return true;
+}
+
+uint32_t SceneTree::maxId() const {
+    uint32_t highest = 0;
+    for (const auto& [id, node] : nodes_) {
+        (void)node;
+        highest = std::max(highest, id);
+    }
+    return highest;
 }
 
 void SceneTree::rebuildHierarchy() {

@@ -25,6 +25,55 @@ double nowSeconds() {
     return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9;
 }
 
+// linux/input-event-codes.h KEY_* values delivered by wl_keyboard.key, mapped to sokol key codes.
+sapp_keycode sappKeycodeFromEvdev(uint32_t key) {
+    if (key >= 2 && key <= 11) return (sapp_keycode)(SAPP_KEYCODE_1 + (key - 2));  // 1..0
+    if (key >= 16 && key <= 25) return (sapp_keycode)(SAPP_KEYCODE_Q + (key - 16));
+    if (key >= 30 && key <= 38) return (sapp_keycode)(SAPP_KEYCODE_A + (key - 30));
+    if (key >= 44 && key <= 50) return (sapp_keycode)(SAPP_KEYCODE_Z + (key - 44));
+    if (key >= 59 && key <= 68) return (sapp_keycode)(SAPP_KEYCODE_F1 + (key - 59));
+    switch (key) {
+        case 1: return SAPP_KEYCODE_ESCAPE;
+        case 12: return SAPP_KEYCODE_MINUS;
+        case 13: return SAPP_KEYCODE_EQUAL;
+        case 14: return SAPP_KEYCODE_BACKSPACE;
+        case 15: return SAPP_KEYCODE_TAB;
+        case 26: return SAPP_KEYCODE_LEFT_BRACKET;
+        case 27: return SAPP_KEYCODE_RIGHT_BRACKET;
+        case 28: return SAPP_KEYCODE_ENTER;
+        case 29: return SAPP_KEYCODE_LEFT_CONTROL;
+        case 39: return SAPP_KEYCODE_SEMICOLON;
+        case 40: return SAPP_KEYCODE_APOSTROPHE;
+        case 41: return SAPP_KEYCODE_GRAVE_ACCENT;
+        case 42: return SAPP_KEYCODE_LEFT_SHIFT;
+        case 43: return SAPP_KEYCODE_BACKSLASH;
+        case 51: return SAPP_KEYCODE_COMMA;
+        case 52: return SAPP_KEYCODE_PERIOD;
+        case 53: return SAPP_KEYCODE_SLASH;
+        case 54: return SAPP_KEYCODE_RIGHT_SHIFT;
+        case 56: return SAPP_KEYCODE_LEFT_ALT;
+        case 57: return SAPP_KEYCODE_SPACE;
+        case 58: return SAPP_KEYCODE_CAPS_LOCK;
+        case 87: return SAPP_KEYCODE_F11;
+        case 88: return SAPP_KEYCODE_F12;
+        case 97: return SAPP_KEYCODE_RIGHT_CONTROL;
+        case 100: return SAPP_KEYCODE_RIGHT_ALT;
+        case 102: return SAPP_KEYCODE_HOME;
+        case 103: return SAPP_KEYCODE_UP;
+        case 104: return SAPP_KEYCODE_PAGE_UP;
+        case 105: return SAPP_KEYCODE_LEFT;
+        case 106: return SAPP_KEYCODE_RIGHT;
+        case 107: return SAPP_KEYCODE_END;
+        case 108: return SAPP_KEYCODE_DOWN;
+        case 109: return SAPP_KEYCODE_PAGE_DOWN;
+        case 110: return SAPP_KEYCODE_INSERT;
+        case 111: return SAPP_KEYCODE_DELETE;
+        case 125: return SAPP_KEYCODE_LEFT_SUPER;
+        case 126: return SAPP_KEYCODE_RIGHT_SUPER;
+        default: return SAPP_KEYCODE_INVALID;
+    }
+}
+
 bool parseConfig(const CliOptions& cli, LayerSurfaceConfig& config) {
     config.output = cli.screen_root;
     if (!layer_options::parseLayer(cli.layer, config.layer)) {
@@ -78,6 +127,8 @@ struct LayerApp::Impl : SurfaceProvider {
     void forwardPointer(float x, float y, void (*event)(const sapp_event*));
     void forwardPointerButton(uint32_t button, bool pressed, void (*event)(const sapp_event*));
     void forwardPointerEnterLeave(bool entered, void (*event)(const sapp_event*));
+    void forwardKey(uint32_t key, bool pressed, void (*event)(const sapp_event*));
+    void forwardChar(uint32_t codepoint, void (*event)(const sapp_event*));
 };
 
 void LayerApp::Impl::trackFrameTime() {
@@ -127,6 +178,22 @@ void LayerApp::Impl::forwardPointerEnterLeave(bool entered, void (*event)(const 
     event(&e);
 }
 
+void LayerApp::Impl::forwardKey(uint32_t key, bool pressed, void (*event)(const sapp_event*)) {
+    const sapp_keycode code = sappKeycodeFromEvdev(key);
+    if (code == SAPP_KEYCODE_INVALID) return;
+    sapp_event e = {};
+    e.type = pressed ? SAPP_EVENTTYPE_KEY_DOWN : SAPP_EVENTTYPE_KEY_UP;
+    e.key_code = code;
+    event(&e);
+}
+
+void LayerApp::Impl::forwardChar(uint32_t codepoint, void (*event)(const sapp_event*)) {
+    sapp_event e = {};
+    e.type = SAPP_EVENTTYPE_CHAR;
+    e.char_code = codepoint;
+    event(&e);
+}
+
 LayerApp::LayerApp(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 
 LayerApp::~LayerApp() = default;
@@ -156,6 +223,8 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
     app.wayland->setButtonHandler(
         [&](uint32_t button, bool pressed) { app.forwardPointerButton(button, pressed, callbacks.event); });
     app.wayland->setEnterLeaveHandler([&](bool entered) { app.forwardPointerEnterLeave(entered, callbacks.event); });
+    app.wayland->setKeyHandler([&](uint32_t key, bool pressed) { app.forwardKey(key, pressed, callbacks.event); });
+    app.wayland->setCharHandler([&](uint32_t codepoint) { app.forwardChar(codepoint, callbacks.event); });
 
     callbacks.init();
     while (!app.quit.load(std::memory_order_relaxed)) {

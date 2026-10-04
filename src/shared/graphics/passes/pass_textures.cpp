@@ -1,5 +1,9 @@
 #include "pass_textures.h"
 
+#include <string.h>
+
+#include <algorithm>
+
 #include "shared/core/logger.h"
 
 namespace {
@@ -11,10 +15,25 @@ void ensure_slot(PassTextures& pass, int slot) {
     }
 }
 
-void load_texture0(PassTextures& pass, cJSON* tex_node, const std::string& shader_name, EngineContext& ctx,
+// A slot listed under `usertextures` as the $mediaThumbnail system texture replaces the authored texture.
+const char* slot_reference(cJSON* textures, cJSON* user_textures, int slot) {
+    cJSON* user = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, slot) : nullptr;
+    cJSON* name = cJSON_IsObject(user) ? cJSON_GetObjectItemCaseSensitive(user, "name") : nullptr;
+    if (cJSON_IsString(name) && name->valuestring && strcmp(name->valuestring, "$mediaThumbnail") == 0)
+        return name->valuestring;
+    cJSON* node = cJSON_IsArray(textures) ? cJSON_GetArrayItem(textures, slot) : nullptr;
+    return cJSON_IsString(node) ? node->valuestring : nullptr;
+}
+
+int slot_count(cJSON* textures, cJSON* user_textures) {
+    return std::max(cJSON_IsArray(textures) ? cJSON_GetArraySize(textures) : 0,
+                    cJSON_IsArray(user_textures) ? cJSON_GetArraySize(user_textures) : 0);
+}
+
+void load_texture0(PassTextures& pass, const char* reference, const std::string& shader_name, EngineContext& ctx,
                    bool allow_clear) {
-    if (cJSON_IsString(tex_node) && tex_node->valuestring) {
-        if (tex_node->valuestring[0] == '\0') {
+    if (reference) {
+        if (reference[0] == '\0') {
             if (allow_clear) {
                 pass.texture0 = {};
                 pass.texture0_view = {};
@@ -24,11 +43,14 @@ void load_texture0(PassTextures& pass, cJSON* tex_node, const std::string& shade
             return;
         }
 
+        // Render targets (`_rt_*`) are bound by the effect chain at draw time, not loaded as textures.
+        if (strncmp(reference, "_rt_", 4) == 0 || strstr(reference, "/_rt_") != nullptr) return;
+
         std::string path;
-        GfxImage img = ctx.asset_mgr->resolveTexture(tex_node->valuestring, &path);
+        GfxImage img = ctx.asset_mgr->resolveTexture(reference, &path);
         if (img.id == SG_INVALID_ID) {
             effect_log.warn("ShaderPass %s: g_Texture0 - Failed to load explicit texture: %s", shader_name.c_str(),
-                            tex_node->valuestring);
+                            reference);
             return;
         }
 
@@ -41,20 +63,23 @@ void load_texture0(PassTextures& pass, cJSON* tex_node, const std::string& shade
 
 void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_name, EngineContext& ctx) {
     cJSON* textures_node = cJSON_GetObjectItemCaseSensitive(base_config, "textures");
+    cJSON* user_textures = cJSON_GetObjectItemCaseSensitive(base_config, "usertextures");
     if (!cJSON_IsArray(textures_node)) return;
+    const int slots = slot_count(textures_node, user_textures);
 
-    if (cJSON_GetArraySize(textures_node) > 0) {
-        load_texture0(*this, cJSON_GetArrayItem(textures_node, 0), shader_name, ctx, true);
+    if (slots > 0) {
+        load_texture0(*this, slot_reference(textures_node, user_textures, 0), shader_name, ctx, true);
     }
 
-    for (int source_slot = 1; source_slot < cJSON_GetArraySize(textures_node); ++source_slot) {
-        cJSON* tex_node = cJSON_GetArrayItem(textures_node, source_slot);
+    for (int source_slot = 1; source_slot < slots; ++source_slot) {
+        const char* reference = slot_reference(textures_node, user_textures, source_slot);
+        if (!reference && source_slot >= cJSON_GetArraySize(textures_node)) continue;
         const int pass_idx = source_slot - 1;
         ensure_slot(*this, pass_idx);
 
-        if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {
+        if (reference && reference[0] != '\0') {
             std::string path;
-            GfxImage img = ctx.asset_mgr->resolveTexture(tex_node->valuestring, &path);
+            GfxImage img = ctx.asset_mgr->resolveTexture(reference, &path);
             textures[pass_idx] = std::move(img);
             texture_paths[pass_idx] = path;
             effect_log.info("ShaderPass %s: g_Texture%d - Loaded base texture: %s", shader_name.c_str(), source_slot,
@@ -69,19 +94,21 @@ void PassTextures::applyInstanceOverrides(cJSON* instance_config, const std::str
     if (!instance_config) return;
 
     cJSON* inst_textures = cJSON_GetObjectItemCaseSensitive(instance_config, "textures");
-    if (!cJSON_IsArray(inst_textures)) return;
+    cJSON* inst_user_textures = cJSON_GetObjectItemCaseSensitive(instance_config, "usertextures");
+    if (!cJSON_IsArray(inst_textures) && !cJSON_IsArray(inst_user_textures)) return;
+    const int slots = slot_count(inst_textures, inst_user_textures);
 
-    if (cJSON_GetArraySize(inst_textures) > 0) {
-        load_texture0(*this, cJSON_GetArrayItem(inst_textures, 0), shader_name, ctx, true);
+    if (slots > 0) {
+        load_texture0(*this, slot_reference(inst_textures, inst_user_textures, 0), shader_name, ctx, true);
     }
 
-    for (int source_slot = 1; source_slot < cJSON_GetArraySize(inst_textures); ++source_slot) {
-        cJSON* tex_node = cJSON_GetArrayItem(inst_textures, source_slot);
-        if (!cJSON_IsString(tex_node) || !tex_node->valuestring || tex_node->valuestring[0] == '\0') continue;
+    for (int source_slot = 1; source_slot < slots; ++source_slot) {
+        const char* reference = slot_reference(inst_textures, inst_user_textures, source_slot);
+        if (!reference || reference[0] == '\0') continue;
 
         const int pass_idx = source_slot - 1;
         std::string path;
-        GfxImage img = ctx.asset_mgr->resolveTexture(tex_node->valuestring, &path);
+        GfxImage img = ctx.asset_mgr->resolveTexture(reference, &path);
         if (img.id == SG_INVALID_ID) continue;
 
         ensure_slot(*this, pass_idx);

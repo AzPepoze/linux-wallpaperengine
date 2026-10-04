@@ -2,6 +2,7 @@
 
 #include <quickjs.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 
@@ -78,7 +79,7 @@ int ScriptEngine::broadcast(const char* hook, const ScriptEvent& event, bool sti
     int delivered = 0;
     const std::vector<ScriptEntry> entries = scripts_;  // a hook may load or free scripts
     for (const ScriptEntry& entry : entries) {
-        if (!entry.script->callHook(hook, event)) continue;
+        if (entry.script->scope() != active_scope_ || !entry.script->callHook(hook, event)) continue;
         ++delivered;
     }
     return delivered;
@@ -88,7 +89,9 @@ int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const Scr
     int delivered = 0;
     const std::vector<ScriptEntry> entries = scripts_;
     for (const ScriptEntry& entry : entries)
-        if (entry.script->layerId() == layer_id && entry.script->callHook(hook, event)) ++delivered;
+        if (entry.script->scope() == active_scope_ && entry.script->layerId() == layer_id &&
+            entry.script->callHook(hook, event))
+            ++delivered;
     return delivered;
 }
 
@@ -121,16 +124,18 @@ void ScriptEngine::animationEnded(uint32_t handle) {
 }
 
 bool ScriptEngine::anyScriptExports(const std::vector<const char*>& hooks) {
-    for (const ScriptEntry& entry : scripts_)
+    for (const ScriptEntry& entry : scripts_) {
+        if (entry.script->scope() != active_scope_) continue;
         for (const char* hook : hooks)
             if (entry.script->hasFunction(hook)) return true;
+    }
     return false;
 }
 
 std::vector<uint32_t> ScriptEngine::layersWithHooks(const std::vector<const char*>& hooks) {
     std::vector<uint32_t> ids;
     for (const ScriptEntry& entry : scripts_) {
-        if (entry.script->layerId() == 0) continue;
+        if (entry.script->layerId() == 0 || entry.script->scope() != active_scope_) continue;
         for (const char* hook : hooks) {
             if (!entry.script->hasFunction(hook)) continue;
             ids.push_back(entry.script->layerId());
@@ -161,16 +166,77 @@ bool ScriptEngine::deadlineExceeded() const {
 }
 
 ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms)
-    : engine_(engine), previous_errors_(engine.current_errors_), previous_id_(engine.current_script_id_) {
+    : CallScope(engine, errors, script_id, budget_ms, engine.active_scope_) {}
+
+ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms,
+                                   const void* scope)
+    : engine_(engine),
+      previous_errors_(engine.current_errors_),
+      previous_id_(engine.current_script_id_),
+      previous_scope_(engine.current_scope_),
+      script_id_(script_id) {
+    if (engine.profiling_) started_ns_ = scriptNowNs();
     engine.current_errors_ = errors;
     engine.current_script_id_ = script_id;
+    engine.current_scope_ = scope;
     engine.runtime_.setDeadlineNs(scriptNowNs() + (int64_t)(budget_ms * 1e6));
 }
 
 ScriptEngine::CallScope::~CallScope() {
+    if (started_ns_ != 0 && script_id_ != 0) {
+        ProfileEntry& entry = engine_.profile_[script_id_];
+        entry.ns += scriptNowNs() - started_ns_;
+        ++entry.calls;
+    }
     engine_.current_errors_ = previous_errors_;
     engine_.current_script_id_ = previous_id_;
+    engine_.current_scope_ = previous_scope_;
     engine_.runtime_.setDeadlineNs(0);
+}
+
+void ScriptEngine::reportProfile() {
+    std::vector<std::pair<int, ProfileEntry>> ranked(profile_.begin(), profile_.end());
+    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.second.ns > b.second.ns; });
+    int64_t total_ns = 0;
+    for (const auto& [id, entry] : ranked) total_ns += entry.ns;
+    LOG_TAG_I(TAG, "script profile: %zu scripts, %.2f ms in total over the last 10 s", ranked.size(), total_ns / 1e6);
+    for (size_t i = 0; i < ranked.size() && i < 5; ++i) {
+        uint32_t layer = 0;
+        for (const ScriptEntry& entry : scripts_)
+            if (entry.script && entry.script->id() == ranked[i].first) layer = entry.script->layerId();
+        LOG_TAG_I(TAG, "  script %d (object %u): %.2f ms, %d calls", ranked[i].first, layer, ranked[i].second.ns / 1e6,
+                  ranked[i].second.calls);
+    }
+    profile_.clear();
+}
+
+void ScriptEngine::registerScope(const void* scope, ScriptSceneBackend* backend, const std::string& wallpaper_id) {
+    ScopeInfo& info = scopes_[scope];
+    if (info.key == 0 && scope != nullptr) info.key = ++next_scope_key_;
+    info.backend = backend;
+    info.wallpaper_id = wallpaper_id;
+}
+
+int ScriptEngine::scopeKey(const void* scope) const {
+    const auto it = scopes_.find(scope);
+    return it == scopes_.end() ? 0 : it->second.key;
+}
+
+std::string ScriptEngine::wallpaperIdForKey(int key) const {
+    for (const auto& [scope, info] : scopes_)
+        if (info.key == key && !info.wallpaper_id.empty()) return info.wallpaper_id;
+    return wallpaper_id_;
+}
+
+void ScriptEngine::unregisterScope(const void* scope) {
+    scopes_.erase(scope);
+    if (active_scope_ == scope) active_scope_ = nullptr;
+    if (creation_scope_ == scope) creation_scope_ = nullptr;
+}
+
+ScriptSceneBackend* ScriptEngine::sceneBackend() const {
+    const auto it = scopes_.find(current_scope_);
+    return it == scopes_.end() ? nullptr : it->second.backend;
 }
 
 void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w,
@@ -190,11 +256,19 @@ void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w,
     JS_FreeValue(runtime_.context(), global);
 
     for (size_t i = 0; i < scripts_.size(); ++i) {
-        if (scripts_[i].sticky_delivered) continue;
+        if (scripts_[i].sticky_delivered || scripts_[i].script->scope() != active_scope_) continue;
         scripts_[i].sticky_delivered = true;
         SceneScript* script = scripts_[i].script;
         const std::map<std::string, ScriptEvent> events = sticky_events_;
         for (const auto& [hook, event] : events) script->callHook(hook.c_str(), event);
+    }
+
+    if (profiling_) {
+        profile_timer_ += dt;
+        if (profile_timer_ >= 10.0) {
+            profile_timer_ = 0.0;
+            reportProfile();
+        }
     }
 
     storage_flush_timer_ += dt;

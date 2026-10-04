@@ -1,12 +1,19 @@
 #include "app/platform/wayland_layer/wayland_layer_surface.h"
 
 #include <poll.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include <wayland-client.h>
 
 #include <algorithm>
 
+#include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
+
+#ifdef LWE_HAVE_XKBCOMMON
+#include <xkbcommon/xkbcommon.h>
+#endif
 
 namespace {
 constexpr uint32_t kMaxOutputVersion = 4;
@@ -29,6 +36,7 @@ struct WaylandLayerSurface::Impl {
     zwlr_layer_shell_v1* layer_shell = nullptr;
     wl_seat* seat = nullptr;
     wl_pointer* pointer = nullptr;
+    wl_keyboard* keyboard = nullptr;
     wl_surface* surface = nullptr;
     zwlr_layer_surface_v1* layer_surface = nullptr;
     std::vector<std::unique_ptr<Output>> outputs;
@@ -42,6 +50,13 @@ struct WaylandLayerSurface::Impl {
     PointerHandler pointer_handler;
     ButtonHandler button_handler;
     EnterLeaveHandler enter_leave_handler;
+    KeyHandler key_handler;
+    CharHandler char_handler;
+#ifdef LWE_HAVE_XKBCOMMON
+    xkb_context* xkb_ctx = nullptr;
+    xkb_keymap* keymap = nullptr;
+    xkb_state* kb_state = nullptr;
+#endif
 
     ~Impl();
     bool connect();
@@ -52,6 +67,8 @@ struct WaylandLayerSurface::Impl {
     void onPointerMotion(wl_fixed_t x, wl_fixed_t y);
     void onPointerButton(uint32_t button, uint32_t state);
     void onPointerEnterLeave(bool entered);
+    void onKey(uint32_t key, uint32_t state);
+    void onModifiers(uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group);
     void updateSeat(uint32_t capabilities);
 
     static void registryGlobal(void* data, wl_registry* registry, uint32_t name, const char* interface,
@@ -75,6 +92,13 @@ struct WaylandLayerSurface::Impl {
     static void pointerAxisSource(void*, wl_pointer*, uint32_t) {}
     static void pointerAxisStop(void*, wl_pointer*, uint32_t, uint32_t) {}
     static void pointerAxisDiscrete(void*, wl_pointer*, uint32_t, int32_t) {}
+    static void keyboardKeymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size);
+    static void keyboardEnter(void*, wl_keyboard*, uint32_t, wl_surface*, wl_array*) {}
+    static void keyboardLeave(void*, wl_keyboard*, uint32_t, wl_surface*) {}
+    static void keyboardKey(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state);
+    static void keyboardModifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed, uint32_t latched,
+                                  uint32_t locked, uint32_t group);
+    static void keyboardRepeatInfo(void*, wl_keyboard*, int32_t, int32_t) {}
     static void layerConfigure(void* data, zwlr_layer_surface_v1*, uint32_t serial, uint32_t w, uint32_t h);
     static void layerClosed(void* data, zwlr_layer_surface_v1*);
 };
@@ -102,6 +126,17 @@ wl_pointer_listener makePointerListener() {
     return listener;
 }
 const wl_pointer_listener kPointerListener = makePointerListener();
+wl_keyboard_listener makeKeyboardListener() {
+    wl_keyboard_listener listener = {};
+    listener.keymap = WaylandLayerSurface::Impl::keyboardKeymap;
+    listener.enter = WaylandLayerSurface::Impl::keyboardEnter;
+    listener.leave = WaylandLayerSurface::Impl::keyboardLeave;
+    listener.key = WaylandLayerSurface::Impl::keyboardKey;
+    listener.modifiers = WaylandLayerSurface::Impl::keyboardModifiers;
+    listener.repeat_info = WaylandLayerSurface::Impl::keyboardRepeatInfo;
+    return listener;
+}
+const wl_keyboard_listener kKeyboardListener = makeKeyboardListener();
 const zwlr_layer_surface_v1_listener kLayerListener = {WaylandLayerSurface::Impl::layerConfigure,
                                                        WaylandLayerSurface::Impl::layerClosed};
 }  // namespace
@@ -164,6 +199,42 @@ void WaylandLayerSurface::Impl::pointerButton(void* data, wl_pointer*, uint32_t,
     static_cast<Impl*>(data)->onPointerButton(button, state);
 }
 
+void WaylandLayerSurface::Impl::keyboardKeymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint32_t size) {
+#ifdef LWE_HAVE_XKBCOMMON
+    auto* self = static_cast<Impl*>(data);
+    if (format == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1 && fd >= 0 && size > 0) {
+        void* map = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (map != MAP_FAILED) {
+            if (!self->xkb_ctx) self->xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+            xkb_keymap* keymap =
+                xkb_keymap_new_from_string(self->xkb_ctx, (const char*)map, XKB_KEYMAP_FORMAT_TEXT_V1,
+                                           XKB_KEYMAP_COMPILE_NO_FLAGS);
+            munmap(map, size);
+            if (keymap) {
+                if (self->keymap) xkb_keymap_unref(self->keymap);
+                self->keymap = keymap;
+                if (self->kb_state) xkb_state_unref(self->kb_state);
+                self->kb_state = xkb_state_new(self->keymap);
+            }
+        }
+    }
+#else
+    (void)data;
+    (void)format;
+    (void)size;
+#endif
+    if (fd >= 0) close(fd);
+}
+
+void WaylandLayerSurface::Impl::keyboardKey(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
+    static_cast<Impl*>(data)->onKey(key, state);
+}
+
+void WaylandLayerSurface::Impl::keyboardModifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed, uint32_t latched,
+                                                  uint32_t locked, uint32_t group) {
+    static_cast<Impl*>(data)->onModifiers(depressed, latched, locked, group);
+}
+
 void WaylandLayerSurface::Impl::layerConfigure(void* data, zwlr_layer_surface_v1*, uint32_t serial, uint32_t w,
                                                uint32_t h) {
     static_cast<Impl*>(data)->onConfigure(serial, w, h);
@@ -182,6 +253,14 @@ void WaylandLayerSurface::Impl::updateSeat(uint32_t capabilities) {
         wl_pointer_release(pointer);
         pointer = nullptr;
     }
+    const bool has_keyboard = (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) != 0;
+    if (has_keyboard && !keyboard) {
+        keyboard = wl_seat_get_keyboard(seat);
+        wl_keyboard_add_listener(keyboard, &kKeyboardListener, this);
+    } else if (!has_keyboard && keyboard) {
+        wl_keyboard_release(keyboard);
+        keyboard = nullptr;
+    }
 }
 
 void WaylandLayerSurface::Impl::onPointerMotion(wl_fixed_t x, wl_fixed_t y) {
@@ -196,6 +275,29 @@ void WaylandLayerSurface::Impl::onPointerButton(uint32_t button, uint32_t state)
 
 void WaylandLayerSurface::Impl::onPointerEnterLeave(bool entered) {
     if (enter_leave_handler) enter_leave_handler(entered);
+}
+
+void WaylandLayerSurface::Impl::onKey(uint32_t key, uint32_t state) {
+    const bool pressed = state == WL_KEYBOARD_KEY_STATE_PRESSED;
+    if (key_handler) key_handler(key, pressed);
+#ifdef LWE_HAVE_XKBCOMMON
+    if (pressed && char_handler && kb_state) {
+        // Wayland key codes are evdev codes; xkb key codes are offset by 8.
+        const uint32_t codepoint = xkb_state_key_get_utf32(kb_state, key + 8);
+        if (codepoint != 0) char_handler(codepoint);
+    }
+#endif
+}
+
+void WaylandLayerSurface::Impl::onModifiers(uint32_t depressed, uint32_t latched, uint32_t locked, uint32_t group) {
+#ifdef LWE_HAVE_XKBCOMMON
+    if (kb_state) xkb_state_update_mask(kb_state, depressed, latched, locked, 0, 0, group);
+#else
+    (void)depressed;
+    (void)latched;
+    (void)locked;
+    (void)group;
+#endif
 }
 
 void WaylandLayerSurface::Impl::onConfigure(uint32_t serial, uint32_t w, uint32_t h) {
@@ -258,7 +360,13 @@ bool WaylandLayerSurface::Impl::createSurface() {
                                    static_cast<uint32_t>(config.height));
     zwlr_layer_surface_v1_set_anchor(layer_surface, config.anchor);
     zwlr_layer_surface_v1_set_exclusive_zone(layer_surface, -1);
+#if DEBUG_BUILD
+    // Let a debug layer take keyboard focus (click it) so the inspector can be toggled with F8.
+    zwlr_layer_surface_v1_set_keyboard_interactivity(layer_surface,
+                                                     ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
+#else
     zwlr_layer_surface_v1_set_keyboard_interactivity(layer_surface, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
+#endif
     applyScale();
     wl_surface_commit(surface);
     while (!configured && !closed && wl_display_roundtrip(display) >= 0) {
@@ -272,6 +380,12 @@ bool WaylandLayerSurface::Impl::createSurface() {
 
 WaylandLayerSurface::Impl::~Impl() {
     if (pointer) wl_pointer_release(pointer);
+    if (keyboard) wl_keyboard_release(keyboard);
+#ifdef LWE_HAVE_XKBCOMMON
+    if (kb_state) xkb_state_unref(kb_state);
+    if (keymap) xkb_keymap_unref(keymap);
+    if (xkb_ctx) xkb_context_unref(xkb_ctx);
+#endif
     if (seat) wl_seat_destroy(seat);
     if (layer_surface) zwlr_layer_surface_v1_destroy(layer_surface);
     if (surface) wl_surface_destroy(surface);
@@ -338,6 +452,14 @@ void WaylandLayerSurface::setButtonHandler(ButtonHandler handler) {
 
 void WaylandLayerSurface::setEnterLeaveHandler(EnterLeaveHandler handler) {
     impl_->enter_leave_handler = std::move(handler);
+}
+
+void WaylandLayerSurface::setKeyHandler(KeyHandler handler) {
+    impl_->key_handler = std::move(handler);
+}
+
+void WaylandLayerSurface::setCharHandler(CharHandler handler) {
+    impl_->char_handler = std::move(handler);
 }
 
 bool WaylandLayerSurface::pump() {

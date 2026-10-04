@@ -96,15 +96,18 @@ const MdlAnimationClip* findClip(const MdlModel& model, uint32_t id) {
 
 // Every layer contributes its motion relative to its own first frame, on top of
 // the first layer's first frame, which already holds the assembled pose.
-void accumulateLayer(const MdlAnimationClip& clip, const PuppetAnimationLayer& layer, std::vector<MdlKeyframe>& pose) {
-    const float frame = wrapFrame(layer.time * clip.fps, clip.frame_count, clip.loop_mode);
+void accumulateLayer(const MdlModel& model, const MdlAnimationClip& clip, const PuppetAnimationLayer& layer,
+                     bool root_motion, std::vector<MdlKeyframe>& pose) {
+    const float frame = wrapFrame(layer.time * clip.fps, clip.frame_count, layer.once ? "single" : clip.loop_mode);
     const size_t bones = std::min(pose.size(), clip.tracks.size());
     for (size_t b = 0; b < bones; ++b) {
         const std::vector<MdlKeyframe>& track = clip.tracks[b];
         if (track.empty()) continue;
         const MdlKeyframe now = sample(track, frame);
+        const bool is_root = b < model.bones.size() && model.bones[b].parent >= model.bones.size();
         for (int i = 0; i < 3; ++i) {
-            pose[b].translation[i] += layer.blend * (now.translation[i] - track[0].translation[i]);
+            if (root_motion || !is_root)
+                pose[b].translation[i] += layer.blend * (now.translation[i] - track[0].translation[i]);
             pose[b].rotation[i] += layer.blend * (now.rotation[i] - track[0].rotation[i]);
             pose[b].scale[i] += layer.blend * (now.scale[i] - track[0].scale[i]);
         }
@@ -126,12 +129,64 @@ void PuppetPose::init(const MdlModel& model) {
     }
 }
 
+void PuppetPose::setBoneOverride(size_t bone, const MdlKeyframe& pose) {
+    if (overrides_.size() <= bone) overrides_.resize(bone + 1);
+    overrides_[bone].active = true;
+    overrides_[bone].pose = pose;
+}
+
+void PuppetPose::clearBoneOverride(size_t bone) {
+    if (bone < overrides_.size()) overrides_[bone].active = false;
+}
+
+bool PuppetPose::localPose(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                           std::vector<MdlKeyframe>& pose) const {
+    pose.assign(model.bones.size(), MdlKeyframe{});
+    bool seeded = false;
+    for (const PuppetAnimationLayer& layer : layers) {
+        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
+        if (!clip) continue;
+        if (!seeded) {
+            for (size_t b = 0; b < std::min(pose.size(), clip->tracks.size()); ++b) {
+                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
+            }
+            seeded = true;
+        }
+        accumulateLayer(model, *clip, layer, root_motion, pose);
+    }
+    if (seeded) {
+        for (size_t b = 0; b < std::min(pose.size(), overrides_.size()); ++b)
+            if (overrides_[b].active) pose[b] = overrides_[b].pose;
+    }
+    return seeded;
+}
+
+void PuppetPose::localMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                               std::vector<PuppetMatrix>& out) const {
+    std::vector<MdlKeyframe> pose;
+    const bool seeded = localPose(model, layers, pose);
+    out.assign(model.bones.size(), PuppetMatrix{});
+    for (size_t i = 0; i < model.bones.size(); ++i) out[i] = seeded ? composeLocal(pose[i]) : bindLocal(model.bones[i]);
+}
+
+void PuppetPose::worldMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                               std::vector<PuppetMatrix>& out) const {
+    std::vector<MdlKeyframe> pose;
+    const bool seeded = localPose(model, layers, pose);
+    out.assign(model.bones.size(), PuppetMatrix{});
+    for (size_t i = 0; i < model.bones.size(); ++i) {
+        const PuppetMatrix local = seeded ? composeLocal(pose[i]) : bindLocal(model.bones[i]);
+        const uint32_t parent = model.bones[i].parent;
+        out[i] = parent < i ? multiply(out[parent], local) : local;
+    }
+}
+
 void PuppetPose::advance(const MdlModel& model, std::vector<PuppetAnimationLayer>& layers, float dt) const {
     for (PuppetAnimationLayer& layer : layers) {
         if (!layer.visible || !layer.playing) continue;
         layer.time = std::max(0.0f, layer.time + dt * layer.rate);
         const MdlAnimationClip* clip = findClip(model, layer.animation_id);
-        if (clip && clip->loop_mode == "single" && clip->fps > 0.0f &&
+        if (clip && (clip->loop_mode == "single" || layer.once) && clip->fps > 0.0f &&
             layer.time * clip->fps >= (float)clip->frame_count) {
             layer.time = (float)clip->frame_count / clip->fps;
             layer.playing = false;
@@ -145,19 +200,8 @@ void PuppetPose::attachmentTransforms(const MdlModel& model, const std::vector<P
     out.clear();
     if (model.attachments.empty()) return;
 
-    std::vector<MdlKeyframe> pose(model.bones.size());
-    bool seeded = false;
-    for (const PuppetAnimationLayer& layer : layers) {
-        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
-        if (!clip) continue;
-        if (!seeded) {
-            for (size_t b = 0; b < std::min(pose.size(), clip->tracks.size()); ++b) {
-                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
-            }
-            seeded = true;
-        }
-        accumulateLayer(*clip, layer, pose);
-    }
+    std::vector<MdlKeyframe> pose;
+    const bool seeded = localPose(model, layers, pose);
 
     std::vector<PuppetMatrix> world(model.bones.size());
     for (size_t i = 0; i < model.bones.size(); ++i) {
@@ -176,20 +220,8 @@ void PuppetPose::attachmentTransforms(const MdlModel& model, const std::vector<P
 
 void PuppetPose::computeBoneMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers) const {
     const size_t count = model.bones.size();
-    std::vector<MdlKeyframe> pose(count);
-    bool seeded = false;
-    for (const PuppetAnimationLayer& layer : layers) {
-        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
-        if (!clip) continue;
-        if (!seeded) {
-            for (size_t b = 0; b < std::min(count, clip->tracks.size()); ++b) {
-                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
-            }
-            seeded = true;
-        }
-        accumulateLayer(*clip, layer, pose);
-    }
-    if (!seeded) {
+    std::vector<MdlKeyframe> pose;
+    if (!localPose(model, layers, pose)) {
         std::fill(skin_matrices.begin(), skin_matrices.end(), PuppetMatrix{});
         return;
     }

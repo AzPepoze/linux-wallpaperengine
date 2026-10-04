@@ -188,11 +188,14 @@ void testEffectScripts() {
                  scripted.visible_script.script.find("update") != std::string::npos &&
                      scripted.visible_script.properties_json.find("k") != std::string::npos,
                  "visible script and properties captured");
-    test::expect("effect", scripted.constant_scripts.size() == 1, "only the scripted constant is kept");
-    if (scripted.constant_scripts.size() == 1) {
+    test::expect("effect", scripted.constant_scripts.size() == 2, "only scripted or animated constants are kept");
+    if (scripted.constant_scripts.size() == 2) {
         const EffectConstantScript& constant = scripted.constant_scripts[0];
         test::expect("effect", constant.pass == 0 && constant.name == "strength", "constant pass and name");
-        test::expect("effect", !constant.script.empty(), "constant script captured");
+        test::expect("effect", !constant.script.empty() && !constant.has_animation, "constant script captured");
+        const EffectConstantScript& animated = scripted.constant_scripts[1];
+        test::expect("effect", animated.name == "pulse" && animated.has_animation && animated.script.empty(),
+                     "animated constant keeps its keyframes");
     }
 
     const EffectInstanceDocument& plain = doc.objects[0].effects[1];

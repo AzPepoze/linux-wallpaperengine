@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "wallpaper/2d/layers/model/model_data.h"
+
 // What scripts can see and change of the running scene. Layers are addressed by scene object id (0 = none).
 class ScriptSceneBackend {
    public:
@@ -43,6 +45,12 @@ class ScriptSceneBackend {
 
     virtual uint32_t parentOf(uint32_t id) = 0;
     virtual std::vector<uint32_t> childrenOf(uint32_t id) = 0;
+    // Parent 0 detaches the layer. `adjust_transforms` keeps the layer where it is in the world (its local transform
+    // is recomputed); otherwise the local transform stays. `attachment` names a puppet attachment of the parent.
+    virtual bool setParent(uint32_t /*id*/, uint32_t /*parent*/, const std::string& /*attachment*/,
+                           bool /*adjust_transforms*/) {
+        return false;
+    }
 
     virtual uint32_t findLayerByName(const std::string& name) = 0;
     virtual std::vector<uint32_t> allLayers() = 0;  // in scene (draw) order
@@ -69,6 +77,136 @@ class ScriptSceneBackend {
     }
     virtual int animationLayerCount(uint32_t /*layer_id*/) {
         return 0;
+    }
+    // `config_json`: {"animation": name|id, "rate", "blend", "additive", "name", "once", "autoRemove"}. Returns the
+    // animation handle, 0 when the model has no such clip.
+    virtual uint32_t createAnimationLayer(uint32_t /*layer_id*/, const std::string& /*config_json*/) {
+        return 0;
+    }
+    virtual bool destroyAnimationLayer(uint32_t /*layer_id*/, const std::string& /*name_or_index*/) {
+        return false;
+    }
+    // Puppet attachments by name or index: fields origin, angles (degrees, world space) and matrix (world space).
+    virtual int findAttachment(uint32_t /*layer_id*/, const std::string& /*name*/) {
+        return -1;
+    }
+    virtual bool getAttachment(uint32_t /*layer_id*/, const std::string& /*name_or_index*/,
+                               const std::string& /*field*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    // A 3x3 (column-major, 9 values) taking a puppet attachment of `attachment_layer` into this layer's texture space.
+    virtual bool transformAttachmentToTexture(uint32_t /*layer_id*/, uint32_t /*attachment_layer*/,
+                                              const std::string& /*key*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    // Rotates around the layer's own axes; angles in degrees.
+    virtual bool rotateObjectSpace(uint32_t /*id*/, const double /*angles*/[3]) {
+        return false;
+    }
+
+    // Puppet skeleton: bones by index. Fields origin, angles (degrees), scale (local pose) and matrix (model space).
+    virtual int boneCount(uint32_t /*layer_id*/) {
+        return 0;
+    }
+    virtual int findBone(uint32_t /*layer_id*/, const std::string& /*name*/) {
+        return -1;
+    }
+    virtual std::string boneName(uint32_t /*layer_id*/, int /*bone*/) {
+        return "";
+    }
+    virtual int boneParent(uint32_t /*layer_id*/, int /*bone*/) {
+        return -1;
+    }
+    virtual bool getBone(uint32_t /*layer_id*/, int /*bone*/, const std::string& /*field*/,
+                         std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setBone(uint32_t /*layer_id*/, int /*bone*/, const std::string& /*field*/,
+                         const std::vector<double>& /*value*/) {
+        return false;
+    }
+    virtual bool resetBone(uint32_t /*layer_id*/, int /*bone*/) {
+        return false;
+    }
+
+    // The scene object's JSON as authored; empty for unknown layers.
+    virtual std::string initialLayerConfig(uint32_t /*id*/) {
+        return "";
+    }
+
+    // Scene settings (bloomstrength, clearcolor, camerashake...), by the SceneScript property name; booleans are 0 / 1.
+    virtual bool getSceneProperty(const std::string& /*name*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setSceneProperty(const std::string& /*name*/, const std::vector<double>& /*value*/) {
+        return false;
+    }
+
+    // Script-made geometry (IModelData). A layer made with createLayer({model}) draws the model; later patches show
+    // up on it. `replace` allows any change (shapes added or removed, new buffer sizes), otherwise only the fields
+    // present change.
+    virtual uint32_t createModelData(const std::vector<ShapePatch>& /*shapes*/) {
+        return 0;
+    }
+    virtual bool updateModelData(uint32_t /*model*/, const std::vector<ShapePatch>& /*shapes*/, bool /*replace*/) {
+        return false;
+    }
+    virtual bool destroyModelData(uint32_t /*model*/) {
+        return false;
+    }
+
+    // Dynamic layers. `config_json` is a scene object (image, particle, text, sound...); returns the new object id, or 0.
+    // Destruction is applied between frames; sortLayer moves a layer to a draw-order index.
+    virtual uint32_t createLayer(const std::string& /*config_json*/) {
+        return 0;
+    }
+    virtual bool destroyLayer(uint32_t /*id*/) {
+        return false;
+    }
+    virtual bool sortLayer(uint32_t /*id*/, int /*index*/) {
+        return false;
+    }
+
+    // Effects of a layer, by index in the layer's effect list.
+    virtual int effectCount(uint32_t /*layer_id*/) {
+        return 0;
+    }
+    virtual int findEffect(uint32_t /*layer_id*/, const std::string& /*name*/) {
+        return -1;
+    }
+    virtual std::string effectName(uint32_t /*layer_id*/, int /*effect*/) {
+        return "";
+    }
+    virtual bool effectVisible(uint32_t /*layer_id*/, int /*effect*/, bool& /*out*/) {
+        return false;
+    }
+    virtual bool setEffectVisible(uint32_t /*layer_id*/, int /*effect*/, bool /*value*/) {
+        return false;
+    }
+    // Material constants of an effect's passes; a set applies to every pass that has the constant.
+    virtual bool getMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/,
+                                     std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/,
+                                     const std::vector<double>& /*value*/) {
+        return false;
+    }
+    // One pass of an effect is one material (IMaterial).
+    virtual int effectPassCount(uint32_t /*layer_id*/, int /*effect*/) {
+        return 0;
+    }
+    virtual bool getPassMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, int /*pass*/,
+                                         const std::string& /*name*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setPassMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, int /*pass*/,
+                                         const std::string& /*name*/, const std::vector<double>& /*value*/) {
+        return false;
+    }
+    // Runs a function the effect defines (the fluid simulation's clear functions).
+    virtual bool executeMaterialFunction(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/) {
+        return false;
     }
 };
 

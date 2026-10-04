@@ -48,6 +48,9 @@ class SceneScript {
 
     void setLayerId(uint32_t layer_id);
     uint32_t layerId() const;
+    int id() const;  // engine-wide script id used in logs
+    // The scene this script belongs to (see ScriptEngine::registerScope), fixed when it loads.
+    const void* scope() const;
     // The scene property this script drives, so thisObject.getAnimation() can find its timeline.
     void setProperty(const std::string& property);
 

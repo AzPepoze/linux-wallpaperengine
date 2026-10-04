@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "pointer_state.h"
 #include "render_internal.h"
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
@@ -46,16 +47,23 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.parallax_pos[0] = ctx.parallax.smooth_x * 0.5f + 0.5f;
         builtin.parallax_pos[1] = ctx.parallax.smooth_y * 0.5f + 0.5f;
         builtin.time = ctx.time;
+        builtin.frametime = ctx.frametime;
         builtin.screen_res[0] = r->view_width;
         builtin.screen_res[1] = r->view_height;
         builtin.texel_size[0] = r->view_width > 0.0f ? 1.0f / r->view_width : 0.0f;
         builtin.texel_size[1] = r->view_height > 0.0f ? 1.0f / r->view_height : 0.0f;
         builtin.pointer_position[0] = 0.5f;
         builtin.pointer_position[1] = 0.5f;
-        if (ctx.input.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
-            builtin.pointer_position[0] = std::max(0.0f, std::min(1.0f, ctx.input.mouse_x / r->view_width));
-            builtin.pointer_position[1] = std::max(0.0f, std::min(1.0f, ctx.input.mouse_y / r->view_height));
+        if (ctx.input.mouse_position_valid) {
+            builtin.pointer_position[0] = g_shader_pointer.x;
+            builtin.pointer_position[1] = g_shader_pointer.y;
         }
+        builtin.pointer_position_last[0] = g_shader_pointer.last_x;
+        builtin.pointer_position_last[1] = g_shader_pointer.last_y;
+        builtin.pointer_state[0] = g_shader_pointer.x;
+        builtin.pointer_state[1] = g_shader_pointer.y;
+        builtin.pointer_state[2] = g_shader_pointer.pressed;
+        builtin.pointer_state[3] = 0.0f;
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
         builtin.light_ambient_color[0] = ctx.scene.general.ambient_color[0];

@@ -31,6 +31,15 @@ class VideoTexture {
     // Increments each time playback wraps to the start; used to resync audio.
     uint32_t loopCount() const;
 
+    double duration() const;
+    // Without looping, playback stops at the end of the file (loopCount() still counts it as an end).
+    bool looping() const;
+    void setLooping(bool enabled);
+    // Back to the first frame, keeping the play state.
+    void rewind();
+    // Jump to `seconds` into the file, keeping the play state. False when the container cannot seek.
+    bool seek(double seconds);
+
     void start();
     void stop();
     void pause();

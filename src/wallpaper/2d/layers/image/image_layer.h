@@ -2,6 +2,7 @@
 #define IMAGE_LAYER_H
 
 #include <array>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -53,6 +54,35 @@ class ImageLayer : public Layer {
     size_t puppetLayerCount() const {
         return puppet_layers.size();
     }
+    // Animation layers added and removed at run time (IModelLayer). `animation` is a clip name or id; the new layer's
+    // index, or -1.
+    int puppetLayerCreate(const std::string& animation, double rate, double blend, bool additive, bool once,
+                          bool remove_when_done, const std::string& name);
+    bool puppetLayerDestroy(size_t index);
+    void setRootMotion(bool enabled) {
+        puppet_pose.root_motion = enabled;
+    }
+    bool rootMotion() const {
+        return puppet_pose.root_motion;
+    }
+    // Drops the named off-screen buffers of the effect chain; they start empty when next used.
+    void clearEffectTargets(const std::vector<std::string>& names);
+    const wallpaper_engine::MdlModel& puppetModel() const {
+        return puppet;
+    }
+    bool perspective = false;  // IModelLayer.perspective: kept for scripts, the 2D renderer does not use it
+
+    // Skeleton access for scripts. Fields: origin, angles (degrees) and scale are the bone's local pose; matrix is its
+    // model-space transform (column-major, read only).
+    size_t boneCount() const {
+        return puppet.bones.size();
+    }
+    int boneIndex(const std::string& name) const;
+    std::string boneName(size_t bone) const;
+    int boneParent(size_t bone) const;
+    bool boneGet(size_t bone, const std::string& field, std::vector<double>& out) const;
+    bool boneSet(size_t bone, const std::string& field, const std::vector<double>& value);
+    void boneReset(size_t bone);
     // True once after the one-shot clip of that puppet layer ended.
     bool puppetLayerTakeEnded(size_t index);
 
@@ -183,6 +213,7 @@ class ImageLayer : public Layer {
     };
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
+    void dropFinishedPuppetLayers();
     void loadPuppet(const char* mdl_rel_path, EngineContext& ctx);
     void setPuppetLayers();
     bool ensurePuppetTarget(int width, int height);
@@ -194,6 +225,9 @@ class ImageLayer : public Layer {
 
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
+    // The image the effect chain read this frame (the scene for a post-process layer); shown in the inspector.
+    sg_image effect_source_image = {SG_INVALID_ID};
+    sg_view effect_source_view = {SG_INVALID_ID};
 
    private:
     struct ChainState {
@@ -249,6 +283,10 @@ class ImageLayer : public Layer {
     // Sprite placement in screen pixels. Text layers override this to anchor
     // the sprite to the alignment corner instead of the centre.
     virtual ScreenRect screenRect(EngineContext& ctx) const;
+
+    // Makes the layer's picture a mesh drawing: `draw` issues renderer_draw_mesh calls in a width x height pixel
+    // space (top-left origin). Call it after ImageLayer::update, which resets the picture each frame.
+    bool renderGeometry(EngineContext& ctx, int width, int height, const std::function<void()>& draw);
 
     wallpaper_engine::ImageObjectDocument alpha_document;
     // Set when the object's alpha is driven by a SceneScript; `alpha_script_value` is its running result.

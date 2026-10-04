@@ -199,6 +199,7 @@ void ShaderPass::finish(EngineContext& ctx) {
     (void)ctx;
     const std::shared_ptr<PreparedShader> prepared = std::move(prepared_);
     if (!prepared) return;
+    shader_uniform_configs_ = prepared->shader_uniforms;
     const ShaderSourceSet& sources = prepared->sources;
     compiled =
         ShaderCompiler::compile(shader_name, sources.full_vs, sources.full_fs, uniforms, prepared->texture_count);
@@ -224,6 +225,30 @@ void ShaderPass::updateAnimatedUniforms(float time) {
             it->second[0] = value;
         }
     }
+}
+
+bool ShaderPass::resolveMaterialName(const std::string& name, std::string& resolved) const {
+    if (EffectParser::resolveUniformName(name, shader_uniform_configs_, resolved)) return true;
+    if (uniforms.count(name)) {
+        resolved = name;
+        return true;
+    }
+    return false;
+}
+
+bool ShaderPass::setMaterialConstant(const std::string& name, const std::vector<float>& values) {
+    std::string resolved;
+    if (values.empty() || !resolveMaterialName(name, resolved)) return false;
+    uniforms[resolved] = values;
+    resolved_animations.erase(resolved);
+    return true;
+}
+
+const std::vector<float>* ShaderPass::materialConstant(const std::string& name) const {
+    std::string resolved;
+    if (!resolveMaterialName(name, resolved)) return nullptr;
+    const auto it = uniforms.find(resolved);
+    return it == uniforms.end() ? nullptr : &it->second;
 }
 
 void ShaderPass::applyAudioSpectrumBlocks() {

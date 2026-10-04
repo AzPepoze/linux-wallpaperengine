@@ -125,8 +125,10 @@ std::vector<std::string> layoutLines(const stbtt_fontinfo& font, float scale, co
     return lines;
 }
 
+// Pixels are RGBA8 as a little-endian word: alpha in the top byte, red in the lowest. Text is white and the layer tint
+// colors it; over an opaque background the glyph coverage mixes the background toward white instead.
 void blitLine(std::vector<uint32_t>& pixels, int canvas_w, int canvas_h, const stbtt_fontinfo& font, float scale,
-              const std::string& line, float pen_x, float baseline) {
+              const std::string& line, float pen_x, float baseline, bool opaque_background) {
     size_t index = 0;
     while (index < line.size()) {
         const int cp = nextCodepoint(line, index);
@@ -154,7 +156,17 @@ void blitLine(std::vector<uint32_t>& pixels, int canvas_w, int canvas_h, const s
                     if (px < 0 || px >= canvas_w) continue;
                     const uint32_t coverage = bitmap[(size_t)y * (size_t)gw + x];
                     uint32_t& dst = pixels[(size_t)py * (size_t)canvas_w + px];
-                    if (coverage > (dst >> 24)) dst = (coverage << 24) | 0x00FFFFFFu;
+                    if (opaque_background) {
+                        uint32_t mixed = 0xFF000000u;
+                        for (int channel = 0; channel < 3; ++channel) {
+                            const uint32_t below = (dst >> (8 * channel)) & 0xFFu;
+                            const uint32_t above = below + (255u - below) * coverage / 255u;
+                            mixed |= std::max(below, above) << (8 * channel);
+                        }
+                        dst = mixed;
+                    } else if (coverage > (dst >> 24)) {
+                        dst = (coverage << 24) | 0x00FFFFFFu;
+                    }
                 }
             }
         }
@@ -204,6 +216,8 @@ bool TextLayer::propertyGetString(const std::string& name, std::string& out) con
         out = config_.horizontal_align;
     else if (name == "verticalalign")
         out = config_.vertical_align;
+    else if (name == "anchor")
+        out = config_.anchor;
     else
         return false;
     return true;
@@ -221,9 +235,49 @@ bool TextLayer::propertySetString(const std::string& name, const std::string& va
         config_.horizontal_align = value;
     } else if (name == "verticalalign") {
         config_.vertical_align = value;
+    } else if (name == "anchor") {
+        config_.anchor = value;
     } else {
         return false;
     }
+    needs_rebuild_ = true;
+    return true;
+}
+
+bool TextLayer::propertyGetBool(const std::string& name, bool& out) const {
+    if (name == "opaquebackground")
+        out = config_.opaque_background;
+    else if (name == "limitrows")
+        out = config_.limit_rows;
+    else if (name == "limitwidth")
+        out = config_.limit_width;
+    else
+        return false;
+    return true;
+}
+
+bool TextLayer::propertySetBool(const std::string& name, bool value) {
+    if (name == "opaquebackground")
+        config_.opaque_background = value;
+    else if (name == "limitrows")
+        config_.limit_rows = value;
+    else if (name == "limitwidth")
+        config_.limit_width = value;
+    else
+        return false;
+    needs_rebuild_ = true;
+    return true;
+}
+
+bool TextLayer::propertyGetVector(const std::string& name, double out[3]) const {
+    if (name != "backgroundcolor") return false;
+    for (size_t i = 0; i < 3; ++i) out[i] = config_.background_color[i];
+    return true;
+}
+
+bool TextLayer::propertySetVector(const std::string& name, const double value[3]) {
+    if (name != "backgroundcolor") return false;
+    for (size_t i = 0; i < 3; ++i) config_.background_color[i] = (float)value[i];
     needs_rebuild_ = true;
     return true;
 }
@@ -237,6 +291,8 @@ bool TextLayer::propertyGetNumber(const std::string& name, double& out) const {
         out = config_.max_rows;
     else if (name == "alpha")
         out = config_.alpha;
+    else if (name == "padding")
+        out = config_.padding;
     else
         return false;
     return true;
@@ -253,6 +309,8 @@ bool TextLayer::propertySetNumber(const std::string& name, double value) {
         config_.maxwidth = (float)value;
     else if (name == "maxrows")
         config_.max_rows = (int)value;
+    else if (name == "padding")
+        config_.padding = (float)value;
     else
         return false;
     needs_rebuild_ = true;
@@ -336,38 +394,54 @@ bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height
     const float line_advance = (ascent - descent + line_gap) * scale;
 
     // Without a width limit Wallpaper Engine only breaks lines at explicit newlines.
-    const float layout_width = config_.maxwidth > 0.0f ? config_.maxwidth * pixel_scale : 1.0e9f;
+    const bool width_limited = config_.limit_width && config_.maxwidth > 0.0f;
+    const float layout_width = width_limited ? config_.maxwidth * pixel_scale : 1.0e9f;
 
     std::vector<std::string> lines = layoutLines(font, scale, config_.text, layout_width);
     if (lines.empty()) return false;
-    if (config_.max_rows > 0 && lines.size() > (size_t)config_.max_rows) lines.resize((size_t)config_.max_rows);
+    if (config_.limit_rows && config_.max_rows > 0 && lines.size() > (size_t)config_.max_rows)
+        lines.resize((size_t)config_.max_rows);
 
     const float block_height = (float)lines.size() * line_advance;
     float natural_width = 0.0f;
     for (const auto& line : lines) natural_width = std::max(natural_width, measureText(font, scale, line));
 
-    width = std::clamp(config_.size[0] > 0.0f ? (int)lroundf(config_.size[0] * pixel_scale) : (int)ceilf(natural_width),
+    // Padding is empty border around the text, so effects have room to draw outside the glyphs.
+    const float pad = std::max(0.0f, config_.padding) * pixel_scale;
+    width = std::clamp(config_.size[0] > 0.0f ? (int)lroundf(config_.size[0] * pixel_scale)
+                                              : (int)ceilf(natural_width + 2.0f * pad),
                        1, kMaxTextureSize);
-    height = std::clamp(config_.size[1] > 0.0f ? (int)lroundf(config_.size[1] * pixel_scale) : (int)ceilf(block_height),
+    height = std::clamp(config_.size[1] > 0.0f ? (int)lroundf(config_.size[1] * pixel_scale)
+                                               : (int)ceilf(block_height + 2.0f * pad),
                         1, kMaxTextureSize);
 
-    float start_y = (height - block_height) * 0.5f;
+    float start_y = pad + ((float)height - 2.0f * pad - block_height) * 0.5f;
     if (config_.vertical_align == "top")
-        start_y = 0.0f;
+        start_y = pad;
     else if (config_.vertical_align == "bottom")
-        start_y = (float)height - block_height;
+        start_y = (float)height - pad - block_height;
 
-    pixels.assign((size_t)width * (size_t)height, 0u);
+    // Over an opaque background the tint multiplies it too, so divide the tint out of the stored color.
+    uint32_t background = 0u;
+    if (config_.opaque_background) {
+        background = 0xFF000000u;
+        for (int channel = 0; channel < 3; ++channel) {
+            const float shown = std::clamp(config_.background_color[(size_t)channel] / std::max(tint[channel], 1.0f / 255.0f),
+                                           0.0f, 1.0f);
+            background |= (uint32_t)lroundf(shown * 255.0f) << (8 * channel);
+        }
+    }
+    pixels.assign((size_t)width * (size_t)height, background);
     for (size_t i = 0; i < lines.size(); ++i) {
         const float line_width = measureText(font, scale, lines[i]);
-        float pen_x = (width - line_width) * 0.5f;
+        float pen_x = pad + ((float)width - 2.0f * pad - line_width) * 0.5f;
         if (config_.horizontal_align == "left")
-            pen_x = 0.0f;
+            pen_x = pad;
         else if (config_.horizontal_align == "right")
-            pen_x = (float)width - line_width;
+            pen_x = (float)width - pad - line_width;
 
         const float baseline = start_y + (float)i * line_advance + ascent_px;
-        blitLine(pixels, width, height, font, scale, lines[i], pen_x, baseline);
+        blitLine(pixels, width, height, font, scale, lines[i], pen_x, baseline, config_.opaque_background);
     }
     return true;
 }

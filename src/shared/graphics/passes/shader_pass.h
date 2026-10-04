@@ -13,6 +13,7 @@
 #include "effect_geometry.h"
 #include "pass_textures.h"
 #include "shared/graphics/gfx_resource.h"
+#include "shared/graphics/pointer_state.h"
 #include "shared/graphics/render.h"
 #include "shared/graphics/shader/shader_compiler.h"
 #include "sokol_gfx.h"
@@ -82,7 +83,8 @@ class ShaderPass {
 
             std::vector<float> packed(block.uniform_names.size() * 4, 0.0f);
             for (size_t i = 0; i < block.uniform_names.size(); ++i) {
-                auto value = uniforms.find(block.uniform_names[i]);
+                const std::string& uniform_name = block.uniform_names[i];
+                auto value = uniforms.find(uniform_name);
                 if (value == uniforms.end()) continue;
                 for (size_t component = 0; component < value->second.size() && component < 4; ++component) {
                     packed[i * 4 + component] = value->second[component];
@@ -119,6 +121,11 @@ class ShaderPass {
         return r;
     }
 
+    // Material constants by authored (material key) or shader uniform name. A value set by a script replaces the
+    // constant's keyframe animation for good.
+    bool setMaterialConstant(const std::string& name, const std::vector<float>& values);
+    const std::vector<float>* materialConstant(const std::string& name) const;
+
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
 
@@ -134,6 +141,8 @@ class ShaderPass {
                              const std::vector<ShaderUniformConfig>& shader_uniforms) const;
     void applyAudioSpectrumBlocks();
     void updateAnimatedUniforms(float time);
+    bool resolveMaterialName(const std::string& name, std::string& resolved) const;
+    std::vector<ShaderUniformConfig> shader_uniform_configs_;
     std::string stored_vs_source;
     std::string stored_fs_source;
     std::map<std::string, wallpaper_engine::AnimationCurve> resolved_animations;

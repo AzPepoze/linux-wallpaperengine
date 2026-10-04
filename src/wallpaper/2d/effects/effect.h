@@ -3,6 +3,7 @@
 
 #include <cjson/cJSON.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,7 +35,10 @@ class EffectLoadBatch {
 class Effect {
    public:
     std::string file_path;
+    std::string name;
     std::vector<ShaderPass*> passes;
+    // Functions the effect defines for scripts (executeMaterialFunction): name to the render targets it clears.
+    std::map<std::string, std::vector<std::string>> functions;
     bool visible = true;
     bool solo = false;
 
