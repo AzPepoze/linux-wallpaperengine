@@ -1,6 +1,5 @@
 #include "app/frame_loop.h"
 
-#include "app/wallpaper_switch.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -109,14 +108,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     // Runtime switch requests are applied before this frame's scene work so the
     // new wallpaper is the one updated and rendered.
     mgr.pollControl(ctx);
-    SwitchRequest request;
-    if (mgr.takePendingSwitch(request)) {
-        if (switchWallpaper(mgr, ctx, request.path, request.is_pkg, request.properties)) {
-            LOG_I("[CONTROL] switched wallpaper to %s", request.path.c_str());
-        } else {
-            LOG_E("[CONTROL] failed to switch to %s", request.path.c_str());
-        }
-    }
+    mgr.beginPendingSwitch(ctx);
 
 #if DEBUG_BUILD
     RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
@@ -125,13 +117,19 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
     Scene2DRuntime* runtime = activeRuntime(mgr);
     updateFrame(ctx, mgr, runtime);
+    mgr.updateTransition((float)surface::frameDuration());
+    if (runtime && mgr.isTransitioning())
+        runtime->setForceOffscreen(true);
+    else if (runtime)
+        runtime->setForceOffscreen(false);
 
 #if DEBUG_BUILD
     ctx.profiler.update_ms = stm_ms(stm_since(update_start));
     const uint64_t render_start = stm_now();
 #endif
 
-    const bool offscreen_composition = runtime ? runtime->requiresOffscreenComposition() : false;
+    const bool offscreen_composition =
+        runtime ? (runtime->requiresOffscreenComposition() || mgr.isTransitioning()) : false;
     if (offscreen_composition && runtime) runtime->draw();
 
     sg_pass pass = {};
@@ -143,6 +141,8 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
         runtime->present();
     else if (runtime)
         runtime->draw();
+
+    if (mgr.isTransitioning()) mgr.compositeTransition(ctx);
 
     if (runtime) runtime->drawParticleDiagnostics();
 

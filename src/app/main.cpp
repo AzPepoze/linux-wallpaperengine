@@ -112,6 +112,16 @@ static void applyCliToContext() {
     if (cli.particle_debug_velocity_scale > 0.0f)
         ctx.debug.particle_debug_velocity_scale = cli.particle_debug_velocity_scale;
     if (cli.particle_debug_max_particles > 0) ctx.debug.particle_debug_max_particles = cli.particle_debug_max_particles;
+
+    int transition = 0;
+    int transition_duration = cli.transition_duration_ms;
+    std::string transition_error;
+    if (!lwe::transition::resolveTransitionSetting(cli.transition, transition, transition_duration, transition_error))
+        LOG_W("[CONTROL] %s; using fade", transition_error.c_str());
+    TransitionConfig transition_config;
+    transition_config.selection = transition;
+    transition_config.duration_ms = transition_duration;
+    wallpaper_mgr.setTransitionConfig(transition_config);
 }
 
 static void loadInitialWallpaper() {
@@ -207,6 +217,7 @@ static void cleanup(void) {
 #endif
 
     wallpaper_mgr.clear();
+    wallpaper_mgr.shutdownTransition();
     ctx.asset_mgr.clearVideoTextures();
     AudioEngine::instance().shutdown();
     renderer_cleanup(&ctx.renderer);

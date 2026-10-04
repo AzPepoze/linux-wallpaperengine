@@ -3,7 +3,10 @@
 #include <utility>
 
 #include "app/control/control_server.h"
+#include "app/wallpaper_switch.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/surface.h"
+#include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/wallpaper_loader.h"
 
 bool WallpaperManager::load(const std::string& scene_directory, EngineContext& ctx) {
@@ -73,5 +76,40 @@ bool WallpaperManager::takePendingSwitch(SwitchRequest& out) {
     if (!pending_switch_) return false;
     out = std::move(*pending_switch_);
     pending_switch_.reset();
+    return true;
+}
+
+bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
+    SwitchRequest request;
+    if (!takePendingSwitch(request)) return false;
+
+    TransitionConfig config = transition_config_;
+    config.selection = request.transition;
+    config.duration_ms = request.transition_time_ms > 0 ? request.transition_time_ms : 1000;
+    if (config.selection == lwe::transition::kSelectionRandom) {
+        config.selection = lwe::transition::pickRandomEffect(random_seed_);
+        random_seed_ = random_seed_ * 1664525u + 1013904223u;
+    }
+
+    // Capture the outgoing frame before unloading it. The switch itself always
+    // happens; only the transition is skipped for `none`.
+    bool captured = false;
+    if (config.selection != lwe::transition::kSelectionNone) {
+        if (auto* scene = dynamic_cast<Scene2DWallpaper*>(active_wallpaper_.get())) {
+            if (Scene2DRuntime* runtime = scene->getRuntime()) {
+                runtime->setForceOffscreen(true);
+                runtime->draw();
+                captured = transition_.begin(ctx, runtime->composedView(), runtime->composedImage(), surface::width(),
+                                             surface::height(), config);
+            }
+        }
+    }
+
+    if (!switchWallpaper(*this, ctx, request.path, request.is_pkg, request.properties)) {
+        LOG_TAG_E("WALLPAPER_MGR", "Switch to %s failed; holding the previous frame", request.path.c_str());
+        if (captured) transition_.hold();
+        return true;
+    }
+    LOG_TAG_I("WALLPAPER_MGR", "Switched to %s", request.path.c_str());
     return true;
 }
