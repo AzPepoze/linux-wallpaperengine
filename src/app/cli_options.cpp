@@ -104,6 +104,11 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
+    for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
+        const size_t equals = entry.find('=');
+        if (equals == std::string::npos) continue;
+        opts.set_properties.emplace_back(entry.substr(0, equals), entry.substr(equals + 1));
+    }
 #if DEBUG_BUILD
     cli_args::optionValue(args, {"--layer-size"}, opts.layer_size);
     cli_args::optionValue(args, {"--layer-anchor"}, opts.layer_anchor);

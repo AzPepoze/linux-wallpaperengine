@@ -2,6 +2,8 @@
 #define CLI_OPTIONS_H
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 
@@ -31,6 +33,7 @@ struct CliOptions {
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.0f;
     int particle_debug_max_particles = 0;
+    std::vector<std::pair<std::string, std::string>> set_properties;
 
     static CliOptions parse(int argc, char* argv[]);
 };

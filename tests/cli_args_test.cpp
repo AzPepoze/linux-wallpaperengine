@@ -38,5 +38,14 @@ int main() {
     CHECK(cli_args::positional(diagnose) == "/wp");
     CHECK(cli_args::optionValue(diagnose, {"--diagnose-frame"}, value) && value == "10");
 
+    const V setProps = {"app", "--set-property", "a=1", "--set-property", "b=two words", "--set-property=c=3", "/wp"};
+    CHECK(cli_args::positional(setProps) == "/wp");
+    const std::vector<std::string> properties = cli_args::optionValues(setProps, {"--set-property"});
+    CHECK(properties.size() == 3);
+    CHECK(properties[0] == "a=1");
+    CHECK(properties[1] == "b=two words");
+    CHECK(properties[2] == "c=3");
+    CHECK(cli_args::optionValues(launcher, {"--set-property"}).empty());
+
     return test::finish("cli args checks");
 }

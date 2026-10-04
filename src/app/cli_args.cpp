@@ -25,7 +25,8 @@ const char* const kValueOptions[] = {"--gpu",
                                      "--disable-effects",
                                      "--diagnose-frame",
                                      "--particle-debug-velocity-scale",
-                                     "--particle-debug-max-particles"};
+                                     "--particle-debug-max-particles",
+                                     "--set-property"};
 }  // namespace
 
 bool takesValue(const std::string& arg) {
@@ -47,6 +48,24 @@ bool optionValue(const std::vector<std::string>& args, const std::vector<std::st
         }
     }
     return found;
+}
+
+std::vector<std::string> optionValues(const std::vector<std::string>& args, const std::vector<std::string>& names) {
+    std::vector<std::string> values;
+    for (size_t i = 1; i < args.size(); ++i) {
+        for (const std::string& name : names) {
+            if (args[i] == name && i + 1 < args.size()) {
+                values.push_back(args[i + 1]);
+                ++i;
+                break;
+            }
+            if (args[i].rfind(name + "=", 0) == 0) {
+                values.push_back(args[i].substr(name.size() + 1));
+                break;
+            }
+        }
+    }
+    return values;
 }
 
 bool hasFlag(const std::vector<std::string>& args, const std::vector<std::string>& names) {
