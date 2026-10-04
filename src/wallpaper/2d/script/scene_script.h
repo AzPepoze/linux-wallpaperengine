@@ -38,6 +38,12 @@ class SceneScript {
 
     bool valid() const;
 
+    // Diagnostics: the most recent script exception ("hook: message"), how many have been seen, and whether the
+    // script defines a global hook of that name.
+    const std::string& lastError() const;
+    int errorCount() const;
+    bool hasFunction(const char* name) const;
+
    private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

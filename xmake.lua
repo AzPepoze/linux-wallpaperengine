@@ -187,6 +187,23 @@ add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media
                          "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
          nil, {"avformat", "avutil"})
 
+-- Loads every SceneScript block of a Workshop folder and reports script errors (no GPU). See tools/script_corpus.cpp.
+target("script_corpus")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_packages("cjson", "quickjs")
+    add_files("tools/script_corpus.cpp", "src/wallpaper/2d/script/scene_script.cpp", "src/shared/assets/unpack.cpp",
+              "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp")
+    if is_mode("debug", "asan", "ubsan") then
+        add_defines("DEBUG_BUILD=1")
+    else
+        add_defines("DEBUG_BUILD=0")
+    end
+target_end()
+
 task("check")
     set_menu {
         usage = "xmake check",

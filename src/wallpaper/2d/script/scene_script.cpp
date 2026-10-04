@@ -87,10 +87,20 @@ std::string stripModuleSyntax(const std::string& source) {
     return out;
 }
 
+// Errors seen by one script; reachable from the QuickJS context so the free helpers below can record them.
+struct ScriptErrors {
+    std::string last;
+    int count = 0;
+};
+
 void logException(JSContext* ctx, const char* what) {
     JSValue exception = JS_GetException(ctx);
     const char* message = JS_ToCString(ctx, exception);
     LOG_TAG_W(TAG, "SceneScript %s error: %s", what, message ? message : "(unknown)");
+    if (auto* errors = static_cast<ScriptErrors*>(JS_GetContextOpaque(ctx))) {
+        errors->last = std::string(what) + ": " + (message ? message : "(unknown)");
+        ++errors->count;
+    }
     if (message) JS_FreeCString(ctx, message);
     JS_FreeValue(ctx, exception);
 }
@@ -100,6 +110,7 @@ struct SceneScript::Impl {
     JSRuntime* runtime = nullptr;
     JSContext* context = nullptr;
     bool has_update = false;
+    ScriptErrors errors;
 };
 
 SceneScript::SceneScript() : impl_(std::make_unique<Impl>()) {}
@@ -108,6 +119,26 @@ SceneScript::~SceneScript() {
     if (!impl_) return;
     if (impl_->context) JS_FreeContext(impl_->context);
     if (impl_->runtime) JS_FreeRuntime(impl_->runtime);
+}
+
+const std::string& SceneScript::lastError() const {
+    static const std::string none;
+    return impl_ ? impl_->errors.last : none;
+}
+
+int SceneScript::errorCount() const {
+    return impl_ ? impl_->errors.count : 0;
+}
+
+bool SceneScript::hasFunction(const char* name) const {
+    if (!impl_ || !impl_->context) return false;
+    JSContext* ctx = impl_->context;
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue fn = JS_GetPropertyStr(ctx, global, name);
+    const bool found = JS_IsFunction(ctx, fn);
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, global);
+    return found;
 }
 
 bool SceneScript::valid() const {
@@ -128,6 +159,7 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
         return false;
     }
     JSContext* ctx = impl_->context;
+    JS_SetContextOpaque(ctx, &impl_->errors);
 
     JSValue prelude = JS_Eval(ctx, kPrelude, strlen(kPrelude), "<scene-script-prelude>", JS_EVAL_TYPE_GLOBAL);
     if (JS_IsException(prelude)) {
