@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "shared/media/fake_media_source.h"
+#include "shared/media/mpris_metadata.h"
 #include "shared/media/thumbnail_colors.h"
 #include "test_util.h"
 using test::expect;
@@ -61,6 +62,29 @@ void testTwoColorPrimary() {
     expect("two-color", colors.primary[0] > 0.95f && colors.primary[2] < 0.05f, "primary is the larger red area");
 }
 
+void testMprisMetadataKeyMapping() {
+    using wallpaper_engine::classifyMprisMetadataKey;
+    using wallpaper_engine::MprisMetadataField;
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:title") == MprisMetadataField::Title, "title");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:artist") == MprisMetadataField::Artist, "artist");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:album") == MprisMetadataField::Album, "album");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:albumArtist") == MprisMetadataField::AlbumArtist, "album artist");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:genre") == MprisMetadataField::Genre, "genre");
+    expect("mpris-keys", classifyMprisMetadataKey("mpris:length") == MprisMetadataField::Length, "length");
+    // Regression: the art URL was previously dropped, leaving $mediaThumbnail empty.
+    expect("mpris-keys", classifyMprisMetadataKey("mpris:artUrl") == MprisMetadataField::ArtUrl, "art url");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:trackNumber") == MprisMetadataField::Ignore, "unknown ignored");
+    expect("mpris-keys", classifyMprisMetadataKey(nullptr) == MprisMetadataField::Ignore, "null ignored");
+}
+
+void testThumbnailTextureResolution() {
+    // The uploaded texture must not be clamped to the coarse palette downsample.
+    const std::vector<uint8_t> image = solidImage(64, 64, 10, 20, 30);
+    const ThumbnailColors colors = extractThumbnailColors(image.data(), 64, 64);
+    expect("thumbnail-res", colors.has_thumbnail, "reports a thumbnail");
+    expect("thumbnail-res", colors.width == 64 && colors.height == 64, "keeps resolution up to 256");
+}
+
 void testFakeSourceOrdering() {
     FakeMediaSource source;
     MediaEvent first;
@@ -87,6 +111,8 @@ int main() {
     testMostlyWhite();
     testTransparent();
     testTwoColorPrimary();
+    testThumbnailTextureResolution();
+    testMprisMetadataKeyMapping();
     testFakeSourceOrdering();
     return test::finish("media session tests");
 }

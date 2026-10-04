@@ -310,7 +310,7 @@ add_test("transition_cli_tests", {"tests/transition_cli_test.cpp",
                                   "src/wallpaper/transition/transition_catalog.cpp"})
 
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
-                                 "src/shared/core/logger.cpp"}, {"stb"})
+                                 "src/shared/media/mpris_metadata.cpp", "src/shared/core/logger.cpp"}, {"stb"})
 
 add_test("media_events_tests", {"tests/media_events_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
                                 "src/wallpaper/2d/script/script_engine.cpp",

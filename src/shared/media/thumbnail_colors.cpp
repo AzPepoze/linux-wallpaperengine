@@ -8,7 +8,8 @@
 namespace wallpaper_engine {
 namespace {
 
-constexpr int kMaxDimension = 32;
+constexpr int kPaletteDimension = 32;
+constexpr int kTextureDimension = 256;
 constexpr std::size_t kClusters = 4;
 constexpr uint8_t kOpaqueAlpha = 128;
 
@@ -49,9 +50,10 @@ void copyColor(float destination[3], const float source[3]) {
     destination[2] = source[2];
 }
 
-std::vector<uint8_t> downsample(const uint8_t* rgba, int width, int height, int& out_width, int& out_height) {
-    out_width = std::min(width, kMaxDimension);
-    out_height = std::min(height, kMaxDimension);
+std::vector<uint8_t> downsample(const uint8_t* rgba, int width, int height, int max_dimension, int& out_width,
+                                int& out_height) {
+    out_width = std::min(width, max_dimension);
+    out_height = std::min(height, max_dimension);
     std::vector<uint8_t> out(static_cast<std::size_t>(out_width) * out_height * 4);
     for (int y = 0; y < out_height; ++y) {
         const int y0 = y * height / out_height;
@@ -164,11 +166,14 @@ ThumbnailColors extractThumbnailColors(const uint8_t* rgba, int width, int heigh
     ThumbnailColors result;
     if (!rgba || width <= 0 || height <= 0) return result;
 
-    int out_width = 0;
-    int out_height = 0;
-    std::vector<uint8_t> small = downsample(rgba, width, height, out_width, out_height);
+    // The palette only needs a coarse view, but the image is also uploaded as the
+    // `$mediaThumbnail` texture, so keep a much larger copy for display.
+    int palette_width = 0;
+    int palette_height = 0;
+    std::vector<uint8_t> palette =
+        downsample(rgba, width, height, kPaletteDimension, palette_width, palette_height);
 
-    std::vector<Cluster> clusters = clusterAverages(medianCut(opaquePixels(small, out_width, out_height)));
+    std::vector<Cluster> clusters = clusterAverages(medianCut(opaquePixels(palette, palette_width, palette_height)));
     if (clusters.empty()) return result;
 
     copyColor(result.primary, clusters[0].rgb);
@@ -185,10 +190,14 @@ ThumbnailColors extractThumbnailColors(const uint8_t* rgba, int width, int heigh
     const bool white_contrasts_more = contrastRatio(luminance, 1.0f) >= contrastRatio(luminance, 0.0f);
     result.high_contrast[0] = result.high_contrast[1] = result.high_contrast[2] = white_contrasts_more ? 1.0f : 0.0f;
 
+    int texture_width = 0;
+    int texture_height = 0;
+    std::vector<uint8_t> texture = downsample(rgba, width, height, kTextureDimension, texture_width, texture_height);
+
     result.has_thumbnail = true;
-    result.rgba = std::move(small);
-    result.width = out_width;
-    result.height = out_height;
+    result.rgba = std::move(texture);
+    result.width = texture_width;
+    result.height = texture_height;
     return result;
 }
 

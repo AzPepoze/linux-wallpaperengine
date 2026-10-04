@@ -96,6 +96,16 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     }
 
     static wallpaper_engine::MediaScriptBridge media_bridge;
+    static bool media_fallback_configured = false;
+    if (!media_fallback_configured) {
+        // WE ships this placeholder for media integrations with no album art.
+        char fallback_path[1024] = {};
+        if (ctx.asset_mgr->resolvePath("materials/util/webthumbnailfallback.png", fallback_path,
+                                       sizeof(fallback_path))) {
+            wallpaper_engine::setMediaThumbnailFallbackImage(fallback_path);
+            media_fallback_configured = true;
+        }
+    }
     auto& thumbnail_texture = wallpaper_engine::MediaThumbnailTexture::instance();
     media_bridge.update(thumbnail_texture.inUse(), [&](const wallpaper_engine::ThumbnailColors& thumbnail) {
         thumbnail_texture.setThumbnail(thumbnail);

@@ -13,6 +13,7 @@
 
 #include "shared/core/build_config.h"
 #include "shared/media/media_session.h"
+#include "shared/media/mpris_metadata.h"
 #include "shared/media/thumbnail_colors.h"
 
 #if LWE_MPRIS
@@ -25,6 +26,19 @@
 #endif
 
 namespace wallpaper_engine {
+
+namespace {
+std::mutex g_thumbnail_fallback_mutex;
+std::string g_thumbnail_fallback_path;
+}  // namespace
+
+// The artwork shown by `$mediaThumbnail` when the current track has no usable
+// cover (WE ships materials/util/webthumbnailfallback.png for this). Set once by
+// the app from the resolved asset path before the media source starts.
+void setMediaThumbnailFallbackImage(const std::string& path) {
+    std::lock_guard<std::mutex> lock(g_thumbnail_fallback_mutex);
+    g_thumbnail_fallback_path = path;
+}
 
 #if LWE_MPRIS
 
@@ -87,21 +101,35 @@ void readMetadataDict(sd_bus_message* message, Player& player) {
         const char* key = nullptr;
         if (sd_bus_message_read(message, "s", &key) < 0) break;
         if (sd_bus_message_enter_container(message, 'v', nullptr) > 0) {
-            if (key && std::strcmp(key, "xesam:title") == 0) {
-                readStringValue(message, player.props.title);
-            } else if (key && std::strcmp(key, "xesam:artist") == 0) {
-                readStringArrayValue(message, player.props.artist);
-            } else if (key && std::strcmp(key, "xesam:album") == 0) {
-                readStringValue(message, player.props.albumTitle);
-            } else if (key && std::strcmp(key, "xesam:albumArtist") == 0) {
-                readStringArrayValue(message, player.props.albumArtist);
-            } else if (key && std::strcmp(key, "xesam:genre") == 0) {
-                readStringArrayValue(message, player.props.genres);
-            } else if (key && std::strcmp(key, "mpris:length") == 0) {
-                int64_t micros = 0;
-                if (sd_bus_message_read(message, "x", &micros) > 0) player.duration = static_cast<double>(micros) / 1e6;
-            } else {
-                sd_bus_message_skip(message, nullptr);
+            switch (classifyMprisMetadataKey(key)) {
+                case MprisMetadataField::Title:
+                    readStringValue(message, player.props.title);
+                    break;
+                case MprisMetadataField::Artist:
+                    readStringArrayValue(message, player.props.artist);
+                    break;
+                case MprisMetadataField::Album:
+                    readStringValue(message, player.props.albumTitle);
+                    break;
+                case MprisMetadataField::AlbumArtist:
+                    readStringArrayValue(message, player.props.albumArtist);
+                    break;
+                case MprisMetadataField::Genre:
+                    readStringArrayValue(message, player.props.genres);
+                    break;
+                case MprisMetadataField::Length: {
+                    int64_t micros = 0;
+                    if (sd_bus_message_read(message, "x", &micros) > 0)
+                        player.duration = static_cast<double>(micros) / 1e6;
+                    break;
+                }
+                case MprisMetadataField::ArtUrl:
+                    readStringValue(message, player.art_url);
+                    break;
+                case MprisMetadataField::Ignore:
+                default:
+                    sd_bus_message_skip(message, nullptr);
+                    break;
             }
             sd_bus_message_exit_container(message);
         } else {
@@ -157,6 +185,27 @@ std::string percentDecode(const std::string& text) {
     return out;
 }
 
+// Loads the configured `$mediaThumbnail` fallback (WE's webthumbnailfallback.png)
+// on demand. Empty when no path was configured or the image cannot be decoded.
+ThumbnailColors loadFallbackThumbnail() {
+    std::string path;
+    {
+        std::lock_guard<std::mutex> lock(g_thumbnail_fallback_mutex);
+        path = g_thumbnail_fallback_path;
+    }
+    if (path.empty()) return {};
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+    if (!pixels) return {};
+
+    ThumbnailColors thumbnail = extractThumbnailColors(pixels, width, height);
+    stbi_image_free(pixels);
+    return thumbnail;
+}
+
 }  // namespace
 
 class MprisMediaSource : public MediaSource {
@@ -189,6 +238,7 @@ class MprisMediaSource : public MediaSource {
     void reselect();
     void publish(Player& player);
     void emitThumbnail(Player& player);
+    const ThumbnailColors& fallbackThumbnail();
     void emitTimeline();
     void emit(MediaEvent event);
 
@@ -205,6 +255,7 @@ class MprisMediaSource : public MediaSource {
     std::string selected_;
     uint64_t stamp_counter_ = 0;
     bool http_art_warned_ = false;
+    ThumbnailColors fallback_thumbnail_;
 };
 
 void MprisMediaSource::emit(MediaEvent event) {
@@ -383,12 +434,19 @@ void MprisMediaSource::publish(Player& player) {
     player.published = true;
 }
 
+const ThumbnailColors& MprisMediaSource::fallbackThumbnail() {
+    // Retry until the app has configured the fallback path and it decodes.
+    if (!fallback_thumbnail_.has_thumbnail) fallback_thumbnail_ = loadFallbackThumbnail();
+    return fallback_thumbnail_;
+}
+
 void MprisMediaSource::emitThumbnail(Player& player) {
     MediaEvent event;
     event.kind = MediaEvent::Kind::Thumbnail;
     event.enabled = true;
     event.state = player.state;
 
+    bool loaded = false;
     if (player.art_url.rfind("file://", 0) == 0) {
         const std::string path = percentDecode(player.art_url.substr(7));
         int width = 0;
@@ -398,12 +456,26 @@ void MprisMediaSource::emitThumbnail(Player& player) {
         if (pixels) {
             event.thumbnail = extractThumbnailColors(pixels, width, height);
             stbi_image_free(pixels);
+            loaded = event.thumbnail.has_thumbnail;
         }
     } else if (player.art_url.rfind("http://", 0) == 0 || player.art_url.rfind("https://", 0) == 0) {
         if (!http_art_warned_) {
             LOG_W("skipping remote art URL (no HTTP support): %s", player.art_url.c_str());
             http_art_warned_ = true;
         }
+    }
+
+    // No usable artwork: fall back to WE's default media texture so the album
+    // art layer shows a placeholder instead of its blank solid base.
+    if (!loaded) event.thumbnail = fallbackThumbnail();
+
+    if (loaded) {
+        LOG_I("Media thumbnail: %dx%d loaded from %s", event.thumbnail.width, event.thumbnail.height,
+              player.art_url.c_str());
+    } else if (event.thumbnail.has_thumbnail) {
+        LOG_I("Media thumbnail: no cover art; using the default fallback");
+    } else {
+        LOG_W("Media thumbnail: no cover art and no default fallback configured");
     }
 
     emit(std::move(event));
