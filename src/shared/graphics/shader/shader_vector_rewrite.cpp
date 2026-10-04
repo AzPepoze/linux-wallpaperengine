@@ -72,9 +72,32 @@ void rewriteNarrowingConversions(std::string& source) {
 }  // namespace shader_processor_internal
 
 namespace {
+bool isIdentifierStart(char c) {
+    return std::isalpha((unsigned char)c) || c == '_';
+}
+
+bool isIdentifierChar(char c) {
+    return std::isalnum((unsigned char)c) || c == '_';
+}
+
+// Length of the identifier that starts `text`, or 0 when it does not start with one.
+size_t identifierLength(const std::string& text) {
+    if (text.empty() || !isIdentifierStart(text[0])) return 0;
+    size_t length = 1;
+    while (length < text.size() && isIdentifierChar(text[length])) ++length;
+    return length;
+}
+
+bool isIdentifier(const std::string& text) {
+    return !text.empty() && identifierLength(text) == text.size();
+}
+
+bool isDigit(char c) {
+    return c >= '0' && c <= '9';
+}
+
 bool isVectorIdentifier(const std::map<std::string, int>& widths, const std::string& token, int& width) {
-    static const std::regex identifier(R"(^[A-Za-z_][A-Za-z0-9_]*$)");
-    if (!std::regex_match(token, identifier)) return false;
+    if (!isIdentifier(token)) return false;
     const auto it = widths.find(token);
     if (it == widths.end()) return false;
     width = it->second;
@@ -244,20 +267,29 @@ void rewriteMixVectorWidths(std::string& source) {
 
 namespace {
 int vectorWidthFromTypeToken(const std::string& token) {
-    static const std::regex vector_type(R"(^(?:(?:[biu]?vec)|(?:float)|(?:int))([234])$)");
-    static const std::regex scalar_type(R"(^(?:float|double|int|uint|bool|mat[234])$)");
-    std::smatch match;
-    if (std::regex_match(token, match, vector_type)) return match[1].str()[0] - '0';
-    if (std::regex_match(token, scalar_type)) return 0;
+    static const char* const kVectorBases[] = {"vec", "bvec", "ivec", "uvec", "float", "int"};
+    static const char* const kScalarTypes[] = {"float", "double", "int", "uint", "bool", "mat2", "mat3", "mat4"};
+    if (token.size() >= 2 && token.back() >= '2' && token.back() <= '4') {
+        const std::string base = token.substr(0, token.size() - 1);
+        for (const char* candidate : kVectorBases) {
+            if (base == candidate) return token.back() - '0';
+        }
+    }
+    for (const char* scalar : kScalarTypes) {
+        if (token == scalar) return 0;
+    }
     return -1;
 }
 
 int classifyParameter(const std::string& parameter) {
-    static const std::regex qualifier(R"(^(?:in|out|inout|const|lowp|mediump|highp|flat|noperspective|smooth)$)");
+    static const char* const kQualifiers[] = {"in",      "out",   "inout", "const",         "lowp",
+                                              "mediump", "highp", "flat",  "noperspective", "smooth"};
     std::istringstream stream(parameter);
     std::string token;
     while (stream >> token) {
-        if (std::regex_match(token, qualifier)) continue;
+        if (std::any_of(std::begin(kQualifiers), std::end(kQualifiers),
+                        [&](const char* qualifier) { return token == qualifier; }))
+            continue;
         const int width = vectorWidthFromTypeToken(token);
         if (width != -1) return width;
         return -1;
@@ -343,9 +375,53 @@ void rewriteFunctionArguments(std::string& source) {
 }  // namespace shader_processor_internal
 
 namespace {
+// digits[.digits] or .digits, an optional exponent and an optional f suffix.
 bool isNumericLiteral(const std::string& text) {
-    static const std::regex number(R"(^(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?[fF]?$)");
-    return std::regex_match(text, number);
+    const size_t size = text.size();
+    size_t i = 0;
+    while (i < size && isDigit(text[i])) ++i;
+    const bool has_integer_part = i > 0;
+    if (i < size && text[i] == '.') {
+        ++i;
+        const size_t fraction_start = i;
+        while (i < size && isDigit(text[i])) ++i;
+        if (!has_integer_part && i == fraction_start) return false;
+    } else if (!has_integer_part) {
+        return false;
+    }
+    if (i < size && (text[i] == 'e' || text[i] == 'E')) {
+        size_t j = i + 1;
+        if (j < size && (text[j] == '+' || text[j] == '-')) ++j;
+        const size_t exponent_start = j;
+        while (j < size && isDigit(text[j])) ++j;
+        if (j > exponent_start) i = j;
+    }
+    if (i < size && (text[i] == 'f' || text[i] == 'F')) ++i;
+    return i == size;
+}
+
+// Matches `name` or `name.swizzle` where the swizzle is one to four component letters.
+bool parseSwizzledIdentifier(const std::string& text, std::string& name, int& swizzle_length) {
+    const size_t dot = text.find('.');
+    name = text.substr(0, dot);
+    if (!isIdentifier(name)) return false;
+    swizzle_length = -1;
+    if (dot == std::string::npos) return true;
+    const std::string swizzle = text.substr(dot + 1);
+    if (swizzle.empty() || swizzle.size() > 4) return false;
+    for (char c : swizzle) {
+        if (std::string("xyzwrgba").find(c) == std::string::npos) return false;
+    }
+    swizzle_length = (int)swizzle.size();
+    return true;
+}
+
+// True when `text` starts with `identifier (`.
+bool startsWithCall(const std::string& text) {
+    size_t i = identifierLength(text);
+    if (i == 0) return false;
+    while (i < text.size() && std::isspace((unsigned char)text[i])) ++i;
+    return i < text.size() && text[i] == '(';
 }
 
 bool isScalarReducingBuiltin(const std::string& name) {
@@ -435,17 +511,16 @@ int inferExpressionWidth(const std::string& expression, const std::map<std::stri
 
     if (isNumericLiteral(text)) return 0;
 
-    static const std::regex identifier(R"(^([A-Za-z_][A-Za-z0-9_]*)(?:\.([xyzwrgba]{1,4}))?$)");
-    std::smatch match;
-    if (std::regex_match(text, match, identifier)) {
-        const auto found = widths.find(match[1].str());
+    std::string identifier_name;
+    int swizzle_length = -1;
+    if (parseSwizzledIdentifier(text, identifier_name, swizzle_length)) {
+        const auto found = widths.find(identifier_name);
         if (found == widths.end()) return 0;
-        if (match[2].matched) return (int)match[2].str().size();
+        if (swizzle_length >= 0) return swizzle_length;
         return found->second;
     }
 
-    static const std::regex call(R"(^([A-Za-z_][A-Za-z0-9_]*)\s*\()");
-    if (std::regex_search(text, match, call) && match.position() == 0) return inferCallWidth(text, widths);
+    if (startsWithCall(text)) return inferCallWidth(text, widths);
 
     const size_t op = findTopLevelOperator(text);
     if (op != std::string::npos) {
