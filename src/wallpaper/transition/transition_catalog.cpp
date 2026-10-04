@@ -1,5 +1,7 @@
 #include "wallpaper/transition/transition_catalog.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 
 namespace lwe::transition {
@@ -69,6 +71,36 @@ bool parseSelection(const std::string& text, Selection& out) {
     const EffectInfo* info = effectByName(text);
     if (!info) return false;
     out.value = (int)info->effect;
+    return true;
+}
+
+bool parseMode(const std::string& text, Mode& out) {
+    std::string lowered = text;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char c) { return (char)std::tolower(c); });
+    if (lowered == "freeze") {
+        out = Mode::Freeze;
+        return true;
+    }
+    if (lowered == "continue") {
+        out = Mode::Continue;
+        return true;
+    }
+    return false;
+}
+
+bool resolveTransitionModeSetting(const std::string& raw, bool& out_continue, std::string& error) {
+    if (raw.empty()) {
+        out_continue = false;
+        return true;
+    }
+    Mode mode;
+    if (!parseMode(raw, mode)) {
+        error = "unknown transition mode '" + raw + "'";
+        return false;
+    }
+    out_continue = mode == Mode::Continue;
+    error.clear();
     return true;
 }
 

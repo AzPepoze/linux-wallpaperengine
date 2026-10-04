@@ -11,6 +11,7 @@ struct EngineContext;
 struct TransitionConfig {
     int selection = (int)lwe::transition::Effect::Fade;
     int duration_ms = 1000;
+    bool continue_previous = false;
 };
 
 // Loads and draws Wallpaper Engine's own playlist transition shader

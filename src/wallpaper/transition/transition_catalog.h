@@ -59,6 +59,18 @@ struct Selection {
 // Accepts an effect name ("fade"), a decimal index ("0".."26"), "none" or "random".
 bool parseSelection(const std::string& text, Selection& out);
 
+// How the outgoing wallpaper behaves once a transition ends.
+enum class Mode {
+    Freeze,    // outgoing visual is frozen for the fade (default)
+    Continue,  // outgoing keeps animating through the fade (P2/P3)
+};
+
+bool parseMode(const std::string& text, Mode& out);
+
+// Resolves a raw --transition-mode string. Empty means freeze. Sets out_continue
+// and fills `error` on an unknown value.
+bool resolveTransitionModeSetting(const std::string& raw, bool& out_continue, std::string& error);
+
 // Deterministic pick in 0..26 for a given seed; the same seed always returns the same effect.
 int pickRandomEffect(uint32_t seed);
 

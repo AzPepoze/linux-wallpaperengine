@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 #include "test_util.h"
 #include "wallpaper/transition/transition_catalog.h"
@@ -36,5 +37,18 @@ int main() {
     CHECK(transitionProgress(0.5f, 1000) == 0.5f);
     CHECK(transitionProgress(2.0f, 1000) == 1.0f);
     CHECK(transitionProgress(0.5f, 0) == 1.0f);
+
+    Mode mode = Mode::Continue;
+    CHECK(parseMode("freeze", mode) && mode == Mode::Freeze);
+    CHECK(parseMode("continue", mode) && mode == Mode::Continue);
+    CHECK(parseMode("FREEZE", mode) && mode == Mode::Freeze);
+    CHECK(!parseMode("bogus", mode));
+
+    std::string error;
+    bool continue_previous = true;
+    CHECK(resolveTransitionModeSetting("", continue_previous, error) && !continue_previous);
+    CHECK(resolveTransitionModeSetting("freeze", continue_previous, error) && !continue_previous);
+    CHECK(resolveTransitionModeSetting("continue", continue_previous, error) && continue_previous);
+    CHECK(!resolveTransitionModeSetting("bogus", continue_previous, error) && !error.empty());
     return test::finish("transition catalog checks");
 }
