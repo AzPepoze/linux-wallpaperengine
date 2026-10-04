@@ -65,22 +65,25 @@ ready. This is what makes the old keep animating during the load.
   the web child live in the wallpaper instance, this falls out of per-instance
   isolation.
 
-## 4. Phasing
+## 4. Phasing (status)
 
-- **P1 — audio groups + crossfade + mode plumbing + `freeze`.**
+- **P1 — audio groups + crossfade + mode plumbing + `freeze`.** DONE.
   No dual runtime. `AudioEngine` gains audio groups; the outgoing group is
   faded while the incoming group fades in; scene sound layers crossfade
   correctly because their miniaudio voices are self-contained once playing.
   `freeze` is the visual behavior (existing snapshot). Synchronous load is
-  unchanged. Mode flags are accepted; `continue` logs and falls back to
-  `freeze`. Independently useful and low-risk.
+  unchanged. Mode flags are accepted; P1 accepted `continue` but fell back to
+  `freeze`.
 - **P2 — `SharedAssets` split + `WallpaperInstance` isolation + background
-  load.** New wallpapers build into their own instance across frames/workers
-  while the active one keeps rendering, then swap. This makes "old keeps
-  animating during the load" true for both modes, and enables video/web audio
-  to survive the fade (their decoders/child live in the instance).
-- **P3 — `continue`.** During the fade, step and render the outgoing instance
-  into the transition source each frame; destroy it at the end.
+  load.** P2a DONE (shared assets, `WallpaperInstance`, retention). P2b
+  (background load) not started. New wallpapers build into their own instance
+  across frames/workers while the active one keeps rendering, then swap. This
+  makes "old keeps animating during the load" true for both modes, and enables
+  video/web audio to survive the fade (their decoders/child live in the
+  instance).
+- **P3 — `continue`.** DONE. During the fade, step and render the outgoing
+  instance into the transition source each frame; destroy it at the end.
+  Scene, video and web share the same path.
 
 ## 5. P1 design (detailed)
 
@@ -235,11 +238,10 @@ In `WallpaperManager::beginPendingSwitch(ctx)`:
 ### 5.6 Docs (P1)
 
 - `README.md`: document `--transition-mode freeze|continue` and the
-  `transition_mode` config key; note `continue` is P3 (P1 falls back to freeze).
-- `docs/features.md` (or the existing feature doc): same, plus the P1 audio
-  limitation for video/web.
+  `transition_mode` config key.
+- `docs/features.md` (or the existing feature doc): same.
 
-## 6. P2 design (outline — not implemented in P1)
+## 6. P2 design (outline — P2a done, P2b not started)
 
 - **Shared vs per-instance assets.** Split `AssetManager` so the
   process-wide pieces are built once at startup and shared:
@@ -273,7 +275,7 @@ In `WallpaperManager::beginPendingSwitch(ctx)`:
   transition end, so video/web audio crossfades in both modes. `AudioEngine`
   groups from P1 are unchanged; the outgoing instance owns the old group.
 
-## 7. P3 design (outline — `continue`)
+## 7. P3 design (`continue` — implemented)
 
 - Each frame of the fade, step the outgoing instance (`outgoing_->update(dt,
   outgoing_ctx)`) and render it offscreen to produce the transition's
