@@ -10,16 +10,9 @@
 #include "util/sokol_imgui.h"
 #include "wallpaper/2d/effects/effect.h"
 
-namespace Inspector {
-void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
-    ImGui::PushID(id);
-
-    if (ImGui::Checkbox(pass.shader_name.empty() ? "Pass" : pass.shader_name.c_str(), &pass.enabled)) {
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Toggle this specific shader pass");
-    }
-
+namespace {
+// Combo and step slider that override the fragment output to inspect individual shader inputs.
+void showDebugViewControls(EngineContext& ctx, ::ShaderPass& pass) {
     std::vector<std::string> mode_names = {"Normal"};
     mode_names.push_back("g_Texture0 [Color]");
 
@@ -87,10 +80,11 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
             ImGui::SetTooltip("Debug Step: forced texture output for slot N");
         }
     }
+}
 
-    ImGui::Indent();
-    // g_Texture0 may be an authored image, the previous pass, or a fallback, so show it
-    // alongside the numbered texture array rather than treating it as implicit.
+// g_Texture0 may be an authored image, the previous pass, or a fallback, so it is shown
+// alongside the numbered texture array rather than treated as implicit.
+void showResolvedTextureSlots(::ShaderPass& pass) {
     if (ImGui::TreeNodeEx("Resolved Texture Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto show_resolved_slot = [&](int slot, sg_image image, sg_view view, const std::string& path,
                                       const char* source) {
@@ -125,95 +119,98 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
         }
         ImGui::TreePop();
     }
+}
 
-    if (!pass.pass_textures.textures.empty()) {
-        if (ImGui::TreeNodeEx("Texture Slots Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
-            float size = 72.0f;
-            float avl_x = ImGui::GetContentRegionAvail().x;
-            int cols = (int)(avl_x / (size + 8.0f));
-            if (cols < 1) cols = 1;
-
-            for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
-                if (i > 0 && i % cols != 0) ImGui::SameLine();
-                int shader_slot = i + 1;  // textures[0] = g_Texture1, textures[1] = g_Texture2, ...
-
-                const char* slot_label = nullptr;
-                if (pass.texture_labels.count(shader_slot)) {
-                    slot_label = pass.texture_labels[shader_slot].c_str();
-                }
-
-                bool valid = i < (int)pass.pass_textures.cached_views.size() &&
-                             pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
-                ImVec4 border_color = valid ? ImVec4(0.3f, 0.3f, 0.3f, 1) : ImVec4(1, 0.2f, 0.2f, 1);
-
-                ImGui::BeginGroup();
-                ImVec2 p0 = ImGui::GetCursorScreenPos();
-                if (valid) {
-                    ImGui::Image((ImTextureID)simgui_imtextureid(pass.pass_textures.cached_views[i]),
-                                 ImVec2(size, size));
-                } else {
-                    ImGui::Dummy(ImVec2(size, size));
-                }
-                ImVec2 p1 = ImGui::GetItemRectMax();
-                ImGui::GetWindowDrawList()->AddRect(p0, p1, ImColor(border_color), 0, 0, valid ? 1.0f : 2.0f);
-
-                if (ImGui::IsItemHovered()) {
-                    ImGui::BeginTooltip();
-                    ImGui::Text("g_Texture%d: %s", shader_slot, slot_label ? slot_label : "Extra");
-                    if (i < (int)pass.pass_textures.texture_paths.size() &&
-                        !pass.pass_textures.texture_paths[i].empty())
-                        ImGui::Text("Path: %s", pass.pass_textures.texture_paths[i].c_str());
-                    if (!valid) ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "INVALID - renders as black");
-                    ImGui::EndTooltip();
-                }
-
-                ImGui::Text("g_Tex%d", shader_slot);
-                if (slot_label)
-                    ImGui::TextDisabled("%s", slot_label);
-                else
-                    ImGui::TextDisabled("-");
-                ImGui::EndGroup();
-            }
-            ImGui::TreePop();
-        }
+void showTextureSlotsGrid(::ShaderPass& pass) {
+    if (ImGui::TreeNodeEx("Texture Slots Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
+        float size = 72.0f;
+        float avl_x = ImGui::GetContentRegionAvail().x;
+        int cols = (int)(avl_x / (size + 8.0f));
+        if (cols < 1) cols = 1;
 
         for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
-            ImGui::PushID(i);
-            int shader_slot = i + 1;
+            if (i > 0 && i % cols != 0) ImGui::SameLine();
+            int shader_slot = i + 1;  // textures[0] = g_Texture1, textures[1] = g_Texture2, ...
 
-            const char* slot_desc = "Extra";
+            const char* slot_label = nullptr;
             if (pass.texture_labels.count(shader_slot)) {
-                slot_desc = pass.texture_labels[shader_slot].c_str();
+                slot_label = pass.texture_labels[shader_slot].c_str();
             }
 
             bool valid = i < (int)pass.pass_textures.cached_views.size() &&
                          pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
+            ImVec4 border_color = valid ? ImVec4(0.3f, 0.3f, 0.3f, 1) : ImVec4(1, 0.2f, 0.2f, 1);
 
-            if (i < (int)pass.pass_textures.texture_masks.size()) {
-                bool m = pass.pass_textures.texture_masks[i];
-                if (ImGui::Checkbox("##mask", &m)) pass.pass_textures.texture_masks[i] = m;
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle this texture slot");
-                ImGui::SameLine();
-            }
-
-            if (!valid) {
-                ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "g_Texture%d [%s]: INVALID", shader_slot, slot_desc);
-            } else if (!pass.pass_textures.texture_paths[i].empty()) {
-                const char* full_path = pass.pass_textures.texture_paths[i].c_str();
-                const char* filename = strrchr(full_path, '/');
-                if (filename)
-                    filename++;
-                else
-                    filename = full_path;
-                ImGui::Text("g_Texture%d [%s]: %s", shader_slot, slot_desc, filename);
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", full_path);
+            ImGui::BeginGroup();
+            ImVec2 p0 = ImGui::GetCursorScreenPos();
+            if (valid) {
+                ImGui::Image((ImTextureID)simgui_imtextureid(pass.pass_textures.cached_views[i]), ImVec2(size, size));
             } else {
-                ImGui::Text("g_Texture%d [%s]: (ok)", shader_slot, slot_desc);
+                ImGui::Dummy(ImVec2(size, size));
             }
-            ImGui::PopID();
-        }
-    }
+            ImVec2 p1 = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddRect(p0, p1, ImColor(border_color), 0, 0, valid ? 1.0f : 2.0f);
 
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::Text("g_Texture%d: %s", shader_slot, slot_label ? slot_label : "Extra");
+                if (i < (int)pass.pass_textures.texture_paths.size() && !pass.pass_textures.texture_paths[i].empty())
+                    ImGui::Text("Path: %s", pass.pass_textures.texture_paths[i].c_str());
+                if (!valid) ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "INVALID - renders as black");
+                ImGui::EndTooltip();
+            }
+
+            ImGui::Text("g_Tex%d", shader_slot);
+            if (slot_label)
+                ImGui::TextDisabled("%s", slot_label);
+            else
+                ImGui::TextDisabled("-");
+            ImGui::EndGroup();
+        }
+        ImGui::TreePop();
+    }
+}
+
+// One row per texture slot with an enable checkbox and its resolved file.
+void showTextureSlotToggles(::ShaderPass& pass) {
+    for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
+        ImGui::PushID(i);
+        int shader_slot = i + 1;
+
+        const char* slot_desc = "Extra";
+        if (pass.texture_labels.count(shader_slot)) {
+            slot_desc = pass.texture_labels[shader_slot].c_str();
+        }
+
+        bool valid =
+            i < (int)pass.pass_textures.cached_views.size() && pass.pass_textures.cached_views[i].id != SG_INVALID_ID;
+
+        if (i < (int)pass.pass_textures.texture_masks.size()) {
+            bool m = pass.pass_textures.texture_masks[i];
+            if (ImGui::Checkbox("##mask", &m)) pass.pass_textures.texture_masks[i] = m;
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle this texture slot");
+            ImGui::SameLine();
+        }
+
+        if (!valid) {
+            ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "g_Texture%d [%s]: INVALID", shader_slot, slot_desc);
+        } else if (!pass.pass_textures.texture_paths[i].empty()) {
+            const char* full_path = pass.pass_textures.texture_paths[i].c_str();
+            const char* filename = strrchr(full_path, '/');
+            if (filename)
+                filename++;
+            else
+                filename = full_path;
+            ImGui::Text("g_Texture%d [%s]: %s", shader_slot, slot_desc, filename);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", full_path);
+        } else {
+            ImGui::Text("g_Texture%d [%s]: (ok)", shader_slot, slot_desc);
+        }
+        ImGui::PopID();
+    }
+}
+
+void showUniformEditors(::ShaderPass& pass) {
     if (!pass.uniforms.empty() && ImGui::TreeNodeEx("Shader Uniforms", ImGuiTreeNodeFlags_DefaultOpen)) {
         for (auto& [name, values] : pass.uniforms) {
             if (values.empty()) continue;
@@ -236,12 +233,36 @@ void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
         }
         ImGui::TreePop();
     }
+}
 
+void showCombos(::ShaderPass& pass) {
     if (!pass.combos.empty() && ImGui::TreeNode("Shader Combos")) {
         for (const auto& combo : pass.combos) ImGui::BulletText("%s = %d", combo.first.c_str(), combo.second);
         ImGui::TreePop();
     }
+}
+}  // namespace
 
+namespace Inspector {
+void showShaderPass(EngineContext& ctx, ::ShaderPass& pass, int id) {
+    ImGui::PushID(id);
+
+    if (ImGui::Checkbox(pass.shader_name.empty() ? "Pass" : pass.shader_name.c_str(), &pass.enabled)) {
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Toggle this specific shader pass");
+    }
+
+    showDebugViewControls(ctx, pass);
+
+    ImGui::Indent();
+    showResolvedTextureSlots(pass);
+    if (!pass.pass_textures.textures.empty()) {
+        showTextureSlotsGrid(pass);
+        showTextureSlotToggles(pass);
+    }
+    showUniformEditors(pass);
+    showCombos(pass);
     ImGui::Unindent();
     ImGui::PopID();
 }
