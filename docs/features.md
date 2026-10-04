@@ -75,6 +75,10 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [x] Runtime switching: a running instance loads a new wallpaper in place, in the same window or layer surface
 - [x] Wallpaper Engine transition shaders, loaded from the install (`assets/shaders/HLSL/dx11playlisttransition.*`), covering the full `FADEEFFECT` set 0-26: fade, mosaic, diffuse, horizontal/vertical slide, horizontal/vertical fade, clouds, burnt paper, circular, zipper, door, lines, zoom, drip, pixelate, bricks, paint, fade to black, twister, black hole, crt, radial wipe, glass shatter, bullets, ice and boilover
 - [x] `none` (hard cut) and `random` (one effect picked per switch), with a configurable duration (`--transition`, `--transition-duration`, default `fade` / 1000 ms)
+- [x] Audio crossfade: the outgoing wallpaper's audio fades out while the incoming wallpaper's fades in, driven by the transition progress. Scene sound layers crossfade; video/web audio is assigned to the same group but still cuts at the swap (fixed when per-instance retention lands in P2)
+- [-] Transition mode (`--transition-mode`, config `transition_mode`, default `freeze`)
+  - Works: `freeze` holds the outgoing wallpaper's last frame for the fade; mode flows through the CLI, `config.json` and the control socket, and both modes crossfade audio
+  - Missing: `continue` (outgoing keeps animating through the fade) is accepted but currently logs and falls back to `freeze`; implemented in P2/P3
 - [x] The outgoing frame is captured and held while the new wallpaper loads, so a slow load does not show a black gap; a failed load keeps the frozen frame
 - [x] Type-agnostic: scene, video and web wallpapers all switch through the same compositor, and 3D inherits it when 3D rendering lands
 - [-] Single-instance control
