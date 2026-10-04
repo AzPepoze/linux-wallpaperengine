@@ -48,10 +48,18 @@ struct SceneNodeDocument {
     bool propagate_to_children = true;
 };
 
+struct EffectConstantScript {
+    int pass = 0;      // index into the effect's `passes`
+    std::string name;  // the constant's key in constantshadervalues
+    ScriptedValue script;
+};
+
 struct EffectInstanceDocument {
     std::string file;
     bool visible = true;
+    ScriptedValue visible_script;
     std::string instance_config_json;
+    std::vector<EffectConstantScript> constant_scripts;
 };
 
 struct AnimationLayerDocument {

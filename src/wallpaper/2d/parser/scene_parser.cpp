@@ -395,6 +395,28 @@ void parseSoundFields(const cJSON* object, SoundObjectDocument& sound_doc) {
     parseFloat(member(object, "maxtime"), sound_doc.max_time);
 }
 
+void parseEffectConstantScripts(const cJSON* effect_json, std::vector<EffectConstantScript>& out) {
+    const cJSON* passes = member(effect_json, "passes");
+    if (!cJSON_IsArray(passes)) return;
+    int pass_index = 0;
+    const cJSON* pass = nullptr;
+    cJSON_ArrayForEach(pass, passes) {
+        const cJSON* values = member(pass, "constantshadervalues");
+        if (cJSON_IsObject(values)) {
+            const cJSON* constant = nullptr;
+            cJSON_ArrayForEach(constant, values) {
+                if (!constant->string) continue;
+                EffectConstantScript entry;
+                entry.pass = pass_index;
+                entry.name = constant->string;
+                readScript(constant, entry.script);
+                if (!entry.script.empty()) out.push_back(std::move(entry));
+            }
+        }
+        ++pass_index;
+    }
+}
+
 void parseEffects(const cJSON* object, std::vector<EffectInstanceDocument>& out) {
     const cJSON* effects = member(object, "effects");
     if (!cJSON_IsArray(effects)) return;
@@ -406,10 +428,12 @@ void parseEffects(const cJSON* object, std::vector<EffectInstanceDocument>& out)
         EffectInstanceDocument effect;
         effect.file = file->valuestring;
         effect.visible = parseBool(member(effect_json, "visible"), true);
+        readScript(member(effect_json, "visible"), effect.visible_script);
         if (char* serialized = cJSON_PrintUnformatted(effect_json)) {
             effect.instance_config_json = serialized;
             cJSON_free(serialized);
         }
+        parseEffectConstantScripts(effect_json, effect.constant_scripts);
         out.push_back(std::move(effect));
     }
 }

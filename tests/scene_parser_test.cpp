@@ -47,6 +47,25 @@ const char* kScriptedScene = R"JSON({
   ]
 })JSON";
 
+const char* kEffectScene = R"JSON({
+  "camera": {"center": "0 0 0", "eye": "0 0 1", "up": "0 1 0"},
+  "objects": [
+    {"id": 1, "name": "Fx", "image": "models/a.json",
+     "effects": [
+       {"file": "effects/glow/effect.json",
+        "visible": {"script": "export function update(v) {}", "scriptproperties": {"k": 1}, "value": false},
+        "passes": [
+          {"constantshadervalues": {"strength": {"script": "export function update(v) {}",
+                                                 "scriptproperties": {"k": 1}, "value": 0.5},
+                                    "count": 4,
+                                    "pulse": {"animation": {"c0": [{"frame": 0, "value": 0}]}}}},
+          {"constantshadervalues": {"tint": "1 0 0"}}
+        ]},
+       {"file": "effects/plain/effect.json", "visible": true}
+     ]}
+  ]
+})JSON";
+
 SceneDocument parseText(const char* json) {
     char path[] = "/tmp/lwe_scene_XXXXXX";
     const int fd = mkstemp(path);
@@ -137,6 +156,31 @@ void testScriptedValues() {
                  "plain values have no scripts");
 }
 
+void testEffectScripts() {
+    const SceneDocument doc = parseText(kEffectScene);
+    test::expect("effect", doc.objects.size() == 1, "effect object is kept");
+    if (doc.objects.size() != 1) return;
+    test::expect("effect", doc.objects[0].effects.size() == 2, "both effects are kept");
+    if (doc.objects[0].effects.size() != 2) return;
+
+    const EffectInstanceDocument& scripted = doc.objects[0].effects[0];
+    test::expect("effect", !scripted.visible, "scripted visible keeps its base value");
+    test::expect("effect",
+                 scripted.visible_script.script.find("update") != std::string::npos &&
+                     scripted.visible_script.properties_json.find("k") != std::string::npos,
+                 "visible script and properties captured");
+    test::expect("effect", scripted.constant_scripts.size() == 1, "only the scripted constant is kept");
+    if (scripted.constant_scripts.size() == 1) {
+        const EffectConstantScript& constant = scripted.constant_scripts[0];
+        test::expect("effect", constant.pass == 0 && constant.name == "strength", "constant pass and name");
+        test::expect("effect", !constant.script.empty(), "constant script captured");
+    }
+
+    const EffectInstanceDocument& plain = doc.objects[0].effects[1];
+    test::expect("effect", plain.visible && plain.visible_script.empty(), "plain visible has no script");
+    test::expect("effect", plain.constant_scripts.empty(), "plain effect has no constant scripts");
+}
+
 void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
@@ -146,6 +190,7 @@ void testMissingFile() {
 int main() {
     testObjects();
     testScriptedValues();
+    testEffectScripts();
     testMissingFile();
     return test::finish("scene parser tests");
 }
