@@ -206,6 +206,8 @@ add_test("shader_tests", {"tests/shader_preprocess_test.cpp", "src/shared/graphi
                           "src/shared/graphics/shader/shader_processor_metadata.cpp",
                           "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
                           "src/shared/graphics/shader/shader_vector_rewrite.cpp",
+                          "src/shared/graphics/shader/shader_vector_rewrite_args.cpp",
+                          "src/shared/graphics/shader/shader_vector_rewrite_infer.cpp",
                           "src/shared/graphics/shader/shader_swizzle_rewrite.cpp", "src/shared/core/vfs.cpp",
                           "src/shared/core/logger.cpp", "src/shared/core/disk_cache.cpp"},
          {"sokol"})
