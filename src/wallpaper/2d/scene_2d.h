@@ -31,6 +31,8 @@ class Scene2DRuntime {
     }
     // The composed scene texture after draw(), or an empty view when unavailable.
     sg_view composedView() const;
+    // The image backing composedView(), for binding during a copy.
+    sg_image composedImage() const;
 
    private:
     struct SceneTarget {

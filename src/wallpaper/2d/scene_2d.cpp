@@ -135,6 +135,11 @@ sg_view Scene2DRuntime::composedView() const {
     return scene_targets[scene_output_index].texture_view;
 }
 
+sg_image Scene2DRuntime::composedImage() const {
+    if (scene_output_index < 0 || scene_output_index > 1) return {};
+    return scene_targets[scene_output_index].image;
+}
+
 void Scene2DRuntime::drawParticleDiagnostics() {
     if (!ctx.debug.particle_debug_bounds && !ctx.debug.particle_debug_velocity) return;
     for (Layer* layer : ctx.scene.layers) {
