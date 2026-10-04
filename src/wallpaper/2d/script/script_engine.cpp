@@ -39,7 +39,7 @@ function vec2(x, y) { return typeof g.Vec2 === 'function' ? new g.Vec2(x, y) : {
     try { hide(name, (0, eval)(name)); } catch (e) { /* baseclasses.js not loaded */ }
 });
 
-hide('__lweCurrent', { id: 0, layerId: 0, object: undefined });
+hide('__lweCurrent', { id: 0, layerId: 0, scopeKey: 0, object: undefined });
 Object.defineProperty(g, 'thisLayer', { get: function () { return layerHandle(g.__lweCurrent.layerId); }, configurable: true });
 Object.defineProperty(g, 'thisObject', {
     get: function () {
@@ -84,7 +84,16 @@ hide('console', {
 });
 
 // Fallbacks for a missing assets folder; baseclasses.js defines the real ones.
-if (typeof g.shared === 'undefined') hide('shared', {});
+// `shared` is one object per scene so two wallpapers alive in a transition do not see each other's state.
+var sharedByScope = {};
+delete g.shared;
+Object.defineProperty(g, 'shared', {
+    get: function () {
+        var key = g.__lweCurrent.scopeKey || 0;
+        return sharedByScope[key] || (sharedByScope[key] = {});
+    },
+    configurable: true
+});
 if (typeof g.createScriptProperties !== 'function') {
     hide('createScriptProperties', function () {
         var vars = {};
@@ -162,10 +171,12 @@ hide('__lweTick', function (dt, runtime, canvasW, canvasH, screenW, screenH) {
 var store = {};
 var dirty = {};
 function areaKey(location) { return location === 'global' ? 'global' : 'screen'; }
+function scopeKey() { return g.__lweCurrent.scopeKey || 0; }
+function slot(location) { return scopeKey() + ':' + areaKey(location); }
 function area(location) {
-    var key = areaKey(location);
+    var key = slot(location);
     if (!store[key]) {
-        try { store[key] = JSON.parse(__lweStorageLoad(key) || '{}'); } catch (e) { store[key] = {}; }
+        try { store[key] = JSON.parse(__lweStorageLoad(scopeKey(), areaKey(location)) || '{}'); } catch (e) { store[key] = {}; }
     }
     return store[key];
 }
@@ -184,22 +195,25 @@ hide('localStorage', {
             __lweLog(1, 'localStorage: 100 KB limit reached, value for "' + key + '" not stored');
             return;
         }
-        dirty[areaKey(location)] = true;
+        dirty[slot(location)] = true;
     },
     delete: function (key, location) {
         var data = area(location);
         var had = Object.prototype.hasOwnProperty.call(data, key);
         delete data[key];
-        if (had) dirty[areaKey(location)] = true;
+        if (had) dirty[slot(location)] = true;
         return had;
     },
     clear: function (location) {
-        store[areaKey(location)] = {};
-        dirty[areaKey(location)] = true;
+        store[slot(location)] = {};
+        dirty[slot(location)] = true;
     }
 });
 hide('__lweStorageFlush', function () {
-    Object.keys(dirty).forEach(function (key) { __lweStorageSave(key, JSON.stringify(store[key])); });
+    Object.keys(dirty).forEach(function (key) {
+        var parts = key.split(':');
+        __lweStorageSave(Number(parts[0]), parts[1], JSON.stringify(store[key]));
+    });
     dirty = {};
 });
 
@@ -405,10 +419,13 @@ std::string storagePath(const std::string& wallpaper_id, const std::string& key,
     return dir + "/localstorage/" + safe + "_" + key + ".json";
 }
 
+// __lweStorageLoad(scopeKey, area) / __lweStorageSave(scopeKey, area, json)
 JSValue jsStorageLoad(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
-    const char* key = argc > 0 ? JS_ToCString(ctx, argv[0]) : nullptr;
+    int32_t scope_key = 0;
+    if (argc > 0) JS_ToInt32(ctx, &scope_key, argv[0]);
+    const char* key = argc > 1 ? JS_ToCString(ctx, argv[1]) : nullptr;
     if (!key) return JS_NewString(ctx, "");
-    std::ifstream file(storagePath(ScriptEngine::instance().wallpaperId(), key, false));
+    std::ifstream file(storagePath(ScriptEngine::instance().wallpaperIdForKey(scope_key), key, false));
     JS_FreeCString(ctx, key);
     std::stringstream contents;
     contents << file.rdbuf();
@@ -416,11 +433,14 @@ JSValue jsStorageLoad(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv
 }
 
 JSValue jsStorageSave(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
-    if (argc < 2) return JS_UNDEFINED;
-    const char* key = JS_ToCString(ctx, argv[0]);
-    const char* json = JS_ToCString(ctx, argv[1]);
+    if (argc < 3) return JS_UNDEFINED;
+    int32_t scope_key = 0;
+    JS_ToInt32(ctx, &scope_key, argv[0]);
+    const char* key = JS_ToCString(ctx, argv[1]);
+    const char* json = JS_ToCString(ctx, argv[2]);
     if (key && json) {
-        std::ofstream file(storagePath(ScriptEngine::instance().wallpaperId(), key, true), std::ios::trunc);
+        std::ofstream file(storagePath(ScriptEngine::instance().wallpaperIdForKey(scope_key), key, true),
+                           std::ios::trunc);
         file << json;
     }
     if (key) JS_FreeCString(ctx, key);
@@ -684,7 +704,7 @@ int ScriptEngine::broadcast(const char* hook, const ScriptEvent& event, bool sti
     int delivered = 0;
     const std::vector<ScriptEntry> entries = scripts_;  // a hook may load or free scripts
     for (const ScriptEntry& entry : entries) {
-        if (!entry.script->callHook(hook, event)) continue;
+        if (entry.script->scope() != active_scope_ || !entry.script->callHook(hook, event)) continue;
         ++delivered;
     }
     return delivered;
@@ -694,7 +714,9 @@ int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const Scr
     int delivered = 0;
     const std::vector<ScriptEntry> entries = scripts_;
     for (const ScriptEntry& entry : entries)
-        if (entry.script->layerId() == layer_id && entry.script->callHook(hook, event)) ++delivered;
+        if (entry.script->scope() == active_scope_ && entry.script->layerId() == layer_id &&
+            entry.script->callHook(hook, event))
+            ++delivered;
     return delivered;
 }
 
@@ -727,16 +749,18 @@ void ScriptEngine::animationEnded(uint32_t handle) {
 }
 
 bool ScriptEngine::anyScriptExports(const std::vector<const char*>& hooks) {
-    for (const ScriptEntry& entry : scripts_)
+    for (const ScriptEntry& entry : scripts_) {
+        if (entry.script->scope() != active_scope_) continue;
         for (const char* hook : hooks)
             if (entry.script->hasFunction(hook)) return true;
+    }
     return false;
 }
 
 std::vector<uint32_t> ScriptEngine::layersWithHooks(const std::vector<const char*>& hooks) {
     std::vector<uint32_t> ids;
     for (const ScriptEntry& entry : scripts_) {
-        if (entry.script->layerId() == 0) continue;
+        if (entry.script->layerId() == 0 || entry.script->scope() != active_scope_) continue;
         for (const char* hook : hooks) {
             if (!entry.script->hasFunction(hook)) continue;
             ids.push_back(entry.script->layerId());
@@ -767,16 +791,54 @@ bool ScriptEngine::deadlineExceeded() const {
 }
 
 ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms)
-    : engine_(engine), previous_errors_(engine.current_errors_), previous_id_(engine.current_script_id_) {
+    : CallScope(engine, errors, script_id, budget_ms, engine.active_scope_) {}
+
+ScriptEngine::CallScope::CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms,
+                                   const void* scope)
+    : engine_(engine),
+      previous_errors_(engine.current_errors_),
+      previous_id_(engine.current_script_id_),
+      previous_scope_(engine.current_scope_) {
     engine.current_errors_ = errors;
     engine.current_script_id_ = script_id;
+    engine.current_scope_ = scope;
     engine.deadline_ns_ = nowNs() + (int64_t)(budget_ms * 1e6);
 }
 
 ScriptEngine::CallScope::~CallScope() {
     engine_.current_errors_ = previous_errors_;
     engine_.current_script_id_ = previous_id_;
+    engine_.current_scope_ = previous_scope_;
     engine_.deadline_ns_ = 0;
+}
+
+void ScriptEngine::registerScope(const void* scope, ScriptSceneBackend* backend, const std::string& wallpaper_id) {
+    ScopeInfo& info = scopes_[scope];
+    if (info.key == 0 && scope != nullptr) info.key = ++next_scope_key_;
+    info.backend = backend;
+    info.wallpaper_id = wallpaper_id;
+}
+
+int ScriptEngine::scopeKey(const void* scope) const {
+    const auto it = scopes_.find(scope);
+    return it == scopes_.end() ? 0 : it->second.key;
+}
+
+std::string ScriptEngine::wallpaperIdForKey(int key) const {
+    for (const auto& [scope, info] : scopes_)
+        if (info.key == key && !info.wallpaper_id.empty()) return info.wallpaper_id;
+    return wallpaper_id_;
+}
+
+void ScriptEngine::unregisterScope(const void* scope) {
+    scopes_.erase(scope);
+    if (active_scope_ == scope) active_scope_ = nullptr;
+    if (creation_scope_ == scope) creation_scope_ = nullptr;
+}
+
+ScriptSceneBackend* ScriptEngine::sceneBackend() const {
+    const auto it = scopes_.find(current_scope_);
+    return it == scopes_.end() ? nullptr : it->second.backend;
 }
 
 void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w,
@@ -796,7 +858,7 @@ void ScriptEngine::beginFrame(double dt, double runtime_seconds, float canvas_w,
     JS_FreeValue(context_, global);
 
     for (size_t i = 0; i < scripts_.size(); ++i) {
-        if (scripts_[i].sticky_delivered) continue;
+        if (scripts_[i].sticky_delivered || scripts_[i].script->scope() != active_scope_) continue;
         scripts_[i].sticky_delivered = true;
         SceneScript* script = scripts_[i].script;
         const std::map<std::string, ScriptEvent> events = sticky_events_;

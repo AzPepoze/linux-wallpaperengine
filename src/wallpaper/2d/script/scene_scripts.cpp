@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <optional>
 
 #include "script_engine.h"
@@ -283,7 +284,8 @@ std::vector<uint32_t> SceneScriptBackend::takeEndedAnimations() {
 }
 
 ScriptBindings::ScriptBindings(EngineContext& ctx) : ctx_(ctx), animations_(ctx), backend_(ctx, animations_) {
-    ScriptEngine::instance().setSceneBackend(&backend_);
+    ScriptEngine::instance().registerScope(this, &backend_, std::filesystem::path(ctx.asset_root).filename().string());
+    ScriptEngine::instance().setCreationScope(this);
 }
 
 void ScriptBindings::setUserProperties(const UserProperties& properties) {
@@ -312,7 +314,7 @@ void ScriptBindings::setUserProperties(const UserProperties& properties) {
 
 ScriptBindings::~ScriptBindings() {
     bindings_.clear();  // scripts first: they may still call back into the backend while shutting down
-    if (ScriptEngine::instance().sceneBackend() == &backend_) ScriptEngine::instance().setSceneBackend(nullptr);
+    ScriptEngine::instance().unregisterScope(this);
 }
 
 bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::string& script,

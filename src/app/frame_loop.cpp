@@ -59,6 +59,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     {
         const AudioEngine::Spectrum& spectrum = AudioEngine::instance().spectrum();
         ScriptEngine& scripts = ScriptEngine::instance();
+        scripts.setActiveScope(ctx.scene.scripts);
         scripts.setAudioBands(16, spectrum.bands16_left, spectrum.bands16_right);
         scripts.setAudioBands(32, spectrum.bands32_left, spectrum.bands32_right);
         scripts.setAudioBands(64, spectrum.bands64_left, spectrum.bands64_right);

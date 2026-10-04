@@ -38,12 +38,27 @@ class ScriptEngine {
         return assets_dir_;
     }
     void setWallpaperId(const std::string& id);
+    // Two wallpapers can be alive during a transition, so each scene registers a scope with its own backend. A script
+    // keeps the scope that was being built when it loaded and runs against that backend; events go to the scripts of
+    // the active scope only. Without scopes (tests, the corpus runner) everything uses the null scope.
+    // `wallpaper_id` names the scene's localStorage; `shared` and localStorage are separate per scope.
+    void registerScope(const void* scope, class ScriptSceneBackend* backend, const std::string& wallpaper_id = "");
+    void unregisterScope(const void* scope);
+    int scopeKey(const void* scope) const;
+    std::string wallpaperIdForKey(int key) const;
+    void setActiveScope(const void* scope) {
+        active_scope_ = scope;
+    }
+    void setCreationScope(const void* scope) {
+        creation_scope_ = scope;
+    }
+    const void* creationScope() const {
+        return creation_scope_;
+    }
     void setSceneBackend(class ScriptSceneBackend* backend) {
-        scene_backend_ = backend;
+        registerScope(nullptr, backend);
     }
-    class ScriptSceneBackend* sceneBackend() const {
-        return scene_backend_;
-    }
+    class ScriptSceneBackend* sceneBackend() const;
 
     void beginFrame(double dt, double runtime_seconds, float canvas_w, float canvas_h, float screen_w, float screen_h);
     void setAudioBands(int resolution, const float* left, const float* right);
@@ -68,7 +83,9 @@ class ScriptEngine {
     // Scopes one script call: where errors are recorded, which script is current, and its time budget.
     class CallScope {
        public:
+        // Engine-internal calls (no owning script) run in the active scope.
         CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms);
+        CallScope(ScriptEngine& engine, ScriptErrors* errors, int script_id, double budget_ms, const void* scope);
         ~CallScope();
         CallScope(const CallScope&) = delete;
         CallScope& operator=(const CallScope&) = delete;
@@ -77,6 +94,7 @@ class ScriptEngine {
         ScriptEngine& engine_;
         ScriptErrors* previous_errors_;
         int previous_id_;
+        const void* previous_scope_;
     };
     ScriptErrors* currentErrors() const {
         return current_errors_;
@@ -106,7 +124,16 @@ class ScriptEngine {
     int64_t deadline_ns_ = 0;
     std::string wallpaper_id_ = "default";
     std::string assets_dir_;
-    class ScriptSceneBackend* scene_backend_ = nullptr;
+    struct ScopeInfo {
+        int key = 0;
+        class ScriptSceneBackend* backend = nullptr;
+        std::string wallpaper_id;
+    };
+    std::map<const void*, ScopeInfo> scopes_;
+    int next_scope_key_ = 0;
+    const void* active_scope_ = nullptr;
+    const void* creation_scope_ = nullptr;
+    const void* current_scope_ = nullptr;
 
     struct ScriptEntry {
         SceneScript* script = nullptr;

@@ -59,6 +59,7 @@ struct SceneScript::Impl {
     bool disabled = false;
     uint32_t layer_id = 0;
     std::string property;
+    const void* scope = nullptr;
 
     JSContext* ctx() const {
         return ScriptEngine::instance().context();
@@ -74,7 +75,7 @@ struct SceneScript::Impl {
         JS_SetPropertyStr(c, global, "__lweCurrent", JS_DupValue(c, context_object));
         JS_FreeValue(c, global);
 
-        ScriptEngine::CallScope scope(ScriptEngine::instance(), &errors, id, budget_ms);
+        ScriptEngine::CallScope call_scope(ScriptEngine::instance(), &errors, id, budget_ms, scope);
         result = JS_Call(c, fn, JS_UNDEFINED, argc, argv);
         if (JS_IsException(result)) {
             scriptLogException(c, what);
@@ -199,10 +200,24 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
     JSContext* ctx = engine.context();
     if (!ctx) return false;
     impl_->id = engine.allocateScriptId();
+    impl_->scope = engine.creationScope();
     const std::string name = "script://" + std::to_string(impl_->id);
     const std::string module = buildModuleSource(source, impl_->id);
 
-    ScriptEngine::CallScope scope(engine, &impl_->errors, impl_->id, kLoadBudgetMs);
+    // Top-level code already runs as this script (thisLayer, shared, localStorage).
+    impl_->context_object = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, impl_->context_object, "id", JS_NewInt32(ctx, impl_->id));
+    JS_SetPropertyStr(ctx, impl_->context_object, "layerId", JS_NewUint32(ctx, impl_->layer_id));
+    JS_SetPropertyStr(ctx, impl_->context_object, "scopeKey", JS_NewInt32(ctx, engine.scopeKey(impl_->scope)));
+    JS_SetPropertyStr(ctx, impl_->context_object, "property",
+                      JS_NewStringLen(ctx, impl_->property.c_str(), impl_->property.size()));
+    {
+        JSValue current_global = JS_GetGlobalObject(ctx);
+        JS_SetPropertyStr(ctx, current_global, "__lweCurrent", JS_DupValue(ctx, impl_->context_object));
+        JS_FreeValue(ctx, current_global);
+    }
+
+    ScriptEngine::CallScope scope(engine, &impl_->errors, impl_->id, kLoadBudgetMs, impl_->scope);
     JSValue promise = JS_Eval(ctx, module.c_str(), module.size(), name.c_str(), JS_EVAL_TYPE_MODULE);
     if (JS_IsException(promise)) {
         scriptLogException(ctx, "compile");
@@ -254,11 +269,6 @@ bool SceneScript::load(const std::string& source, const std::string& script_prop
         impl_->init_fn = impl_->hook("init");
         impl_->update_fn = impl_->hook("update");
         engine.registerScript(this);
-        impl_->context_object = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, impl_->context_object, "id", JS_NewInt32(ctx, impl_->id));
-        JS_SetPropertyStr(ctx, impl_->context_object, "layerId", JS_NewUint32(ctx, impl_->layer_id));
-        JS_SetPropertyStr(ctx, impl_->context_object, "property",
-                          JS_NewStringLen(ctx, impl_->property.c_str(), impl_->property.size()));
     }
     JS_FreeValue(ctx, global);
     return loaded;
@@ -314,6 +324,10 @@ void SceneScript::setLayerId(uint32_t layer_id) {
 
 uint32_t SceneScript::layerId() const {
     return impl_ ? impl_->layer_id : 0;
+}
+
+const void* SceneScript::scope() const {
+    return impl_ ? impl_->scope : nullptr;
 }
 
 void SceneScript::setProperty(const std::string& property) {

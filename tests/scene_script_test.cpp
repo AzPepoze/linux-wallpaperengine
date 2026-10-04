@@ -6,6 +6,7 @@
 
 #include "test_util.h"
 #include "wallpaper/2d/script/script_engine.h"
+#include "wallpaper/2d/script/script_scene_backend.h"
 
 namespace {
 
@@ -33,6 +34,44 @@ export function update(value) {
     return head + '\n' + months[time.getMonth()] + ' ' + time.getDate() + ' ' + time.getFullYear();
 }
 )JS";
+
+class CountingScene : public ScriptSceneBackend {
+   public:
+    explicit CountingScene(size_t layers) : layers_(layers) {}
+    bool layerExists(uint32_t) override {
+        return false;
+    }
+    std::string layerName(uint32_t) override {
+        return "";
+    }
+    bool getVector(uint32_t, const std::string&, double[3], int&) override {
+        return false;
+    }
+    bool setVector(uint32_t, const std::string&, const double[3]) override {
+        return false;
+    }
+    bool getBool(uint32_t, const std::string&, bool&) override {
+        return false;
+    }
+    bool setBool(uint32_t, const std::string&, bool) override {
+        return false;
+    }
+    uint32_t parentOf(uint32_t) override {
+        return 0;
+    }
+    std::vector<uint32_t> childrenOf(uint32_t) override {
+        return {};
+    }
+    uint32_t findLayerByName(const std::string&) override {
+        return 0;
+    }
+    std::vector<uint32_t> allLayers() override {
+        return std::vector<uint32_t>(layers_, 1);
+    }
+
+   private:
+    size_t layers_;
+};
 
 bool updateText(SceneScript& script, std::string& out) {
     ScriptValue value = ScriptValue::makeString("");
@@ -104,6 +143,59 @@ export function update(value) { return seen; }
         CHECK(late.load(source, ""));
         engine.beginFrame(0.016, 1.0, 1920, 1080, 1920, 1080);  // delivers remembered events to new scripts
         CHECK(updateText(late, out) && out == "Sticky|9");
+    }
+
+    // Two scenes alive at once (a transition): each script sees its own scene and only the active scene gets events.
+    {
+        CountingScene first(2), second(5);
+        ScriptEngine& engine = ScriptEngine::instance();
+        const int first_scope = 0, second_scope = 0;
+        engine.registerScope(&first_scope, &first);
+        engine.registerScope(&second_scope, &second);
+        const char* source = R"JS(
+let clicks = 0;
+export function cursorClick() { clicks++; }
+export function update() { return thisScene.getLayerCount() + ':' + clicks; }
+)JS";
+        SceneScript a, b;
+        a.setLayerId(7);
+        b.setLayerId(7);  // object ids collide across wallpapers
+        engine.setCreationScope(&first_scope);
+        CHECK(a.load(source, ""));
+        engine.setCreationScope(&second_scope);
+        CHECK(b.load(source, ""));
+        std::string out;
+
+        engine.setActiveScope(&first_scope);
+        CHECK(engine.dispatchToLayer(7, "cursorClick", {}) == 1);
+        CHECK(updateText(a, out) && out == "2:1");
+        CHECK(updateText(b, out) && out == "5:0");  // own backend even though the other scene is active
+
+        engine.setActiveScope(&second_scope);
+        CHECK(engine.broadcast("cursorClick", {}) == 1);
+        CHECK(updateText(b, out) && out == "5:1");
+        CHECK(updateText(a, out) && out == "2:1");
+
+        // `shared` is separate per scene.
+        const char* shared_source = R"JS(
+export function init() { if (shared.mark === undefined) shared.mark = thisScene.getLayerCount(); }
+export function update() { return String(shared.mark); }
+)JS";
+        SceneScript sa, sb;
+        engine.setCreationScope(&first_scope);
+        CHECK(sa.load(shared_source, ""));
+        engine.setCreationScope(&second_scope);
+        CHECK(sb.load(shared_source, ""));
+        ScriptValue unused = ScriptValue::makeString("");
+        sa.initValue(unused);
+        sb.initValue(unused);
+        CHECK(updateText(sa, out) && out == "2");
+        CHECK(updateText(sb, out) && out == "5");
+
+        engine.unregisterScope(&first_scope);
+        engine.unregisterScope(&second_scope);
+        engine.setCreationScope(nullptr);
+        engine.setActiveScope(nullptr);
     }
 
     return test::finish("scene script tests");
