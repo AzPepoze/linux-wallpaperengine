@@ -29,6 +29,7 @@ The following dependencies are fetched by xmake and normally do not need to be i
 - miniaudio
 - cJSON
 - stb
+- QuickJS (SceneScript text objects)
 - Dear ImGui (debug builds only)
 - libwayland-client, `wayland-scanner` (optional, for the desktop layer backend)
 
@@ -80,6 +81,7 @@ sudo pacman -S --needed clang cppcheck
 | List available GPUs                                  | `bin/<mode>/linux-wallpaperengine --list-gpus`                         |
 | Select a GPU                                         | `bin/<mode>/linux-wallpaperengine --gpu <index-or-name> "/path"`      |
 | Extract a package                                    | `bin/<mode>/linux-wallpaperengine --extract-only "/path/to/scene.pkg"` |
+| Keep a video file in RAM instead of streaming it     | `bin/<mode>/linux-wallpaperengine --video-ram "/path/to/video.mp4"`   |
 | Clean build outputs                                  | `xmake clean`                                                         |
 | Validate formatting and static analysis              | `xmake check`                                                         |
 | Format source files                                  | `xmake format`                                                        |
@@ -92,12 +94,15 @@ Launcher-compatible options (the wallpaper path may come first or last):
 | `--assets-dir <path>` | Wallpaper Engine install root or its `assets/` directory |
 | `-f, --fps <n>` | Cap the frame rate |
 | `-s, --silent` | Disable audio |
+| `--video-ram` | Load video files into RAM (one shared copy). By default video is streamed from disk, so large 4K files stay out of memory. `LWE_VIDEO_RAM=1` does the same |
 | `--scaling <default\|fit\|fill\|stretch>` | `fill` crops to cover, `fit` letterboxes (`stretch` currently behaves like `fit`) |
 | `--clamp <mode>` | Accepted and ignored |
 | `-r, --screen-root <output>`, `--layer <background\|bottom\|top\|overlay>` | Draw as a `wlr-layer-shell` wallpaper surface on the named output (default layer `background`), anchored to all edges with pointer parallax. Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the output is not found, the app logs the reason and runs in a window |
 | `--layer-size <WxH>`, `--layer-anchor <edges>` | Debug builds only: use a small anchored rectangle (for example `320x180` and `top-left`) instead of the full output |
 
 Build outputs are written to `bin/<mode>/`.
+
+Release builds read `scene.pkg` in place from a memory map, so nothing is extracted and startup does not wait on disk writes. Debug builds, `--extract-only` and packages without a `scene.json` extract to `extracted/`. Compiled shaders are cached in `$XDG_CACHE_HOME/linux-wallpaperengine/` (default `~/.cache/linux-wallpaperengine/`) and reused across launches.
 
 ### Render Diagnostics (Debug Mode)
 
@@ -128,8 +133,8 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 - [x] Image layers
 - [-] Particle system layers
-- [ ] Text layers
-- [ ] Sound layers
+- [-] Text layers (alignment-corner anchoring and SceneScript-driven clock / date text)
+- [x] Sound layers
 - [ ] Light layers
 - [ ] 3D model layers
 - [-] Composition layers
@@ -206,7 +211,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 ### Bloom & HDR
 
 - [ ] Bloom
-- [ ] HDR rendering
+- [-] HDR rendering (float scene target with a soft highlight roll-off at present)
 - [ ] Ultra HDR
 - [ ] HDR bloom / threshold
 - [ ] Bloom iterations
@@ -267,23 +272,23 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 #### Advanced Particle Features
 
-- [x] Child particle systems
+- [x] Child particle systems (`static`, `eventfollow`, `eventspawn`, `eventdeath`, with origin / angles / scale, `maxcount` and `probability`)
 - [ ] Control points
 - [ ] Mouse-interactive particles
 - [ ] Audio-responsive particles
 - [-] Particle sprite-sheet animations
 - [ ] Particle instance modifiers
-- [-] Particle instance overrides
+- [-] Particle instance overrides (alpha, rate, size, color, count and speed)
 
 ### Timeline Animations
 
-- [ ] Timeline animations
-- [ ] Property animations
-- [ ] Keyframes
+- [-] Timeline animations
+- [-] Property animations (alpha and effect constants)
+- [x] Keyframes
 - [ ] Bézier interpolation
-- [ ] Loop mode
-- [ ] Mirror mode
-- [ ] Single mode
+- [x] Loop mode
+- [x] Mirror mode
+- [x] Single mode
 - [ ] Animation playback rate
 - [ ] Start paused
 - [ ] Named animations
@@ -419,11 +424,11 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 ### SceneScript
 
-- [ ] SceneScript runtime
-- [ ] ECMAScript-compatible scripting
-- [ ] Property scripts
+- [-] SceneScript runtime (embedded QuickJS, text objects only)
+- [-] ECMAScript-compatible scripting
+- [-] Property scripts (text objects)
 - [ ] `init()`
-- [ ] `update()`
+- [x] `update()`
 - [ ] Scene access
 - [ ] Layer access
 - [ ] Effect access
@@ -436,9 +441,9 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [ ] Sound control
 - [ ] Cursor events
 - [ ] Audio data
-- [ ] User properties
-- [ ] Time / date APIs
-- [ ] Media integration
+- [-] User properties (`scriptproperties` overrides)
+- [x] Time / date APIs
+- [-] Media integration (`mediaPropertiesChanged` hook; no live media data)
 - [ ] Local persistent storage
 - [ ] Shared script state
 - [ ] Dynamic 2D / 3D model creation
@@ -476,6 +481,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [-] Wallpaper Engine GLSL compatibility
 - [-] GLSL to SPIR-V translation
 - [x] Runtime Slang compilation
+- [x] Persistent SPIR-V cache (shared across launches, written atomically)
 - [-] Built-in shader uniforms
 - [-] Built-in texture bindings
 - [-] Shader combo system
@@ -504,6 +510,7 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 
 - [x] Wallpaper Engine project folders
 - [x] `scene.pkg` extraction
+- [x] Read `scene.pkg` in place from a memory map (release builds)
 - [x] Standalone package input
 - [x] `scene.json` parsing
 - [x] `project.json` video target detection
@@ -540,6 +547,8 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [x] Playback rate, volume and fit (fit / fill) from `project.json` properties
 - [x] Pause while the window is iconified or suspended
 - [x] Decode path logged at startup (zero-copy, CPU copy or software)
+- [x] Streams from disk by default; `--video-ram` keeps one shared copy in RAM
+- [x] Videos embedded in `.tex` files, including ones inside a mapped package
 - [-] Playback controls
 - [x] FFmpeg software decoding
 - [x] VA-API hardware decoding
@@ -571,4 +580,5 @@ Diagnostics can capture render-pipeline state including pass images, scene stage
 - [x] GPU selection
 - [x] Package extraction CLI
 - [x] Debug sandbox
+- [x] Debug scene tree keyboard navigation, wallpaper path copy and sound-layer mute toggle
 - [x] Debug render diagnostics
