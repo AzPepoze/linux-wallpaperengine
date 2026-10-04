@@ -76,6 +76,21 @@ bool parseString(const cJSON* raw, std::string& out) {
     return false;
 }
 
+// Reads `script` and `scriptproperties` from a property object; leaves `out` empty for plain values.
+void readScript(const cJSON* property, ScriptedValue& out) {
+    if (!cJSON_IsObject(property)) return;
+    const cJSON* script = cJSON_GetObjectItemCaseSensitive(property, "script");
+    if (!cJSON_IsString(script) || !script->valuestring || !script->valuestring[0]) return;
+    out.script = script->valuestring;
+    const cJSON* properties = cJSON_GetObjectItemCaseSensitive(property, "scriptproperties");
+    if (cJSON_IsObject(properties)) {
+        if (char* printed = cJSON_PrintUnformatted(properties)) {
+            out.properties_json = printed;
+            cJSON_free(printed);
+        }
+    }
+}
+
 SceneNodeDocument parseNode(const cJSON* object) {
     SceneNodeDocument out;
 
@@ -94,6 +109,9 @@ SceneNodeDocument parseNode(const cJSON* object) {
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "origin"), out.origin.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "scale"), out.scale.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "angles"), out.angles.data(), 3);
+    readScript(cJSON_GetObjectItemCaseSensitive(object, "origin"), out.origin_script);
+    readScript(cJSON_GetObjectItemCaseSensitive(object, "scale"), out.scale_script);
+    readScript(cJSON_GetObjectItemCaseSensitive(object, "angles"), out.angles_script);
 
     out.has_parallax_depth =
         parseVec(cJSON_GetObjectItemCaseSensitive(object, "parallaxDepth"), out.parallax_depth.data(), 2);
@@ -292,6 +310,8 @@ void parseImageFields(const cJSON* object, ImageObjectDocument& image) {
     readPlainString(object, "model", image.model);
     parseVec(member(object, "size"), image.size.data(), 2);
     parseVec(member(object, "color"), image.color.data(), 3);
+    readScript(member(object, "size"), image.size_script);
+    readScript(member(object, "color"), image.color_script);
     parseImageAlpha(member(object, "alpha"), image);
     const cJSON* color_blend_mode = member(object, "colorBlendMode");
     if (cJSON_IsNumber(color_blend_mode)) image.color_blend_mode = (int)color_blend_mode->valuedouble;
@@ -433,6 +453,7 @@ SceneObjectDocument parseObject(const cJSON* object) {
     doc.node = parseNode(object);
     readPlainString(object, "name", doc.name);
     doc.visible = parseBool(member(object, "visible"), true);
+    readScript(member(object, "visible"), doc.visible_script);
 
     parseImageFields(object, doc.image);
     parseParticleFields(object, doc.particle);

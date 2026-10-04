@@ -25,6 +25,15 @@ enum class SoundPlaybackMode {
     Random,
 };
 
+// A scene property driven by a SceneScript: the module source and the scene's `scriptproperties` overrides as JSON.
+struct ScriptedValue {
+    std::string script;
+    std::string properties_json;
+    bool empty() const {
+        return script.empty();
+    }
+};
+
 struct SceneNodeDocument {
     bool valid = false;
     uint32_t id = 0;
@@ -33,6 +42,7 @@ struct SceneNodeDocument {
     std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};
     std::array<float, 3> angles = {0.0f, 0.0f, 0.0f};
+    ScriptedValue origin_script, scale_script, angles_script;
     std::array<float, 2> parallax_depth = {0.0f, 0.0f};
     bool has_parallax_depth = false;
     bool propagate_to_children = true;
@@ -58,6 +68,7 @@ struct ImageObjectDocument {
     std::string model;
     std::array<float, 2> size = {0.0f, 0.0f};
     std::array<float, 3> color = {1.0f, 1.0f, 1.0f};
+    ScriptedValue color_script, size_script;
     float alpha = 1.0f;
     std::vector<AlphaKey> alpha_keys;
     float alpha_fps = 30.0f;
@@ -118,6 +129,7 @@ struct SceneObjectDocument {
     SceneNodeDocument node;
     std::string name;
     bool visible = true;
+    ScriptedValue visible_script;
 
     ImageObjectDocument image;
     ParticleObjectDocument particle;

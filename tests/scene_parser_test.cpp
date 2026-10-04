@@ -1,10 +1,11 @@
+#include "wallpaper/2d/parser/scene_parser.h"
+
 #include <unistd.h>
 
 #include <cstdio>
 #include <string>
 
 #include "test_util.h"
-#include "wallpaper/2d/parser/scene_parser.h"
 
 using namespace wallpaper_engine;
 
@@ -27,6 +28,22 @@ const char* kScene = R"JSON({
      "startsilent": true, "mintime": 2, "maxtime": 9},
     {"id": 5, "name": "Single", "sound": "c.ogg", "playbackmode": "loop"},
     {"id": 6, "name": "Nothing"}
+  ]
+})JSON";
+
+const char* kScriptedScene = R"JSON({
+  "camera": {"center": "0 0 0", "eye": "0 0 1", "up": "0 1 0"},
+  "objects": [
+    {"id": 1, "name": "Scripted", "image": "models/a.json",
+     "origin": {"script": "export function update(v) {}", "scriptproperties": {"k": {"user": "x", "value": 1}}, "value": "1 2 3"},
+     "scale": {"script": "export function update(v) {}", "scriptproperties": {"k": {"user": "x", "value": 1}}, "value": "4 5 6"},
+     "angles": {"script": "export function update(v) {}", "scriptproperties": {"k": {"user": "x", "value": 1}}, "value": "7 8 9"},
+     "visible": {"script": "export function update(v) {}", "scriptproperties": {"k": {"user": "x", "value": 1}}, "value": false},
+     "color": {"script": "export function update(v) {}", "scriptproperties": {"k": {"user": "x", "value": 1}}, "value": "0.1 0.2 0.3"},
+     "size": {"script": "export function update(v) {}", "scriptproperties": {"k": {"user": "x", "value": 1}}, "value": "10 20"}},
+    {"id": 2, "name": "Plain", "image": "models/b.json",
+     "origin": "1 1 1", "scale": "2 2 2", "angles": "0 0 0", "visible": true,
+     "color": "1 1 1", "size": "5 5"}
   ]
 })JSON";
 
@@ -77,13 +94,47 @@ void testObjects() {
     test::expect("sound", doc.objects[3].kind == SceneObjectKind::Sound, "sound kind");
     test::expect("sound", music.sounds.size() == 2 && music.playback_mode == SoundPlaybackMode::Random,
                  "sound list and mode");
-    test::expect("sound", music.volume == 0.5f && music.start_silent && music.min_time == 2.0f && music.max_time == 9.0f,
+    test::expect("sound",
+                 music.volume == 0.5f && music.start_silent && music.min_time == 2.0f && music.max_time == 9.0f,
                  "sound timing");
     const SoundObjectDocument& single = doc.objects[4].sound;
     test::expect("sound", single.sounds.size() == 1 && single.sounds[0] == "c.ogg", "a lone sound string");
     test::expect("sound", single.playback_mode == SoundPlaybackMode::Loop, "loop mode");
 
     test::expect("unknown", doc.objects[5].kind == SceneObjectKind::Unknown, "an object with no payload is unknown");
+}
+
+void testScriptedValues() {
+    const SceneDocument doc = parseText(kScriptedScene);
+    test::expect("scripted", doc.objects.size() == 2, "both objects are kept");
+    if (doc.objects.size() != 2) return;
+
+    const SceneObjectDocument& scripted = doc.objects[0];
+    test::expect("scripted", scripted.node.origin[2] == 3.0f, "scripted origin keeps its value");
+    test::expect("scripted", scripted.node.scale[0] == 4.0f, "scripted scale keeps its value");
+    test::expect("scripted", scripted.node.angles[1] == 8.0f, "scripted angles keep their value");
+    test::expect("scripted", !scripted.visible, "scripted visible keeps its value");
+    test::expect("scripted", scripted.image.color[1] == 0.2f, "scripted color keeps its value");
+    test::expect("scripted", scripted.image.size[0] == 10.0f, "scripted size keeps its value");
+
+    test::expect(
+        "scripted",
+        !scripted.node.origin_script.empty() && scripted.node.origin_script.script.find("update") != std::string::npos,
+        "origin script captured");
+    test::expect("scripted", scripted.node.origin_script.properties_json.find("k") != std::string::npos,
+                 "origin script properties captured");
+    test::expect("scripted", !scripted.node.scale_script.empty(), "scale script captured");
+    test::expect("scripted", !scripted.node.angles_script.empty(), "angles script captured");
+    test::expect("scripted", !scripted.visible_script.empty(), "visible script captured");
+    test::expect("scripted", !scripted.image.color_script.empty(), "color script captured");
+    test::expect("scripted", !scripted.image.size_script.empty(), "size script captured");
+
+    const SceneObjectDocument& plain = doc.objects[1];
+    test::expect("scripted",
+                 plain.node.origin_script.empty() && plain.node.scale_script.empty() &&
+                     plain.node.angles_script.empty() && plain.visible_script.empty() &&
+                     plain.image.color_script.empty() && plain.image.size_script.empty(),
+                 "plain values have no scripts");
 }
 
 void testMissingFile() {
@@ -94,6 +145,7 @@ void testMissingFile() {
 
 int main() {
     testObjects();
+    testScriptedValues();
     testMissingFile();
     return test::finish("scene parser tests");
 }
