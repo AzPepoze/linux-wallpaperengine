@@ -93,6 +93,7 @@ target("linux-wallpaperengine")
         set_symbols("hidden")
         set_optimize("fastest")
         set_strip("all")
+        set_policy("build.optimization.lto", true)
     end
 
 -- Optional out-of-process QtWebEngine renderer for web wallpapers. Kept in a
