@@ -40,6 +40,8 @@ struct WaylandLayerSurface::Impl {
     bool closed = false;
     bool resized = false;
     PointerHandler pointer_handler;
+    ButtonHandler button_handler;
+    EnterLeaveHandler enter_leave_handler;
 
     ~Impl();
     bool connect();
@@ -48,6 +50,8 @@ struct WaylandLayerSurface::Impl {
     void applyScale();
     void onConfigure(uint32_t serial, uint32_t w, uint32_t h);
     void onPointerMotion(wl_fixed_t x, wl_fixed_t y);
+    void onPointerButton(uint32_t button, uint32_t state);
+    void onPointerEnterLeave(bool entered);
     void updateSeat(uint32_t capabilities);
 
     static void registryGlobal(void* data, wl_registry* registry, uint32_t name, const char* interface,
@@ -63,9 +67,9 @@ struct WaylandLayerSurface::Impl {
     static void seatCapabilities(void* data, wl_seat*, uint32_t capabilities);
     static void seatName(void*, wl_seat*, const char*) {}
     static void pointerEnter(void* data, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t x, wl_fixed_t y);
-    static void pointerLeave(void*, wl_pointer*, uint32_t, wl_surface*) {}
+    static void pointerLeave(void* data, wl_pointer*, uint32_t, wl_surface*);
     static void pointerMotion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y);
-    static void pointerButton(void*, wl_pointer*, uint32_t, uint32_t, uint32_t, uint32_t) {}
+    static void pointerButton(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state);
     static void pointerAxis(void*, wl_pointer*, uint32_t, uint32_t, wl_fixed_t) {}
     static void pointerFrame(void*, wl_pointer*) {}
     static void pointerAxisSource(void*, wl_pointer*, uint32_t) {}
@@ -142,11 +146,22 @@ void WaylandLayerSurface::Impl::seatCapabilities(void* data, wl_seat*, uint32_t 
 
 void WaylandLayerSurface::Impl::pointerEnter(void* data, wl_pointer*, uint32_t, wl_surface*, wl_fixed_t x,
                                              wl_fixed_t y) {
-    static_cast<Impl*>(data)->onPointerMotion(x, y);
+    auto* self = static_cast<Impl*>(data);
+    self->onPointerEnterLeave(true);
+    self->onPointerMotion(x, y);
+}
+
+void WaylandLayerSurface::Impl::pointerLeave(void* data, wl_pointer*, uint32_t, wl_surface*) {
+    static_cast<Impl*>(data)->onPointerEnterLeave(false);
 }
 
 void WaylandLayerSurface::Impl::pointerMotion(void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
     static_cast<Impl*>(data)->onPointerMotion(x, y);
+}
+
+void WaylandLayerSurface::Impl::pointerButton(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button,
+                                              uint32_t state) {
+    static_cast<Impl*>(data)->onPointerButton(button, state);
 }
 
 void WaylandLayerSurface::Impl::layerConfigure(void* data, zwlr_layer_surface_v1*, uint32_t serial, uint32_t w,
@@ -173,6 +188,14 @@ void WaylandLayerSurface::Impl::onPointerMotion(wl_fixed_t x, wl_fixed_t y) {
     if (!pointer_handler) return;
     pointer_handler(static_cast<float>(wl_fixed_to_double(x)) * scale,
                     static_cast<float>(wl_fixed_to_double(y)) * scale);
+}
+
+void WaylandLayerSurface::Impl::onPointerButton(uint32_t button, uint32_t state) {
+    if (button_handler) button_handler(button, state == WL_POINTER_BUTTON_STATE_PRESSED);
+}
+
+void WaylandLayerSurface::Impl::onPointerEnterLeave(bool entered) {
+    if (enter_leave_handler) enter_leave_handler(entered);
 }
 
 void WaylandLayerSurface::Impl::onConfigure(uint32_t serial, uint32_t w, uint32_t h) {
@@ -307,6 +330,14 @@ bool WaylandLayerSurface::takeResize() {
 
 void WaylandLayerSurface::setPointerHandler(PointerHandler handler) {
     impl_->pointer_handler = std::move(handler);
+}
+
+void WaylandLayerSurface::setButtonHandler(ButtonHandler handler) {
+    impl_->button_handler = std::move(handler);
+}
+
+void WaylandLayerSurface::setEnterLeaveHandler(EnterLeaveHandler handler) {
+    impl_->enter_leave_handler = std::move(handler);
 }
 
 bool WaylandLayerSurface::pump() {

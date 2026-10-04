@@ -8,6 +8,7 @@
 #include "sokol_glue.h"
 #include "sokol_time.h"
 #include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/input/pointer_input.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/2d/script/script_engine.h"
 
@@ -34,6 +35,13 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     }
 #endif
     if (runtime) runtime->updateViewport();
+
+    if (runtime && ctx.input.mouse_position_valid) {
+        const WorldPoint world = screenToWorld(ctx.input.mouse_x, ctx.input.mouse_y, ctx.scene.offset_x,
+                                               ctx.scene.offset_y, ctx.scene.render_scale, ctx.scene.scene_h);
+        ctx.input.mouse_world_x = world.x;
+        ctx.input.mouse_world_y = world.y;
+    }
 
     // Inspector edits are intentionally runtime-only. Rebuild the clear pass
     // every frame so direct and offscreen composition see the same live state.
@@ -143,6 +151,16 @@ void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& m
         ctx.input.mouse_x = e->mouse_x;
         ctx.input.mouse_y = e->mouse_y;
         ctx.input.mouse_position_valid = true;
+    } else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN || e->type == SAPP_EVENTTYPE_MOUSE_UP) {
+        if (e->mouse_button <= SAPP_MOUSEBUTTON_MIDDLE) {
+            const uint8_t bit = static_cast<uint8_t>(1u << e->mouse_button);
+            if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN)
+                ctx.input.buttons |= bit;
+            else
+                ctx.input.buttons &= static_cast<uint8_t>(~bit);
+        }
+    } else if (e->type == SAPP_EVENTTYPE_MOUSE_LEAVE) {
+        ctx.input.mouse_position_valid = false;
     } else if (e->type == SAPP_EVENTTYPE_QUIT_REQUESTED) {
         LOG_I("[APP] Received quit request from window/system");
     } else if (e->type == SAPP_EVENTTYPE_RESIZED) {

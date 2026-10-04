@@ -156,6 +156,8 @@ add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
 
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
+add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/2d/input/pointer_input.cpp"})
+
 add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
                                 "src/wallpaper/2d/script/script_engine.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})

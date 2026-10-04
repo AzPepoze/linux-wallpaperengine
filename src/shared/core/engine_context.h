@@ -41,7 +41,15 @@ struct profiler_stats_t {
 struct InputState {
     float mouse_x = 0.0f;
     float mouse_y = 0.0f;
+    float mouse_world_x = 0.0f;
+    float mouse_world_y = 0.0f;
+    // bit0 left, bit1 right, bit2 middle.
+    uint8_t buttons = 0;
     bool mouse_position_valid = false;
+
+    bool left_down() const {
+        return (buttons & 0x1u) != 0;
+    }
 };
 
 struct ParallaxState {

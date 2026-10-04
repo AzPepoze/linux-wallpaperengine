@@ -14,6 +14,10 @@
 
 namespace {
 constexpr double kMaxFrameSeconds = 0.1;
+// linux/input-event-codes.h BTN_* values delivered by wl_pointer.button.
+constexpr uint32_t kBtnLeft = 0x110;
+constexpr uint32_t kBtnRight = 0x111;
+constexpr uint32_t kBtnMiddle = 0x112;
 
 double nowSeconds() {
     timespec ts;
@@ -45,6 +49,8 @@ struct LayerApp::Impl : SurfaceProvider {
     std::atomic<bool> quit{false};
     double last_frame = 0.0;
     double frame_seconds = 1.0 / 60.0;
+    float last_pointer_x = 0.0f;
+    float last_pointer_y = 0.0f;
 
     int width() const override {
         return wayland->pixelWidth();
@@ -70,6 +76,8 @@ struct LayerApp::Impl : SurfaceProvider {
 
     void trackFrameTime();
     void forwardPointer(float x, float y, void (*event)(const sapp_event*));
+    void forwardPointerButton(uint32_t button, bool pressed, void (*event)(const sapp_event*));
+    void forwardPointerEnterLeave(bool entered, void (*event)(const sapp_event*));
 };
 
 void LayerApp::Impl::trackFrameTime() {
@@ -79,10 +87,43 @@ void LayerApp::Impl::trackFrameTime() {
 }
 
 void LayerApp::Impl::forwardPointer(float x, float y, void (*event)(const sapp_event*)) {
+    last_pointer_x = x;
+    last_pointer_y = y;
     sapp_event e = {};
     e.type = SAPP_EVENTTYPE_MOUSE_MOVE;
     e.mouse_x = x;
     e.mouse_y = y;
+    event(&e);
+}
+
+void LayerApp::Impl::forwardPointerButton(uint32_t button, bool pressed, void (*event)(const sapp_event*)) {
+    sapp_mousebutton code = SAPP_MOUSEBUTTON_INVALID;
+    switch (button) {
+        case kBtnLeft:
+            code = SAPP_MOUSEBUTTON_LEFT;
+            break;
+        case kBtnRight:
+            code = SAPP_MOUSEBUTTON_RIGHT;
+            break;
+        case kBtnMiddle:
+            code = SAPP_MOUSEBUTTON_MIDDLE;
+            break;
+        default:
+            return;
+    }
+    sapp_event e = {};
+    e.type = pressed ? SAPP_EVENTTYPE_MOUSE_DOWN : SAPP_EVENTTYPE_MOUSE_UP;
+    e.mouse_button = code;
+    e.mouse_x = last_pointer_x;
+    e.mouse_y = last_pointer_y;
+    event(&e);
+}
+
+void LayerApp::Impl::forwardPointerEnterLeave(bool entered, void (*event)(const sapp_event*)) {
+    sapp_event e = {};
+    e.type = entered ? SAPP_EVENTTYPE_MOUSE_ENTER : SAPP_EVENTTYPE_MOUSE_LEAVE;
+    e.mouse_x = last_pointer_x;
+    e.mouse_y = last_pointer_y;
     event(&e);
 }
 
@@ -112,6 +153,9 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
     Impl& app = *impl_;
     surface::setProvider(&app);
     app.wayland->setPointerHandler([&](float x, float y) { app.forwardPointer(x, y, callbacks.event); });
+    app.wayland->setButtonHandler(
+        [&](uint32_t button, bool pressed) { app.forwardPointerButton(button, pressed, callbacks.event); });
+    app.wayland->setEnterLeaveHandler([&](bool entered) { app.forwardPointerEnterLeave(entered, callbacks.event); });
 
     callbacks.init();
     while (!app.quit.load(std::memory_order_relaxed)) {

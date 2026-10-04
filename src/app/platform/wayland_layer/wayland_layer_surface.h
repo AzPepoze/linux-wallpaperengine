@@ -26,6 +26,9 @@ class WaylandLayerSurface {
    public:
     struct Impl;
     using PointerHandler = std::function<void(float x, float y)>;
+    // Reports the raw linux evdev button code and whether it went down.
+    using ButtonHandler = std::function<void(uint32_t button, bool pressed)>;
+    using EnterLeaveHandler = std::function<void(bool entered)>;
 
     static std::unique_ptr<WaylandLayerSurface> create(const LayerSurfaceConfig& config);
     ~WaylandLayerSurface();
@@ -40,6 +43,8 @@ class WaylandLayerSurface {
     bool closed() const;
     bool takeResize();
     void setPointerHandler(PointerHandler handler);
+    void setButtonHandler(ButtonHandler handler);
+    void setEnterLeaveHandler(EnterLeaveHandler handler);
 
     // Reads and dispatches pending events without blocking. False once the connection is broken.
     bool pump();
