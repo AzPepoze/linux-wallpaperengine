@@ -41,6 +41,9 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     ctx.pass_action.colors[0].clear_value = {ctx.scene.general.clear_color[0], ctx.scene.general.clear_color[1],
                                              ctx.scene.general.clear_color[2], ctx.scene.general.clear_color[3]};
     float dt = (float)surface::frameDuration();
+#if DEBUG_BUILD
+    if (RenderDiagnostics::instance().getConfig().fixed_step) dt = 1.0f / 60.0f;
+#endif
     ctx.time += dt;
     AudioEngine::instance().update(dt);
 

@@ -87,6 +87,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.disable_bloom = hasAnySpelling("disable-bloom");
     opts.diagnostics.final_only = hasDashedFlag("diagnose-final-only");
     opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
+    opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
     const std::vector<std::string> args(argv, argv + argc);
     opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled ||

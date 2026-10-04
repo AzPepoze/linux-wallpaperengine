@@ -49,6 +49,8 @@ void RenderDiagnostics::init(const DiagnosticOptions& options) {
     config.target_frame = 100;
     config.capture_pass_images = true;
     if (!options.enabled) return;
+    config.fixed_step = options.deterministic;
+    if (options.deterministic) srand(1);
 
     size_t start = 0;
     const std::string& list = options.disable_effects;

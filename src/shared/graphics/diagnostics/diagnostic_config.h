@@ -13,6 +13,8 @@ struct DiagnosticOptions {
     bool disable_bloom = false;
     bool final_only = false;
     bool exit_after_diagnose = false;
+    // Fixed 1/60 s frame step and a seeded random generator, so a capture frame is identical from run to run.
+    bool deterministic = false;
 };
 
 struct DiagnosticConfig {
@@ -21,6 +23,7 @@ struct DiagnosticConfig {
     uint64_t target_frame = 100;
     bool has_deterministic_time = false;
     float deterministic_time = 0.0f;
+    bool fixed_step = false;
 
     int isolate_effect_index = -1;
     std::string isolate_effect_path;
