@@ -92,7 +92,7 @@ Launcher-compatible options (the wallpaper path may come first or last):
 | Option | Effect |
 | --- | --- |
 | `--assets-dir <path>` | Wallpaper Engine install root or its `assets/` directory |
-| `-f, --fps <n>` | Cap the frame rate |
+| `-f, --fps <n>` | Cap the frame rate (default 60; `0` renders at the display rate) |
 | `-s, --silent` | Disable audio |
 | `--video-ram` | Load video files into RAM (one shared copy). By default video is streamed from disk, so large 4K files stay out of memory. `LWE_VIDEO_RAM=1` does the same |
 | `--scaling <default\|fit\|fill\|stretch>` | `fill` crops to cover, `fit` letterboxes (`stretch` currently behaves like `fit`) |
