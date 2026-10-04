@@ -191,13 +191,14 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
   - Light Shafts, God Rays, Shine
   - Depth Parallax
   - VHS, Skew, Film Grain, Perspective, Reflection, Chromatic Aberration, Twirl, Spin, Clouds, Fisheye, Local Contrast, Refraction, Swing, Shimmer, Nitro, Edge Detection, Transform
-  - Known failing: some Pulse variants, Cloud Motion, Cursor Ripple, Water Caustics, and Workshop effects that use GLSL constructs Slang rejects (audio bars, hue shift, auto sway, clipping mask, pixelate and others)
+  - Known failing: some Pulse variants, Cloud Motion, Water Caustics, and Workshop effects that use GLSL constructs Slang rejects (audio bars, hue shift, auto sway, clipping mask, pixelate and others)
   - Untested: Radial Blur, X-Ray, Glitter, Fire, Advanced Fluid Simulation
 - [-] Shader pipeline
   - Works
     - Wallpaper Engine GLSL preprocessing with `#include` from the install's `shaders/`
     - Rewrites for Slang: scalar/vector mismatches, out-of-range swizzles, narrowing conversions, vector width mismatches, `mix` differences, HLSL-style initializers
     - Runtime Slang compilation to SPIR-V with a persistent on-disk cache (under `$XDG_CACHE_HOME`)
+    - Pointer uniforms `g_PointerPosition`, `g_PointerPositionLast` and `g_PointerState` (normalized to the output surface), which Cursor Ripple needs; its projection back into layer space assumes the layer fills the screen
     - Built-in uniforms: time, texture resolutions, `g_ParallaxPosition`, effect texture projection matrices, pointer position, ambient and skylight colors, screen size, texel size, model-view-projection, audio spectrum (16/32/64 bands)
     - Texture bindings `g_Texture0..N`
   - Missing

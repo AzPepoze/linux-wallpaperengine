@@ -186,9 +186,9 @@ void ParticleSystem::draw(EngineContext& ctx) {
             builtins.texel_size[1] = ctx.renderer.view_height > 0.0f ? 1.0f / ctx.renderer.view_height : 0.0f;
             builtins.pointer_position[0] = 0.5f;
             builtins.pointer_position[1] = 0.5f;
-            if (ctx.input.mouse_position_valid && ctx.renderer.view_width > 0.0f && ctx.renderer.view_height > 0.0f) {
-                builtins.pointer_position[0] = std::clamp(ctx.input.mouse_x / ctx.renderer.view_width, 0.0f, 1.0f);
-                builtins.pointer_position[1] = std::clamp(ctx.input.mouse_y / ctx.renderer.view_height, 0.0f, 1.0f);
+            if (ctx.input.mouse_position_valid) {
+                builtins.pointer_position[0] = g_shader_pointer.x;
+                builtins.pointer_position[1] = g_shader_pointer.y;
             }
             mat4x4_identity(builtins.effect_texture_projection);
             mat4x4_identity(builtins.effect_texture_projection_inverse);

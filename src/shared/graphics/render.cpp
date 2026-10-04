@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "pointer_state.h"
 #include "render_internal.h"
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
@@ -52,9 +53,9 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.texel_size[1] = r->view_height > 0.0f ? 1.0f / r->view_height : 0.0f;
         builtin.pointer_position[0] = 0.5f;
         builtin.pointer_position[1] = 0.5f;
-        if (ctx.input.mouse_position_valid && r->view_width > 0.0f && r->view_height > 0.0f) {
-            builtin.pointer_position[0] = std::max(0.0f, std::min(1.0f, ctx.input.mouse_x / r->view_width));
-            builtin.pointer_position[1] = std::max(0.0f, std::min(1.0f, ctx.input.mouse_y / r->view_height));
+        if (ctx.input.mouse_position_valid) {
+            builtin.pointer_position[0] = g_shader_pointer.x;
+            builtin.pointer_position[1] = g_shader_pointer.y;
         }
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);

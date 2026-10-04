@@ -13,6 +13,7 @@
 #include "effect_geometry.h"
 #include "pass_textures.h"
 #include "shared/graphics/gfx_resource.h"
+#include "shared/graphics/pointer_state.h"
 #include "shared/graphics/render.h"
 #include "shared/graphics/shader/shader_compiler.h"
 #include "sokol_gfx.h"
@@ -82,7 +83,19 @@ class ShaderPass {
 
             std::vector<float> packed(block.uniform_names.size() * 4, 0.0f);
             for (size_t i = 0; i < block.uniform_names.size(); ++i) {
-                auto value = uniforms.find(block.uniform_names[i]);
+                const std::string& uniform_name = block.uniform_names[i];
+                if (uniform_name == "g_PointerPositionLast") {
+                    packed[i * 4] = g_shader_pointer.last_x;
+                    packed[i * 4 + 1] = g_shader_pointer.last_y;
+                    continue;
+                }
+                if (uniform_name == "g_PointerState") {
+                    packed[i * 4] = g_shader_pointer.x;
+                    packed[i * 4 + 1] = g_shader_pointer.y;
+                    packed[i * 4 + 2] = g_shader_pointer.pressed;
+                    continue;
+                }
+                auto value = uniforms.find(uniform_name);
                 if (value == uniforms.end()) continue;
                 for (size_t component = 0; component < value->second.size() && component < 4; ++component) {
                     packed[i * 4 + component] = value->second[component];

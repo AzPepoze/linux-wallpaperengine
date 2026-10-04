@@ -1,9 +1,12 @@
 #include "app/frame_loop.h"
 
+#include <algorithm>
+
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
+#include "shared/graphics/pointer_state.h"
 #include "shared/media/media_thumbnail_texture.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
@@ -44,6 +47,14 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
         ctx.input.mouse_world_x = world.x;
         ctx.input.mouse_world_y = world.y;
     }
+
+    g_shader_pointer.last_x = g_shader_pointer.x;
+    g_shader_pointer.last_y = g_shader_pointer.y;
+    if (ctx.input.mouse_position_valid && surface::width() > 0 && surface::height() > 0) {
+        g_shader_pointer.x = std::clamp(ctx.input.mouse_x / (float)surface::width(), 0.0f, 1.0f);
+        g_shader_pointer.y = std::clamp(ctx.input.mouse_y / (float)surface::height(), 0.0f, 1.0f);
+    }
+    g_shader_pointer.pressed = ctx.input.left_down() ? 1.0f : 0.0f;
 
     // Inspector edits are intentionally runtime-only. Rebuild the clear pass
     // every frame so direct and offscreen composition see the same live state.
