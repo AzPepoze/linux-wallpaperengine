@@ -58,6 +58,12 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             builtin.pointer_position[0] = g_shader_pointer.x;
             builtin.pointer_position[1] = g_shader_pointer.y;
         }
+        builtin.pointer_position_last[0] = g_shader_pointer.last_x;
+        builtin.pointer_position_last[1] = g_shader_pointer.last_y;
+        builtin.pointer_state[0] = g_shader_pointer.x;
+        builtin.pointer_state[1] = g_shader_pointer.y;
+        builtin.pointer_state[2] = g_shader_pointer.pressed;
+        builtin.pointer_state[3] = 0.0f;
         mat4x4_identity(builtin.effect_texture_projection);
         mat4x4_identity(builtin.effect_texture_projection_inverse);
         builtin.light_ambient_color[0] = ctx.scene.general.ambient_color[0];

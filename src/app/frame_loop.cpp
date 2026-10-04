@@ -48,11 +48,25 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
         ctx.input.mouse_world_y = world.y;
     }
 
-    g_shader_pointer.last_x = g_shader_pointer.x;
-    g_shader_pointer.last_y = g_shader_pointer.y;
     if (ctx.input.mouse_position_valid && surface::width() > 0 && surface::height() > 0) {
-        g_shader_pointer.x = std::clamp(ctx.input.mouse_x / (float)surface::width(), 0.0f, 1.0f);
-        g_shader_pointer.y = std::clamp(ctx.input.mouse_y / (float)surface::height(), 0.0f, 1.0f);
+        const float nx = std::clamp(ctx.input.mouse_x / (float)surface::width(), 0.0f, 1.0f);
+        const float ny = std::clamp(ctx.input.mouse_y / (float)surface::height(), 0.0f, 1.0f);
+        // On the first frame (or after the pointer re-enters) start "last" at the current spot so the
+        // ripple's pointer-ray does not sweep in from a stale origin.
+        if (g_shader_pointer.valid) {
+            g_shader_pointer.last_x = g_shader_pointer.x;
+            g_shader_pointer.last_y = g_shader_pointer.y;
+        } else {
+            g_shader_pointer.last_x = nx;
+            g_shader_pointer.last_y = ny;
+        }
+        g_shader_pointer.x = nx;
+        g_shader_pointer.y = ny;
+        g_shader_pointer.valid = true;
+    } else {
+        g_shader_pointer.last_x = g_shader_pointer.x;
+        g_shader_pointer.last_y = g_shader_pointer.y;
+        g_shader_pointer.valid = false;
     }
     g_shader_pointer.pressed = ctx.input.left_down() ? 1.0f : 0.0f;
 

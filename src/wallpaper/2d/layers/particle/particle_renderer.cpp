@@ -191,6 +191,12 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 builtins.pointer_position[0] = g_shader_pointer.x;
                 builtins.pointer_position[1] = g_shader_pointer.y;
             }
+            builtins.pointer_position_last[0] = g_shader_pointer.last_x;
+            builtins.pointer_position_last[1] = g_shader_pointer.last_y;
+            builtins.pointer_state[0] = g_shader_pointer.x;
+            builtins.pointer_state[1] = g_shader_pointer.y;
+            builtins.pointer_state[2] = g_shader_pointer.pressed;
+            builtins.pointer_state[3] = 0.0f;
             mat4x4_identity(builtins.effect_texture_projection);
             mat4x4_identity(builtins.effect_texture_projection_inverse);
             builtins.light_ambient_color[0] = ctx.scene.general.ambient_color[0];

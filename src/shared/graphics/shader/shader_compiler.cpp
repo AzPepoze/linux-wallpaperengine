@@ -142,6 +142,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                    "g_EffectTextureProjectionMatrix",
                                    "g_EffectTextureProjectionMatrixInverse",
                                    "g_PointerPosition",
+                                   "g_PointerPositionLast",
+                                   "g_PointerState",
                                    "g_LightAmbientColor",
                                    "g_LightSkylightColor"};
     const sg_uniform_type builtin_types[] = {SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
@@ -149,7 +151,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                              SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_FLOAT2,
-                                             SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4};
+                                             SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
+                                             SG_UNIFORMTYPE_FLOAT4};
     constexpr int kBuiltinMemberCount = sizeof(builtin_names) / sizeof(builtin_names[0]);
     for (int i = 0; i < kBuiltinMemberCount; ++i) {
         shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
