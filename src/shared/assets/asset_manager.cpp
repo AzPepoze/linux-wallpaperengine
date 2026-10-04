@@ -387,6 +387,11 @@ GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::str
             cJSON* tex_node = cJSON_GetArrayItem(textures, 0);
             if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {
                 const std::string texture_ref = tex_node->valuestring;
+                // Render targets (`_rt_*`) are bound by the effect chain at draw time, not loaded as textures.
+                if (texture_ref.rfind("_rt_", 0) == 0 || texture_ref.find("/_rt_") != std::string::npos) {
+                    cJSON_Delete(mat_json);
+                    return img;
+                }
                 const bool material_rooted = texture_ref.rfind("materials/", 0) == 0 ||
                                              texture_ref.rfind("assets/", 0) == 0 || texture_ref[0] == '/';
                 if (material_rooted) img = resolveTextureInternal(texture_ref.c_str(), out_path, 0, false);

@@ -126,28 +126,21 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
                                  ? ctx.debug.selected_node_id == node.id
                                  : (layer_index >= 0 && ctx.debug.selected_object == layer_index);
     const bool expanded = has_children && g_expanded_nodes.count(node.id) > 0;
-    std::string node_name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
+    std::string type = "Node";
     if (layer_index >= 0 && layer_index < (int)ctx.scene.layers.size()) {
         const Layer* layer = ctx.scene.layers[layer_index];
         if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
-            if (il->is_fullscreen)
-                node_name += " [FS PostProcess]";
-            else if (il->solid_layer)
-                node_name += " [Solid]";
-            else
-                node_name += " [Image]";
-
-            if (il->color_blend_mode != 0) {
-                node_name += " (Blend " + std::to_string(il->color_blend_mode) + ")";
-            }
+            type = il->is_fullscreen ? "Image/Post" : (il->solid_layer ? "Image/Solid" : "Image");
         } else if (dynamic_cast<const ParticleLayer*>(layer)) {
-            node_name += " [Particle]";
+            type = "Particle";
         }
-        if (node.parallax_depth[0] != 0.0f || node.parallax_depth[1] != 0.0f) {
-            char p_buf[64];
-            snprintf(p_buf, sizeof(p_buf), " [P:%.1f,%.1f]", node.parallax_depth[0], node.parallax_depth[1]);
-            node_name += p_buf;
-        }
+    }
+    std::string node_name =
+        "[" + type + "] " + (node.name.empty() ? "Node " + std::to_string(node.id) : node.name);
+    if (node.parallax_depth[0] != 0.0f || node.parallax_depth[1] != 0.0f) {
+        char p_buf[64];
+        snprintf(p_buf, sizeof(p_buf), " [P:%.1f,%.1f]", node.parallax_depth[0], node.parallax_depth[1]);
+        node_name += p_buf;
     }
     ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;

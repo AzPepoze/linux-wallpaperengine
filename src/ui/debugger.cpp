@@ -5,7 +5,10 @@
 #if DEBUG_BUILD
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -106,11 +109,80 @@ void selectFirstPreview(EngineContext& ctx) {
 
 }  // namespace
 
+namespace {
+// Standard font locations across distributions; the scan is skipped for directories that do not exist.
+std::vector<std::string> fontDirectories() {
+    std::vector<std::string> dirs = {"/usr/share/fonts", "/usr/local/share/fonts", "/run/host/fonts"};
+    if (const char* home = getenv("HOME")) {
+        dirs.push_back(std::string(home) + "/.local/share/fonts");
+        dirs.push_back(std::string(home) + "/.fonts");
+    }
+    return dirs;
+}
+
+// First installed font whose file name contains any of `needles` (case-insensitive), or "".
+std::string findFontFile(const std::vector<std::string>& needles) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    for (const std::string& dir : fontDirectories()) {
+        if (!fs::is_directory(dir, ec)) continue;
+        for (fs::recursive_directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec), end;
+             it != end; it.increment(ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!it->is_regular_file(ec)) continue;
+            std::string extension = it->path().extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](unsigned char c) { return (char)std::tolower(c); });
+            if (extension != ".ttf" && extension != ".otf" && extension != ".ttc") continue;
+            std::string name = it->path().filename().string();
+            std::transform(name.begin(), name.end(), name.begin(),
+                           [](unsigned char c) { return (char)std::tolower(c); });
+            for (const std::string& needle : needles)
+                if (name.find(needle) != std::string::npos) return it->path().string();
+        }
+    }
+    return "";
+}
+}  // namespace
+
 void Debugger::init() {
     simgui_desc_t desc = {};
     desc.logger.func = slog_func;
     desc.disable_set_mouse_cursor = surface::hasProvider();
+    desc.no_default_font = true;  // the default font plus script fallbacks are added below
     simgui_setup(&desc);
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->AddFontDefault();
+    ImFontConfig merge;
+    merge.MergeMode = true;
+    merge.PixelSnapH = true;
+    const auto merge_font = [&](const std::string& path, const ImWchar* ranges) {
+        if (!path.empty()) io.Fonts->AddFontFromFileTTF(path.c_str(), 16.0f, &merge, ranges);
+    };
+    // Merge whatever script fonts the system has, so non-Latin names render instead of "????".
+    const std::string cjk = findFontFile(
+        {"notosanscjk", "notoserifcjk", "sourcehansans", "sourcehanserif", "wqy", "wenquanyi",
+         "droidsansfallback", "notosanssc", "notosansjp", "notosanskr", "unifont", "arpluming", "arplukai"});
+    const std::string latin = findFontFile({"notosans-regular", "notosans", "dejavusans", "liberationsans",
+                                            "freesans", "arial", "segoeui"});
+    const std::string thai = findFontFile({"notosansthai", "garuda", "norasi", "dejavusans", "freesans"});
+    if (!cjk.empty()) {
+        merge_font(cjk, io.Fonts->GetGlyphRangesChineseFull());
+        merge_font(cjk, io.Fonts->GetGlyphRangesJapanese());
+        merge_font(cjk, io.Fonts->GetGlyphRangesKorean());
+    }
+    if (!latin.empty()) {
+        merge_font(latin, io.Fonts->GetGlyphRangesCyrillic());
+        merge_font(latin, io.Fonts->GetGlyphRangesGreek());
+        merge_font(latin, io.Fonts->GetGlyphRangesVietnamese());
+    }
+    if (!thai.empty()) merge_font(thai, io.Fonts->GetGlyphRangesThai());
+    // sokol_imgui rebuilds the font atlas texture automatically once fonts are added.
+
     if (surface::hasProvider()) {
         ImGui::GetPlatformIO().Platform_SetClipboardTextFn = nullptr;
         ImGui::GetPlatformIO().Platform_GetClipboardTextFn = nullptr;

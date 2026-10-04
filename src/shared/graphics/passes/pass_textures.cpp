@@ -43,6 +43,9 @@ void load_texture0(PassTextures& pass, const char* reference, const std::string&
             return;
         }
 
+        // Render targets (`_rt_*`) are bound by the effect chain at draw time, not loaded as textures.
+        if (strncmp(reference, "_rt_", 4) == 0 || strstr(reference, "/_rt_") != nullptr) return;
+
         std::string path;
         GfxImage img = ctx.asset_mgr->resolveTexture(reference, &path);
         if (img.id == SG_INVALID_ID) {
