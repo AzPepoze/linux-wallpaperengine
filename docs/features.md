@@ -17,6 +17,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 ## Contents
 
 - [Wallpaper types](#wallpaper-types)
+- [Wallpaper switching and transitions](#wallpaper-switching-and-transitions)
 - [Projects and packages](#projects-and-packages)
 - [Scene layers](#scene-layers)
 - [Camera and parallax](#camera-and-parallax)
@@ -68,6 +69,20 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
     - Audio visualization API (silence only) and media integration API (no-op listeners)
     - RGB API, user-configurable FPS API, web video playback
 - [ ] Application wallpapers (the project type is rejected)
+
+## Wallpaper switching and transitions
+
+- [x] Runtime switching: a running instance loads a new wallpaper in place, in the same window or layer surface
+- [x] Wallpaper Engine transition shaders, loaded from the install (`assets/shaders/HLSL/dx11playlisttransition.*`), covering the full `FADEEFFECT` set 0-26: fade, mosaic, diffuse, horizontal/vertical slide, horizontal/vertical fade, clouds, burnt paper, circular, zipper, door, lines, zoom, drip, pixelate, bricks, paint, fade to black, twister, black hole, crt, radial wipe, glass shatter, bullets, ice and boilover
+- [x] `none` (hard cut) and `random` (one effect picked per switch), with a configurable duration (`--transition`, `--transition-duration`, default `fade` / 1000 ms)
+- [x] The outgoing frame is captured and held while the new wallpaper loads, so a slow load does not show a black gap; a failed load keeps the frozen frame
+- [x] Type-agnostic: scene, video and web wallpapers all switch through the same compositor, and 3D inherits it when 3D rendering lands
+- [-] Single-instance control
+  - Works: launching with a wallpaper for a display that already runs an instance hands the switch over a Unix socket in `$XDG_RUNTIME_DIR/linux-wallpaperengine/` and exits; `--no-control` opts out
+  - Missing: no explicit switch command separate from launching with a path, and no per-output targeting when a path is not the first argument
+- [-] Bricks (#16) and glass shatter (#23)
+  - Works: geometry generated on the CPU (falling brick quads, a tessellated shard plane) since this renderer has no geometry-shader stage
+  - Missing: not yet verified pixel-for-pixel against the Windows renderer
 
 ## Projects and packages
 
@@ -383,7 +398,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Multi-monitor rendering from one process, per-monitor, spanned and cloned wallpapers (run one process per output)
     - Pause/resume and mute/unmute controls while running
     - Fullscreen-application detection and screensaver mode
-    - A runtime control interface beyond the command line
+    - A runtime control interface beyond the command line and the liquid-wallpaper switch socket
 - [x] Unit tests in `tests/` (`xmake test`) and the script corpus runner in `utils/` (`xmake build script_corpus`)
 - [x] CI runs formatting and static analysis (`xmake check`)
 

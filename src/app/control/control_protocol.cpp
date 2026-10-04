@@ -67,8 +67,7 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
         parsed.is_pkg = cJSON_IsTrue(is_pkg);
     }
 
-    if (const cJSON* properties = cJSON_GetObjectItemCaseSensitive(root, "properties");
-        cJSON_IsObject(properties)) {
+    if (const cJSON* properties = cJSON_GetObjectItemCaseSensitive(root, "properties"); cJSON_IsObject(properties)) {
         for (const cJSON* entry = properties->child; entry; entry = entry->next) {
             if (cJSON_IsString(entry) && entry->string && entry->valuestring) {
                 parsed.properties.emplace_back(entry->string, entry->valuestring);
@@ -76,8 +75,7 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
         }
     }
 
-    if (const cJSON* transition = cJSON_GetObjectItemCaseSensitive(root, "transition");
-        cJSON_IsNumber(transition)) {
+    if (const cJSON* transition = cJSON_GetObjectItemCaseSensitive(root, "transition"); cJSON_IsNumber(transition)) {
         parsed.transition = (int)transition->valuedouble;
     }
     if (const cJSON* duration = cJSON_GetObjectItemCaseSensitive(root, "transition_time_ms");

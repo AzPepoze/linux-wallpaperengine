@@ -102,6 +102,11 @@ Launcher-compatible options (the wallpaper path may come first or last):
 | `--clamp <mode>` | Accepted and ignored |
 | `-r, --screen-root <output>`, `--layer <background\|bottom\|top\|overlay>` | Draw as a `wlr-layer-shell` wallpaper surface on the named output (default layer `background`), anchored to all edges with pointer parallax. Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the output is not found, the app logs the reason and runs in a window |
 | `--layer-size <WxH>`, `--layer-anchor <edges>` | Debug builds only: use a small anchored rectangle (for example `320x180` and `top-left`) instead of the full output |
+| `--transition <name\|none\|random>` | Shader transition used when switching wallpapers (`fade`, `mosaic`, ..., `boilover`, or `0`-`26`; default `fade`) |
+| `--transition-duration <ms>` | Transition length in milliseconds (default `1000`) |
+| `--no-control` | Do not hand off to a running instance or own a control socket; always start a separate process |
+
+Launching with a wallpaper for a display that already has a running instance hands the switch to that instance over a Unix control socket and exits, instead of starting a second process. The running instance crossfades from its current frame to the new wallpaper using Wallpaper Engine's own transition shaders (loaded from the install). Pass `--no-control` to opt out. The effect and duration can also be set per switch on the second launch.
 
 Build outputs are written to `bin/<mode>/`.
 

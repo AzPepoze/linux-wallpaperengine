@@ -39,7 +39,8 @@ bool compile_hlsl_stage(SlangStage stage, const std::string& source, const char*
         module_name.c_str(), (module_name + "/" + source_name).c_str(), source.c_str(), diagnostics.writeRef());
     if (!module) {
         if (diagnostics && diagnostics->getBufferSize())
-            core_log.error("Slang HLSL diagnostics for %s: %s", source_name, (const char*)diagnostics->getBufferPointer());
+            core_log.error("Slang HLSL diagnostics for %s: %s", source_name,
+                           (const char*)diagnostics->getBufferPointer());
         return false;
     }
 

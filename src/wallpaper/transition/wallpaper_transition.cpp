@@ -68,8 +68,8 @@ bool WallpaperTransition::begin(EngineContext& ctx, sg_view source, sg_image sou
     sg_apply_viewport(0, 0, width, height, true);
     sg_apply_scissor_rect(0, 0, width, height, true);
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    renderer_draw_sprite(ctx, &ctx.renderer, source_image, source, 0.0f, 0.0f, (float)width, (float)height, 0.0f,
-                         white, false, nullptr, /*replace=*/true);
+    renderer_draw_sprite(ctx, &ctx.renderer, source_image, source, 0.0f, 0.0f, (float)width, (float)height, 0.0f, white,
+                         false, nullptr, /*replace=*/true);
     sg_end_pass();
 
     // Load the matching Wallpaper Engine transition shader; if the install
