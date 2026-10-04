@@ -566,6 +566,13 @@ int ScriptEngine::dispatchToLayer(uint32_t layer_id, const char* hook, const Scr
     return delivered;
 }
 
+bool ScriptEngine::anyScriptExports(const std::vector<const char*>& hooks) {
+    for (const ScriptEntry& entry : scripts_)
+        for (const char* hook : hooks)
+            if (entry.script->hasFunction(hook)) return true;
+    return false;
+}
+
 std::vector<uint32_t> ScriptEngine::layersWithHooks(const std::vector<const char*>& hooks) {
     std::vector<uint32_t> ids;
     for (const ScriptEntry& entry : scripts_) {

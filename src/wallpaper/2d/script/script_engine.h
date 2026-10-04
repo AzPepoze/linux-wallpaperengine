@@ -53,6 +53,8 @@ class ScriptEngine {
     int broadcast(const char* hook, const ScriptEvent& event, bool sticky = false);
     // Same, for the scripts owned by one scene object (cursor events).
     int dispatchToLayer(uint32_t layer_id, const char* hook, const ScriptEvent& event);
+    // True when any loaded script exports at least one of `hooks` (e.g. to start a media source only if needed).
+    bool anyScriptExports(const std::vector<const char*>& hooks);
     // Scene objects that own a script exporting at least one of `hooks`.
     std::vector<uint32_t> layersWithHooks(const std::vector<const char*>& hooks);
     // The `input` global: cursor in scene-world coordinates (y up) and window pixels, and the left button.
