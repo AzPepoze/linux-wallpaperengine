@@ -235,7 +235,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Control points (only `controlpointstartindex` for child systems is read)
     - Mouse-interactive and audio-responsive particles
     - World-space particles, material lighting
-    - Script control of particle systems
+    - Script control of particle systems (control points)
 
 ## Animations
 
@@ -362,7 +362,12 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works: `init`, `update`, `applyUserProperties` (once after the first init), `cursorEnter/Leave/Move/Down/Up/Click` on solid image layers, and `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged`, `mediaThumbnailChanged`, `mediaTimelineChanged` from MPRIS
   - Missing: `destroy`, `resizeScreen`, `applyGeneralSettings`
 - [ ] Video texture handle (`IVideoTexture`)
-- [ ] Particle handles (`IParticleSystem`, `IParticleSystemInstance`)
+- [-] Particle handles (`thisLayer.getParticleSystem()`)
+  - Works
+    - `alpha`, `size`, `count`, `speed`, `lifetime`, `rate`, `color`, `play()`, `pause()`, `stop()` (ends emission, live particles finish) and `emitParticles(n)`; one instance per system
+  - Missing
+    - `controlpoint0` to `controlpoint7` are stored but nothing in the simulation reads them
+    - Child systems are not exposed as separate instances
 - [ ] Dynamic layers (`createLayer`, `destroyLayer`, `sortLayer`) and model data (`IModelData`)
 - [ ] Bone, blend-shape and physics APIs
 

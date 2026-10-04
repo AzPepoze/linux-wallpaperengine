@@ -9,11 +9,42 @@
 #include "shared/core/logger.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 #define TAG "SCRIPT"
+
+namespace {
+constexpr char kParticlePrefix[] = "particle.";
+
+ParticleSystem* particleSystemOf(Layer* layer) {
+    auto* particles = dynamic_cast<ParticleLayer*>(layer);
+    return particles ? particles->ps : nullptr;
+}
+
+float* particleScalar(ParticleSystem& ps, const std::string& field) {
+    if (field == "alpha") return &ps.override_alpha;
+    if (field == "size") return &ps.override_size;
+    if (field == "count") return &ps.override_count;
+    if (field == "speed") return &ps.override_speed;
+    if (field == "lifetime") return &ps.override_lifetime;
+    if (field == "rate") return &ps.override_rate;
+    return nullptr;
+}
+
+float* particleVector(ParticleSystem& ps, const std::string& field) {
+    if (field == "color") return ps.override_color;
+    if (field.size() == 13 && field.compare(0, 12, "controlpoint") == 0 && field[12] >= '0' && field[12] <= '7')
+        return ps.control_points[field[12] - '0'];
+    return nullptr;
+}
+
+bool hasParticlePrefix(const std::string& property) {
+    return property.compare(0, sizeof(kParticlePrefix) - 1, kParticlePrefix) == 0;
+}
+}  // namespace
 
 Layer* SceneScriptBackend::layerById(uint32_t id) const {
     if (id == 0) return nullptr;
@@ -34,6 +65,14 @@ std::string SceneScriptBackend::layerName(uint32_t id) {
 }
 
 bool SceneScriptBackend::getVector(uint32_t id, const std::string& property, double out[3], int& components) {
+    if (hasParticlePrefix(property)) {
+        ParticleSystem* ps = particleSystemOf(layerById(id));
+        const float* field = ps ? particleVector(*ps, property.substr(sizeof(kParticlePrefix) - 1)) : nullptr;
+        if (!field) return false;
+        for (int i = 0; i < 3; ++i) out[i] = field[i];
+        components = 3;
+        return true;
+    }
     const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
     if (!node) return false;
     auto copy3 = [&](const std::array<float, 3>& v) {
@@ -77,6 +116,15 @@ bool SceneScriptBackend::getWorldMatrix(uint32_t id, double out[16]) {
 }
 
 bool SceneScriptBackend::setVector(uint32_t id, const std::string& property, const double value[3]) {
+    if (hasParticlePrefix(property)) {
+        ParticleSystem* ps = particleSystemOf(layerById(id));
+        const std::string field_name = property.substr(sizeof(kParticlePrefix) - 1);
+        float* field = ps ? particleVector(*ps, field_name) : nullptr;
+        if (!field) return false;
+        for (int i = 0; i < 3; ++i) field[i] = (float)value[i];
+        if (field_name == "color") ps->has_override_color = true;
+        return true;
+    }
     SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
     if (!node) return false;
     auto assign3 = [&](std::array<float, 3>& v) {
@@ -179,6 +227,25 @@ bool SceneScriptBackend::setMaterialProperty(uint32_t layer_id, int effect, cons
 }
 
 bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
+    if (hasParticlePrefix(command)) {
+        ParticleSystem* ps = particleSystemOf(layerById(id));
+        if (!ps) return false;
+        const std::string name = command.substr(sizeof(kParticlePrefix) - 1);
+        if (name == "play") {
+            ps->emitting = true;
+            ps->paused = false;
+        } else if (name == "pause") {
+            ps->paused = true;
+        } else if (name == "stop") {
+            ps->emitting = false;
+            ps->paused = false;
+        } else if (name.compare(0, 5, "emit:") == 0) {
+            ps->emitParticles(std::atoi(name.c_str() + 5));
+        } else {
+            return false;
+        }
+        return true;
+    }
     auto* sound = dynamic_cast<SoundLayer*>(layerById(id));
     if (!sound) return false;
     if (command == "play")
@@ -193,6 +260,13 @@ bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
 bool SceneScriptBackend::getNumber(uint32_t id, const std::string& property, double& out) {
     Layer* layer = layerById(id);
     if (!layer) return false;
+    if (hasParticlePrefix(property)) {
+        ParticleSystem* ps = particleSystemOf(layer);
+        const float* value = ps ? particleScalar(*ps, property.substr(sizeof(kParticlePrefix) - 1)) : nullptr;
+        if (!value) return false;
+        out = *value;
+        return true;
+    }
     if (auto* sound = dynamic_cast<SoundLayer*>(layer)) {
         if (property != "volume") return false;
         out = sound->volume();
@@ -208,6 +282,13 @@ bool SceneScriptBackend::getNumber(uint32_t id, const std::string& property, dou
 bool SceneScriptBackend::setNumber(uint32_t id, const std::string& property, double value) {
     Layer* layer = layerById(id);
     if (!layer) return false;
+    if (hasParticlePrefix(property)) {
+        ParticleSystem* ps = particleSystemOf(layer);
+        float* field = ps ? particleScalar(*ps, property.substr(sizeof(kParticlePrefix) - 1)) : nullptr;
+        if (!field) return false;
+        *field = (float)value;
+        return true;
+    }
     if (auto* sound = dynamic_cast<SoundLayer*>(layer)) {
         if (property != "volume") return false;
         sound->setVolume((float)value);

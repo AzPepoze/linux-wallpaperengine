@@ -3,11 +3,20 @@
 
 #include "particle_system.h"
 
+void ParticleSystem::emitParticles(int count) {
+    for (int i = 0; i < count && i < 1000; ++i) spawnParticle();
+}
+
+void ParticleSystem::clearParticles() {
+    particles.clear();
+}
+
 void ParticleSystem::update(float real_dt) {
+    if (paused) return;
     // `rate` scales this system's own clock: emission, lifetimes and motion all run faster or slower.
     const float dt = real_dt * fmaxf(0.0f, override_rate);
     global_time += dt;
-    if (spawn_type == ParticleSpawnType::Static) {
+    if (spawn_type == ParticleSpawnType::Static && emitting) {
         for (size_t emitter_index = 0; emitter_index < config.emitters.size(); ++emitter_index) {
             const float rate = config.emitters[emitter_index].rate * override_count;
             if (rate > 0) {

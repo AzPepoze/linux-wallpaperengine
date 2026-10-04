@@ -101,6 +101,22 @@ class EffectScene : public CountingScene {
         visible[effect] = value;
         return true;
     }
+    double particle_rate = 1.0;
+    std::string last_command;
+    bool getNumber(uint32_t id, const std::string& property, double& out) override {
+        if (id != 3 || property != "particle.rate") return false;
+        out = particle_rate;
+        return true;
+    }
+    bool setNumber(uint32_t, const std::string& property, double value) override {
+        if (property != "particle.rate") return false;
+        particle_rate = value;
+        return true;
+    }
+    bool layerCommand(uint32_t, const std::string& command) override {
+        last_command = command;
+        return true;
+    }
     bool getMaterialProperty(uint32_t, int effect, const std::string& name, std::vector<double>& out) override {
         if (effect != 1 || name != "speed") return false;
         out = speed;
@@ -261,6 +277,20 @@ export function update() {
         CHECK(updateText(script, out) && out == "2:glow:ripple:true");
         CHECK(!scene.visible[0] && scene.visible[1]);
         CHECK(scene.speed.size() == 1 && scene.speed[0] == 3.0);
+
+        // Particle systems: scalar fields and commands reach the backend.
+        SceneScript particles;
+        particles.setLayerId(3);
+        CHECK(particles.load(R"JS(
+export function update() {
+    var system = thisLayer.getParticleSystem();
+    system.rate = system.rate * 2;
+    system.emitParticles(5);
+    return String(system.getInstanceCount());
+})JS",
+                             ""));
+        CHECK(updateText(particles, out) && out == "1");
+        CHECK(scene.particle_rate == 2.0 && scene.last_command == "particle.emit:5");
 
         // A script bound to an effect sees that effect as thisObject.
         SceneScript bound;

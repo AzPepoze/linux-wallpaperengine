@@ -355,6 +355,27 @@ EffectHandle.prototype.setMaterialProperty = function (name, value) {
     return __lweScene('matSet', this.__layer, this.__index, String(name), materialValues(value));
 };
 function effectHandle(layerId, index) { return new EffectHandle(layerId, index); }
+
+function ParticleHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
+(function () {
+    var props = { color: vectorProperty('particle.color', 3) };
+    ['alpha', 'size', 'count', 'speed', 'lifetime', 'rate'].forEach(function (field) {
+        props[field] = scalarProperty('particle.' + field, Number);
+    });
+    for (var i = 0; i < 8; ++i) props['controlpoint' + i] = vectorProperty('particle.controlpoint' + i, 3);
+    Object.defineProperties(ParticleHandle.prototype, props);
+})();
+['play', 'pause', 'stop'].forEach(function (command) {
+    ParticleHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, 'particle.' + command); };
+});
+ParticleHandle.prototype.emitParticles = function (count) {
+    __lweScene('layerCommand', this.__id, 'particle.emit:' + (Number(count) | 0));
+};
+ParticleHandle.prototype.getInstanceCount = function () { return 1; };
+ParticleHandle.prototype.getInstance = function () { return this; };
+LayerHandle.prototype.getParticleSystem = function () {
+    return __lweScene('get', this.__id, 'particle.rate') === undefined ? undefined : new ParticleHandle(this.__id);
+};
 LayerHandle.prototype.getEffectCount = function () { return __lweScene('effCount', this.__id); };
 LayerHandle.prototype.getEffect = function (nameOrIndex) {
     var index = typeof nameOrIndex === 'number' ? nameOrIndex : __lweScene('effFind', this.__id, String(nameOrIndex));
