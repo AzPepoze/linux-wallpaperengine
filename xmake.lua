@@ -238,6 +238,12 @@ add_test("transition_catalog_tests", {"tests/transition_catalog_test.cpp",
 add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp"},
          {"cjson"})
 
+add_test("control_endpoint_tests", {"tests/control_endpoint_test.cpp", "src/app/control/control_endpoint.cpp"})
+
+add_test("control_socket_tests", {"tests/control_socket_test.cpp", "src/app/control/control_server.cpp",
+                                  "src/app/control/control_client.cpp", "src/app/control/control_protocol.cpp",
+                                  "src/app/control/control_endpoint.cpp"}, {"cjson"})
+
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/core/logger.cpp"}, {"stb"})
 
