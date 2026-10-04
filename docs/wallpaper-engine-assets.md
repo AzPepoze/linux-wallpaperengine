@@ -1,4 +1,4 @@
-# Wallpaper Engine assets we can use
+# Wallpaper Engine assets that can be used
 
 Linux Wallpaper Engine does not re-create the content that ships with the Windows application. It reads it from the user's own Wallpaper Engine installation (`<install>` below; pass it with `--assets-dir`, or set `engine_path` in `config.json`). Nothing from the install is copied into this repository.
 
@@ -8,10 +8,10 @@ Counts below are from Wallpaper Engine 2.8.x and are only meant to show scale.
 
 ## Installation layout
 
-| Path | What it is | Used by us | Notes |
+| Path | What it is | Used | Notes |
 | --- | --- | --- | --- |
 | `<install>/assets/` | Content shared by every wallpaper: shaders, effects, materials, particles, presets, fonts, models, scripts, scenes, compatibility data | Yes | Detailed in the next table |
-| `<install>/bin/` | Windows executables and DLLs (renderer, `scenescript64.dll`, FreeImage, assimp, CEF...) | No | Closed-source and Windows-only. `scenescript64.dll` is the real SceneScript runtime; the JavaScript it exposes is documented, so we host QuickJS ourselves |
+| `<install>/bin/` | Windows executables and DLLs (renderer, `scenescript64.dll`, FreeImage, assimp, CEF...) | No | Closed-source and Windows-only. `scenescript64.dll` is the real SceneScript runtime; the JavaScript it exposes is documented, so the engine hosts QuickJS itself |
 | `<install>/projects/` | `defaultprojects` (sample wallpapers), `templates`, `myprojects` | No | The default projects are handy extra test content |
 | `<install>/plugins/` | Hardware (LED) plugins | No | RGB integration is not supported |
 | `<install>/ui/` | Editor and launcher web UI | No | Contains editor typings for the JavaScript standard library only; there are no SceneScript typings to reuse |
@@ -54,6 +54,6 @@ For a relative path such as `materials/foo.tex` the asset manager tries, in orde
 
 Without the install, the script engine still starts with a minimal fallback (`shared`, `createScriptProperties`) and logs that the Vec/Mat classes and modules are unavailable.
 
-## What the install does not give us
+## What the install does not provide
 
 These live inside the closed `scenescript64.dll` / renderer and must be implemented here, following the [official SceneScript reference](https://docs.wallpaperengine.io/en/scene/scenescript/reference.html): the `engine`, `input`, `thisScene`, `thisLayer`, `thisObject`, `console` and `localStorage` objects, the timers, audio buffers, layer/animation/effect/particle handles, the event dispatch, and media and user-property plumbing. [features.md](features.md) tracks which of these exist.
