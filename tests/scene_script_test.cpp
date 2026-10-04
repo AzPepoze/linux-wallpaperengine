@@ -101,6 +101,23 @@ class EffectScene : public CountingScene {
         visible[effect] = value;
         return true;
     }
+    std::vector<double> bone_origin = {1.0, 2.0, 3.0};
+    int boneCount(uint32_t) override {
+        return 2;
+    }
+    int findBone(uint32_t, const std::string& name) override {
+        return name == "head" ? 1 : -1;
+    }
+    bool getBone(uint32_t, int bone, const std::string& field, std::vector<double>& out) override {
+        if (bone != 1 || field != "origin") return false;
+        out = bone_origin;
+        return true;
+    }
+    bool setBone(uint32_t, int bone, const std::string& field, const std::vector<double>& value) override {
+        if (bone != 1 || field != "origin") return false;
+        bone_origin = value;
+        return true;
+    }
     std::vector<double> clear = {0.0, 0.0, 0.0};
     bool getSceneProperty(const std::string& name, std::vector<double>& out) override {
         if (name != "clearcolor") return false;
@@ -362,6 +379,19 @@ export function update() {
                          ""));
         CHECK(updateText(video, out) && out == "true");
         CHECK(scene.last_command == "video.pause");
+
+        // Bones by name or index.
+        SceneScript bones;
+        bones.setLayerId(3);
+        CHECK(bones.load(R"JS(
+export function update() {
+    var origin = thisLayer.getBoneOrigin('head');
+    thisLayer.setBoneOrigin(1, { x: origin.x + 10, y: origin.y, z: origin.z });
+    return thisLayer.getBoneCount() + ':' + thisLayer.getBoneIndex('head');
+})JS",
+                         ""));
+        CHECK(updateText(bones, out) && out == "2:1");
+        CHECK(scene.bone_origin[0] == 11.0 && scene.bone_origin[2] == 3.0);
 
         // A script bound to an effect sees that effect as thisObject.
         SceneScript bound;

@@ -126,6 +126,50 @@ void PuppetPose::init(const MdlModel& model) {
     }
 }
 
+void PuppetPose::setBoneOverride(size_t bone, const MdlKeyframe& pose) {
+    if (overrides_.size() <= bone) overrides_.resize(bone + 1);
+    overrides_[bone].active = true;
+    overrides_[bone].pose = pose;
+}
+
+void PuppetPose::clearBoneOverride(size_t bone) {
+    if (bone < overrides_.size()) overrides_[bone].active = false;
+}
+
+bool PuppetPose::localPose(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                           std::vector<MdlKeyframe>& pose) const {
+    pose.assign(model.bones.size(), MdlKeyframe{});
+    bool seeded = false;
+    for (const PuppetAnimationLayer& layer : layers) {
+        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
+        if (!clip) continue;
+        if (!seeded) {
+            for (size_t b = 0; b < std::min(pose.size(), clip->tracks.size()); ++b) {
+                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
+            }
+            seeded = true;
+        }
+        accumulateLayer(*clip, layer, pose);
+    }
+    if (seeded) {
+        for (size_t b = 0; b < std::min(pose.size(), overrides_.size()); ++b)
+            if (overrides_[b].active) pose[b] = overrides_[b].pose;
+    }
+    return seeded;
+}
+
+void PuppetPose::worldMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                               std::vector<PuppetMatrix>& out) const {
+    std::vector<MdlKeyframe> pose;
+    const bool seeded = localPose(model, layers, pose);
+    out.assign(model.bones.size(), PuppetMatrix{});
+    for (size_t i = 0; i < model.bones.size(); ++i) {
+        const PuppetMatrix local = seeded ? composeLocal(pose[i]) : bindLocal(model.bones[i]);
+        const uint32_t parent = model.bones[i].parent;
+        out[i] = parent < i ? multiply(out[parent], local) : local;
+    }
+}
+
 void PuppetPose::advance(const MdlModel& model, std::vector<PuppetAnimationLayer>& layers, float dt) const {
     for (PuppetAnimationLayer& layer : layers) {
         if (!layer.visible || !layer.playing) continue;
@@ -145,19 +189,8 @@ void PuppetPose::attachmentTransforms(const MdlModel& model, const std::vector<P
     out.clear();
     if (model.attachments.empty()) return;
 
-    std::vector<MdlKeyframe> pose(model.bones.size());
-    bool seeded = false;
-    for (const PuppetAnimationLayer& layer : layers) {
-        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
-        if (!clip) continue;
-        if (!seeded) {
-            for (size_t b = 0; b < std::min(pose.size(), clip->tracks.size()); ++b) {
-                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
-            }
-            seeded = true;
-        }
-        accumulateLayer(*clip, layer, pose);
-    }
+    std::vector<MdlKeyframe> pose;
+    const bool seeded = localPose(model, layers, pose);
 
     std::vector<PuppetMatrix> world(model.bones.size());
     for (size_t i = 0; i < model.bones.size(); ++i) {
@@ -176,20 +209,8 @@ void PuppetPose::attachmentTransforms(const MdlModel& model, const std::vector<P
 
 void PuppetPose::computeBoneMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers) const {
     const size_t count = model.bones.size();
-    std::vector<MdlKeyframe> pose(count);
-    bool seeded = false;
-    for (const PuppetAnimationLayer& layer : layers) {
-        const MdlAnimationClip* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
-        if (!clip) continue;
-        if (!seeded) {
-            for (size_t b = 0; b < std::min(count, clip->tracks.size()); ++b) {
-                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
-            }
-            seeded = true;
-        }
-        accumulateLayer(*clip, layer, pose);
-    }
-    if (!seeded) {
+    std::vector<MdlKeyframe> pose;
+    if (!localPose(model, layers, pose)) {
         std::fill(skin_matrices.begin(), skin_matrices.end(), PuppetMatrix{});
         return;
     }

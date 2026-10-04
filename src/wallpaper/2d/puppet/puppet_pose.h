@@ -37,8 +37,24 @@ class PuppetPose {
     // Writes skinned xyz positions for every vertex of the model.
     void skin(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers, std::vector<float>& out) const;
 
+    // A script-set local pose replaces the animated one for that bone until cleared.
+    void setBoneOverride(size_t bone, const MdlKeyframe& pose);
+    void clearBoneOverride(size_t bone);
+    // Local pose of every bone as currently animated (overrides included); false when no clip drives the model.
+    bool localPose(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                   std::vector<MdlKeyframe>& pose) const;
+    // Bone transforms in model space, parents applied.
+    void worldMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                       std::vector<PuppetMatrix>& out) const;
+
    private:
     void computeBoneMatrices(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers) const;
+
+    struct BoneOverride {
+        bool active = false;
+        MdlKeyframe pose;
+    };
+    std::vector<BoneOverride> overrides_;
 
     std::vector<PuppetMatrix> inverse_bind_world;
     mutable std::vector<PuppetMatrix> skin_matrices;

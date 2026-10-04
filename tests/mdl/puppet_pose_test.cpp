@@ -88,4 +88,20 @@ void runPuppetPoseTests() {
     layers[0].playing = false;
     pose.advance(model, layers, 1.0f);
     check(fabsf(layers[0].time - 0.5f) < 1e-5f, "a paused layer does not advance");
+
+    // A script-set bone pose replaces the animated one until it is cleared.
+    std::vector<MdlKeyframe> local;
+    check(pose.localPose(model, layers, local) && fabsf(local[0].translation[0] - 150.0f) < 1e-3f,
+          "local pose reports the animated translation");
+    MdlKeyframe forced = local[0];
+    forced.translation[0] = 400.0f;
+    pose.setBoneOverride(0, forced);
+    pose.skin(model, layers, out);
+    check(fabsf(out[0] - 410.0f) < 1e-3f, "bone override moves the skinned vertex");
+    std::vector<PuppetMatrix> world;
+    pose.worldMatrices(model, layers, world);
+    check(world.size() == 1 && fabsf(world[0].m[12] - 400.0f) < 1e-3f, "world matrix follows the override");
+    pose.clearBoneOverride(0);
+    pose.skin(model, layers, out);
+    check(fabsf(out[0] - 160.0f) < 1e-3f, "clearing the override restores the animation");
 }

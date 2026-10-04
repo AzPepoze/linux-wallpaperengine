@@ -356,6 +356,32 @@ EffectHandle.prototype.setMaterialProperty = function (name, value) {
 };
 function effectHandle(layerId, index) { return new EffectHandle(layerId, index); }
 
+// Bones are addressed by index or name.
+function boneIndexOf(layer, bone) {
+    return typeof bone === 'number' ? bone : __lweScene('boneFind', layer.__id, String(bone));
+}
+LayerHandle.prototype.getBoneCount = function () { return __lweScene('boneCount', this.__id); };
+LayerHandle.prototype.getBoneIndex = function (name) { return __lweScene('boneFind', this.__id, String(name)); };
+LayerHandle.prototype.getBoneName = function (bone) { return __lweScene('boneName', this.__id, bone); };
+LayerHandle.prototype.getBoneParentIndex = function (bone) {
+    return __lweScene('boneParent', this.__id, boneIndexOf(this, bone));
+};
+LayerHandle.prototype.getBoneTransform = function (bone) {
+    var m = __lweScene('boneGet', this.__id, boneIndexOf(this, bone), 'matrix');
+    return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
+};
+LayerHandle.prototype.resetBone = function (bone) { return __lweScene('boneReset', this.__id, boneIndexOf(this, bone)); };
+['Origin', 'Angles', 'Scale'].forEach(function (what) {
+    var field = what.toLowerCase();
+    LayerHandle.prototype['getBone' + what] = function (bone) {
+        var a = __lweScene('boneGet', this.__id, boneIndexOf(this, bone), field);
+        return a ? vec3(a[0], a[1], a[2]) : undefined;
+    };
+    LayerHandle.prototype['setBone' + what] = function (bone, value) {
+        return __lweScene('boneSet', this.__id, boneIndexOf(this, bone), field, toArray(value, 3));
+    };
+});
+
 function VideoTextureHandle(layerId) { Object.defineProperty(this, '__id', { value: layerId }); }
 ['play', 'pause', 'stop'].forEach(function (command) {
     VideoTextureHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, 'video.' + command); };
@@ -686,6 +712,30 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
     if (op == "animCommand") return JS_NewBool(ctx, scene->animationCommand(id, stringArg(2)));
 
+    if (op == "boneCount") return JS_NewInt32(ctx, scene->boneCount(id));
+    if (op == "boneFind") return JS_NewInt32(ctx, scene->findBone(id, stringArg(2)));
+    if (op == "boneName") return JS_NewString(ctx, scene->boneName(id, (int)idArg(2)).c_str());
+    if (op == "boneParent") return JS_NewInt32(ctx, scene->boneParent(id, (int)idArg(2)));
+    if (op == "boneReset") return JS_NewBool(ctx, scene->resetBone(id, (int)idArg(2)));
+    if (op == "boneGet") {
+        std::vector<double> values;
+        if (!scene->getBone(id, (int)idArg(2), stringArg(3), values)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (size_t i = 0; i < values.size(); ++i)
+            JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, values[i]));
+        return array;
+    }
+    if (op == "boneSet" && argc > 4) {
+        std::vector<double> values;
+        for (uint32_t i = 0; i < 3; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, argv[4], i);
+            double number = 0.0;
+            JS_ToFloat64(ctx, &number, item);
+            JS_FreeValue(ctx, item);
+            values.push_back(number);
+        }
+        return JS_NewBool(ctx, scene->setBone(id, (int)idArg(2), stringArg(3), values));
+    }
     if (op == "effCount") return JS_NewInt32(ctx, scene->effectCount(id));
     if (op == "effFind") return JS_NewInt32(ctx, scene->findEffect(id, stringArg(2)));
     if (op == "effName") return JS_NewString(ctx, scene->effectName(id, (int)idArg(2)).c_str());

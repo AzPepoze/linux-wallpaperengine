@@ -75,6 +75,31 @@ class ScriptSceneBackend {
         return 0;
     }
 
+    // Puppet skeleton: bones by index. Fields origin, angles (degrees), scale (local pose) and matrix (model space).
+    virtual int boneCount(uint32_t /*layer_id*/) {
+        return 0;
+    }
+    virtual int findBone(uint32_t /*layer_id*/, const std::string& /*name*/) {
+        return -1;
+    }
+    virtual std::string boneName(uint32_t /*layer_id*/, int /*bone*/) {
+        return "";
+    }
+    virtual int boneParent(uint32_t /*layer_id*/, int /*bone*/) {
+        return -1;
+    }
+    virtual bool getBone(uint32_t /*layer_id*/, int /*bone*/, const std::string& /*field*/,
+                         std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setBone(uint32_t /*layer_id*/, int /*bone*/, const std::string& /*field*/,
+                         const std::vector<double>& /*value*/) {
+        return false;
+    }
+    virtual bool resetBone(uint32_t /*layer_id*/, int /*bone*/) {
+        return false;
+    }
+
     // Scene settings (bloomstrength, clearcolor, camerashake...), by the SceneScript property name; booleans are 0 / 1.
     virtual bool getSceneProperty(const std::string& /*name*/, std::vector<double>& /*out*/) {
         return false;

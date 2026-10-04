@@ -232,3 +232,66 @@ bool ImageLayer::puppetLayerTakeEnded(size_t index) {
     puppet_layers[index].ended = false;
     return true;
 }
+
+int ImageLayer::boneIndex(const std::string& name) const {
+    for (size_t i = 0; i < puppet.bones.size(); ++i)
+        if (puppet.bones[i].name == name) return (int)i;
+    return -1;
+}
+
+std::string ImageLayer::boneName(size_t bone) const {
+    return bone < puppet.bones.size() ? puppet.bones[bone].name : "";
+}
+
+int ImageLayer::boneParent(size_t bone) const {
+    if (bone >= puppet.bones.size() || puppet.bones[bone].parent >= puppet.bones.size()) return -1;
+    return (int)puppet.bones[bone].parent;
+}
+
+bool ImageLayer::boneGet(size_t bone, const std::string& field, std::vector<double>& out) const {
+    if (bone >= puppet.bones.size()) return false;
+    if (field == "matrix") {
+        std::vector<wallpaper_engine::PuppetMatrix> world;
+        puppet_pose.worldMatrices(puppet, puppet_layers, world);
+        out.assign(world[bone].m, world[bone].m + 16);
+        return true;
+    }
+    std::vector<wallpaper_engine::MdlKeyframe> pose;
+    if (!puppet_pose.localPose(puppet, puppet_layers, pose)) return false;
+    const wallpaper_engine::MdlKeyframe& now = pose[bone];
+    constexpr double kRadToDeg = 180.0 / M_PI;
+    if (field == "origin") {
+        out.assign(now.translation, now.translation + 3);
+    } else if (field == "scale") {
+        out.assign(now.scale, now.scale + 3);
+    } else if (field == "angles") {
+        out = {now.rotation[0] * kRadToDeg, now.rotation[1] * kRadToDeg, now.rotation[2] * kRadToDeg};
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool ImageLayer::boneSet(size_t bone, const std::string& field, const std::vector<double>& value) {
+    if (bone >= puppet.bones.size() || value.size() < 3) return false;
+    std::vector<wallpaper_engine::MdlKeyframe> pose;
+    if (!puppet_pose.localPose(puppet, puppet_layers, pose)) return false;
+    wallpaper_engine::MdlKeyframe next = pose[bone];
+    constexpr double kDegToRad = M_PI / 180.0;
+    for (size_t i = 0; i < 3; ++i) {
+        if (field == "origin")
+            next.translation[i] = (float)value[i];
+        else if (field == "scale")
+            next.scale[i] = (float)value[i];
+        else if (field == "angles")
+            next.rotation[i] = (float)(value[i] * kDegToRad);
+        else
+            return false;
+    }
+    puppet_pose.setBoneOverride(bone, next);
+    return true;
+}
+
+void ImageLayer::boneReset(size_t bone) {
+    puppet_pose.clearBoneOverride(bone);
+}

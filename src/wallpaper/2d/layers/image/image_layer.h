@@ -53,6 +53,17 @@ class ImageLayer : public Layer {
     size_t puppetLayerCount() const {
         return puppet_layers.size();
     }
+    // Skeleton access for scripts. Fields: origin, angles (degrees) and scale are the bone's local pose; matrix is its
+    // model-space transform (column-major, read only).
+    size_t boneCount() const {
+        return puppet.bones.size();
+    }
+    int boneIndex(const std::string& name) const;
+    std::string boneName(size_t bone) const;
+    int boneParent(size_t bone) const;
+    bool boneGet(size_t bone, const std::string& field, std::vector<double>& out) const;
+    bool boneSet(size_t bone, const std::string& field, const std::vector<double>& value);
+    void boneReset(size_t bone);
     // True once after the one-shot clip of that puppet layer ended.
     bool puppetLayerTakeEnded(size_t index);
 

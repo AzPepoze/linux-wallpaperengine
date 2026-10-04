@@ -372,7 +372,11 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - `controlpoint0` to `controlpoint7` are stored but nothing in the simulation reads them
     - Child systems are not exposed as separate instances
 - [ ] Model data (`IModelData`)
-- [ ] Bone, blend-shape and physics APIs
+- [-] Bone, blend-shape and physics APIs
+  - Works
+    - Puppet skeleton on image layers: `getBoneCount`, `getBoneIndex`, `getBoneName`, `getBoneParentIndex`, `getBoneTransform` (model space `Mat4`), `getBoneOrigin/Angles/Scale` and `setBoneOrigin/Angles/Scale` (local pose, replaces the animated one), `resetBone`; bones are addressed by index or name
+  - Missing
+    - Blend shapes (the `.mdl` parser reads no morph targets), bone physics (no simulation), `IModelData` and custom meshes
 
 ## Interaction
 

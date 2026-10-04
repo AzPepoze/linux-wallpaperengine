@@ -43,6 +43,13 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool animationCommand(uint32_t handle, const std::string& command) override;
     std::vector<uint32_t> takeEndedAnimations() override;
     int animationLayerCount(uint32_t layer_id) override;
+    int boneCount(uint32_t layer_id) override;
+    int findBone(uint32_t layer_id, const std::string& name) override;
+    std::string boneName(uint32_t layer_id, int bone) override;
+    int boneParent(uint32_t layer_id, int bone) override;
+    bool getBone(uint32_t layer_id, int bone, const std::string& field, std::vector<double>& out) override;
+    bool setBone(uint32_t layer_id, int bone, const std::string& field, const std::vector<double>& value) override;
+    bool resetBone(uint32_t layer_id, int bone) override;
     bool getSceneProperty(const std::string& name, std::vector<double>& out) override;
     bool setSceneProperty(const std::string& name, const std::vector<double>& value) override;
     uint32_t createLayer(const std::string& config_json) override;

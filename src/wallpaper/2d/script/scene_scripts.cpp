@@ -547,6 +547,44 @@ bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) 
 }
 }  // namespace
 
+int SceneScriptBackend::boneCount(uint32_t layer_id) {
+    const ImageLayer* image = imageById(layer_id);
+    return image ? (int)image->boneCount() : 0;
+}
+
+int SceneScriptBackend::findBone(uint32_t layer_id, const std::string& name) {
+    const ImageLayer* image = imageById(layer_id);
+    return image ? image->boneIndex(name) : -1;
+}
+
+std::string SceneScriptBackend::boneName(uint32_t layer_id, int bone) {
+    const ImageLayer* image = imageById(layer_id);
+    return image && bone >= 0 ? image->boneName((size_t)bone) : "";
+}
+
+int SceneScriptBackend::boneParent(uint32_t layer_id, int bone) {
+    const ImageLayer* image = imageById(layer_id);
+    return image && bone >= 0 ? image->boneParent((size_t)bone) : -1;
+}
+
+bool SceneScriptBackend::getBone(uint32_t layer_id, int bone, const std::string& field, std::vector<double>& out) {
+    const ImageLayer* image = imageById(layer_id);
+    return image && bone >= 0 && image->boneGet((size_t)bone, field, out);
+}
+
+bool SceneScriptBackend::setBone(uint32_t layer_id, int bone, const std::string& field,
+                                 const std::vector<double>& value) {
+    ImageLayer* image = imageById(layer_id);
+    return image && bone >= 0 && image->boneSet((size_t)bone, field, value);
+}
+
+bool SceneScriptBackend::resetBone(uint32_t layer_id, int bone) {
+    ImageLayer* image = imageById(layer_id);
+    if (!image || bone < 0 || (size_t)bone >= image->boneCount()) return false;
+    image->boneReset((size_t)bone);
+    return true;
+}
+
 bool SceneScriptBackend::getSceneProperty(const std::string& name, std::vector<double>& out) {
     SceneField field;
     if (!sceneField(ctx_, name, field)) return false;
