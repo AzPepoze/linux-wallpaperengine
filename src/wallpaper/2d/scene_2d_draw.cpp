@@ -1,5 +1,7 @@
 #include <cjson/cJSON.h>
 
+#include <algorithm>
+
 #include "scene_2d.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
@@ -16,6 +18,77 @@
 #include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
+namespace {
+sg_pass colorPass(sg_view target, sg_load_action load, float clear_alpha = 0.0f) {
+    sg_pass pass = {};
+    pass.action.colors[0].load_action = load;
+    pass.action.colors[0].store_action = SG_STOREACTION_STORE;
+    pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, clear_alpha};
+    pass.attachments.colors[0] = target;
+    return pass;
+}
+
+// Copies a render target into the pass that is currently open, untinted and opaque to blending.
+void drawFullscreenTarget(EngineContext& ctx, sg_image image, sg_view texture_view, int width, int height) {
+    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    renderer_draw_sprite(ctx, &ctx.renderer, image, texture_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f, white,
+                         false, nullptr);
+}
+
+// A throwaway RGBA8 target that diagnostics keep for a stage image.
+struct Snapshot {
+    sg_image image = {SG_INVALID_ID};
+    sg_view texture = {SG_INVALID_ID};
+    sg_view attachment = {SG_INVALID_ID};
+
+    bool valid() const {
+        return image.id != SG_INVALID_ID && texture.id != SG_INVALID_ID && attachment.id != SG_INVALID_ID;
+    }
+    void destroy() {
+        if (texture.id != SG_INVALID_ID) sg_destroy_view(texture);
+        if (attachment.id != SG_INVALID_ID) sg_destroy_view(attachment);
+        if (image.id != SG_INVALID_ID) sg_destroy_image(image);
+        *this = Snapshot();
+    }
+};
+
+Snapshot makeSnapshot(int width, int height) {
+    Snapshot snapshot;
+    sg_image_desc image_desc = {};
+    image_desc.usage.color_attachment = true;
+    image_desc.width = width;
+    image_desc.height = height;
+    image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+    snapshot.image = sg_make_image(&image_desc);
+    if (snapshot.image.id == SG_INVALID_ID) return snapshot;
+
+    sg_view_desc texture_desc = {};
+    texture_desc.texture.image = snapshot.image;
+    snapshot.texture = sg_make_view(&texture_desc);
+    sg_view_desc attachment_desc = {};
+    attachment_desc.color_attachment.image = snapshot.image;
+    snapshot.attachment = sg_make_view(&attachment_desc);
+    if (!snapshot.valid()) snapshot.destroy();
+    return snapshot;
+}
+
+// Visits the layers to draw: only the debugger's selected layer in test mode, otherwise the soloed layers if any
+// are soloed, otherwise every visible one.
+template <class Draw>
+void forEachDrawnLayer(EngineContext& ctx, Draw&& draw) {
+    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
+        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+        draw(ctx.scene.layers[ctx.debug.selected_object]);
+        return;
+    }
+    const bool any_solo =
+        std::any_of(ctx.scene.layers.begin(), ctx.scene.layers.end(), [](const Layer* layer) { return layer->solo; });
+    for (Layer* layer : ctx.scene.layers) {
+        if (any_solo ? layer->solo : layer->visible) draw(layer);
+    }
+}
+}  // namespace
+
 void Scene2DRuntime::drawDirect() {
     const bool has_output_viewport = output_width > 0 && output_height > 0;
     if (has_output_viewport) {
@@ -23,26 +96,7 @@ void Scene2DRuntime::drawDirect() {
         sg_apply_scissor_rect(output_x, output_y, output_width, output_height, true);
     }
 
-    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
-        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
-        ctx.scene.layers[ctx.debug.selected_object]->draw(ctx);
-    } else {
-        bool any_solo = false;
-        for (auto layer : ctx.scene.layers) {
-            if (layer->solo) {
-                any_solo = true;
-                break;
-            }
-        }
-
-        for (auto layer : ctx.scene.layers) {
-            if (any_solo) {
-                if (layer->solo) layer->draw(ctx);
-            } else if (layer->visible) {
-                layer->draw(ctx);
-            }
-        }
-    }
+    forEachDrawnLayer(ctx, [&](Layer* layer) { layer->draw(ctx); });
 
     if (has_output_viewport) {
         sg_apply_viewport(0, 0, surface::width(), surface::height(), true);
@@ -73,39 +127,16 @@ void Scene2DRuntime::drawOffscreen() {
         IRenderObserver& diagnostics = renderObserver();
         if (!diagnostics.isCapturingFrame()) return;
 
-        sg_image_desc image_desc = {};
-        image_desc.usage.color_attachment = true;
-        image_desc.width = width;
-        image_desc.height = height;
-        image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-        sg_image snapshot = sg_make_image(&image_desc);
-        if (snapshot.id == SG_INVALID_ID) return;
-        sg_view_desc source_view_desc = {};
-        source_view_desc.texture.image = snapshot;
-        sg_view snapshot_texture = sg_make_view(&source_view_desc);
-        sg_view_desc attachment_view_desc = {};
-        attachment_view_desc.color_attachment.image = snapshot;
-        sg_view snapshot_attachment = sg_make_view(&attachment_view_desc);
-        if (snapshot_texture.id == SG_INVALID_ID || snapshot_attachment.id == SG_INVALID_ID) {
-            if (snapshot_texture.id != SG_INVALID_ID) sg_destroy_view(snapshot_texture);
-            if (snapshot_attachment.id != SG_INVALID_ID) sg_destroy_view(snapshot_attachment);
-            sg_destroy_image(snapshot);
-            return;
-        }
+        Snapshot snapshot = makeSnapshot(width, height);
+        if (!snapshot.valid()) return;
 
-        sg_pass snapshot_pass = {};
-        snapshot_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-        snapshot_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-        snapshot_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-        snapshot_pass.attachments.colors[0] = snapshot_attachment;
+        sg_pass snapshot_pass = colorPass(snapshot.attachment, SG_LOADACTION_CLEAR);
         sg_begin_pass(&snapshot_pass);
         if (raw_layer) {
             // Capture the layer's own output before it blends into the accumulated scene.
             layer->draw(ctx);
         } else {
-            float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-            renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current].image, scene_targets[current].texture_view,
-                                 0.0f, 0.0f, (float)width, (float)height, 0.0f, white, false, nullptr);
+            drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
         }
         sg_end_pass();
 
@@ -118,7 +149,7 @@ void Scene2DRuntime::drawOffscreen() {
             snprintf(stage_name, sizeof(stage_name), "%s-%02d-id-%u-%s", raw_layer ? "raw" : "after", layer_index,
                      layer->scene_object_id, layer->name.c_str());
         }
-        diagnostics.recordSceneStage(stage_name, snapshot, snapshot_texture, snapshot_attachment);
+        diagnostics.recordSceneStage(stage_name, snapshot.image, snapshot.texture, snapshot.attachment);
         if (!raw_layer) ++layer_index;
     };
 
@@ -129,16 +160,9 @@ void Scene2DRuntime::drawOffscreen() {
             capture_layer_result(layer, true);
             const int next = 1 - current;
 
-            sg_pass composite_pass = {};
-            composite_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-            composite_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-            composite_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
-            composite_pass.attachments.colors[0] = scene_targets[next].attachment_view;
+            sg_pass composite_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR);
             sg_begin_pass(&composite_pass);
-
-            float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-            renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current].image, scene_targets[current].texture_view,
-                                 0.0f, 0.0f, (float)width, (float)height, 0.0f, white, false, nullptr);
+            drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
             particle->setSceneColorView(scene_targets[current].texture_view);
             if (!RenderDiagnostics::instance().getConfig().disable_particles) {
                 particle->draw(ctx);
@@ -160,15 +184,9 @@ void Scene2DRuntime::drawOffscreen() {
             capture_layer_result(layer, true);
             const int next = 1 - current;
 
-            sg_pass composite_pass = {};
-            composite_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-            composite_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-            composite_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-            composite_pass.attachments.colors[0] = scene_targets[next].attachment_view;
+            sg_pass composite_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR, 1.0f);
             sg_begin_pass(&composite_pass);
-            float white[4] = {1, 1, 1, 1};
-            renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current].image, scene_targets[current].texture_view,
-                                 0, 0, (float)width, (float)height, 0, white, false, nullptr);
+            drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
             image->drawComposite(ctx, scene_targets[current].texture_view);
             sg_end_pass();
 
@@ -179,10 +197,7 @@ void Scene2DRuntime::drawOffscreen() {
 
         capture_layer_result(layer, true);
 
-        sg_pass layer_pass = {};
-        layer_pass.action.colors[0].load_action = SG_LOADACTION_LOAD;
-        layer_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-        layer_pass.attachments.colors[0] = scene_targets[current].attachment_view;
+        sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
         sg_begin_pass(&layer_pass);
         layer->draw(ctx);
         sg_end_pass();
@@ -190,60 +205,19 @@ void Scene2DRuntime::drawOffscreen() {
         capture_layer_result(layer, false);
     };
 
-    if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
-        ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
-        draw_layer(ctx.scene.layers[ctx.debug.selected_object]);
-    } else {
-        bool any_solo = false;
-        for (auto layer : ctx.scene.layers) {
-            if (layer->solo) {
-                any_solo = true;
-                break;
-            }
-        }
-        for (auto layer : ctx.scene.layers) {
-            if ((any_solo && !layer->solo) || (!any_solo && !layer->visible)) continue;
-            draw_layer(layer);
-        }
-    }
+    forEachDrawnLayer(ctx, draw_layer);
 
     current = renderBloom(current, width, height);
     // The layer snapshots stop before post-processing; capture one final post-bloom
     // stage so diagnostics represent what present() sends to the swapchain.
-    {
-        IRenderObserver& diagnostics = renderObserver();
-        if (diagnostics.isCapturingFrame()) {
-            sg_image_desc image_desc = {};
-            image_desc.usage.color_attachment = true;
-            image_desc.width = width;
-            image_desc.height = height;
-            image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-            sg_image snapshot = sg_make_image(&image_desc);
-            if (snapshot.id != SG_INVALID_ID) {
-                sg_view_desc texture_desc = {};
-                texture_desc.texture.image = snapshot;
-                sg_view texture_view = sg_make_view(&texture_desc);
-                sg_view_desc attachment_desc = {};
-                attachment_desc.color_attachment.image = snapshot;
-                sg_view attachment_view = sg_make_view(&attachment_desc);
-                if (texture_view.id != SG_INVALID_ID && attachment_view.id != SG_INVALID_ID) {
-                    sg_pass snapshot_pass = {};
-                    snapshot_pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-                    snapshot_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-                    snapshot_pass.attachments.colors[0] = attachment_view;
-                    sg_begin_pass(&snapshot_pass);
-                    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-                    renderer_draw_sprite(ctx, &ctx.renderer, scene_targets[current].image,
-                                         scene_targets[current].texture_view, 0.0f, 0.0f, (float)width, (float)height,
-                                         0.0f, white, false, nullptr);
-                    sg_end_pass();
-                    diagnostics.recordSceneStage("post-bloom-final", snapshot, texture_view, attachment_view);
-                } else {
-                    if (texture_view.id != SG_INVALID_ID) sg_destroy_view(texture_view);
-                    if (attachment_view.id != SG_INVALID_ID) sg_destroy_view(attachment_view);
-                    sg_destroy_image(snapshot);
-                }
-            }
+    if (IRenderObserver& diagnostics = renderObserver(); diagnostics.isCapturingFrame()) {
+        Snapshot snapshot = makeSnapshot(width, height);
+        if (snapshot.valid()) {
+            sg_pass snapshot_pass = colorPass(snapshot.attachment, SG_LOADACTION_CLEAR);
+            sg_begin_pass(&snapshot_pass);
+            drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
+            sg_end_pass();
+            diagnostics.recordSceneStage("post-bloom-final", snapshot.image, snapshot.texture, snapshot.attachment);
         }
     }
     scene_output_index = current;
