@@ -15,6 +15,7 @@ struct CliOptions {
     std::string gpu;
     bool list_gpus = false;
     bool no_audio = false;
+    bool video_ram = false;
     bool no_ui = false;
     DiagnosticOptions diagnostics;
     bool cover = false;

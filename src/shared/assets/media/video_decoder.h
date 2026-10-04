@@ -1,5 +1,6 @@
 #pragma once
 
+#include "media_source.h"
 #include "video_types.h"
 
 extern "C" {
@@ -19,8 +20,6 @@ class VideoDecoder {
     ~VideoDecoder();
 
     bool openFile(const char* path, ZeroCopyMetrics& zero_copy, const std::string& drm_render_node = "");
-    bool openMemory(const std::vector<uint8_t>& memory_data, ZeroCopyMetrics& zero_copy,
-                    const std::string& drm_render_node = "");
 
     bool receive_frame(AVFrame* out_frame, bool& out_eof, ZeroCopyMetrics& zero_copy, PlaybackStats& stats,
                        PerformanceTiming& perf);
@@ -57,23 +56,13 @@ class VideoDecoder {
     }
 
    private:
-    struct MemoryInput {
-        std::vector<uint8_t> bytes;
-        size_t position = 0;
-    };
-
     bool initDecoder(ZeroCopyMetrics& zero_copy, const std::string& drm_render_node);
-
-    static int readPacket(void* opaque, uint8_t* buf, int buf_size);
-    static int64_t seekMemory(void* opaque, int64_t offset, int whence);
 
     AVFormatContext* format_ctx_ = nullptr;
     AVCodecContext* decoder_ctx_ = nullptr;
     AVBufferRef* hw_device_ctx_ = nullptr;
     AVPacket* packet_ = nullptr;
-    AVIOContext* io_ctx_ = nullptr;
-    uint8_t* io_buffer_ = nullptr;
-    MemoryInput memory_input_;
+    wallpaper_engine::MediaIo io_;
 
     int video_stream_index_ = -1;
     int width_ = 0;

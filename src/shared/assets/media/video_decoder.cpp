@@ -9,7 +9,6 @@
 #include "shared/graphics/backend/gpu_device_manager.h"
 
 #define TAG "DECODER"
-constexpr int kIoBufferSize = 64 * 1024;
 
 VideoDecoder::VideoDecoder() = default;
 
@@ -17,73 +16,30 @@ VideoDecoder::~VideoDecoder() {
     close();
 }
 
-int VideoDecoder::readPacket(void* opaque, uint8_t* buf, int buf_size) {
-    auto* input = static_cast<MemoryInput*>(opaque);
-    if (!input || input->bytes.empty()) return AVERROR_EOF;
-    const size_t count = std::min(input->bytes.size() - input->position, (size_t)buf_size);
-    if (count == 0) return AVERROR_EOF;
-    memcpy(buf, input->bytes.data() + input->position, count);
-    input->position += count;
-    return (int)count;
-}
-
-int64_t VideoDecoder::seekMemory(void* opaque, int64_t offset, int whence) {
-    auto* input = static_cast<MemoryInput*>(opaque);
-    if (!input) return AVERROR(EINVAL);
-    if (whence == AVSEEK_SIZE) return (int64_t)input->bytes.size();
-    const int origin = whence & ~AVSEEK_FORCE;
-    int64_t position = origin == SEEK_SET   ? offset
-                       : origin == SEEK_CUR ? (int64_t)input->position + offset
-                                            : (int64_t)input->bytes.size() + offset;
-    if (position < 0 || position > (int64_t)input->bytes.size()) return AVERROR(EINVAL);
-    input->position = (size_t)position;
-    return position;
-}
-
 bool VideoDecoder::openFile(const char* path, ZeroCopyMetrics& zero_copy, const std::string& drm_render_node) {
     close();
     fallback_reason_.clear();
-    int result = avformat_open_input(&format_ctx_, path, nullptr, nullptr);
+
+    if (!io_.open(wallpaper_engine::openMediaSource(path))) {
+        LOG_TAG_E(TAG, "Could not read %s", path);
+        return false;
+    }
+    format_ctx_ = avformat_alloc_context();
+    if (!format_ctx_) {
+        close();
+        return false;
+    }
+    format_ctx_->pb = io_.context();
+    format_ctx_->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+    const int result = avformat_open_input(&format_ctx_, nullptr, nullptr, nullptr);
     if (result < 0) {
         char err[AV_ERROR_MAX_STRING_SIZE] = {};
         av_strerror(result, err, sizeof(err));
         LOG_TAG_E(TAG, "avformat_open_input failed for %s: %s", path, err);
-        return false;
-    }
-    return initDecoder(zero_copy, drm_render_node);
-}
-
-bool VideoDecoder::openMemory(const std::vector<uint8_t>& memory_data, ZeroCopyMetrics& zero_copy,
-                              const std::string& drm_render_node) {
-    close();
-    fallback_reason_.clear();
-    if (memory_data.empty()) return false;
-
-    memory_input_.bytes = memory_data;
-    memory_input_.position = 0;
-
-    io_buffer_ = (uint8_t*)av_malloc(kIoBufferSize);
-    if (!io_buffer_) return false;
-
-    io_ctx_ = avio_alloc_context(io_buffer_, kIoBufferSize, 0, &memory_input_, readPacket, nullptr, seekMemory);
-    format_ctx_ = avformat_alloc_context();
-    if (!io_ctx_ || !format_ctx_) {
         close();
         return false;
     }
-
-    format_ctx_->pb = io_ctx_;
-    format_ctx_->flags |= AVFMT_FLAG_CUSTOM_IO;
-
-    int result = avformat_open_input(&format_ctx_, nullptr, nullptr, nullptr);
-    if (result < 0) {
-        char err[AV_ERROR_MAX_STRING_SIZE] = {};
-        av_strerror(result, err, sizeof(err));
-        LOG_TAG_E(TAG, "avformat_open_input (custom memory io) failed: %s", err);
-        close();
-        return false;
-    }
-
     return initDecoder(zero_copy, drm_render_node);
 }
 
@@ -252,13 +208,7 @@ void VideoDecoder::close() {
         avformat_close_input(&format_ctx_);
         format_ctx_ = nullptr;
     }
-    if (io_ctx_) {
-        avio_context_free(&io_ctx_);
-        io_ctx_ = nullptr;
-    }
-    io_buffer_ = nullptr;
-    memory_input_.bytes.clear();
-    memory_input_.position = 0;
+    io_.close();
     va_display_ = nullptr;
     video_stream_index_ = -1;
 }

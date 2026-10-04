@@ -12,6 +12,7 @@
 #endif
 #include "app/package_extractor.h"
 #include "app/signals.h"
+#include "shared/assets/media/media_source.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/engine_context.h"
@@ -141,6 +142,7 @@ static void init(void) {
     }
     ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
 
+    wallpaper_engine::setVideoLoadInRam(cli.video_ram);
     initAudio();
 #if DEBUG_BUILD
     RenderDiagnostics::instance().init(cli.diagnostics);

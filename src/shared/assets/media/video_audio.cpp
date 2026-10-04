@@ -6,9 +6,9 @@
 #include <algorithm>
 #include <vector>
 
+#include "shared/assets/media/media_source.h"
 #include "shared/assets/media/video_rate.h"
 #include "shared/core/logger.h"
-#include "shared/core/vfs.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -21,59 +21,8 @@ extern "C" {
 #define TAG "VIDEO_AUDIO"
 
 namespace {
-constexpr int kIoBufferSize = 4096;
 constexpr uint32_t kOutputSampleRate = 48000;
 constexpr uint32_t kOutputChannels = 2;
-
-struct MemoryInput {
-    std::vector<uint8_t> bytes;
-    size_t position = 0;
-};
-
-int readMemory(void* opaque, uint8_t* buf, int buf_size) {
-    auto* input = static_cast<MemoryInput*>(opaque);
-    if (!input || input->position >= input->bytes.size()) return AVERROR_EOF;
-    const size_t available = input->bytes.size() - input->position;
-    const size_t to_read = std::min((size_t)buf_size, available);
-    memcpy(buf, input->bytes.data() + input->position, to_read);
-    input->position += to_read;
-    return (int)to_read;
-}
-
-int64_t seekMemory(void* opaque, int64_t offset, int whence) {
-    auto* input = static_cast<MemoryInput*>(opaque);
-    if (!input) return -1;
-    int64_t position = 0;
-    if (whence == SEEK_SET)
-        position = offset;
-    else if (whence == SEEK_CUR)
-        position = (int64_t)input->position + offset;
-    else if (whence == SEEK_END)
-        position = (int64_t)input->bytes.size() + offset;
-    else if (whence == AVSEEK_SIZE)
-        return (int64_t)input->bytes.size();
-    else
-        return -1;
-    if (position < 0 || position > (int64_t)input->bytes.size()) return -1;
-    input->position = (size_t)position;
-    return position;
-}
-
-bool readEmbeddedMp4(const char* path, std::vector<uint8_t>& mp4) {
-    std::vector<uint8_t> data;
-    if (!vfs::readAll(path, data) || data.size() <= 8) return false;
-    // ffmpeg cannot open a packaged file by name, so packaged videos always take the memory route.
-    if (vfs::isVirtual(path)) {
-        mp4 = std::move(data);
-        return true;
-    }
-    static constexpr uint8_t marker[] = {'f', 't', 'y', 'p'};
-    const auto ftyp = std::search(data.begin(), data.end(), std::begin(marker), std::end(marker));
-    if (ftyp == data.end() || ftyp - data.begin() < 4) return false;
-    const size_t offset = (size_t)(ftyp - data.begin() - 4);
-    mp4.assign(data.begin() + (long)offset, data.end());
-    return true;
-}
 
 }  // namespace
 
@@ -90,9 +39,7 @@ struct VideoAudioStream::Impl {
     bool logged_started = false;
     std::vector<float> converted;
 
-    MemoryInput memory_input;
-    AVIOContext* io = nullptr;
-    uint8_t* io_buffer = nullptr;
+    wallpaper_engine::MediaIo io;
 
     bool initResampler(uint32_t output_rate) {
         AVChannelLayout out_layout;
@@ -109,7 +56,7 @@ struct VideoAudioStream::Impl {
         av_packet_free(&packet);
         avcodec_free_context(&codec);
         avformat_close_input(&format);
-        if (io) avio_context_free(&io);
+        io.close();
     }
 };
 
@@ -120,22 +67,12 @@ std::unique_ptr<VideoAudioStream> VideoAudioStream::open(const char* path) {
     auto stream = std::unique_ptr<VideoAudioStream>(new VideoAudioStream());
     stream->impl = std::make_unique<Impl>();
 
-    std::vector<uint8_t> mp4_bytes;
-    const bool is_embedded = readEmbeddedMp4(path, mp4_bytes);
-
-    if (is_embedded) {
-        stream->impl->memory_input.bytes = std::move(mp4_bytes);
-        stream->impl->io_buffer = static_cast<uint8_t*>(av_malloc(kIoBufferSize));
-        stream->impl->io = avio_alloc_context(stream->impl->io_buffer, kIoBufferSize, 0, &stream->impl->memory_input,
-                                              readMemory, nullptr, seekMemory);
-        if (!stream->impl->io) return nullptr;
-        stream->impl->format = avformat_alloc_context();
-        if (!stream->impl->format) return nullptr;
-        stream->impl->format->pb = stream->impl->io;
-        if (avformat_open_input(&stream->impl->format, "memory", nullptr, nullptr) < 0) return nullptr;
-    } else {
-        if (avformat_open_input(&stream->impl->format, path, nullptr, nullptr) < 0) return nullptr;
-    }
+    if (!stream->impl->io.open(wallpaper_engine::openMediaSource(path))) return nullptr;
+    stream->impl->format = avformat_alloc_context();
+    if (!stream->impl->format) return nullptr;
+    stream->impl->format->pb = stream->impl->io.context();
+    stream->impl->format->flags |= AVFMT_FLAG_CUSTOM_IO;
+    if (avformat_open_input(&stream->impl->format, nullptr, nullptr, nullptr) < 0) return nullptr;
 
     if (avformat_find_stream_info(stream->impl->format, nullptr) < 0) return nullptr;
     const AVCodec* decoder = nullptr;

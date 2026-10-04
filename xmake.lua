@@ -224,6 +224,17 @@ target("video_tests")
     add_includedirs("src")
     add_files("tests/video_test.cpp", "src/wallpaper/video/video_properties.cpp")
 
+-- Video byte source checks (disk vs RAM, TEX-embedded MP4). Not built by default; run with `xmake build media_tests`.
+target("media_tests")
+    set_kind("binary")
+    set_default(false)
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_syslinks("avformat", "avutil")
+    add_files("tests/media_source_test.cpp", "src/shared/assets/media/media_source.cpp", "src/shared/core/vfs.cpp",
+              "src/shared/core/logger.cpp")
+
 task("check")
     set_menu {
         usage = "xmake check",

@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <chrono>
 
+#include "media_source.h"
 #include "shared/core/logger.h"
-#include "shared/core/vfs.h"
 #include "shared/graphics/backend/gpu_zero_copy.h"
 #include "video_decoder.h"
 #include "video_import_cache.h"
@@ -24,61 +24,6 @@ extern "C" {
 #define TAG "VIDEO"
 
 namespace wallpaper_engine {
-namespace {
-constexpr int kIoBufferSize = 4096;
-
-struct MemoryInput {
-    std::vector<uint8_t> bytes;
-    size_t position = 0;
-};
-
-int readMemory(void* opaque, uint8_t* buf, int buf_size) {
-    auto* input = static_cast<MemoryInput*>(opaque);
-    if (!input || input->position >= input->bytes.size()) return AVERROR_EOF;
-    const size_t available = input->bytes.size() - input->position;
-    const size_t to_read = std::min((size_t)buf_size, available);
-    memcpy(buf, input->bytes.data() + input->position, to_read);
-    input->position += to_read;
-    return (int)to_read;
-}
-
-int64_t seekMemory(void* opaque, int64_t offset, int whence) {
-    auto* input = static_cast<MemoryInput*>(opaque);
-    if (!input) return -1;
-    int64_t position = 0;
-    if (whence == SEEK_SET)
-        position = offset;
-    else if (whence == SEEK_CUR)
-        position = (int64_t)input->position + offset;
-    else if (whence == SEEK_END)
-        position = (int64_t)input->bytes.size() + offset;
-    else if (whence == AVSEEK_SIZE)
-        return (int64_t)input->bytes.size();
-    else
-        return -1;
-
-    if (position < 0 || position > (int64_t)input->bytes.size()) return -1;
-    input->position = (size_t)position;
-    return position;
-}
-
-bool readEmbeddedMp4(const char* path, std::vector<uint8_t>& mp4) {
-    std::vector<uint8_t> data;
-    if (!vfs::readAll(path, data) || data.size() <= 8) return false;
-    // ffmpeg cannot open a packaged file by name, so packaged videos always take the memory route.
-    if (vfs::isVirtual(path)) {
-        mp4 = std::move(data);
-        return true;
-    }
-    static constexpr uint8_t marker[] = {'f', 't', 'y', 'p'};
-    const auto ftyp = std::search(data.begin(), data.end(), std::begin(marker), std::end(marker));
-    if (ftyp == data.end() || ftyp - data.begin() < 4) return false;
-    const size_t offset = (size_t)(ftyp - data.begin() - 4);
-    mp4.assign(data.begin() + (long)offset, data.end());
-    return true;
-}
-
-}  // namespace
 
 struct VideoTexture::Impl {
     VideoDecoder hw_decoder;
@@ -95,14 +40,12 @@ struct VideoTexture::Impl {
     uint32_t loop_count = 0;
     AVFrame* current_frame = nullptr;
 
-    MemoryInput input;
+    MediaIo io;
     AVFormatContext* sw_format = nullptr;
     AVCodecContext* sw_codec = nullptr;
     AVFrame* sw_frame = nullptr;
     AVPacket* sw_packet = nullptr;
     SwsContext* sw_scaler = nullptr;
-    AVIOContext* sw_io = nullptr;
-    uint8_t* sw_io_buffer = nullptr;
     int sw_stream_index = -1;
     uint32_t video_width = 0;
     uint32_t video_height = 0;
@@ -143,7 +86,7 @@ struct VideoTexture::Impl {
         av_packet_free(&sw_packet);
         avcodec_free_context(&sw_codec);
         avformat_close_input(&sw_format);
-        if (sw_io) avio_context_free(&sw_io);
+        io.close();
     }
 };
 
@@ -154,17 +97,8 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
     auto texture = std::unique_ptr<VideoTexture>(new VideoTexture());
     texture->impl = std::make_unique<Impl>();
 
-    std::vector<uint8_t> mp4_bytes;
-    const bool is_embedded = readEmbeddedMp4(path, mp4_bytes);
-
-    if (is_embedded) {
-        if (texture->impl->hw_decoder.openMemory(mp4_bytes, texture->impl->zero_copy)) {
-            texture->impl->is_hw_active = true;
-        }
-    } else {
-        if (texture->impl->hw_decoder.openFile(path, texture->impl->zero_copy)) {
-            texture->impl->is_hw_active = true;
-        }
+    if (texture->impl->hw_decoder.openFile(path, texture->impl->zero_copy)) {
+        texture->impl->is_hw_active = true;
     }
 
     if (texture->impl->is_hw_active) {
@@ -188,17 +122,10 @@ std::unique_ptr<VideoTexture> VideoTexture::open(const char* path) {
     texture->impl->sw_format = avformat_alloc_context();
     if (!texture->impl->sw_format) return nullptr;
 
-    if (is_embedded) {
-        texture->impl->input.bytes = std::move(mp4_bytes);
-        texture->impl->sw_io_buffer = static_cast<uint8_t*>(av_malloc(kIoBufferSize));
-        texture->impl->sw_io = avio_alloc_context(texture->impl->sw_io_buffer, kIoBufferSize, 0, &texture->impl->input,
-                                                  readMemory, nullptr, seekMemory);
-        if (!texture->impl->sw_io) return nullptr;
-        texture->impl->sw_format->pb = texture->impl->sw_io;
-        if (avformat_open_input(&texture->impl->sw_format, "memory", nullptr, nullptr) < 0) return nullptr;
-    } else {
-        if (avformat_open_input(&texture->impl->sw_format, path, nullptr, nullptr) < 0) return nullptr;
-    }
+    if (!texture->impl->io.open(openMediaSource(path))) return nullptr;
+    texture->impl->sw_format->pb = texture->impl->io.context();
+    texture->impl->sw_format->flags |= AVFMT_FLAG_CUSTOM_IO;
+    if (avformat_open_input(&texture->impl->sw_format, nullptr, nullptr, nullptr) < 0) return nullptr;
 
     if (avformat_find_stream_info(texture->impl->sw_format, nullptr) < 0) return nullptr;
     const int stream_index = av_find_best_stream(texture->impl->sw_format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
