@@ -126,17 +126,24 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
                                  ? ctx.debug.selected_node_id == node.id
                                  : (layer_index >= 0 && ctx.debug.selected_object == layer_index);
     const bool expanded = has_children && g_expanded_nodes.count(node.id) > 0;
-    std::string type = "Node";
+    std::string node_name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
+    // The tree name already carries a "[Class]" prefix; fold the variant into it as a sub-prefix.
+    std::string variant;
     if (layer_index >= 0 && layer_index < (int)ctx.scene.layers.size()) {
-        const Layer* layer = ctx.scene.layers[layer_index];
-        if (const auto* il = dynamic_cast<const ImageLayer*>(layer)) {
-            type = il->is_fullscreen ? "Image/Post" : (il->solid_layer ? "Image/Solid" : "Image");
-        } else if (dynamic_cast<const ParticleLayer*>(layer)) {
-            type = "Particle";
+        if (const auto* il = dynamic_cast<const ImageLayer*>(ctx.scene.layers[layer_index])) {
+            if (il->is_fullscreen)
+                variant = "Post";
+            else if (il->solid_layer)
+                variant = "Solid";
         }
     }
-    std::string node_name =
-        "[" + type + "] " + (node.name.empty() ? "Node " + std::to_string(node.id) : node.name);
+    const size_t close = node_name.find(']');
+    if (node_name[0] == '[' && close != std::string::npos) {
+        node_name = "[" + node_name.substr(1, close - 1) + (variant.empty() ? "" : "/" + variant) + "]" +
+                    node_name.substr(close + 1);
+    } else if (!variant.empty()) {
+        node_name = "[" + variant + "] " + node_name;
+    }
     if (node.parallax_depth[0] != 0.0f || node.parallax_depth[1] != 0.0f) {
         char p_buf[64];
         snprintf(p_buf, sizeof(p_buf), " [P:%.1f,%.1f]", node.parallax_depth[0], node.parallax_depth[1]);
