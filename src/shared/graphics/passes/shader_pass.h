@@ -17,6 +17,8 @@
 #include "wallpaper/2d/animation_curve.h"
 
 class EngineContext;
+struct ShaderSourceSet;
+struct ShaderUniformConfig;
 
 class ShaderPass {
    public:
@@ -101,6 +103,11 @@ class ShaderPass {
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
 
    private:
+    void resolveUniforms(const std::vector<ShaderUniformConfig>& shader_uniforms);
+    std::string buildComboDefines(const ShaderSourceSet& sources) const;
+    void warnAboutMissingTextures() const;
+    void registerDiagnostics(const ShaderSourceSet& sources,
+                             const std::vector<ShaderUniformConfig>& shader_uniforms) const;
     void applyAudioSpectrumBlocks();
     void updateAnimatedUniforms(float time);
     std::string stored_vs_source;

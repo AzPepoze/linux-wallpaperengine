@@ -90,73 +90,83 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     if (owned_base_config) cJSON_Delete(owned_base_config);
 }
 
-void ShaderPass::init(EngineContext& ctx) {
-    if (shader_name.empty()) {
-        effect_log.warn("Skipping effect pass with no shader");
-        return;
-    }
+// Every stage of one pass's shader source, kept together for the diagnostics dump.
+struct ShaderSourceSet {
+    std::string raw_vs;
+    std::string raw_fs;
+    std::string processed_vs;
+    std::string processed_fs;
+    std::string full_vs;
+    std::string full_fs;
+};
 
-    char vert_path[256], frag_path[256];
-    if (shader_name.find("shaders/") == 0) {
-        snprintf(vert_path, sizeof(vert_path), "%s.vert", shader_name.c_str());
-        snprintf(frag_path, sizeof(frag_path), "%s.frag", shader_name.c_str());
-    } else {
-        snprintf(vert_path, sizeof(vert_path), "shaders/%s.vert", shader_name.c_str());
-        snprintf(frag_path, sizeof(frag_path), "shaders/%s.frag", shader_name.c_str());
-    }
-
-    char abs_vert[1024], abs_frag[1024];
-    char* vs_src = nullptr;
-    char* fs_src = nullptr;
-
-    if (ctx.asset_mgr.resolvePath(vert_path, abs_vert, sizeof(abs_vert))) {
-        vs_src = read_file_to_string(abs_vert);
-    } else {
+namespace {
+// Reads one shader stage from the wallpaper package or the engine assets, falling back to an extraction directory.
+bool readShaderStage(EngineContext& ctx, const char* relative_path, char* absolute_path, size_t capacity,
+                     std::string& source) {
+    if (!ctx.asset_mgr.resolvePath(relative_path, absolute_path, (int)capacity)) {
         char extracted_path[512];
-        snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", vert_path);
-        if (ctx.asset_mgr.resolvePath(extracted_path, abs_vert, sizeof(abs_vert))) {
-            vs_src = read_file_to_string(abs_vert);
+        snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", relative_path);
+        if (!ctx.asset_mgr.resolvePath(extracted_path, absolute_path, (int)capacity)) return false;
+    }
+    char* text = read_file_to_string(absolute_path);
+    if (!text) return false;
+    source = text;
+    free(text);
+    return true;
+}
+
+// The depth-parallax mask is authored in sRGB but sampled as linear data here.
+void convertDepthParallaxMaskToLinear(std::string& fragment_source) {
+    const std::string mask_sample = "texSample2D(g_Texture2, v_TexCoordMask.xy).r";
+    const size_t mask_sample_pos = fragment_source.find(mask_sample);
+    if (mask_sample_pos == std::string::npos) return;
+    fragment_source.replace(mask_sample_pos, mask_sample.size(), "lwe_srgb_to_linear(" + mask_sample + ")");
+    fragment_source =
+        "float lwe_srgb_to_linear(float c) {\n"
+        "    return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);\n"
+        "}\n" +
+        fragment_source;
+}
+
+// Finds the authored value in `values` that resolves to `meta`, if any.
+bool findResolvedValue(const std::map<std::string, std::vector<float>>& values, const ShaderUniformConfig& meta,
+                       std::vector<float>& found_value) {
+    for (const auto& [name, value] : values) {
+        std::string resolved;
+        if (EffectParser::resolveUniformName(name, {meta}, resolved) && resolved == meta.name) {
+            found_value = value;
+            return true;
         }
     }
+    return false;
+}
 
-    if (ctx.asset_mgr.resolvePath(frag_path, abs_frag, sizeof(abs_frag))) {
-        fs_src = read_file_to_string(abs_frag);
-    } else {
-        char extracted_path[512];
-        snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", frag_path);
-        if (ctx.asset_mgr.resolvePath(extracted_path, abs_frag, sizeof(abs_frag))) {
-            fs_src = read_file_to_string(abs_frag);
-        }
-    }
+UniformResolutionStep makeStep(ProvenanceSource source, const char* source_name, bool present,
+                               std::vector<float> values = {}) {
+    UniformResolutionStep step;
+    step.source = source;
+    step.source_name = source_name;
+    step.present = present;
+    step.values = std::move(values);
+    step.applied = false;
+    return step;
+}
 
-    if (!vs_src || !fs_src) {
-        effect_log.warn("ShaderPass %s: missing vertex or fragment shader source", shader_name.c_str());
-        if (vs_src) free(vs_src);
-        if (fs_src) free(fs_src);
-        return;
-    }
+void addComboStep(ComboProvenanceEntry& entry, const std::map<std::string, int>& values, ProvenanceSource source,
+                  const char* source_name) {
+    const auto found = values.find(entry.name);
+    if (found == values.end()) return;
+    ComboResolutionStep step;
+    step.source = source;
+    step.source_name = source_name;
+    step.present = true;
+    step.value = found->second;
+    entry.resolution.push_back(step);
+}
+}  // namespace
 
-    std::string raw_vs = vs_src;
-    std::string raw_fs = fs_src;
-    std::string combo_defines;
-
-    const bool is_depth_parallax = shader_name.find("depthparallax") != std::string::npos;
-    const bool is_waterwaves = shader_name.find("waterwaves") != std::string::npos;
-    const bool has_mask_texture_combo = raw_fs.find("\"combo\":\"MASK\"") != std::string::npos;
-
-    bool has_mvp = raw_vs.find("g_ModelViewProjectionMatrix") != std::string::npos;
-    int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
-    is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
-
-    std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
-    std::string processed_vs = ShaderSourceProcessor::processShaderSource(raw_vs, abs_vert, ctx.asset_mgr, true);
-    std::string processed_fs = ShaderSourceProcessor::processShaderSource(raw_fs, abs_frag, ctx.asset_mgr, false);
-
-    // Shared includes can declare material uniforms, so inspect the expanded sources.
-    std::vector<ShaderUniformConfig> shader_uniforms = EffectParser::extractShaderUniforms(processed_vs);
-    std::vector<ShaderUniformConfig> fragment_uniforms = EffectParser::extractShaderUniforms(processed_fs);
-    shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
-
+void ShaderPass::resolveUniforms(const std::vector<ShaderUniformConfig>& shader_uniforms) {
     std::map<std::string, std::vector<float>> resolved_uniforms;
     for (const auto& [name, values] : uniforms) {
         std::string resolved_name;
@@ -201,246 +211,206 @@ void ShaderPass::init(EngineContext& ctx) {
                          shader_name.c_str(), name.c_str(), resolved_name.c_str(), curve.keys.size(), curve.fps,
                          curve.length, curve.mode.c_str());
     }
+}
 
-    combo_defines = ShaderSourceProcessor::extractCombos((processed_vs + "\n" + processed_fs).c_str());
+std::string ShaderPass::buildComboDefines(const ShaderSourceSet& sources) const {
+    std::string combo_defines =
+        ShaderSourceProcessor::extractCombos((sources.processed_vs + "\n" + sources.processed_fs).c_str());
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
-    if (is_depth_parallax) {
-        setComboDefine(combo_defines, "MASK",
-                       pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
-    } else if (is_waterwaves) {
-        setComboDefine(combo_defines, "MASK",
-                       !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID);
-        setComboDefine(combo_defines, "TIMEOFFSET",
-                       pass_textures.textures.size() > 1 && pass_textures.textures[1].id != SG_INVALID_ID);
-    } else if (has_mask_texture_combo) {
-        const int mask_index = findMaskTextureIndex(raw_fs);
-        bool has_mask = false;
-        if (mask_index <= 0) {
-            has_mask = !pass_textures.textures.empty() && pass_textures.textures[0].id != SG_INVALID_ID;
-        } else {
-            const size_t slot = static_cast<size_t>(mask_index - 1);
-            has_mask = slot < pass_textures.textures.size() && pass_textures.textures[slot].id != SG_INVALID_ID;
-        }
+
+    const auto bound = [&](size_t slot) {
+        return pass_textures.textures.size() > slot && pass_textures.textures[slot].id != SG_INVALID_ID;
+    };
+    if (shader_name.find("depthparallax") != std::string::npos) {
+        setComboDefine(combo_defines, "MASK", bound(1));
+    } else if (shader_name.find("waterwaves") != std::string::npos) {
+        setComboDefine(combo_defines, "MASK", bound(0));
+        setComboDefine(combo_defines, "TIMEOFFSET", bound(1));
+    } else if (sources.raw_fs.find("\"combo\":\"MASK\"") != std::string::npos) {
+        const int mask_index = findMaskTextureIndex(sources.raw_fs);
+        const bool has_mask = bound(mask_index <= 0 ? 0 : (size_t)(mask_index - 1));
         effect_log.debug("ShaderPass %s: MASK combo -> %d (mask sampler g_Texture%d, %zu textures bound)",
                          shader_name.c_str(), has_mask, mask_index, pass_textures.textures.size());
         setComboDefine(combo_defines, "MASK", has_mask);
     }
+    return combo_defines;
+}
 
-    if (is_depth_parallax) {
-        const std::string mask_sample = "texSample2D(g_Texture2, v_TexCoordMask.xy).r";
-        const size_t mask_sample_pos = processed_fs.find(mask_sample);
-        if (mask_sample_pos != std::string::npos) {
-            processed_fs.replace(mask_sample_pos, mask_sample.size(), "lwe_srgb_to_linear(" + mask_sample + ")");
-            processed_fs =
-                "float lwe_srgb_to_linear(float c) {\n"
-                "    return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);\n"
-                "}\n" +
-                processed_fs;
-        }
+void ShaderPass::init(EngineContext& ctx) {
+    if (shader_name.empty()) {
+        effect_log.warn("Skipping effect pass with no shader");
+        return;
     }
 
-    std::string full_vs = prefix + combo_defines + processed_vs;
-    std::string full_fs = prefix + combo_defines + processed_fs;
+    char vert_path[256], frag_path[256];
+    if (shader_name.find("shaders/") == 0) {
+        snprintf(vert_path, sizeof(vert_path), "%s.vert", shader_name.c_str());
+        snprintf(frag_path, sizeof(frag_path), "%s.frag", shader_name.c_str());
+    } else {
+        snprintf(vert_path, sizeof(vert_path), "shaders/%s.vert", shader_name.c_str());
+        snprintf(frag_path, sizeof(frag_path), "shaders/%s.frag", shader_name.c_str());
+    }
 
-    stored_vs_source = full_vs;
-    stored_fs_source = full_fs;
+    ShaderSourceSet sources;
+    char abs_vert[1024], abs_frag[1024];
+    const bool has_vertex = readShaderStage(ctx, vert_path, abs_vert, sizeof(abs_vert), sources.raw_vs);
+    const bool has_fragment = readShaderStage(ctx, frag_path, abs_frag, sizeof(abs_frag), sources.raw_fs);
+    if (!has_vertex || !has_fragment) {
+        effect_log.warn("ShaderPass %s: missing vertex or fragment shader source", shader_name.c_str());
+        return;
+    }
 
-    full_fs = renderObserver().overrideFragmentSource(shader_name, full_fs, debug_view_mode, debug_step);
+    const bool has_mvp = sources.raw_vs.find("g_ModelViewProjectionMatrix") != std::string::npos;
+    const int vertical = combos.count("VERTICAL") ? combos.at("VERTICAL") : 0;
+    is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
 
-    texture_labels = ShaderSourceProcessor::extractTextureLabels(fs_src);
+    const std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
+    sources.processed_vs = ShaderSourceProcessor::processShaderSource(sources.raw_vs, abs_vert, ctx.asset_mgr, true);
+    sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, ctx.asset_mgr, false);
+
+    // Shared includes can declare material uniforms, so inspect the expanded sources.
+    std::vector<ShaderUniformConfig> shader_uniforms = EffectParser::extractShaderUniforms(sources.processed_vs);
+    std::vector<ShaderUniformConfig> fragment_uniforms = EffectParser::extractShaderUniforms(sources.processed_fs);
+    shader_uniforms.insert(shader_uniforms.end(), fragment_uniforms.begin(), fragment_uniforms.end());
+    resolveUniforms(shader_uniforms);
+
+    const std::string combo_defines = buildComboDefines(sources);
+    if (shader_name.find("depthparallax") != std::string::npos) convertDepthParallaxMaskToLinear(sources.processed_fs);
+
+    sources.full_vs = prefix + combo_defines + sources.processed_vs;
+    sources.full_fs = prefix + combo_defines + sources.processed_fs;
+    stored_vs_source = sources.full_vs;
+    stored_fs_source = sources.full_fs;
+    sources.full_fs =
+        renderObserver().overrideFragmentSource(shader_name, sources.full_fs, debug_view_mode, debug_step);
+
+    texture_labels = ShaderSourceProcessor::extractTextureLabels(sources.raw_fs.c_str());
 
     int texture_count = (int)pass_textures.textures.size();
     for (const auto& [slot, binding] : render_texture_bindings) {
         (void)binding;
         if (slot > 0) texture_count = std::max(texture_count, slot);
     }
-    compiled = ShaderCompiler::compile(shader_name, full_vs, full_fs, uniforms, texture_count);
-
-    free(vs_src);
-    free(fs_src);
+    compiled = ShaderCompiler::compile(shader_name, sources.full_vs, sources.full_fs, uniforms, texture_count);
 
     pass_textures.buildCachedViews();
-
-    if (renderObserver().isCollectingShaderInfo()) {
-        PassUniformProvenance prov;
-        prov.effect_file = effect_file;
-        prov.pass_index = pass_index;
-        prov.shader_name = shader_name;
-
-        for (const auto& meta : shader_uniforms) {
-            UniformProvenanceEntry entry;
-            entry.shader_name = meta.name;
-            entry.authored_name = meta.material_name;
-            entry.resolved_name = meta.name;
-            entry.type = meta.type;
-
-            UniformResolutionStep step_def;
-            step_def.source = ProvenanceSource::ShaderMetadataDefault;
-            step_def.source_name = "shader_metadata_default";
-            step_def.present = meta.has_default;
-            step_def.values = meta.default_values;
-            step_def.applied = false;
-            entry.resolution.push_back(step_def);
-
-            bool found_base = false;
-            std::vector<float> base_val;
-            for (const auto& [b_name, b_val] : base_uniforms) {
-                std::string res;
-                if (EffectParser::resolveUniformName(b_name, {meta}, res) && res == meta.name) {
-                    found_base = true;
-                    base_val = b_val;
-                    break;
-                }
-            }
-            UniformResolutionStep step_base;
-            step_base.source = ProvenanceSource::MaterialConstant;
-            step_base.source_name = "material_constant";
-            step_base.present = found_base;
-            step_base.values = base_val;
-            entry.resolution.push_back(step_base);
-
-            bool found_pass = false;
-            std::vector<float> pass_val;
-            for (const auto& [p_name, p_val] : pass_uniforms) {
-                std::string res;
-                if (EffectParser::resolveUniformName(p_name, {meta}, res) && res == meta.name) {
-                    found_pass = true;
-                    pass_val = p_val;
-                    break;
-                }
-            }
-            UniformResolutionStep step_pass;
-            step_pass.source = ProvenanceSource::EffectPassOverride;
-            step_pass.source_name = "effect_pass_override";
-            step_pass.present = found_pass;
-            step_pass.values = pass_val;
-            entry.resolution.push_back(step_pass);
-
-            bool found_inst = false;
-            std::vector<float> inst_val;
-            for (const auto& [i_name, i_val] : inst_uniforms) {
-                std::string res;
-                if (EffectParser::resolveUniformName(i_name, {meta}, res) && res == meta.name) {
-                    found_inst = true;
-                    inst_val = i_val;
-                    break;
-                }
-            }
-            UniformResolutionStep step_inst;
-            step_inst.source = ProvenanceSource::InstanceOverride;
-            step_inst.source_name = "instance_override";
-            step_inst.present = found_inst;
-            step_inst.values = inst_val;
-            entry.resolution.push_back(step_inst);
-
-            entry.resolution[0].applied = meta.has_default && !found_base && !found_pass && !found_inst;
-
-            auto final_it = uniforms.find(meta.name);
-            if (final_it != uniforms.end()) {
-                entry.final_value = final_it->second;
-                if (found_inst) {
-                    entry.final_source = ProvenanceSource::InstanceOverride;
-                    entry.resolution.back().applied = true;
-                } else if (found_pass) {
-                    entry.final_source = ProvenanceSource::EffectPassOverride;
-                    entry.resolution[2].applied = true;
-                } else if (found_base) {
-                    entry.final_source = ProvenanceSource::MaterialConstant;
-                    entry.resolution[1].applied = true;
-                } else {
-                    entry.final_source =
-                        meta.has_default ? ProvenanceSource::ShaderMetadataDefault : ProvenanceSource::RuntimeBuiltin;
-                }
-            } else {
-                entry.final_source = ProvenanceSource::Unresolved;
-            }
-
-            prov.uniforms[meta.name] = entry;
-        }
-
-        for (const auto& [c_name, c_val] : combos) {
-            ComboProvenanceEntry c_entry;
-            c_entry.name = c_name;
-            c_entry.final_value = c_val;
-
-            if (base_combos.count(c_name)) {
-                ComboResolutionStep s;
-                s.source = ProvenanceSource::MaterialConstant;
-                s.source_name = "material_constant";
-                s.present = true;
-                s.value = base_combos.at(c_name);
-                c_entry.resolution.push_back(s);
-            }
-            if (pass_combos.count(c_name)) {
-                ComboResolutionStep s;
-                s.source = ProvenanceSource::EffectPassOverride;
-                s.source_name = "effect_pass_override";
-                s.present = true;
-                s.value = pass_combos.at(c_name);
-                c_entry.resolution.push_back(s);
-            }
-            if (inst_combos.count(c_name)) {
-                ComboResolutionStep s;
-                s.source = ProvenanceSource::InstanceOverride;
-                s.source_name = "instance_override";
-                s.present = true;
-                s.value = inst_combos.at(c_name);
-                c_entry.resolution.push_back(s);
-            }
-
-            if (inst_combos.count(c_name)) {
-                c_entry.final_source = ProvenanceSource::InstanceOverride;
-                if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
-            } else if (pass_combos.count(c_name)) {
-                c_entry.final_source = ProvenanceSource::EffectPassOverride;
-                if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
-            } else if (base_combos.count(c_name)) {
-                c_entry.final_source = ProvenanceSource::MaterialConstant;
-                if (!c_entry.resolution.empty()) c_entry.resolution.back().applied = true;
-            } else {
-                c_entry.final_source = ProvenanceSource::RuntimeInferred;
-            }
-
-            prov.combos[c_name] = c_entry;
-        }
-
-        ShaderDump dump;
-        dump.effect_index = effect_index;
-        dump.pass_index = pass_index;
-        dump.shader_name = shader_name;
-        dump.effect_file = effect_file;
-        dump.original_vs = raw_vs;
-        dump.original_fs = raw_fs;
-        dump.processed_vs = processed_vs;
-        dump.processed_fs = processed_fs;
-        dump.final_vs = full_vs;
-        dump.final_fs = full_fs;
-        dump.combos = combos;
-        dump.uniforms = uniforms;
-
-        renderObserver().registerShaderDump(dump);
-        renderObserver().registerUniformProvenance(prov);
-    }
+    if (renderObserver().isCollectingShaderInfo()) registerDiagnostics(sources, shader_uniforms);
 
     if (compiled.pipeline.id == SG_INVALID_ID) {
         effect_log.warn("ShaderPass %s: effect shader could not be compiled; pass will be skipped",
                         shader_name.c_str());
         return;
     }
+    warnAboutMissingTextures();
+}
 
-    if (is_depth_parallax) {
-        if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
+void ShaderPass::warnAboutMissingTextures() const {
+    const auto unbound = [&](size_t slot) {
+        return pass_textures.textures.size() <= slot || pass_textures.textures[slot].id == SG_INVALID_ID;
+    };
+    if (shader_name.find("depthparallax") != std::string::npos) {
+        if (unbound(0)) {
             effect_log.warn("ShaderPass %s: g_Texture1 (depth) missing, using Wallpaper Engine black fallback",
                             shader_name.c_str());
         }
-        if (pass_textures.textures.size() < 2 || pass_textures.textures[1].id == SG_INVALID_ID) {
+        if (unbound(1)) {
             effect_log.warn("ShaderPass %s: g_Texture2 (mask) missing, using full white fallback", shader_name.c_str());
         }
-    } else if (is_waterwaves) {
-        if (pass_textures.textures.empty() || pass_textures.textures[0].id == SG_INVALID_ID) {
-            effect_log.warn("ShaderPass %s: g_Texture1 (mask) missing, using full white fallback", shader_name.c_str());
-        }
+    } else if (shader_name.find("waterwaves") != std::string::npos && unbound(0)) {
+        effect_log.warn("ShaderPass %s: g_Texture1 (mask) missing, using full white fallback", shader_name.c_str());
     }
+}
+
+void ShaderPass::registerDiagnostics(const ShaderSourceSet& sources,
+                                     const std::vector<ShaderUniformConfig>& shader_uniforms) const {
+    PassUniformProvenance prov;
+    prov.effect_file = effect_file;
+    prov.pass_index = pass_index;
+    prov.shader_name = shader_name;
+
+    for (const ShaderUniformConfig& meta : shader_uniforms) {
+        UniformProvenanceEntry entry;
+        entry.shader_name = meta.name;
+        entry.authored_name = meta.material_name;
+        entry.resolved_name = meta.name;
+        entry.type = meta.type;
+
+        std::vector<float> base_value, pass_value, instance_value;
+        const bool found_base = findResolvedValue(base_uniforms, meta, base_value);
+        const bool found_pass = findResolvedValue(pass_uniforms, meta, pass_value);
+        const bool found_instance = findResolvedValue(inst_uniforms, meta, instance_value);
+
+        UniformResolutionStep default_step = makeStep(ProvenanceSource::ShaderMetadataDefault,
+                                                      "shader_metadata_default", meta.has_default, meta.default_values);
+        default_step.applied = meta.has_default && !found_base && !found_pass && !found_instance;
+        UniformResolutionStep base_step =
+            makeStep(ProvenanceSource::MaterialConstant, "material_constant", found_base, base_value);
+        UniformResolutionStep pass_step =
+            makeStep(ProvenanceSource::EffectPassOverride, "effect_pass_override", found_pass, pass_value);
+        UniformResolutionStep instance_step =
+            makeStep(ProvenanceSource::InstanceOverride, "instance_override", found_instance, instance_value);
+
+        const auto final_value = uniforms.find(meta.name);
+        if (final_value == uniforms.end()) {
+            entry.final_source = ProvenanceSource::Unresolved;
+        } else {
+            entry.final_value = final_value->second;
+            if (found_instance) {
+                entry.final_source = ProvenanceSource::InstanceOverride;
+                instance_step.applied = true;
+            } else if (found_pass) {
+                entry.final_source = ProvenanceSource::EffectPassOverride;
+                pass_step.applied = true;
+            } else if (found_base) {
+                entry.final_source = ProvenanceSource::MaterialConstant;
+                base_step.applied = true;
+            } else {
+                entry.final_source =
+                    meta.has_default ? ProvenanceSource::ShaderMetadataDefault : ProvenanceSource::RuntimeBuiltin;
+            }
+        }
+        entry.resolution = {default_step, base_step, pass_step, instance_step};
+        prov.uniforms[meta.name] = entry;
+    }
+
+    for (const auto& [combo_name, combo_value] : combos) {
+        ComboProvenanceEntry entry;
+        entry.name = combo_name;
+        entry.final_value = combo_value;
+        addComboStep(entry, base_combos, ProvenanceSource::MaterialConstant, "material_constant");
+        addComboStep(entry, pass_combos, ProvenanceSource::EffectPassOverride, "effect_pass_override");
+        addComboStep(entry, inst_combos, ProvenanceSource::InstanceOverride, "instance_override");
+
+        // The last step that exists is the one that won.
+        if (inst_combos.count(combo_name))
+            entry.final_source = ProvenanceSource::InstanceOverride;
+        else if (pass_combos.count(combo_name))
+            entry.final_source = ProvenanceSource::EffectPassOverride;
+        else if (base_combos.count(combo_name))
+            entry.final_source = ProvenanceSource::MaterialConstant;
+        else
+            entry.final_source = ProvenanceSource::RuntimeInferred;
+        if (!entry.resolution.empty() && entry.final_source != ProvenanceSource::RuntimeInferred)
+            entry.resolution.back().applied = true;
+        prov.combos[combo_name] = entry;
+    }
+
+    ShaderDump dump;
+    dump.effect_index = effect_index;
+    dump.pass_index = pass_index;
+    dump.shader_name = shader_name;
+    dump.effect_file = effect_file;
+    dump.original_vs = sources.raw_vs;
+    dump.original_fs = sources.raw_fs;
+    dump.processed_vs = sources.processed_vs;
+    dump.processed_fs = sources.processed_fs;
+    dump.final_vs = sources.full_vs;
+    dump.final_fs = sources.full_fs;
+    dump.combos = combos;
+    dump.uniforms = uniforms;
+
+    renderObserver().registerShaderDump(dump);
+    renderObserver().registerUniformProvenance(prov);
 }
 
 void ShaderPass::updateAnimatedUniforms(float time) {
