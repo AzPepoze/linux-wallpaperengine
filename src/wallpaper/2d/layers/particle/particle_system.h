@@ -94,6 +94,8 @@ class ParticleSystem {
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
     float override_size = 1.0f;
+    float override_count = 1.0f;  // Scales how many particles may be alive at once.
+    float override_speed = 1.0f;
     vec3 override_color = {1.0f, 1.0f, 1.0f};
     bool has_override_color = false;
     bool override_color_is_legacy = false;
@@ -105,9 +107,7 @@ class ParticleSystem {
 
     static ParticleSystem* createFromJSON(cJSON* node, EngineContext& ctx, float sw, float sh);
     static ParticleSystem* createFromPath(const char* particle_path, EngineContext& ctx, float sw, float sh,
-                                          float override_alpha = 1.0f, float override_rate = 1.0f,
-                                          const float* override_color = nullptr, bool override_color_is_legacy = false,
-                                          float override_size = 1.0f);
+                                          const ParticleObjectConfig& overrides = {});
 
     void update(float dt);
     // Emits this (child) system's particles from each parent particle's current

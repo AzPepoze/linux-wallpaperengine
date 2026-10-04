@@ -16,10 +16,8 @@ ParticleLayer::~ParticleLayer() {
 ParticleLayer* ParticleLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
     const ParticleObjectConfig config = ParticleParser::parseObject(doc);
     if (config.particle_path.empty()) return nullptr;
-    ParticleSystem* ps = ParticleSystem::createFromPath(config.particle_path.c_str(), ctx, ctx.scene.scene_w,
-                                                        ctx.scene.scene_h, config.override_alpha, config.override_rate,
-                                                        config.has_override_color ? config.override_color : nullptr,
-                                                        config.override_color_is_legacy, config.override_size);
+    ParticleSystem* ps =
+        ParticleSystem::createFromPath(config.particle_path.c_str(), ctx, ctx.scene.scene_w, ctx.scene.scene_h, config);
     if (ps) {
         ParticleLayer* layer = new ParticleLayer(config.name.c_str(), ps);
         layer->initFromDocument(doc, ctx);

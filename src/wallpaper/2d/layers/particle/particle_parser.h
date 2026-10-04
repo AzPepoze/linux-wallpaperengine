@@ -15,6 +15,8 @@ struct ParticleObjectConfig {
     float override_alpha = 1.0f;
     float override_rate = 1.0f;
     float override_size = 1.0f;
+    float override_count = 1.0f;
+    float override_speed = 1.0f;
     vec3 override_color = {1.0f, 1.0f, 1.0f};
     bool has_override_color = false;
     bool override_color_is_legacy = false;

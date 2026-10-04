@@ -1,6 +1,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <algorithm>
+
 #include "particle_system.h"
 
 namespace {
@@ -10,7 +12,10 @@ float randomFloat() {
 }  // namespace
 
 void ParticleSystem::spawnParticle(const float* parent_position) {
-    if (static_cast<int>(particles.size()) >= max_particles) return;
+    const int live_limit = override_count >= 1.0f ? max_particles
+                                                  : std::max(override_count > 0.0f ? 1 : 0,
+                                                             static_cast<int>((float)max_particles * override_count));
+    if (static_cast<int>(particles.size()) >= live_limit) return;
     Particle particle = {};
     particle.random_seed = randomFloat();
     particle.spawn_time = global_time;
@@ -100,6 +105,8 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
             particle.color[component] = authored_color * authored_color;
         }
     }
+    particle.velocity[0] *= override_speed;
+    particle.velocity[1] *= override_speed;
     particle.size *= override_size;
     particle.initial_size *= override_size;
     particle.size *= child_scale[0];
