@@ -174,6 +174,10 @@ add_test("project_tests", {"tests/project_info_test.cpp", "src/wallpaper/project
                            "src/shared/core/logger.cpp"},
          {"cjson"})
 
+add_test("scene_parser_tests", {"tests/scene_parser_test.cpp", "src/wallpaper/2d/parser/scene_parser.cpp",
+                                "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
+         {"cjson"})
+
 add_test("video_tests", {"tests/video_test.cpp", "src/wallpaper/video/video_properties.cpp"}, {"cjson"})
 
 add_test("media_tests", {"tests/media_source_test.cpp", "src/shared/assets/media/media_source.cpp",

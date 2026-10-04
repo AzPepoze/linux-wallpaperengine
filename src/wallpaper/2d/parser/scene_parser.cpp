@@ -240,160 +240,165 @@ void parseAnimationLayers(const cJSON* array, std::vector<AnimationLayerDocument
     }
 }
 
+const cJSON* member(const cJSON* object, const char* key) {
+    return cJSON_GetObjectItemCaseSensitive(object, key);
+}
+
+// A string stored directly under `key`, without unwrapping a {user, value} property.
+void readPlainString(const cJSON* object, const char* key, std::string& out) {
+    const cJSON* node = member(object, key);
+    if (cJSON_IsString(node) && node->valuestring) out = node->valuestring;
+}
+
+// `alpha` is either a number or an animated property: a fallback `value` plus keyframes under `animation`.
+void parseImageAlpha(const cJSON* alpha, ImageObjectDocument& image) {
+    if (cJSON_IsNumber(alpha)) {
+        image.alpha = (float)alpha->valuedouble;
+        return;
+    }
+    if (!cJSON_IsObject(alpha)) return;
+
+    parseFloat(member(alpha, "value"), image.alpha);
+    const cJSON* animation = member(alpha, "animation");
+    if (!cJSON_IsObject(animation)) return;
+
+    const cJSON* keys = member(animation, "c0");
+    if (cJSON_IsArray(keys)) {
+        const cJSON* key = nullptr;
+        cJSON_ArrayForEach(key, keys) {
+            ImageObjectDocument::AlphaKey parsed;
+            if (!parseFloat(member(key, "frame"), parsed.frame) || !parseFloat(member(key, "value"), parsed.value))
+                continue;
+            image.alpha_keys.push_back(parsed);
+        }
+    }
+    const cJSON* options = member(animation, "options");
+    if (cJSON_IsObject(options)) {
+        parseFloat(member(options, "fps"), image.alpha_fps);
+        parseFloat(member(options, "length"), image.alpha_length);
+        const cJSON* mode = member(options, "mode");
+        if (cJSON_IsString(mode) && mode->valuestring) image.alpha_mode = mode->valuestring;
+    }
+}
+
+void parseImageFields(const cJSON* object, ImageObjectDocument& image) {
+    readPlainString(object, "image", image.image);
+    readPlainString(object, "model", image.model);
+    parseVec(member(object, "size"), image.size.data(), 2);
+    parseVec(member(object, "color"), image.color.data(), 3);
+    parseImageAlpha(member(object, "alpha"), image);
+    const cJSON* color_blend_mode = member(object, "colorBlendMode");
+    if (cJSON_IsNumber(color_blend_mode)) image.color_blend_mode = (int)color_blend_mode->valuedouble;
+    image.solid = parseBool(member(object, "solid"), false);
+    image.copy_background = parseBool(member(object, "copybackground"), false);
+    parseAnimationLayers(member(object, "animationlayers"), image.animation_layers);
+}
+
+void parseParticleFields(const cJSON* object, ParticleObjectDocument& particle) {
+    readPlainString(object, "particle", particle.particle);
+
+    const cJSON* instance_override = member(object, "instanceoverride");
+    if (!cJSON_IsObject(instance_override)) return;
+    parseFloat(member(instance_override, "alpha"), particle.override_alpha);
+    parseFloat(member(instance_override, "rate"), particle.override_rate);
+    parseFloat(member(instance_override, "size"), particle.override_size);
+    parseFloat(member(instance_override, "count"), particle.override_count);
+    parseFloat(member(instance_override, "speed"), particle.override_speed);
+
+    if (parseVec(member(instance_override, "color"), particle.override_color.data(), 3)) {
+        particle.has_override_color = true;
+        particle.override_color_is_legacy = true;
+    } else if (parseVec(member(instance_override, "colorn"), particle.override_color.data(), 3)) {
+        particle.has_override_color = true;
+        particle.override_color_is_legacy = false;
+    }
+}
+
+void parseTextFields(const cJSON* object, TextObjectDocument& text_doc) {
+    const cJSON* text = member(object, "text");
+    if (text) {
+        // Scripted and user-bound text falls back to the authoring-time default in `value`.
+        parseString(text, text_doc.text);
+        readPlainString(text, "script", text_doc.script);
+        const cJSON* script_props = member(text, "scriptproperties");
+        if (cJSON_IsObject(script_props)) {
+            if (char* printed = cJSON_PrintUnformatted(script_props)) {
+                text_doc.script_properties_json = printed;
+                cJSON_free(printed);
+            }
+        }
+    }
+    parseString(member(object, "font"), text_doc.font);
+    parseFloat(member(object, "pointsize"), text_doc.pointsize);
+    parseVec(member(object, "color"), text_doc.color.data(), 3);
+    parseFloat(member(object, "alpha"), text_doc.alpha);
+    parseVec(member(object, "size"), text_doc.size.data(), 2);
+    parseFloat(member(object, "maxwidth"), text_doc.maxwidth);
+    text_doc.limit_width = parseBool(member(object, "limitwidth"), false);
+    text_doc.limit_rows = parseBool(member(object, "limitrows"), false);
+    float max_rows = 1.0f;
+    if (parseFloat(member(object, "maxrows"), max_rows)) text_doc.max_rows = (int)max_rows;
+    parseString(member(object, "horizontalalign"), text_doc.horizontal_align);
+    parseString(member(object, "verticalalign"), text_doc.vertical_align);
+}
+
+void parseSoundFields(const cJSON* object, SoundObjectDocument& sound_doc) {
+    const cJSON* sound = member(object, "sound");
+    if (cJSON_IsArray(sound)) {
+        const cJSON* entry = nullptr;
+        cJSON_ArrayForEach(entry, sound) {
+            if (cJSON_IsString(entry) && entry->valuestring) sound_doc.sounds.emplace_back(entry->valuestring);
+        }
+    } else if (cJSON_IsString(sound) && sound->valuestring) {
+        sound_doc.sounds.emplace_back(sound->valuestring);
+    }
+    std::string playback_mode;
+    if (parseString(member(object, "playbackmode"), playback_mode)) {
+        if (playback_mode == "loop")
+            sound_doc.playback_mode = SoundPlaybackMode::Loop;
+        else if (playback_mode == "random")
+            sound_doc.playback_mode = SoundPlaybackMode::Random;
+        else
+            sound_doc.playback_mode = SoundPlaybackMode::Single;
+    }
+    parseFloat(member(object, "volume"), sound_doc.volume);
+    sound_doc.mute = parseBool(member(object, "mute"), false);
+    sound_doc.start_silent = parseBool(member(object, "startsilent"), false);
+    parseFloat(member(object, "mintime"), sound_doc.min_time);
+    parseFloat(member(object, "maxtime"), sound_doc.max_time);
+}
+
+void parseEffects(const cJSON* object, std::vector<EffectInstanceDocument>& out) {
+    const cJSON* effects = member(object, "effects");
+    if (!cJSON_IsArray(effects)) return;
+    const cJSON* effect_json = nullptr;
+    cJSON_ArrayForEach(effect_json, effects) {
+        const cJSON* file = member(effect_json, "file");
+        if (!cJSON_IsString(file) || !file->valuestring) continue;
+
+        EffectInstanceDocument effect;
+        effect.file = file->valuestring;
+        effect.visible = parseBool(member(effect_json, "visible"), true);
+        if (char* serialized = cJSON_PrintUnformatted(effect_json)) {
+            effect.instance_config_json = serialized;
+            cJSON_free(serialized);
+        }
+        out.push_back(std::move(effect));
+    }
+}
+
 SceneObjectDocument parseObject(const cJSON* object) {
     SceneObjectDocument doc;
     doc.kind = detectObjectKind(object);
     doc.node = parseNode(object);
+    readPlainString(object, "name", doc.name);
+    doc.visible = parseBool(member(object, "visible"), true);
 
-    const cJSON* name = cJSON_GetObjectItemCaseSensitive(object, "name");
-    if (cJSON_IsString(name) && name->valuestring) {
-        doc.name = name->valuestring;
-    }
-
-    doc.visible = parseBool(cJSON_GetObjectItemCaseSensitive(object, "visible"), true);
-
-    const cJSON* image = cJSON_GetObjectItemCaseSensitive(object, "image");
-    if (cJSON_IsString(image) && image->valuestring) {
-        doc.image.image = image->valuestring;
-    }
-
-    const cJSON* model = cJSON_GetObjectItemCaseSensitive(object, "model");
-    if (cJSON_IsString(model) && model->valuestring) {
-        doc.image.model = model->valuestring;
-    }
-
-    parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.image.size.data(), 2);
-    parseVec(cJSON_GetObjectItemCaseSensitive(object, "color"), doc.image.color.data(), 3);
-    const cJSON* alpha = cJSON_GetObjectItemCaseSensitive(object, "alpha");
-    if (cJSON_IsNumber(alpha)) {
-        doc.image.alpha = (float)alpha->valuedouble;
-    } else if (cJSON_IsObject(alpha)) {
-        // Animated properties keep their authoring-time fallback in `value`.
-        parseFloat(cJSON_GetObjectItemCaseSensitive(alpha, "value"), doc.image.alpha);
-        const cJSON* animation = cJSON_GetObjectItemCaseSensitive(alpha, "animation");
-        if (cJSON_IsObject(animation)) {
-            const cJSON* keys = cJSON_GetObjectItemCaseSensitive(animation, "c0");
-            if (cJSON_IsArray(keys)) {
-                const cJSON* key = nullptr;
-                cJSON_ArrayForEach(key, keys) {
-                    ImageObjectDocument::AlphaKey parsed;
-                    if (!parseFloat(cJSON_GetObjectItemCaseSensitive(key, "frame"), parsed.frame) ||
-                        !parseFloat(cJSON_GetObjectItemCaseSensitive(key, "value"), parsed.value))
-                        continue;
-                    doc.image.alpha_keys.push_back(parsed);
-                }
-            }
-            const cJSON* options = cJSON_GetObjectItemCaseSensitive(animation, "options");
-            if (cJSON_IsObject(options)) {
-                parseFloat(cJSON_GetObjectItemCaseSensitive(options, "fps"), doc.image.alpha_fps);
-                parseFloat(cJSON_GetObjectItemCaseSensitive(options, "length"), doc.image.alpha_length);
-                const cJSON* mode = cJSON_GetObjectItemCaseSensitive(options, "mode");
-                if (cJSON_IsString(mode) && mode->valuestring) doc.image.alpha_mode = mode->valuestring;
-            }
-        }
-    }
-    const cJSON* color_blend_mode = cJSON_GetObjectItemCaseSensitive(object, "colorBlendMode");
-    if (cJSON_IsNumber(color_blend_mode)) doc.image.color_blend_mode = (int)color_blend_mode->valuedouble;
-    doc.image.solid = parseBool(cJSON_GetObjectItemCaseSensitive(object, "solid"), false);
-    doc.image.copy_background = parseBool(cJSON_GetObjectItemCaseSensitive(object, "copybackground"), false);
-    parseAnimationLayers(cJSON_GetObjectItemCaseSensitive(object, "animationlayers"), doc.image.animation_layers);
-
-    const cJSON* particle = cJSON_GetObjectItemCaseSensitive(object, "particle");
-    if (cJSON_IsString(particle) && particle->valuestring) {
-        doc.particle.particle = particle->valuestring;
-    }
-
-    const cJSON* instance_override = cJSON_GetObjectItemCaseSensitive(object, "instanceoverride");
-    if (cJSON_IsObject(instance_override)) {
-        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "alpha"), doc.particle.override_alpha);
-        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "rate"), doc.particle.override_rate);
-        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "size"), doc.particle.override_size);
-        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "count"), doc.particle.override_count);
-        parseFloat(cJSON_GetObjectItemCaseSensitive(instance_override, "speed"), doc.particle.override_speed);
-
-        const cJSON* color = cJSON_GetObjectItemCaseSensitive(instance_override, "color");
-        const cJSON* colorn = cJSON_GetObjectItemCaseSensitive(instance_override, "colorn");
-        if (parseVec(color, doc.particle.override_color.data(), 3)) {
-            doc.particle.has_override_color = true;
-            doc.particle.override_color_is_legacy = true;
-        } else if (parseVec(colorn, doc.particle.override_color.data(), 3)) {
-            doc.particle.has_override_color = true;
-            doc.particle.override_color_is_legacy = false;
-        }
-    }
-
-    const cJSON* text = cJSON_GetObjectItemCaseSensitive(object, "text");
-    if (text) {
-        // Scripted and user-bound text falls back to the authoring-time default in `value`.
-        parseString(text, doc.text.text);
-        const cJSON* script = cJSON_GetObjectItemCaseSensitive(text, "script");
-        if (cJSON_IsString(script) && script->valuestring) doc.text.script = script->valuestring;
-        const cJSON* script_props = cJSON_GetObjectItemCaseSensitive(text, "scriptproperties");
-        if (cJSON_IsObject(script_props)) {
-            char* printed = cJSON_PrintUnformatted(script_props);
-            if (printed) {
-                doc.text.script_properties_json = printed;
-                free(printed);
-            }
-        }
-    }
-    parseString(cJSON_GetObjectItemCaseSensitive(object, "font"), doc.text.font);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "pointsize"), doc.text.pointsize);
-    parseVec(cJSON_GetObjectItemCaseSensitive(object, "color"), doc.text.color.data(), 3);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "alpha"), doc.text.alpha);
-    parseVec(cJSON_GetObjectItemCaseSensitive(object, "size"), doc.text.size.data(), 2);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxwidth"), doc.text.maxwidth);
-    doc.text.limit_width = parseBool(cJSON_GetObjectItemCaseSensitive(object, "limitwidth"), false);
-    doc.text.limit_rows = parseBool(cJSON_GetObjectItemCaseSensitive(object, "limitrows"), false);
-    float max_rows = 1.0f;
-    if (parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxrows"), max_rows)) doc.text.max_rows = (int)max_rows;
-    parseString(cJSON_GetObjectItemCaseSensitive(object, "horizontalalign"), doc.text.horizontal_align);
-    parseString(cJSON_GetObjectItemCaseSensitive(object, "verticalalign"), doc.text.vertical_align);
-
-    const cJSON* sound = cJSON_GetObjectItemCaseSensitive(object, "sound");
-    if (cJSON_IsArray(sound)) {
-        const cJSON* entry = nullptr;
-        cJSON_ArrayForEach(entry, sound) {
-            if (cJSON_IsString(entry) && entry->valuestring) doc.sound.sounds.emplace_back(entry->valuestring);
-        }
-    } else if (cJSON_IsString(sound) && sound->valuestring) {
-        doc.sound.sounds.emplace_back(sound->valuestring);
-    }
-    std::string playback_mode;
-    if (parseString(cJSON_GetObjectItemCaseSensitive(object, "playbackmode"), playback_mode)) {
-        if (playback_mode == "loop")
-            doc.sound.playback_mode = SoundPlaybackMode::Loop;
-        else if (playback_mode == "random")
-            doc.sound.playback_mode = SoundPlaybackMode::Random;
-        else
-            doc.sound.playback_mode = SoundPlaybackMode::Single;
-    }
-    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "volume"), doc.sound.volume);
-    doc.sound.mute = parseBool(cJSON_GetObjectItemCaseSensitive(object, "mute"), false);
-    doc.sound.start_silent = parseBool(cJSON_GetObjectItemCaseSensitive(object, "startsilent"), false);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "mintime"), doc.sound.min_time);
-    parseFloat(cJSON_GetObjectItemCaseSensitive(object, "maxtime"), doc.sound.max_time);
-
-    const cJSON* effects = cJSON_GetObjectItemCaseSensitive(object, "effects");
-    if (cJSON_IsArray(effects)) {
-        const cJSON* eff_json;
-        cJSON_ArrayForEach(eff_json, effects) {
-            const cJSON* file = cJSON_GetObjectItemCaseSensitive(eff_json, "file");
-            if (cJSON_IsString(file) && file->valuestring) {
-                EffectInstanceDocument eff_doc;
-                eff_doc.file = file->valuestring;
-                eff_doc.visible = parseBool(cJSON_GetObjectItemCaseSensitive(eff_json, "visible"), true);
-
-                char* serialized = cJSON_PrintUnformatted(eff_json);
-                if (serialized) {
-                    eff_doc.instance_config_json = serialized;
-                    cJSON_free(serialized);
-                }
-                doc.effects.push_back(std::move(eff_doc));
-            }
-        }
-    }
-
+    parseImageFields(object, doc.image);
+    parseParticleFields(object, doc.particle);
+    parseTextFields(object, doc.text);
+    parseSoundFields(object, doc.sound);
+    parseEffects(object, doc.effects);
     return doc;
 }
 
