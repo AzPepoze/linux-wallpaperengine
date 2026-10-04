@@ -160,7 +160,6 @@ class ImageLayer : public Layer {
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
 
    private:
-    // State threaded through the passes of one effect chain.
     struct ChainState {
         sg_image layer_source_image = {SG_INVALID_ID};
         sg_view layer_source_view = {SG_INVALID_ID};
@@ -175,7 +174,6 @@ class ImageLayer : public Layer {
         int draw_order = 0;
     };
 
-    // The images one pass samples: slot 0 and the explicit render-target bindings for slots 1..11.
     struct PassInputs {
         sg_image image = {SG_INVALID_ID};
         sg_view view = {SG_INVALID_ID};
@@ -185,7 +183,6 @@ class ImageLayer : public Layer {
     };
 
     PassInputs resolvePassInputs(const ShaderPass& pass, const ChainState& state);
-    // Moves on after a pass wrote its target: the next pass reads what this one produced.
     void advanceChain(ChainState& state, NamedRenderTarget* named_target);
     void tracePass(IRenderObserver& diag, EngineContext& ctx, const Effect& effect, const ShaderPass& pass,
                    int effect_index, int pass_index, const PassInputs& inputs, ChainState& state,

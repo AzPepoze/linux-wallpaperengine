@@ -244,7 +244,6 @@ const cJSON* member(const cJSON* object, const char* key) {
     return cJSON_GetObjectItemCaseSensitive(object, key);
 }
 
-// A string stored directly under `key`, without unwrapping a {user, value} property.
 void readPlainString(const cJSON* object, const char* key, std::string& out) {
     const cJSON* node = member(object, key);
     if (cJSON_IsString(node) && node->valuestring) out = node->valuestring;

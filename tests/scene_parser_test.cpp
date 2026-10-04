@@ -1,4 +1,3 @@
-// Checks scene.json parsing for every object kind through the same entry point the loader uses.
 #include <unistd.h>
 
 #include <cstdio>

@@ -184,7 +184,6 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
         }
     }
 
-    // The rewrites below dominate preprocessing time and depend only on the text and on this build's code.
     const uint64_t key = disk_cache::hash(result.data(), result.size(), disk_cache::buildIdentity());
     const std::string cache_name = disk_cache::fileName("rewrite", key, "glsl");
     std::vector<uint8_t> cached;

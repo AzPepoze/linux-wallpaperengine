@@ -29,7 +29,6 @@ bool isCompositeRenderTarget(const std::string& name) {
     return name.find("FrameBuffer") != std::string::npos;
 }
 
-// Forwards an input image into a target untouched, so later passes never read an uninitialised buffer.
 void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_view, sg_view target, int width,
                        int height) {
     sg_pass copy_pass = colorPass(target, SG_LOADACTION_CLEAR);
@@ -41,7 +40,6 @@ void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_v
     sg_end_pass();
 }
 
-// Sampling an image that the pass also renders into is a Vulkan hazard; logs every such binding.
 bool aliasesOutput(const std::string& layer_name, const ShaderPass& pass, sg_image slot0_image,
                    const std::array<sg_image, 11>& override_images, const render_effect_pass_t& render_pass,
                    sg_image output_image) {

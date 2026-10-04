@@ -108,7 +108,6 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
     result.frag = prefix + blend_define + processed_frag;
     result.valid = true;
 
-    // Compile the SPIR-V here, in parallel with the other modes; the main thread then only creates GPU objects.
     ShaderCompiler::prewarm("image-composite-" + std::to_string(blend_mode), result.vert, result.frag, {}, 1);
     return result;
 }
@@ -220,7 +219,6 @@ const std::string kMeshFragmentSource =
     "  frag_color = texture(tex, uv) * tint;\n"
     "}\n";
 
-// Every 2D shader here samples one texture and takes an mvp and a tint.
 sg_shader_desc spriteShaderDesc() {
     sg_shader_desc desc = {};
     desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
@@ -296,7 +294,6 @@ void createSamplers(renderer_t* r) {
     }
 }
 
-// One-pixel stand-ins that effects bind when a texture input is missing.
 void createFallbackTextures(renderer_t* r) {
     const auto makeSolid = [](uint32_t pixel, GfxImage& image, GfxView& view) {
         sg_image_desc img_desc = {};
@@ -347,7 +344,6 @@ void createSpritePipelines(renderer_t* r) {
     r->pip_lines = sg_make_pipeline(&pip_desc);
 }
 
-// Puppet meshes: 3D positions in one buffer and UVs in another.
 void createMeshPipeline(renderer_t* r) {
     sg_pipeline_desc desc = {};
     desc.shader = makeSpriteShader(kMeshVertexSource, kMeshFragmentSource, "renderer-mesh");

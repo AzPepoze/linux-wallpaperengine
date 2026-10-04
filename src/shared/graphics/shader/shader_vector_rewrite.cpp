@@ -83,7 +83,6 @@ bool isIdentifierChar(char c) {
     return std::isalnum((unsigned char)c) || c == '_';
 }
 
-// Length of the identifier that starts `text`, or 0 when it does not start with one.
 size_t identifierLength(const std::string& text) {
     if (text.empty() || !isIdentifierStart(text[0])) return 0;
     size_t length = 1;
@@ -378,7 +377,6 @@ void rewriteFunctionArguments(std::string& source) {
 }  // namespace shader_processor_internal
 
 namespace {
-// digits[.digits] or .digits, an optional exponent and an optional f suffix.
 bool isNumericLiteral(const std::string& text) {
     const size_t size = text.size();
     size_t i = 0;
@@ -403,7 +401,6 @@ bool isNumericLiteral(const std::string& text) {
     return i == size;
 }
 
-// Matches `name` or `name.swizzle` where the swizzle is one to four component letters.
 bool parseSwizzledIdentifier(const std::string& text, std::string& name, int& swizzle_length) {
     const size_t dot = text.find('.');
     name = text.substr(0, dot);
@@ -419,7 +416,6 @@ bool parseSwizzledIdentifier(const std::string& text, std::string& name, int& sw
     return true;
 }
 
-// True when `text` starts with `identifier (`.
 bool startsWithCall(const std::string& text) {
     size_t i = identifierLength(text);
     if (i == 0) return false;

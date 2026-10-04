@@ -128,7 +128,6 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
     const int bloom_w = std::max(1, width / 4);
     const int bloom_h = std::max(1, height / 4);
     if (!ensureBloomTargets(bloom_w, bloom_h)) return current_target_index;
-    // Each stage draws one filtered full-target quad: scene -> extract -> blur v -> blur h -> combine over the scene.
     const auto runStage = [&](ShaderPass& pass, sg_view target, sg_image source, sg_view source_view, int target_w,
                               int target_h, sg_view bloom_view = {SG_INVALID_ID}) {
         sg_pass target_pass = colorPass(target, SG_LOADACTION_CLEAR, 1.0f);

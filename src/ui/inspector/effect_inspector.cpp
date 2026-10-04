@@ -11,7 +11,6 @@
 #include "wallpaper/2d/effects/effect.h"
 
 namespace {
-// Combo and step slider that override the fragment output to inspect individual shader inputs.
 void showDebugViewControls(EngineContext& ctx, ::ShaderPass& pass) {
     std::vector<std::string> mode_names = {"Normal"};
     mode_names.push_back("g_Texture0 [Color]");
@@ -171,7 +170,6 @@ void showTextureSlotsGrid(::ShaderPass& pass) {
     }
 }
 
-// One row per texture slot with an enable checkbox and its resolved file.
 void showTextureSlotToggles(::ShaderPass& pass) {
     for (int i = 0; i < (int)pass.pass_textures.textures.size(); i++) {
         ImGui::PushID(i);

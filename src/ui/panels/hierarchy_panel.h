@@ -7,7 +7,6 @@
 
 struct EngineContext;
 
-// The scene tree: layer visibility, solo and selection, with keyboard navigation.
 namespace HierarchyPanel {
 void draw(EngineContext& ctx);
 }

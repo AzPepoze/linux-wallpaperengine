@@ -28,7 +28,6 @@ inline bool isWordChar(char c) {
     return std::isalnum((unsigned char)c) || c == '_';
 }
 
-// The GLSL vector type words: vec2..4, float2..4, ivec2..4 and int2..4.
 inline bool isVectorTypeWord(const std::string& word) {
     static const char* const kTypes[] = {"vec2",  "vec3",  "vec4",  "float2", "float3", "float4",
                                          "ivec2", "ivec3", "ivec4", "int2",   "int3",   "int4"};

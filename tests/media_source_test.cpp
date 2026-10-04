@@ -1,4 +1,3 @@
-// Checks that video bytes are located and served the same way from disk and from RAM.
 
 #include <unistd.h>
 
@@ -14,7 +13,6 @@ using test::expect;
 
 namespace {
 
-// A fake MP4: a box header, the "ftyp" tag, then payload bytes.
 std::vector<uint8_t> mp4Bytes() {
     std::vector<uint8_t> bytes = {0, 0, 0, 24, 'f', 't', 'y', 'p'};
     for (int i = 0; i < 100; ++i) bytes.push_back((uint8_t)i);

@@ -97,7 +97,6 @@ std::string resolveWallpaperName(const EngineContext& ctx) {
 }
 
 namespace {
-// Everything the export stages share: the payload being written, where, and the running list of files made.
 struct ExportContext {
     DiagnosticExportPayload& payload;
     const std::atomic<bool>* cancel;
@@ -117,7 +116,6 @@ std::string childPath(const ExportContext& export_context, const char* name) {
     return export_context.payload.output_dir + "/" + name;
 }
 
-// source.png and layer-final.png; returns the statistics of the source image when there is one.
 bool writeSourceAndFinalImages(ExportContext& export_context, ImageStats& source_stats) {
     const DiagnosticExportPayload& payload = export_context.payload;
     bool has_source_stats = false;
@@ -138,8 +136,6 @@ bool writeSourceAndFinalImages(ExportContext& export_context, ImageStats& source
     return has_source_stats;
 }
 
-// Scene stage images, encoded concurrently because PNG encoding dominates export time in unoptimised builds.
-// Returns false when the export was cancelled.
 bool writeStageImages(ExportContext& export_context) {
     const DiagnosticExportPayload& payload = export_context.payload;
     if (payload.stage_images.empty()) return true;
@@ -180,8 +176,6 @@ bool writeStageImages(ExportContext& export_context) {
     return true;
 }
 
-// Fills each pass's statistics and deltas, writes its image and adds it to the render graph.
-// Returns false when the export was cancelled.
 bool analyzePassImages(ExportContext& export_context, const ImageStats& source_stats, bool has_source_stats) {
     DiagnosticExportPayload& payload = export_context.payload;
     ImageStats previous_stats = source_stats;
@@ -301,7 +295,6 @@ void writeProvenanceFiles(ExportContext& export_context) {
     export_context.generated_files.push_back("combos.json");
 }
 
-// Every pass's shader at each stage of processing, plus its combos and uniforms. Returns false when cancelled.
 bool writeShaderDumps(ExportContext& export_context) {
     const std::string shaders_base_dir = childPath(export_context, "shaders");
     ensureDir(shaders_base_dir);

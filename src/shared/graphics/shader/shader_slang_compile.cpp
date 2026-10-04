@@ -28,7 +28,6 @@ class SessionPool {
         int uses = 0;
     };
 
-    // Blocks while kMaxConcurrent compiles are already running; each one holds a few hundred MB.
     Lease acquire() {
         {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -50,7 +49,6 @@ class SessionPool {
         slot_free_.notify_one();
     }
 
-    // Drops every idle compiler; does nothing while a compile is running.
     bool clearIfUnused() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (active_ != 0) return false;
@@ -101,8 +99,6 @@ int64_t now_ms() {
 
 void release_if_idle(int idle_seconds);
 
-// Frees the compiler (hundreds of MB resident) once nothing has compiled for a while. It watches the clock on its
-// own thread so it works whether or not frames are being rendered.
 class CompilerJanitor {
    public:
     CompilerJanitor() : thread_([this] { run(); }) {}

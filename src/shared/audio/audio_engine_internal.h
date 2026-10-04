@@ -35,7 +35,7 @@ struct AudioEngine::Impl {
 
     struct SoundSlot {
         ma_sound sound = {};
-        ma_decoder decoder = {};  // Backs `sound` when it plays from a mapped package file.
+        ma_decoder decoder = {};
         bool has_decoder = false;
         bool active = false;
 

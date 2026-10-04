@@ -23,8 +23,6 @@ class AssetManager : public IAssetResolver {
 
     void init(const char* engine_path, const char* wallpaper_path);
 
-    // Starts decoding every texture of the mounted package on the task pool so scene loading finds them ready, and
-    // lets repeated uses of one texture share a single decode. Call releaseDecodedTextures() once loading is done.
     void prefetchPackageTextures() const;
     void releaseDecodedTextures() const;
     void updateVideoTextures(float elapsed_seconds, const std::vector<Layer*>& active_layers = {});

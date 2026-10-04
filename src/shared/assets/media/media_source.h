@@ -8,8 +8,6 @@ struct AVIOContext;
 
 namespace wallpaper_engine {
 
-// Chooses where loose video files are read from. Disk (the default) streams from the file as ffmpeg asks, so a
-// large video never has to fit in RAM; memory keeps one shared copy per file.
 void setVideoLoadInRam(bool in_ram);
 
 // Random-access bytes of one video. A TEX container's MP4 payload is exposed as if it were a plain file.
@@ -17,11 +15,9 @@ class MediaSource {
    public:
     virtual ~MediaSource() = default;
     virtual int64_t size() const = 0;
-    // Returns the bytes read, 0 at the end of the data and a negative value on error.
     virtual int64_t readAt(int64_t offset, uint8_t* buffer, int length) const = 0;
 };
 
-// Opens a loose file or a file inside a mounted package. Returns null when it cannot be read.
 std::unique_ptr<MediaSource> openMediaSource(const char* path);
 
 // Adapts a MediaSource to ffmpeg's custom IO. Close it only after the AVFormatContext that uses it.

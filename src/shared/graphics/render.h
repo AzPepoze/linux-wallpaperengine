@@ -129,7 +129,6 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
                                    sg_view scene_view, float x, float y, float width, float height, float rotation,
                                    float tint[4], int blend_mode);
 // Precompiles all blend pipelines during init; creating them mid-render caused GPU context loss.
-// Builds the blend-mode composite pipelines. An empty `modes` builds all of them; otherwise only the listed ones.
 void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r, const std::vector<int>& modes = {});
 #else
 void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,

@@ -92,7 +92,6 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
 }
 
 namespace {
-// Reads one shader stage from the wallpaper package or the engine assets, falling back to an extraction directory.
 bool readShaderStage(EngineContext& ctx, const char* relative_path, char* absolute_path, size_t capacity,
                      std::string& source) {
     if (!ctx.asset_mgr.resolvePath(relative_path, absolute_path, (int)capacity)) {
@@ -120,7 +119,6 @@ void convertDepthParallaxMaskToLinear(std::string& fragment_source) {
         fragment_source;
 }
 
-// Finds the authored value in `values` that resolves to `meta`, if any.
 bool findResolvedValue(const std::map<std::string, std::vector<float>>& values, const ShaderUniformConfig& meta,
                        std::vector<float>& found_value) {
     for (const auto& [name, value] : values) {
@@ -405,7 +403,6 @@ void ShaderPass::registerDiagnostics(const ShaderSourceSet& sources,
         addComboStep(entry, pass_combos, ProvenanceSource::EffectPassOverride, "effect_pass_override");
         addComboStep(entry, inst_combos, ProvenanceSource::InstanceOverride, "instance_override");
 
-        // The last step that exists is the one that won.
         if (inst_combos.count(combo_name))
             entry.final_source = ProvenanceSource::InstanceOverride;
         else if (pass_combos.count(combo_name))

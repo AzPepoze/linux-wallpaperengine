@@ -9,7 +9,6 @@ class Scene2DRuntime {
     explicit Scene2DRuntime(EngineContext& ctx) : ctx(ctx) {}
 
     void init();
-    // Builds the composite pipelines the loaded scene uses (release builds; debug builds build them all in init).
     void precompileBlendModes();
     void update(float dt);
     void draw();

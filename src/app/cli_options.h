@@ -20,7 +20,7 @@ struct CliOptions {
     DiagnosticOptions diagnostics;
     bool cover = false;
     std::string assets_dir;
-    int fps_limit = 60;  // 0 means uncapped
+    int fps_limit = 60;
     std::string scaling;
     std::string clamp;
     std::string screen_root;

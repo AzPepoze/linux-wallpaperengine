@@ -35,7 +35,6 @@ int64_t payloadOffset(const uint8_t* head, size_t length) {
     return (found - head) - 4;
 }
 
-// Bytes that live elsewhere: a mapped package or a RAM copy kept alive by `owner`.
 class SpanSource : public MediaSource {
    public:
     SpanSource(const uint8_t* data, size_t size, std::shared_ptr<const void> owner, int64_t base)
@@ -81,7 +80,6 @@ class FileSource : public MediaSource {
     int64_t size_;
 };
 
-// The picture and the soundtrack open the same file, so they share one RAM copy.
 std::shared_ptr<const std::vector<uint8_t>> loadIntoRam(const char* path) {
     static std::mutex mutex;
     static std::unordered_map<std::string, std::weak_ptr<const std::vector<uint8_t>>> cache;

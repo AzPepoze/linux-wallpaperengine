@@ -69,8 +69,6 @@ class ShaderPass {
     }
 
     void init(EngineContext& ctx);
-    // Starts preparing and warming the shader cache on the task pool; completeInit() finishes it on the render
-    // thread. Lets a scene's shaders compile in parallel instead of one at a time.
     void initAsync(EngineContext& ctx);
     void completeInit(EngineContext& ctx);
     void rebuildWithDebugMode(int mode, EngineContext& ctx);

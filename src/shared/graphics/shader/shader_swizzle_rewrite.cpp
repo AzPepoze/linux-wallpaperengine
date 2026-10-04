@@ -173,7 +173,6 @@ std::string narrowStatementVectors(const std::string& statement, const std::map<
     const size_t first = statement.find_first_not_of(" \t\r\n");
     if (first != std::string::npos && statement[first] == '#') return statement;
 
-    // The first `vecN`/`floatN`/`ivecN`/`intN` declaration with an initializer decides the target width.
     int target_width = 0;
     size_t target_position = 0;
     forEachDeclaration(statement, "=", isVectorTypeWord,

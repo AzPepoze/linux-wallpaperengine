@@ -20,14 +20,12 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
-// Copies a render target into the pass that is currently open, untinted and opaque to blending.
 void drawFullscreenTarget(EngineContext& ctx, sg_image image, sg_view texture_view, int width, int height) {
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_sprite(ctx, &ctx.renderer, image, texture_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f, white,
                          false, nullptr);
 }
 
-// A throwaway RGBA8 target that diagnostics keep for a stage image.
 struct Snapshot {
     sg_image image = {SG_INVALID_ID};
     sg_view texture = {SG_INVALID_ID};
@@ -64,8 +62,6 @@ Snapshot makeSnapshot(int width, int height) {
     return snapshot;
 }
 
-// Visits the layers to draw: only the debugger's selected layer in test mode, otherwise the soloed layers if any
-// are soloed, otherwise every visible one.
 template <class Draw>
 void forEachDrawnLayer(EngineContext& ctx, Draw&& draw) {
     if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&

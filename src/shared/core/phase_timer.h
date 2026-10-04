@@ -5,7 +5,6 @@
 
 #include "logger.h"
 
-// Logs how long a scope took, so startup cost can be attributed to a phase.
 class PhaseTimer {
    public:
     explicit PhaseTimer(const char* phase) : phase_(phase), start_(std::chrono::steady_clock::now()) {}

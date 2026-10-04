@@ -23,7 +23,6 @@ bool find(const char* path, const uint8_t*& data, size_t& size);
 bool readAll(const char* path, std::vector<uint8_t>& out);
 std::FILE* open(const char* path);
 
-// Visits every packaged file name; stops early when the callback returns true.
 void forEachFile(const std::function<bool(const char*)>& visitor);
 
 }  // namespace vfs

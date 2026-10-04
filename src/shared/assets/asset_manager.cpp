@@ -42,8 +42,6 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
 
 }  // namespace
 
-// Decoded textures kept for the duration of a scene load. Entries are futures so a texture that is still being
-// decoded on the task pool can be waited for instead of decoded a second time.
 struct AssetManager::DecodeCache {
     using Entry = std::shared_future<std::shared_ptr<const wallpaper_engine::DecodedImage>>;
 
@@ -72,7 +70,6 @@ void AssetManager::init(const char* ep, const char* wp) {
 }
 
 void AssetManager::prefetchPackageTextures() const {
-    // Bounds the work queued up front: large packages are mostly video or audio, not textures worth racing for.
     constexpr size_t kMaxTextureBytes = 32u << 20;
     constexpr size_t kMaxTotalBytes = 192u << 20;
     size_t total_bytes = 0;
@@ -103,7 +100,6 @@ void AssetManager::releaseDecodedTextures() const {
         std::lock_guard<std::mutex> lock(decode_cache_->mutex);
         decode_cache_->entries.clear();
     }
-    // Decoded pixels are large and short-lived; return the freed pages instead of letting the allocator keep them.
     malloc_trim(0);
 }
 
@@ -116,7 +112,6 @@ std::shared_ptr<const wallpaper_engine::DecodedImage> AssetManager::decodeShared
         const auto found = decode_cache_->entries.find(key);
         if (found != decode_cache_->entries.end()) pending = found->second;
     }
-    // Waits for a worker that is still decoding this texture; the lock is not held meanwhile.
     if (pending.valid()) return pending.get();
 
     auto image =

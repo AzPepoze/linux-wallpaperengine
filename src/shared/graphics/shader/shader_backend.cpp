@@ -22,7 +22,6 @@ bool compileStage(SlangStage stage, const std::string& source, const std::string
     return true;
 }
 
-// Everything create_backend_shader does before it touches the GPU, so it can also run on a worker thread.
 bool buildSpirv(sg_shader_desc* desc, const std::string& vertex_source, const std::string& fragment_source,
                 const char* label, ShaderSpirv& out) {
     if (!desc) return false;

@@ -19,7 +19,6 @@ struct ShaderDiskCache {
     std::atomic<uint64_t> cache_hits{0};
     std::atomic<uint64_t> cache_misses{0};
 
-    // Bound on the RAM copy; the disk cache backs everything beyond it.
     static constexpr size_t kMaxMemoryCacheBytes = 8u << 20;
     size_t memory_cache_bytes = 0;
 

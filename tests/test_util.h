@@ -3,8 +3,6 @@
 
 #include <cstdio>
 
-// Shared pass/fail bookkeeping for the plain-main test programs. Counters are per executable, so tests that link
-// several files together report one combined result.
 namespace test {
 
 inline int checks = 0;
@@ -26,7 +24,6 @@ inline void expect(const char* test, bool condition, const char* what) {
     }
 }
 
-// Prints the summary and returns the process exit code.
 inline int finish(const char* suite) {
     std::printf("%s: %d checks, %d failures\n", suite, checks, failures);
     return failures == 0 ? 0 : 1;
