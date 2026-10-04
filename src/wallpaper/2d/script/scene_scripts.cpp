@@ -115,6 +115,69 @@ bool SceneScriptBackend::setBool(uint32_t id, const std::string& property, bool 
     return true;
 }
 
+Effect* SceneScriptBackend::effectAt(uint32_t layer_id, int effect) const {
+    const Layer* layer = layerById(layer_id);
+    if (!layer || effect < 0 || (size_t)effect >= layer->effects.size()) return nullptr;
+    return layer->effects[(size_t)effect];
+}
+
+int SceneScriptBackend::effectCount(uint32_t layer_id) {
+    const Layer* layer = layerById(layer_id);
+    return layer ? (int)layer->effects.size() : 0;
+}
+
+int SceneScriptBackend::findEffect(uint32_t layer_id, const std::string& name) {
+    const Layer* layer = layerById(layer_id);
+    if (!layer) return -1;
+    for (size_t i = 0; i < layer->effects.size(); ++i)
+        if (layer->effects[i] && layer->effects[i]->name == name) return (int)i;
+    return -1;
+}
+
+std::string SceneScriptBackend::effectName(uint32_t layer_id, int effect) {
+    const Effect* e = effectAt(layer_id, effect);
+    return e ? e->name : "";
+}
+
+bool SceneScriptBackend::effectVisible(uint32_t layer_id, int effect, bool& out) {
+    const Effect* e = effectAt(layer_id, effect);
+    if (!e) return false;
+    out = e->visible;
+    return true;
+}
+
+bool SceneScriptBackend::setEffectVisible(uint32_t layer_id, int effect, bool value) {
+    Effect* e = effectAt(layer_id, effect);
+    if (!e) return false;
+    e->visible = value;
+    return true;
+}
+
+bool SceneScriptBackend::getMaterialProperty(uint32_t layer_id, int effect, const std::string& name,
+                                             std::vector<double>& out) {
+    const Effect* e = effectAt(layer_id, effect);
+    if (!e) return false;
+    for (const ShaderPass* pass : e->passes) {
+        if (!pass) continue;
+        if (const std::vector<float>* values = pass->materialConstant(name)) {
+            out.assign(values->begin(), values->end());
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SceneScriptBackend::setMaterialProperty(uint32_t layer_id, int effect, const std::string& name,
+                                             const std::vector<double>& value) {
+    Effect* e = effectAt(layer_id, effect);
+    if (!e) return false;
+    const std::vector<float> values(value.begin(), value.end());
+    bool applied = false;
+    for (ShaderPass* pass : e->passes)
+        if (pass && pass->setMaterialConstant(name, values)) applied = true;
+    return applied;
+}
+
 bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
     auto* sound = dynamic_cast<SoundLayer*>(layerById(id));
     if (!sound) return false;
@@ -318,7 +381,7 @@ ScriptBindings::~ScriptBindings() {
 }
 
 bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::string& script,
-                         const std::string& properties_json) {
+                         const std::string& properties_json, int effect_index, const std::string& constant) {
     auto loaded = std::make_unique<SceneScript>();
     loaded->setLayerId(object_id);
     switch (property) {
@@ -337,6 +400,13 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
         case BoundProperty::Color:
             loaded->setProperty("color");
             break;
+        case BoundProperty::EffectVisible:
+            // `effect:<index>:<what>` makes thisObject the effect (see the prelude).
+            loaded->setProperty("effect:" + std::to_string(effect_index) + ":visible");
+            break;
+        case BoundProperty::EffectConstant:
+            loaded->setProperty("effect:" + std::to_string(effect_index) + ":" + constant);
+            break;
     }
     if (!loaded->load(script, properties_json)) {
         LOG_TAG_W(TAG, "object %u: property script failed to load: %s", object_id, loaded->lastError().c_str());
@@ -345,12 +415,14 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
     Binding binding;
     binding.object_id = object_id;
     binding.property = property;
+    binding.effect_index = effect_index;
+    binding.constant = constant;
     binding.script = std::move(loaded);
     bindings_.push_back(std::move(binding));
     return true;
 }
 
-bool ScriptBindings::read(const Binding& binding, ScriptValue& value) const {
+bool ScriptBindings::read(const Binding& binding, ScriptValue& value) {
     const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(binding.object_id) : nullptr;
     switch (binding.property) {
         case BoundProperty::Origin:
@@ -371,11 +443,34 @@ bool ScriptBindings::read(const Binding& binding, ScriptValue& value) const {
             if (!binding.layer) return false;
             value = ScriptValue::makeVec3(binding.layer->tint[0], binding.layer->tint[1], binding.layer->tint[2]);
             return true;
+        case BoundProperty::EffectVisible: {
+            bool visible = false;
+            if (!backend_.effectVisible(binding.object_id, binding.effect_index, visible)) return false;
+            value = ScriptValue::makeBool(visible);
+            return true;
+        }
+        case BoundProperty::EffectConstant: {
+            std::vector<double> current;
+            if (!backend_.getMaterialProperty(binding.object_id, binding.effect_index, binding.constant, current))
+                return false;
+            switch (current.size()) {
+                case 1:
+                    value = ScriptValue::makeNumber(current[0]);
+                    return true;
+                case 2:
+                    value = ScriptValue::makeVec2(current[0], current[1]);
+                    return true;
+                case 3:
+                    value = ScriptValue::makeVec3(current[0], current[1], current[2]);
+                    return true;
+            }
+            return false;
+        }
     }
     return false;
 }
 
-void ScriptBindings::write(const Binding& binding, const ScriptValue& value) const {
+void ScriptBindings::write(const Binding& binding, const ScriptValue& value) {
     SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(binding.object_id) : nullptr;
     switch (binding.property) {
         case BoundProperty::Origin:
@@ -395,6 +490,25 @@ void ScriptBindings::write(const Binding& binding, const ScriptValue& value) con
             if (binding.layer)
                 for (int i = 0; i < 3; ++i) binding.layer->tint[i] = (float)value.vec[i];
             return;
+        case BoundProperty::EffectVisible:
+            backend_.setEffectVisible(binding.object_id, binding.effect_index, value.number != 0.0);
+            return;
+        case BoundProperty::EffectConstant: {
+            std::vector<double> next;
+            switch (value.kind) {
+                case ScriptValue::Kind::Vec2:
+                    next = {value.vec[0], value.vec[1]};
+                    break;
+                case ScriptValue::Kind::Vec3:
+                    next = {value.vec[0], value.vec[1], value.vec[2]};
+                    break;
+                default:
+                    next = {value.number};
+                    break;
+            }
+            backend_.setMaterialProperty(binding.object_id, binding.effect_index, binding.constant, next);
+            return;
+        }
     }
 }
 

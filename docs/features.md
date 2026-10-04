@@ -323,41 +323,45 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Shared runtime, per-script module scope, `import ... from 'WEMath' | 'WEColor' | 'WEVector'`
     - 64 MB memory limit, per-call time budgets, and a script is disabled after three consecutive errors
     - `scriptproperties` overrides applied the way the real engine does
+    - Scripts are scoped per scene: each wallpaper has its own `shared`, `localStorage` and layer ids, and events only reach the scripts of the active scene (needed while two wallpapers are alive in a transition)
   - Missing
-    - Hooks other than `init` and `update` (see Events)
+    - `createScriptProperties` extras used by a few Workshop wallpapers (`addTask`, `addListener`, `addAniMapper`, `addInterpolator`, `addChangedUserProperty`)
 - [-] Properties that can host a script
   - Works
     - `origin`, `scale`, `angles`, `visible` and `color` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
     - Text content (`update(string)`, about four times per second)
+    - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect
   - Missing
-    - `size` (parsed, not bound), effect constants, sound volume, particle fields, camera and scene settings
+    - `size` (parsed, not bound), particle fields, camera and scene settings
     - `visible` on objects that have no layer (groups) is not applied
-    - Scripts on text color, alpha, point size and other text properties
+    - Scripts on text color, point size and other text properties
+    - Four-component effect constants
 - [-] Globals
   - [-] `engine`
     - Works: `frametime`, `runtime`, `timeOfDay`, `canvasSize`, `screenResolution`, `AUDIO_RESOLUTION_16/32/64`, `registerAudioBuffers`, `setTimeout`, `setInterval` (returning cancel functions), device/orientation queries
-    - Missing: `userProperties` is empty, `openUserShortcut` and `registerAsset` are stubs
+    - `userProperties` holds every project property (colors as `Vec3`), resolved from `project.json`, the GUI config and `--set-property`
+    - Missing: `openUserShortcut` and `registerAsset` are stubs
   - [x] `console` (`log`, `info`, `debug`, `warn`, `error`; rate-limited)
   - [x] `shared`, `localStorage` (global and per-screen areas, 100 KB each, persisted per wallpaper under `~/.local/share/linux-wallpaperengine/localstorage/`)
   - [x] `Vec2`, `Vec3`, `Vec4`, `Mat3`, `Mat4`, `WEMath`, `WEColor`, `WEVector`, `MediaPlaybackEvent` (from the install)
   - [-] `thisLayer`
-    - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `getParent()`, `getChildren()`
-    - Missing: `alpha`, `getTransformMatrix`, `getAnimation`, `getAnimationLayer`, `getTextureAnimation`, `getVideoTexture`, `setParent`, attachments, `rotateObjectSpace`, and the image/text/effect/sound layer members (`text`, `horizontalalign`, `getEffect`, `solid`, `volume`...)
-    - Not available for scripts on camera, effect or scene-level properties (no owning layer)
-  - [ ] `thisObject` (undefined; `getAnimation()` is the main missing member)
+    - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `color`, `alpha`, `getParent()`, `getChildren()`, `getTransformMatrix()` (`Mat4`), `getAnimation`, `getAnimationLayer`, `getAnimationLayerCount`, `getTextureAnimation`
+    - Works: text layers (`text`, `font`, `pointsize`, `maxwidth`, `maxrows`, alignment) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
+    - Works: `getEffect(name | index)` and `getEffectCount()`; an effect has `visible`, `name`, `getMaterial()`, `getMaterialProperty(name)` and `setMaterialProperty(name, value)` (a value set by a script replaces the constant's keyframes)
+    - Missing: `getVideoTexture`, `setParent`, attachments, `rotateObjectSpace`, `solid`, `executeMaterialFunction`
+    - Not available for scripts on camera or scene-level properties (no owning layer)
+  - [-] `thisObject`
+    - Works: `visible`, `name`, `getAnimation()`; the effect itself for scripts on an effect property
   - [-] `thisScene`
     - Works: `getLayer(name | index)`, `getLayerCount()`, `enumerateLayers()`, `getLayerIndex()`
     - Missing: `createLayer`, `destroyLayer`, `sortLayer` (stubs that do nothing), `getInitialLayerConfig`, camera transforms, scene settings (`bloom*`, `clearcolor`, `camerashake*`...), model data
-  - [-] `input`
-    - Works: the object exists
-    - Missing: always zero/false; pointer events and hit testing exist as a tested module (`src/wallpaper/2d/input/`) but are not connected
+  - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
+- [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`)
 - [-] Events
-  - Works: `init(value)` and `update(value)` for property scripts
-  - Missing: `destroy`, `resizeScreen`, `applyUserProperties`, `applyGeneralSettings`, `cursorEnter/Leave/Move/Down/Up/Click`, `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged` (only a title-only stub), `mediaThumbnailChanged`, `mediaTimelineChanged`
-- [ ] Layer API (`ILayer`, `IImageLayer`, `ITextLayer`, `IEffectLayer`, `ISoundLayer`): transforms, parenting, attachments
-- [ ] Animation handles (`IAnimation`, `IAnimationLayer`, `ITextureAnimation`, `IVideoTexture`)
-- [ ] Effect and material handles (`IEffect`, `IMaterial`)
+  - Works: `init`, `update`, `applyUserProperties` (once after the first init), `cursorEnter/Leave/Move/Down/Up/Click` on solid image layers, and `mediaStatusChanged`, `mediaPlaybackChanged`, `mediaPropertiesChanged`, `mediaThumbnailChanged`, `mediaTimelineChanged` from MPRIS
+  - Missing: `destroy`, `resizeScreen`, `applyGeneralSettings`
+- [ ] Video texture handle (`IVideoTexture`)
 - [ ] Particle handles (`IParticleSystem`, `IParticleSystemInstance`)
 - [ ] Dynamic layers (`createLayer`, `destroyLayer`, `sortLayer`) and model data (`IModelData`)
 - [ ] Bone, blend-shape and physics APIs
@@ -369,8 +373,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works
     - Wayland layer-shell surfaces forward `wl_pointer` button and enter/leave events; the frame loop tracks the pressed-button mask and the cursor's scene-world position
     - A tested hit-test module finds the topmost visible solid layer under the cursor (rotation, non-uniform and negative scale, parents) and a tracker produces enter, leave, move, down, up and click
+    - Solid image layers with cursor hooks are hit targets and their scripts receive the events
   - Missing
-    - Layers are not registered as hit targets and no events reach scripts
     - Live delivery to a background layer-shell surface has not been confirmed
 - [ ] Keyboard, touch and gamepad input
 - [ ] Interactive effects, particles and puppet bones

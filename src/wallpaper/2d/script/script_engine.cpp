@@ -46,6 +46,11 @@ Object.defineProperty(g, 'thisObject', {
         var current = g.__lweCurrent;
         if (!current.layerId) return undefined;
         if (!current.thisObject) {
+            var effect = /^effect:(\d+):/.exec(current.property || '');
+            if (effect) {
+                current.thisObject = effectHandle(current.layerId, Number(effect[1]));
+                return current.thisObject;
+            }
             current.thisObject = {
                 getAnimation: function (name) {
                     return animationHandle(__lweScene('animFind', current.layerId, 'any',
@@ -313,6 +318,48 @@ LayerHandle.prototype.getAnimationLayer = function (nameOrIndex) {
     return animationHandle(__lweScene('animFind', this.__id, 'layer', String(nameOrIndex)));
 };
 LayerHandle.prototype.getAnimationLayerCount = function () { return __lweScene('animCount', this.__id); };
+
+function materialValues(value) {
+    if (typeof value === 'number' || typeof value === 'boolean') return [Number(value)];
+    if (Array.isArray(value)) return value.map(Number);
+    if (value && typeof value === 'object') {
+        return ['x', 'y', 'z', 'w'].filter(function (k) { return typeof value[k] === 'number'; })
+                                   .map(function (k) { return value[k]; });
+    }
+    return [];
+}
+function materialResult(values) {
+    if (!values) return undefined;
+    if (values.length === 1) return values[0];
+    if (values.length === 2) return vec2(values[0], values[1]);
+    if (values.length === 3 && typeof g.Vec3 === 'function') return new g.Vec3(values[0], values[1], values[2]);
+    if (values.length === 4 && typeof g.Vec4 === 'function') return new g.Vec4(values[0], values[1], values[2], values[3]);
+    return values;
+}
+function EffectHandle(layerId, index) {
+    Object.defineProperty(this, '__layer', { value: layerId });
+    Object.defineProperty(this, '__index', { value: index });
+}
+Object.defineProperties(EffectHandle.prototype, {
+    visible: {
+        get: function () { return __lweScene('effVisible', this.__layer, this.__index); },
+        set: function (value) { __lweScene('effSetVisible', this.__layer, this.__index, !!value); }, enumerable: true
+    },
+    name: { get: function () { return __lweScene('effName', this.__layer, this.__index); }, enumerable: true }
+});
+EffectHandle.prototype.getMaterial = function () { return this; };
+EffectHandle.prototype.getMaterialProperty = function (name) {
+    return materialResult(__lweScene('matGet', this.__layer, this.__index, String(name)));
+};
+EffectHandle.prototype.setMaterialProperty = function (name, value) {
+    return __lweScene('matSet', this.__layer, this.__index, String(name), materialValues(value));
+};
+function effectHandle(layerId, index) { return new EffectHandle(layerId, index); }
+LayerHandle.prototype.getEffectCount = function () { return __lweScene('effCount', this.__id); };
+LayerHandle.prototype.getEffect = function (nameOrIndex) {
+    var index = typeof nameOrIndex === 'number' ? nameOrIndex : __lweScene('effFind', this.__id, String(nameOrIndex));
+    return index >= 0 && index < __lweScene('effCount', this.__id) ? effectHandle(this.__id, index) : undefined;
+};
 ['play', 'stop', 'pause'].forEach(function (command) {
     LayerHandle.prototype[command] = function () { __lweScene('layerCommand', this.__id, command); };
 });
@@ -532,6 +579,40 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
         return JS_NewBool(ctx, scene->animationSet(id, stringArg(2), number));
     }
     if (op == "animCommand") return JS_NewBool(ctx, scene->animationCommand(id, stringArg(2)));
+
+    if (op == "effCount") return JS_NewInt32(ctx, scene->effectCount(id));
+    if (op == "effFind") return JS_NewInt32(ctx, scene->findEffect(id, stringArg(2)));
+    if (op == "effName") return JS_NewString(ctx, scene->effectName(id, (int)idArg(2)).c_str());
+    if (op == "effVisible") {
+        bool visible = false;
+        if (!scene->effectVisible(id, (int)idArg(2), visible)) return JS_UNDEFINED;
+        return JS_NewBool(ctx, visible);
+    }
+    if (op == "effSetVisible" && argc > 3)
+        return JS_NewBool(ctx, scene->setEffectVisible(id, (int)idArg(2), JS_ToBool(ctx, argv[3]) != 0));
+    if (op == "matGet") {
+        std::vector<double> values;
+        if (!scene->getMaterialProperty(id, (int)idArg(2), stringArg(3), values)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (size_t i = 0; i < values.size(); ++i)
+            JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, values[i]));
+        return array;
+    }
+    if (op == "matSet" && argc > 4) {
+        std::vector<double> values;
+        JSValue length = JS_GetPropertyStr(ctx, argv[4], "length");
+        uint32_t count = 0;
+        JS_ToUint32(ctx, &count, length);
+        JS_FreeValue(ctx, length);
+        for (uint32_t i = 0; i < count && i < 4; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, argv[4], i);
+            double number = 0.0;
+            JS_ToFloat64(ctx, &number, item);
+            JS_FreeValue(ctx, item);
+            values.push_back(number);
+        }
+        return JS_NewBool(ctx, scene->setMaterialProperty(id, (int)idArg(2), stringArg(3), values));
+    }
 
     const std::string property = stringArg(2);
     if (op == "get") {

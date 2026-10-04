@@ -119,6 +119,11 @@ class ShaderPass {
         return r;
     }
 
+    // Material constants by authored (material key) or shader uniform name. A value set by a script replaces the
+    // constant's keyframe animation for good.
+    bool setMaterialConstant(const std::string& name, const std::vector<float>& values);
+    const std::vector<float>* materialConstant(const std::string& name) const;
+
     int debug_view_mode = 0;
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
 
@@ -134,6 +139,8 @@ class ShaderPass {
                              const std::vector<ShaderUniformConfig>& shader_uniforms) const;
     void applyAudioSpectrumBlocks();
     void updateAnimatedUniforms(float time);
+    bool resolveMaterialName(const std::string& name, std::string& resolved) const;
+    std::vector<ShaderUniformConfig> shader_uniform_configs_;
     std::string stored_vs_source;
     std::string stored_fs_source;
     std::map<std::string, wallpaper_engine::AnimationCurve> resolved_animations;

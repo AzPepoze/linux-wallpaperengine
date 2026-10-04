@@ -122,6 +122,15 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         bind(object.node.angles_script, BoundProperty::Angles);
         bind(object.visible_script, BoundProperty::Visible);
         bind(object.image.color_script, BoundProperty::Color);
+        for (size_t i = 0; i < object.effects.size(); ++i) {
+            const auto& effect = object.effects[i];
+            if (!effect.visible_script.empty())
+                out.scripts->add(object.node.id, BoundProperty::EffectVisible, effect.visible_script.script,
+                                 effect.visible_script.properties_json, (int)i);
+            for (const auto& constant : effect.constant_scripts)
+                out.scripts->add(object.node.id, BoundProperty::EffectConstant, constant.script.script,
+                                 constant.script.properties_json, (int)i, constant.name);
+        }
     }
 
     LOG_I("Built scene tree with %zu nodes, %zu layers and %zu property scripts", out.scene_tree->size(),

@@ -70,6 +70,32 @@ class ScriptSceneBackend {
     virtual int animationLayerCount(uint32_t /*layer_id*/) {
         return 0;
     }
+
+    // Effects of a layer, by index in the layer's effect list.
+    virtual int effectCount(uint32_t /*layer_id*/) {
+        return 0;
+    }
+    virtual int findEffect(uint32_t /*layer_id*/, const std::string& /*name*/) {
+        return -1;
+    }
+    virtual std::string effectName(uint32_t /*layer_id*/, int /*effect*/) {
+        return "";
+    }
+    virtual bool effectVisible(uint32_t /*layer_id*/, int /*effect*/, bool& /*out*/) {
+        return false;
+    }
+    virtual bool setEffectVisible(uint32_t /*layer_id*/, int /*effect*/, bool /*value*/) {
+        return false;
+    }
+    // Material constants of an effect's passes; a set applies to every pass that has the constant.
+    virtual bool getMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/,
+                                     std::vector<double>& /*out*/) {
+        return false;
+    }
+    virtual bool setMaterialProperty(uint32_t /*layer_id*/, int /*effect*/, const std::string& /*name*/,
+                                     const std::vector<double>& /*value*/) {
+        return false;
+    }
 };
 
 #endif  // SCRIPT_SCENE_BACKEND_H

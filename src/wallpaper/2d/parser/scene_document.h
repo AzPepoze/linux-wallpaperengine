@@ -56,6 +56,7 @@ struct EffectConstantScript {
 
 struct EffectInstanceDocument {
     std::string file;
+    std::string name;  // how scripts address the effect: getEffect("name")
     bool visible = true;
     ScriptedValue visible_script;
     std::string instance_config_json;

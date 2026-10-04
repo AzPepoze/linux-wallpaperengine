@@ -34,6 +34,7 @@ class EffectLoadBatch {
 class Effect {
    public:
     std::string file_path;
+    std::string name;
     std::vector<ShaderPass*> passes;
     bool visible = true;
     bool solo = false;

@@ -125,7 +125,10 @@ Effect* Effect::loadFromDocument(const wallpaper_engine::EffectInstanceDocument&
     if (!doc.instance_config_json.empty()) inst_json = cJSON_Parse(doc.instance_config_json.c_str());
 
     Effect* eff = load(doc.file.c_str(), inst_json, ctx);
-    if (eff) eff->visible = doc.visible;
+    if (eff) {
+        eff->visible = doc.visible;
+        eff->name = doc.name;
+    }
     if (inst_json) cJSON_Delete(inst_json);
     return eff;
 }

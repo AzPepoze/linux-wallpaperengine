@@ -41,8 +41,17 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool animationCommand(uint32_t handle, const std::string& command) override;
     std::vector<uint32_t> takeEndedAnimations() override;
     int animationLayerCount(uint32_t layer_id) override;
+    int effectCount(uint32_t layer_id) override;
+    int findEffect(uint32_t layer_id, const std::string& name) override;
+    std::string effectName(uint32_t layer_id, int effect) override;
+    bool effectVisible(uint32_t layer_id, int effect, bool& out) override;
+    bool setEffectVisible(uint32_t layer_id, int effect, bool value) override;
+    bool getMaterialProperty(uint32_t layer_id, int effect, const std::string& name, std::vector<double>& out) override;
+    bool setMaterialProperty(uint32_t layer_id, int effect, const std::string& name,
+                             const std::vector<double>& value) override;
 
    private:
+    class Effect* effectAt(uint32_t layer_id, int effect) const;
     struct AnimationTarget {
         bool sprite = false;  // otherwise a puppet animation layer
         uint32_t layer_id = 0;
@@ -60,7 +69,7 @@ class SceneScriptBackend : public ScriptSceneBackend {
     std::vector<AnimationTarget> targets_;
 };
 
-enum class BoundProperty { Origin, Scale, Angles, Visible, Color };
+enum class BoundProperty { Origin, Scale, Angles, Visible, Color, EffectVisible, EffectConstant };
 
 // The scene's script-driven properties: each frame the script gets the property's current value and its result is
 // written back. Owns the scene backend and keeps it registered with the script engine.
@@ -71,7 +80,9 @@ class ScriptBindings {
     ScriptBindings(const ScriptBindings&) = delete;
     ScriptBindings& operator=(const ScriptBindings&) = delete;
 
-    bool add(uint32_t object_id, BoundProperty property, const std::string& script, const std::string& properties_json);
+    // `effect_index` and `constant` address effect properties (the effect's index on the object; the material key).
+    bool add(uint32_t object_id, BoundProperty property, const std::string& script, const std::string& properties_json,
+             int effect_index = -1, const std::string& constant = "");
     void update(float dt);
     // Publishes engine.userProperties and sends applyUserProperties once, after the scripts' init().
     void setUserProperties(const UserProperties& properties);
@@ -86,13 +97,15 @@ class ScriptBindings {
     struct Binding {
         uint32_t object_id = 0;
         BoundProperty property = BoundProperty::Origin;
+        int effect_index = -1;
+        std::string constant;
         std::unique_ptr<SceneScript> script;
         Layer* layer = nullptr;
         bool started = false;
     };
 
-    bool read(const Binding& binding, ScriptValue& value) const;
-    void write(const Binding& binding, const ScriptValue& value) const;
+    bool read(const Binding& binding, ScriptValue& value);
+    void write(const Binding& binding, const ScriptValue& value);
     void dispatchPointer();
 
     EngineContext& ctx_;

@@ -73,6 +73,46 @@ class CountingScene : public ScriptSceneBackend {
     size_t layers_;
 };
 
+// One layer (id 3) with effects "glow" and "ripple"; "ripple" owns the material constant "speed".
+class EffectScene : public CountingScene {
+   public:
+    EffectScene() : CountingScene(1) {}
+    bool visible[2] = {true, true};
+    std::vector<double> speed = {1.0};
+
+    bool layerExists(uint32_t id) override {
+        return id == 3;
+    }
+    int effectCount(uint32_t id) override {
+        return id == 3 ? 2 : 0;
+    }
+    int findEffect(uint32_t id, const std::string& name) override {
+        if (id != 3) return -1;
+        return name == "glow" ? 0 : name == "ripple" ? 1 : -1;
+    }
+    std::string effectName(uint32_t, int effect) override {
+        return effect == 0 ? "glow" : "ripple";
+    }
+    bool effectVisible(uint32_t, int effect, bool& out) override {
+        out = visible[effect];
+        return true;
+    }
+    bool setEffectVisible(uint32_t, int effect, bool value) override {
+        visible[effect] = value;
+        return true;
+    }
+    bool getMaterialProperty(uint32_t, int effect, const std::string& name, std::vector<double>& out) override {
+        if (effect != 1 || name != "speed") return false;
+        out = speed;
+        return true;
+    }
+    bool setMaterialProperty(uint32_t, int effect, const std::string& name, const std::vector<double>& value) override {
+        if (effect != 1 || name != "speed") return false;
+        speed = value;
+        return true;
+    }
+};
+
 bool updateText(SceneScript& script, std::string& out) {
     ScriptValue value = ScriptValue::makeString("");
     if (!script.updateValue(value)) return false;
@@ -196,6 +236,42 @@ export function update() { return String(shared.mark); }
         engine.unregisterScope(&second_scope);
         engine.setCreationScope(nullptr);
         engine.setActiveScope(nullptr);
+    }
+
+    // Effects: look up by name or index, toggle visibility, read and write material constants.
+    {
+        EffectScene scene;
+        ScriptEngine& engine = ScriptEngine::instance();
+        const int scope = 0;
+        engine.registerScope(&scope, &scene);
+        engine.setCreationScope(&scope);
+        const char* source = R"JS(
+export function update() {
+    var glow = thisLayer.getEffect('glow');
+    var ripple = thisLayer.getEffect(1);
+    glow.visible = false;
+    ripple.setMaterialProperty('speed', ripple.getMaterialProperty('speed') * 3);
+    return thisLayer.getEffectCount() + ':' + glow.name + ':' + ripple.name + ':' + (thisLayer.getEffect('none') === undefined);
+}
+)JS";
+        SceneScript script;
+        script.setLayerId(3);
+        CHECK(script.load(source, ""));
+        std::string out;
+        CHECK(updateText(script, out) && out == "2:glow:ripple:true");
+        CHECK(!scene.visible[0] && scene.visible[1]);
+        CHECK(scene.speed.size() == 1 && scene.speed[0] == 3.0);
+
+        // A script bound to an effect sees that effect as thisObject.
+        SceneScript bound;
+        bound.setLayerId(3);
+        bound.setProperty("effect:1:visible");
+        CHECK(bound.load("export function update(v) { return thisObject.name === 'ripple'; }", ""));
+        ScriptValue flag = ScriptValue::makeBool(false);
+        CHECK(bound.updateValue(flag) && flag.number == 1.0);
+
+        engine.unregisterScope(&scope);
+        engine.setCreationScope(nullptr);
     }
 
     return test::finish("scene script tests");
