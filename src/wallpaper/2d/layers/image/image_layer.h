@@ -220,6 +220,7 @@ class ImageLayer : public Layer {
     // Set when the object's alpha is driven by a SceneScript; `alpha_script_value` is its running result.
     std::unique_ptr<SceneScript> alpha_script;
     double alpha_script_value = 1.0;
+    bool alpha_script_started = false;  // init() runs on the first update, once the whole scene exists
 
    private:
     // Puppet mesh: the parsed model, its rest/skinned positions and the

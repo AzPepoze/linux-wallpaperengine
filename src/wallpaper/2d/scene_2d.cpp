@@ -16,6 +16,7 @@
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
+#include "wallpaper/2d/script/scene_scripts.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
 void Scene2DRuntime::init() {
@@ -39,6 +40,7 @@ void Scene2DRuntime::precompileBlendModes() {
 }
 
 void Scene2DRuntime::update(float dt) {
+    if (ctx.scene.scripts) ctx.scene.scripts->update();
     if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
         ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
         ctx.scene.layers[ctx.debug.selected_object]->update(dt, ctx);
@@ -215,6 +217,8 @@ void Scene2DRuntime::resetOutputViewport() {
 
 void Scene2DRuntime::clearScene() {
     LOG_TAG_I("SCENE_2D", "Destroying %zu scene layers...", ctx.scene.layers.size());
+    delete ctx.scene.scripts;  // scripts point at layers and tree nodes, so they go first
+    ctx.scene.scripts = nullptr;
     for (auto layer : ctx.scene.layers) delete layer;
     ctx.scene.layers.clear();
     delete ctx.scene.scene_tree;

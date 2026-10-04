@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -24,6 +25,7 @@
 #include "shared/core/utils.h"
 #include "wallpaper/2d/script/scene_script.h"
 #include "wallpaper/2d/script/script_engine.h"
+#include "wallpaper/2d/script/script_scene_backend.h"
 
 namespace {
 
@@ -32,7 +34,141 @@ struct ScriptBlock {
     std::string property;
     std::string source;
     std::string properties_json;
+    uint32_t object_id = 0;  // scene object that owns the property (thisLayer), 0 for scene-level scripts
 };
+
+// The scene's objects as a script sees them, so thisLayer / thisScene work without a renderer.
+struct FakeLayer {
+    uint32_t id = 0, parent = 0;
+    std::string name;
+    double origin[3] = {0, 0, 0}, scale[3] = {1, 1, 1}, angles[3] = {0, 0, 0}, size[2] = {0, 0};
+    bool visible = true;
+};
+
+// "x y z" strings, optionally wrapped as { "value": ... } by a script-driven or user-bound property.
+void readVector(const cJSON* property, double* out, int count) {
+    if (cJSON_IsObject(property)) property = cJSON_GetObjectItemCaseSensitive(property, "value");
+    if (!cJSON_IsString(property) || !property->valuestring) return;
+    double v[3] = {out[0], out[1], count > 2 ? out[2] : 0.0};
+    const int read = sscanf(property->valuestring, "%lf %lf %lf", &v[0], &v[1], &v[2]);
+    for (int i = 0; i < count && i < read; ++i) out[i] = v[i];
+}
+
+class FakeScene : public ScriptSceneBackend {
+   public:
+    void load(const cJSON* scene) {
+        layers_.clear();
+        const cJSON* objects = cJSON_GetObjectItemCaseSensitive(scene, "objects");
+        const cJSON* object = nullptr;
+        cJSON_ArrayForEach(object, objects) {
+            FakeLayer layer;
+            const cJSON* id = cJSON_GetObjectItemCaseSensitive(object, "id");
+            const cJSON* parent = cJSON_GetObjectItemCaseSensitive(object, "parent");
+            const cJSON* name = cJSON_GetObjectItemCaseSensitive(object, "name");
+            if (cJSON_IsNumber(id)) layer.id = (uint32_t)id->valuedouble;
+            if (cJSON_IsNumber(parent)) layer.parent = (uint32_t)parent->valuedouble;
+            if (cJSON_IsString(name) && name->valuestring) layer.name = name->valuestring;
+            readVector(cJSON_GetObjectItemCaseSensitive(object, "origin"), layer.origin, 3);
+            readVector(cJSON_GetObjectItemCaseSensitive(object, "scale"), layer.scale, 3);
+            readVector(cJSON_GetObjectItemCaseSensitive(object, "angles"), layer.angles, 3);
+            for (double& angle : layer.angles) angle *= 180.0 / M_PI;  // stored in radians, scripts see degrees
+            readVector(cJSON_GetObjectItemCaseSensitive(object, "size"), layer.size, 2);
+            const cJSON* visible = cJSON_GetObjectItemCaseSensitive(object, "visible");
+            if (cJSON_IsObject(visible)) visible = cJSON_GetObjectItemCaseSensitive(visible, "value");
+            if (cJSON_IsBool(visible)) layer.visible = cJSON_IsTrue(visible);
+            if (layer.id != 0) layers_.push_back(layer);
+        }
+    }
+    FakeLayer* find(uint32_t id) {
+        for (FakeLayer& layer : layers_)
+            if (layer.id == id) return &layer;
+        return nullptr;
+    }
+
+    bool layerExists(uint32_t id) override {
+        return find(id) != nullptr;
+    }
+    std::string layerName(uint32_t id) override {
+        FakeLayer* layer = find(id);
+        return layer ? layer->name : "";
+    }
+    bool getVector(uint32_t id, const std::string& property, double out[3], int& components) override {
+        FakeLayer* layer = find(id);
+        if (!layer) return false;
+        const double* source = property == "origin"   ? layer->origin
+                               : property == "scale"  ? layer->scale
+                               : property == "angles" ? layer->angles
+                                                      : nullptr;
+        if (source) {
+            for (int i = 0; i < 3; ++i) out[i] = source[i];
+            components = 3;
+            return true;
+        }
+        if (property == "size") {
+            out[0] = layer->size[0];
+            out[1] = layer->size[1];
+            components = 2;
+            return true;
+        }
+        return false;
+    }
+    bool setVector(uint32_t id, const std::string& property, const double value[3]) override {
+        FakeLayer* layer = find(id);
+        double* target = !layer                 ? nullptr
+                         : property == "origin" ? layer->origin
+                         : property == "scale"  ? layer->scale
+                         : property == "angles" ? layer->angles
+                                                : nullptr;
+        if (!target) return false;
+        for (int i = 0; i < 3; ++i) target[i] = value[i];
+        return true;
+    }
+    bool getBool(uint32_t id, const std::string& property, bool& out) override {
+        FakeLayer* layer = find(id);
+        if (!layer || property != "visible") return false;
+        out = layer->visible;
+        return true;
+    }
+    bool setBool(uint32_t id, const std::string& property, bool value) override {
+        FakeLayer* layer = find(id);
+        if (!layer || property != "visible") return false;
+        layer->visible = value;
+        return true;
+    }
+    uint32_t parentOf(uint32_t id) override {
+        FakeLayer* layer = find(id);
+        return layer ? layer->parent : 0;
+    }
+    std::vector<uint32_t> childrenOf(uint32_t id) override {
+        std::vector<uint32_t> children;
+        for (const FakeLayer& layer : layers_)
+            if (layer.parent == id) children.push_back(layer.id);
+        return children;
+    }
+    uint32_t findLayerByName(const std::string& name) override {
+        for (const FakeLayer& layer : layers_)
+            if (layer.name == name) return layer.id;
+        return 0;
+    }
+    std::vector<uint32_t> allLayers() override {
+        std::vector<uint32_t> ids;
+        for (const FakeLayer& layer : layers_) ids.push_back(layer.id);
+        return ids;
+    }
+
+   private:
+    std::vector<FakeLayer> layers_;
+};
+
+// Maps /objects/<index>/... to the id of that object.
+uint32_t ownerOf(const cJSON* scene, const std::string& path) {
+    const std::string prefix = "/objects/";
+    if (path.compare(0, prefix.size(), prefix) != 0) return 0;
+    const int index = atoi(path.c_str() + prefix.size());
+    const cJSON* object = cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(scene, "objects"), index);
+    const cJSON* id = object ? cJSON_GetObjectItemCaseSensitive(object, "id") : nullptr;
+    return cJSON_IsNumber(id) ? (uint32_t)id->valuedouble : 0;
+}
 
 struct ScriptResult {
     std::string path;
@@ -43,15 +179,32 @@ struct ScriptResult {
     double max_update_us = 0.0;
 };
 
-// What the runner can feed update() today; vectors/booleans need the Vec* marshalling that the host lacks.
-enum class Kind { Number, Text, Unsupported };
-
-Kind kindOf(const std::string& property) {
-    if (property == "text") return Kind::Text;
-    if (property == "origin" || property == "scale" || property == "angles" || property == "color" ||
-        property == "size" || property == "visible")
-        return Kind::Unsupported;
-    return Kind::Number;
+// The value a property script receives, typed like the engine does it.
+ScriptValue startValue(const ScriptBlock& block, FakeScene& scene) {
+    FakeLayer* layer = scene.find(block.object_id);
+    ScriptValue value;
+    const std::string& property = block.property;
+    if (property == "text") {
+        value = ScriptValue::makeString("");
+    } else if (property == "visible") {
+        value = ScriptValue::makeBool(layer ? layer->visible : true);
+    } else if (property == "origin" || property == "scale" || property == "angles") {
+        double v[3] = {0, 0, 0};
+        int components = 0;
+        if (layer) scene.getVector(layer->id, property, v, components);
+        value = ScriptValue::makeVec3(v[0], v[1], v[2]);
+    } else if (property == "color") {
+        value = ScriptValue::makeVec3(1, 1, 1);
+    } else if (property == "size") {
+        value.kind = ScriptValue::Kind::Vec2;
+        if (layer) {
+            value.vec[0] = layer->size[0];
+            value.vec[1] = layer->size[1];
+        }
+    } else {
+        value = ScriptValue::makeNumber(1.0);
+    }
+    return value;
 }
 
 void collect(const cJSON* node, const std::string& path, const std::string& property, std::vector<ScriptBlock>& out) {
@@ -113,12 +266,13 @@ std::string normalise(const std::string& message) {
     return message.size() > 160 ? message.substr(0, 160) : message;
 }
 
-ScriptResult run(const ScriptBlock& block, int frames) {
+ScriptResult run(const ScriptBlock& block, FakeScene& scene, int frames) {
     ScriptResult result;
     result.path = block.path;
     result.property = block.property;
 
     SceneScript script;
+    script.setLayerId(block.object_id);
     result.loaded = script.load(block.source, block.properties_json);
     if (!result.loaded) {
         result.error = script.lastError().empty() ? "load: failed" : script.lastError();
@@ -129,21 +283,15 @@ ScriptResult run(const ScriptBlock& block, int frames) {
         return result;
     }
 
-    double scratch = 1.0;
-    if (script.hasFunction("init")) script.callInit(scratch);
+    ScriptValue value = startValue(block, scene);
+    if (script.hasFunction("init")) script.initValue(value);
 
-    const Kind kind = kindOf(block.property);
-    if (script.valid() && kind != Kind::Unsupported) {
+    if (script.valid()) {
         result.exercised = true;
         for (int frame = 0; frame < frames && script.errorCount() == 0; ++frame) {
             ScriptEngine::instance().beginFrame(1.0 / 60.0, frame / 60.0, 3840.0f, 2160.0f, 1920.0f, 1080.0f);
             const auto start = std::chrono::steady_clock::now();
-            if (kind == Kind::Text) {
-                std::string out;
-                script.update("", out);
-            } else {
-                script.updateNumber(1.0, scratch);
-            }
+            script.updateValue(value);
             const double us =
                 std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
             result.max_update_us = std::max(result.max_update_us, us);
@@ -223,8 +371,12 @@ int main(int argc, char** argv) {
 
         std::vector<ScriptBlock> blocks;
         collect(scene, "", "", blocks);
+        for (ScriptBlock& block : blocks) block.object_id = ownerOf(scene, block.path);
+        FakeScene fake_scene;
+        fake_scene.load(scene);
         cJSON_Delete(scene);
         if (blocks.empty()) continue;
+        ScriptEngine::instance().setSceneBackend(&fake_scene);
 
         ++with_scripts;
         int wallpaper_clean = 0;
@@ -233,7 +385,7 @@ int main(int argc, char** argv) {
         cJSON_AddStringToObject(entry, "title", readTitle(root + "/" + id).c_str());
         cJSON* failures = cJSON_AddArrayToObject(entry, "failures");
         for (const ScriptBlock& block : blocks) {
-            const ScriptResult result = run(block, frames);
+            const ScriptResult result = run(block, fake_scene, frames);
             ++total_scripts;
             if (result.loaded) ++loaded;
             if (result.error.empty()) {
@@ -253,6 +405,7 @@ int main(int argc, char** argv) {
         cJSON_AddNumberToObject(entry, "clean", wallpaper_clean);
         if (wallpaper_clean == (int)blocks.size()) ++clean_wallpapers;
         cJSON_AddItemToArray(wallpapers, entry);
+        ScriptEngine::instance().setSceneBackend(nullptr);  // fake_scene goes out of scope
         fprintf(stderr, "%s: %d/%zu scripts clean\n", id.c_str(), wallpaper_clean, blocks.size());
     }
 

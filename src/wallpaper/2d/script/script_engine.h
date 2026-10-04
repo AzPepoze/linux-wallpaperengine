@@ -40,6 +40,13 @@ class ScriptEngine {
     const std::string& assetsDir() const {
         return assets_dir_;
     }
+    // The scene scripts may query and modify (thisLayer / thisScene); not owned, clear it before the scene goes away.
+    void setSceneBackend(class ScriptSceneBackend* backend) {
+        scene_backend_ = backend;
+    }
+    class ScriptSceneBackend* sceneBackend() const {
+        return scene_backend_;
+    }
     void flushStorage();
 
     // Used by SceneScript around each script call.
@@ -83,6 +90,7 @@ class ScriptEngine {
     int64_t deadline_ns_ = 0;
     std::string wallpaper_id_ = "default";
     std::string assets_dir_;
+    class ScriptSceneBackend* scene_backend_ = nullptr;
     double storage_flush_timer_ = 0.0;
 };
 

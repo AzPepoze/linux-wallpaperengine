@@ -11,6 +11,7 @@
 #include <sstream>
 #include <unordered_map>
 
+#include "script_scene_backend.h"
 #include "shared/core/logger.h"
 
 #define TAG "SCRIPT"
@@ -33,8 +34,8 @@ function hide(name, value) {
 }
 function vec2(x, y) { return typeof g.Vec2 === 'function' ? new g.Vec2(x, y) : { x: x, y: y }; }
 
-hide('__lweCurrent', { id: 0, layer: undefined, object: undefined });
-Object.defineProperty(g, 'thisLayer', { get: function () { return g.__lweCurrent.layer; }, configurable: true });
+hide('__lweCurrent', { id: 0, layerId: 0, object: undefined });
+Object.defineProperty(g, 'thisLayer', { get: function () { return layerHandle(g.__lweCurrent.layerId); }, configurable: true });
 Object.defineProperty(g, 'thisObject', { get: function () { return g.__lweCurrent.object; }, configurable: true });
 
 function format(args) {
@@ -173,11 +174,54 @@ hide('__lweStorageFlush', function () {
     dirty = {};
 });
 
+// Layer handles: thin objects over the scene backend, one per layer id, so the same layer is always the same object.
+function toArray(value, count) {
+    if (typeof value === 'number') return count === 2 ? [value, value] : [value, value, value];
+    return count === 2 ? [value.x, value.y] : [value.x, value.y, value.z];
+}
+function vectorProperty(name, count) {
+    var Ctor = function () { return count === 2 ? g.Vec2 : g.Vec3; };
+    return {
+        get: function () {
+            var a = __lweScene('get', this.__id, name);
+            if (!a) return undefined;
+            var C = Ctor();
+            return C ? (count === 2 ? new C(a[0], a[1]) : new C(a[0], a[1], a[2])) : { x: a[0], y: a[1], z: a[2] };
+        },
+        set: function (value) { __lweScene('set', this.__id, name, toArray(value, count)); },
+        enumerable: true
+    };
+}
+var handles = {};
+function LayerHandle(id) { Object.defineProperty(this, '__id', { value: id }); }
+Object.defineProperties(LayerHandle.prototype, {
+    origin: vectorProperty('origin', 3),
+    scale: vectorProperty('scale', 3),
+    angles: vectorProperty('angles', 3),
+    parallaxDepth: vectorProperty('parallaxDepth', 2),
+    size: vectorProperty('size', 2),
+    visible: {
+        get: function () { return __lweScene('get', this.__id, 'visible'); },
+        set: function (value) { __lweScene('set', this.__id, 'visible', !!value); }, enumerable: true
+    },
+    name: { get: function () { return __lweScene('name', this.__id); }, enumerable: true }
+});
+LayerHandle.prototype.getParent = function () { return layerHandle(__lweScene('parent', this.__id)); };
+LayerHandle.prototype.getChildren = function () { return __lweScene('children', this.__id).map(layerHandle); };
+function layerHandle(id) {
+    if (!id || !__lweScene('exists', id)) return undefined;
+    return handles[id] || (handles[id] = new LayerHandle(id));
+}
 hide('thisScene', {
-    getLayer: function () { return null; }, getLayerCount: function () { return 0; },
-    enumerateLayers: function () { return []; },
+    getLayer: function (nameOrIndex) { return layerHandle(__lweScene('find', nameOrIndex)); },
+    getLayerCount: function () { return __lweScene('list').length; },
+    enumerateLayers: function () { return __lweScene('list').map(layerHandle); },
+    getLayerIndex: function (layer) {
+        var handle = typeof layer === 'object' ? layer : this.getLayer(layer);
+        return handle ? __lweScene('index', handle.__id) : -1;
+    },
     createLayer: function () { return null; }, destroyLayer: function () { return false; },
-    sortLayer: function () { return false; }, getLayerIndex: function () { return -1; }
+    sortLayer: function () { return false; }
 });
 hide('input', {
     cursorWorldPosition: vec2(0, 0), cursorScreenPosition: vec2(0, 0), cursorLeftDown: false
@@ -285,6 +329,84 @@ std::string readFile(const std::string& path) {
 }
 
 // `import ... from 'WEMath'` resolves to <assets>/scripts/jsmodules/wemath.js from the Wallpaper Engine install.
+JSValue idArray(JSContext* ctx, const std::vector<uint32_t>& ids) {
+    JSValue array = JS_NewArray(ctx);
+    for (size_t i = 0; i < ids.size(); ++i) JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewUint32(ctx, ids[i]));
+    return array;
+}
+
+// __lweScene(op, ...): the single bridge from the JS layer handles to ScriptSceneBackend.
+JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    ScriptSceneBackend* scene = ScriptEngine::instance().sceneBackend();
+    if (!scene || argc < 1) return JS_UNDEFINED;
+    const char* op_text = JS_ToCString(ctx, argv[0]);
+    if (!op_text) return JS_UNDEFINED;
+    const std::string op = op_text;
+    JS_FreeCString(ctx, op_text);
+
+    auto idArg = [&](int index) {
+        uint32_t id = 0;
+        if (index < argc) JS_ToUint32(ctx, &id, argv[index]);
+        return id;
+    };
+    auto stringArg = [&](int index) {
+        std::string text;
+        if (index < argc) {
+            if (const char* c = JS_ToCString(ctx, argv[index])) {
+                text = c;
+                JS_FreeCString(ctx, c);
+            }
+        }
+        return text;
+    };
+
+    if (op == "list") return idArray(ctx, scene->allLayers());
+    if (op == "find") {
+        if (argc > 1 && JS_IsNumber(argv[1])) {
+            int32_t index = -1;
+            JS_ToInt32(ctx, &index, argv[1]);
+            const std::vector<uint32_t> layers = scene->allLayers();
+            return JS_NewUint32(ctx, index >= 0 && (size_t)index < layers.size() ? layers[(size_t)index] : 0u);
+        }
+        return JS_NewUint32(ctx, scene->findLayerByName(stringArg(1)));
+    }
+
+    const uint32_t id = idArg(1);
+    if (op == "exists") return JS_NewBool(ctx, scene->layerExists(id));
+    if (op == "name") return JS_NewString(ctx, scene->layerName(id).c_str());
+    if (op == "parent") return JS_NewUint32(ctx, scene->parentOf(id));
+    if (op == "children") return idArray(ctx, scene->childrenOf(id));
+    if (op == "index") {
+        const std::vector<uint32_t> layers = scene->allLayers();
+        for (size_t i = 0; i < layers.size(); ++i)
+            if (layers[i] == id) return JS_NewInt32(ctx, (int32_t)i);
+        return JS_NewInt32(ctx, -1);
+    }
+
+    const std::string property = stringArg(2);
+    if (op == "get") {
+        bool flag = false;
+        if (scene->getBool(id, property, flag)) return JS_NewBool(ctx, flag);
+        double v[3] = {0.0, 0.0, 0.0};
+        int components = 0;
+        if (!scene->getVector(id, property, v, components)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (int i = 0; i < components; ++i) JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, v[i]));
+        return array;
+    }
+    if (op == "set" && argc > 3) {
+        if (JS_IsBool(argv[3])) return JS_NewBool(ctx, scene->setBool(id, property, JS_ToBool(ctx, argv[3]) != 0));
+        double v[3] = {0.0, 0.0, 0.0};
+        for (uint32_t i = 0; i < 3; ++i) {
+            JSValue component = JS_GetPropertyUint32(ctx, argv[3], i);
+            JS_ToFloat64(ctx, &v[i], component);
+            JS_FreeValue(ctx, component);
+        }
+        return JS_NewBool(ctx, scene->setVector(id, property, v));
+    }
+    return JS_UNDEFINED;
+}
+
 JSModuleDef* moduleLoader(JSContext* ctx, const char* name, void*) {
     std::string lower;
     for (const char* c = name; *c; ++c) lower.push_back((char)tolower((unsigned char)*c));
@@ -356,6 +478,7 @@ void ScriptEngine::create() {
                       JS_NewCFunction(context_, jsStorageLoad, "__lweStorageLoad", 1));
     JS_SetPropertyStr(context_, global, "__lweStorageSave",
                       JS_NewCFunction(context_, jsStorageSave, "__lweStorageSave", 2));
+    JS_SetPropertyStr(context_, global, "__lweScene", JS_NewCFunction(context_, jsScene, "__lweScene", 4));
     JS_FreeValue(context_, global);
 
     // The install's own base classes first (Vec2/3/4, Mat3/4, createScriptProperties, shared, MediaPlaybackEvent...).

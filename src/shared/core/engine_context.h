@@ -16,6 +16,7 @@ enum class RuntimeMode { Wallpaper, Sandbox };
 
 class Layer;
 class SceneTree;
+class ScriptBindings;
 
 struct profiler_stats_t {
     static constexpr size_t HISTORY_SIZE = 128;
@@ -81,6 +82,7 @@ struct SceneState {
 
     std::vector<Layer*> layers;
     SceneTree* scene_tree = nullptr;
+    ScriptBindings* scripts = nullptr;  // property scripts of the scene; deleted before the layers
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;

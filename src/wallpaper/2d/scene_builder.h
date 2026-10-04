@@ -11,6 +11,7 @@
 struct ParsedScene {
     std::vector<Layer*> layers;
     SceneTree* scene_tree = nullptr;
+    ScriptBindings* scripts = nullptr;
     wallpaper_engine::SceneCameraDocument camera;
     wallpaper_engine::SceneGeneralDocument general;
     float design_width = 0.0f;

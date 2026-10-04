@@ -21,6 +21,7 @@ bool Scene2DWallpaper::applyParsedScene(ParsedScene parsed, EngineContext& ctx) 
     ctx.scene.general = parsed.general;
     ctx.scene.layers = std::move(parsed.layers);
     ctx.scene.scene_tree = parsed.scene_tree;
+    ctx.scene.scripts = parsed.scripts;
     ctx.scene.scene_w = parsed.design_width;
     ctx.scene.scene_h = parsed.design_height;
     ctx.parallax.enabled = parsed.general.camera_parallax_enabled;

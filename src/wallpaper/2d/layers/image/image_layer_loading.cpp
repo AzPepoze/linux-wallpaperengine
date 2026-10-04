@@ -32,12 +32,11 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
     layer->alpha_document = doc.image;
     if (!doc.image.alpha_script.empty()) {
         auto script = std::make_unique<SceneScript>();
+        script->setLayerId(doc.node.id);
         if (script->load(doc.image.alpha_script, doc.image.alpha_script_properties_json) && script->valid()) {
             layer->alpha_script_value = doc.image.alpha;
-            script->callInit(layer->alpha_script_value);
             layer->alpha_script = std::move(script);
-            LOG_I("Image layer '%s': alpha SceneScript loaded (start alpha %.2f)", doc.name.c_str(),
-                  layer->alpha_script_value);
+            LOG_I("Image layer '%s': alpha SceneScript loaded", doc.name.c_str());
         }
     }
 

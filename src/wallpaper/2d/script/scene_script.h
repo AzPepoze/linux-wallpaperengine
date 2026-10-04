@@ -1,8 +1,24 @@
 #ifndef SCENE_SCRIPT_H
 #define SCENE_SCRIPT_H
 
+#include <stdint.h>
+
 #include <memory>
 #include <string>
+
+// A property value passed to and from a script's init(value) / update(value). Vectors cross as Vec2 / Vec3 objects.
+struct ScriptValue {
+    enum class Kind { Number, Bool, Vec2, Vec3, String };
+    Kind kind = Kind::Number;
+    double number = 0.0;  // Number, and Bool as 0 / 1
+    double vec[3] = {0.0, 0.0, 0.0};
+    std::string text;
+
+    static ScriptValue makeNumber(double value);
+    static ScriptValue makeBool(bool value);
+    static ScriptValue makeVec3(double x, double y, double z);
+    static ScriptValue makeString(std::string value);
+};
 
 // Minimal Wallpaper Engine SceneScript host backed by QuickJS. Text scripts
 // expose `update(value)` and the `createScriptProperties` builder.
@@ -26,6 +42,15 @@ class SceneScript {
     // Per-frame inputs (engine.frametime, audio buffers) live on ScriptEngine.
     bool callInit(double& value);
     bool updateNumber(double value, double& out);
+
+    // Typed variants: `value` goes in as the hook's argument and is replaced by its result when the script returned
+    // something of a compatible type (a number broadcasts into a vector). Returns false, leaving `value` unchanged,
+    // when the hook is missing, threw, or returned undefined / an incompatible value.
+    bool initValue(ScriptValue& value);
+    bool updateValue(ScriptValue& value);
+
+    // The scene object `thisLayer` refers to while this script runs (0 = none). May be set before or after load().
+    void setLayerId(uint32_t layer_id);
 
     // Calls a single-string-argument hook such as `mediaPropertiesChanged`.
     void callWithString(const std::string& function, const std::string& argument);

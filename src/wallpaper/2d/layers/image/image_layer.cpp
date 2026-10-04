@@ -45,6 +45,10 @@ void ImageLayer::updateCachedView() {
 
 void ImageLayer::update(float dt, EngineContext& ctx) {
     if (alpha_script) {
+        if (!alpha_script_started) {
+            alpha_script_started = true;
+            alpha_script->callInit(alpha_script_value);
+        }
         // A keyframed alpha feeds the script its animated value; otherwise the script carries its own state.
         const double input = alpha_document.alpha_keys.empty() ? alpha_script_value
                                                                : (double)evaluateImageAlpha(alpha_document, ctx.time);

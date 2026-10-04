@@ -12,6 +12,7 @@
 #include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
+#include "wallpaper/2d/script/scene_scripts.h"
 
 namespace {
 
@@ -75,6 +76,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     ctx.scene.perspective_override_fov = document.general.perspective_override_fov;
 
     out.scene_tree = new SceneTree();
+    out.scripts = new ScriptBindings(ctx);
     for (const auto& object : document.objects) {
         if (!object.node.valid) continue;
 
@@ -107,7 +109,21 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
         if (layer) out.layers.push_back(layer);
     }
 
-    LOG_I("Built scene tree with %zu nodes and %zu layers", out.scene_tree->size(), out.layers.size());
+    for (const auto& object : document.objects) {
+        if (!object.node.valid) continue;
+        const auto bind = [&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
+            if (!scripted.empty())
+                out.scripts->add(object.node.id, property, scripted.script, scripted.properties_json);
+        };
+        bind(object.node.origin_script, BoundProperty::Origin);
+        bind(object.node.scale_script, BoundProperty::Scale);
+        bind(object.node.angles_script, BoundProperty::Angles);
+        bind(object.visible_script, BoundProperty::Visible);
+        bind(object.image.color_script, BoundProperty::Color);
+    }
+
+    LOG_I("Built scene tree with %zu nodes, %zu layers and %zu property scripts", out.scene_tree->size(),
+          out.layers.size(), out.scripts->size());
     return out;
 }
 
