@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "app/control/control_protocol.h"
+#include "shared/audio/audio_engine.h"
 #include "shared/core/engine_context.h"
 #include "sokol_app.h"
 #include "wallpaper/transition/wallpaper_transition.h"
@@ -44,9 +45,7 @@ class WallpaperManager {
     bool isTransitioning() const {
         return transition_.active();
     }
-    void updateTransition(float dt) {
-        transition_.update(dt);
-    }
+    void updateTransition(float dt);
     void compositeTransition(EngineContext& ctx) {
         transition_.composite(ctx);
     }
@@ -74,6 +73,9 @@ class WallpaperManager {
     WallpaperTransition transition_;
     TransitionConfig transition_config_ = {};
     uint32_t random_seed_ = 0x5eed1234u;
+    AudioEngine::GroupId fading_group_ = AudioEngine::kDefaultGroup;
+    AudioEngine::GroupId active_group_ = AudioEngine::kDefaultGroup;
+    bool audio_crossfade_ = false;
 };
 
 #endif  // WALLPAPER_MANAGER_H
