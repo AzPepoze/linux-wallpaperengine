@@ -66,6 +66,24 @@ const char* kEffectScene = R"JSON({
   ]
 })JSON";
 
+const char* kAnimatedScene = R"JSON({
+  "camera": {"center": "0 0 0", "eye": "0 0 1", "up": "0 1 0"},
+  "objects": [
+    {"id": 1, "name": "Animated", "image": "models/a.json", "origin": "5 6 7",
+     "scale": {"value": "1 1 1", "animation": {
+        "relative": true,
+        "c0": [{"frame": 0, "value": 1}, {"frame": 30, "value": 2}, {"frame": 60, "value": 3}],
+        "c1": [{"frame": 0, "value": 4}, {"frame": 30, "value": 5}, {"frame": 60, "value": 6}],
+        "c2": [{"frame": 0, "value": 7}, {"frame": 30, "value": 8}, {"frame": 60, "value": 9}],
+        "options": {"fps": 60, "length": 100, "mode": "loop", "name": "Pulse",
+                    "children": [{"key": "alpha"}]}}},
+     "alpha": {"value": 0.5, "animation": {
+        "c0": [{"frame": 0, "value": 0}, {"frame": 15, "value": 1}],
+        "options": {"fps": 60, "length": 100, "mode": "loop", "startpaused": true,
+                    "parent": {"key": "scale"}}}}}
+  ]
+})JSON";
+
 SceneDocument parseText(const char* json) {
     char path[] = "/tmp/lwe_scene_XXXXXX";
     const int fd = mkstemp(path);
@@ -181,6 +199,56 @@ void testEffectScripts() {
     test::expect("effect", plain.constant_scripts.empty(), "plain effect has no constant scripts");
 }
 
+const PropertyAnimationDocument* findAnimation(const SceneObjectDocument& object, const std::string& property) {
+    for (const PropertyAnimationDocument& animation : object.animations) {
+        if (animation.property == property) return &animation;
+    }
+    return nullptr;
+}
+
+void testPropertyAnimations() {
+    const SceneDocument doc = parseText(kAnimatedScene);
+    test::expect("animation", doc.objects.size() == 1, "the animated object is kept");
+    if (doc.objects.size() != 1) return;
+
+    const SceneObjectDocument& object = doc.objects[0];
+    test::expect("animation", object.animations.size() == 2, "a plain origin stays out, scale and alpha animate");
+    const PropertyAnimationDocument* scale = findAnimation(object, "scale");
+    const PropertyAnimationDocument* alpha = findAnimation(object, "alpha");
+    test::expect("animation", scale && alpha, "both animated properties are reported");
+    if (!scale || !alpha) return;
+
+    test::expect(
+        "animation",
+        scale->curves[0].keys.size() == 3 && scale->curves[1].keys.size() == 3 && scale->curves[2].keys.size() == 3,
+        "every scale channel has keyframes");
+    test::expect("animation",
+                 scale->curves[0].keys[2].frame == 60.0f && scale->curves[0].keys[2].value == 3.0f &&
+                     scale->curves[1].keys[0].value == 4.0f && scale->curves[2].keys[1].frame == 30.0f &&
+                     scale->curves[2].keys[1].value == 8.0f,
+                 "scale frame and value pairs");
+    test::expect("animation",
+                 scale->curves[0].fps == 60.0f && scale->curves[0].length == 100.0f && scale->curves[1].fps == 60.0f &&
+                     scale->curves[1].mode == "loop" && scale->curves[2].fps == 60.0f &&
+                     scale->curves[2].length == 100.0f && scale->curves[2].mode == "loop",
+                 "options reach every channel");
+    test::expect("animation", scale->name == "Pulse" && scale->relative, "name and relative");
+    test::expect("animation", scale->children.size() == 1 && scale->children[0] == "alpha", "children listing");
+    test::expect("animation", scale->parent.empty(), "the timeline root has no parent");
+
+    test::expect("animation", alpha->curves[0].keys.size() == 2 && alpha->curves[1].keys.empty(), "alpha uses c0 only");
+    test::expect("animation", alpha->curves[0].keys[1].frame == 15.0f && alpha->curves[0].keys[1].value == 1.0f,
+                 "alpha frame and value pairs");
+    test::expect("animation",
+                 alpha->curves[0].fps == 60.0f && alpha->curves[0].length == 100.0f && alpha->curves[0].mode == "loop",
+                 "alpha options");
+    test::expect("animation", alpha->parent == "scale" && alpha->start_paused && !alpha->relative,
+                 "alpha links to the scale timeline and starts paused");
+
+    test::expect("animation", object.image.alpha_keys.size() == 2 && object.image.alpha_keys[1].frame == 15.0f,
+                 "the legacy alpha keys still parse");
+}
+
 void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
@@ -191,6 +259,7 @@ int main() {
     testObjects();
     testScriptedValues();
     testEffectScripts();
+    testPropertyAnimations();
     testMissingFile();
     return test::finish("scene parser tests");
 }

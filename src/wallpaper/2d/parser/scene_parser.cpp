@@ -456,6 +456,43 @@ void parseCurve(const cJSON* animation, const char* channel, AnimationCurve& out
     if (cJSON_IsString(mode) && mode->valuestring) out.mode = mode->valuestring;
 }
 
+// Reads a keyframed property (`origin`, `scale`, `angles`, `color` or `alpha`) into `out` when it has channels.
+void parsePropertyAnimation(const cJSON* object, const char* property, std::vector<PropertyAnimationDocument>& out) {
+    const cJSON* prop = member(object, property);
+    if (!cJSON_IsObject(prop)) return;
+    const cJSON* animation = member(prop, "animation");
+    if (!cJSON_IsObject(animation)) return;
+
+    const char* const channels[] = {"c0", "c1", "c2"};
+    PropertyAnimationDocument doc;
+    doc.property = property;
+    bool any_keys = false;
+    for (int i = 0; i < 3; ++i) {
+        parseCurve(animation, channels[i], doc.curves[i]);
+        any_keys = any_keys || !doc.curves[i].keys.empty();
+    }
+    if (!any_keys) return;
+
+    const cJSON* options = member(animation, "options");
+    if (cJSON_IsObject(options)) {
+        readPlainString(options, "name", doc.name);
+        doc.start_paused = parseBool(member(options, "startpaused"), false);
+        const cJSON* parent = member(options, "parent");
+        if (cJSON_IsObject(parent)) readPlainString(parent, "key", doc.parent);
+        const cJSON* children = member(options, "children");
+        if (cJSON_IsArray(children)) {
+            const cJSON* child = nullptr;
+            cJSON_ArrayForEach(child, children) {
+                std::string key;
+                readPlainString(child, "key", key);
+                if (!key.empty()) doc.children.push_back(std::move(key));
+            }
+        }
+    }
+    doc.relative = parseBool(member(animation, "relative"), false);
+    out.push_back(std::move(doc));
+}
+
 // A visible camera object may carry keyframed `zoom` / `origin` properties.
 void parseCameraPath(const cJSON* object, SceneCameraDocument& out) {
     if (!cJSON_IsString(member(object, "camera"))) return;
@@ -484,6 +521,9 @@ SceneObjectDocument parseObject(const cJSON* object) {
     parseTextFields(object, doc.text);
     parseSoundFields(object, doc.sound);
     parseEffects(object, doc.effects);
+    for (const char* property : {"origin", "scale", "angles", "color", "alpha"}) {
+        parsePropertyAnimation(object, property, doc.animations);
+    }
     return doc;
 }
 
