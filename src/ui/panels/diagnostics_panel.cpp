@@ -14,7 +14,7 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
 
     UiComponents::SectionHeader("Performance", "Frame Metrics");
 
-    const float current_fps = ctx.profiler.frame_ms > 0.001 ? static_cast<float>(1000.0 / ctx.profiler.frame_ms) : 0.0f;
+    const float current_fps = static_cast<float>(ctx.profiler.measured_fps);
     const float avg_fps =
         ctx.profiler.frame_avg_ms > 0.001 ? static_cast<float>(1000.0 / ctx.profiler.frame_avg_ms) : 0.0f;
 

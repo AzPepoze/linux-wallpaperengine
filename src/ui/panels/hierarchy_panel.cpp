@@ -266,7 +266,7 @@ void drawToolbar(EngineContext& ctx) {
 
 void drawPanel(EngineContext& ctx) {
     g_scroll_to_selection = false;
-    const double fps = ctx.profiler.frame_avg_ms > 0.0 ? (1000.0 / ctx.profiler.frame_avg_ms) : 0.0;
+    const double fps = ctx.profiler.measured_fps;
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "SCENE TREE");
     ImGui::SameLine();
     ImGui::TextDisabled("(%.1f FPS)", fps);

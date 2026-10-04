@@ -23,7 +23,9 @@ struct CliOptions {
     DiagnosticOptions diagnostics;
     bool cover = false;
     std::string assets_dir;
-    int fps_limit = 60;
+    int fps_limit = 0;  // 0 = unset: rely on vsync, no software cap
+    bool web_devtools = false;
+    int web_devtools_port = 9222;
     std::string scaling;
     std::string clamp;
     std::string screen_root;

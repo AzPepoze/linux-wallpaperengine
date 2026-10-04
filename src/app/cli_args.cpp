@@ -29,6 +29,7 @@ const char* const kValueOptions[] = {"--gpu",
                                      "--transition",
                                      "--transition-duration",
                                      "--transition-mode",
+                                     "--web-devtools-port",
                                      "--set-property"};
 }  // namespace
 

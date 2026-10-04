@@ -49,15 +49,29 @@ VkSurfaceFormatKHR pickFormat(VkPhysicalDevice device, VkSurfaceKHR surface) {
     return formats.empty() ? VkSurfaceFormatKHR{} : formats[0];
 }
 
+// vsync -> FIFO (always supported). Otherwise prefer MAILBOX, then IMMEDIATE, so a
+// software --fps cap is not additionally throttled by the display refresh rate.
+VkPresentModeKHR pickPresentMode(VkPhysicalDevice device, VkSurfaceKHR surface, bool vsync) {
+    if (vsync) return VK_PRESENT_MODE_FIFO_KHR;
+    uint32_t count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &count, nullptr);
+    std::vector<VkPresentModeKHR> modes(count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &count, modes.data());
+    for (VkPresentModeKHR mode : {VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR})
+        if (std::find(modes.begin(), modes.end(), mode) != modes.end()) return mode;
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
 sg_pixel_format toSokolFormat(VkFormat format) {
     return format == VK_FORMAT_R8G8B8A8_UNORM ? SG_PIXELFORMAT_RGBA8 : SG_PIXELFORMAT_BGRA8;
 }
 }  // namespace
 
 std::unique_ptr<WaylandVulkanSwapchain> WaylandVulkanSwapchain::create(wl_display* display, wl_surface* surface,
-                                                                       uint32_t width, uint32_t height) {
+                                                                       uint32_t width, uint32_t height, bool vsync) {
     std::unique_ptr<WaylandVulkanSwapchain> self(new WaylandVulkanSwapchain());
     self->extent_ = {width, height};
+    self->vsync_ = vsync;
     if (!self->createInstance() || !self->createSurface(display, surface) || !self->pickPhysicalDevice(display) ||
         !self->createDevice() || !self->createSwapchain())
         return nullptr;
@@ -234,7 +248,7 @@ bool WaylandVulkanSwapchain::createSwapchain() {
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.preTransform = caps.currentTransform;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    info.presentMode = pickPresentMode(physical_device_, surface_, vsync_);
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain_;
     VkSwapchainKHR created = VK_NULL_HANDLE;

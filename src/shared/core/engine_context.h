@@ -29,6 +29,7 @@ struct profiler_stats_t {
     double update_ms = 0.0;
     double render_ms = 0.0;
     double ui_ms = 0.0;
+    double measured_fps = 0.0;  // real presented rate over a short rolling window
     uint32_t draw_calls = 0;
     uint64_t frame_index = 0;
 
@@ -115,6 +116,10 @@ struct EngineContext {
     char asset_root[512] = {};
     UserProperties user_properties;
     std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
+    // Web wallpaper renderer options (passed to the out-of-process QtWebEngine helper).
+    int web_render_fps = 60;
+    bool web_devtools = false;
+    int web_devtools_port = 9222;
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;

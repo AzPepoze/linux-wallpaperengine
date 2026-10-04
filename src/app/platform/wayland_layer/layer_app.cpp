@@ -7,6 +7,7 @@
 #include <atomic>
 
 #include "app/platform/layer_options.h"
+#include "app/frame_rate.h"
 #include "app/platform/wayland_layer/wayland_layer_surface.h"
 #include "app/platform/wayland_layer/wayland_vulkan_swapchain.h"
 #include "shared/core/logger.h"
@@ -211,7 +212,8 @@ std::unique_ptr<LayerApp> LayerApp::create(const CliOptions& cli) {
     if (!impl->wayland) return nullptr;
     impl->swapchain = WaylandVulkanSwapchain::create(impl->wayland->display(), impl->wayland->surface(),
                                                      static_cast<uint32_t>(impl->wayland->pixelWidth()),
-                                                     static_cast<uint32_t>(impl->wayland->pixelHeight()));
+                                                     static_cast<uint32_t>(impl->wayland->pixelHeight()),
+                                                     frame_rate::policyFor(cli.fps_limit).vsync);
     if (!impl->swapchain) return nullptr;
     return std::unique_ptr<LayerApp>(new LayerApp(std::move(impl)));
 }

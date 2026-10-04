@@ -164,6 +164,16 @@ bool WebWallpaper::load(const std::string& path, EngineContext& ctx) {
     argv.push_back(width_arg);
     argv.push_back(const_cast<char*>("--height"));
     argv.push_back(height_arg);
+    char fps_arg[16];
+    snprintf(fps_arg, sizeof(fps_arg), "%d", std::max(1, ctx.web_render_fps));
+    argv.push_back(const_cast<char*>("--fps"));
+    argv.push_back(fps_arg);
+    char devtools_arg[16] = {};
+    if (ctx.web_devtools) {
+        snprintf(devtools_arg, sizeof(devtools_arg), "%d", ctx.web_devtools_port);
+        argv.push_back(const_cast<char*>("--devtools"));
+        argv.push_back(devtools_arg);
+    }
     argv.push_back(nullptr);
 
     pid_t child = -1;
@@ -226,6 +236,8 @@ bool WebWallpaper::load(const std::string& path, EngineContext& ctx) {
     last_frame_counter_ = 0;
 
     LOG_TAG_I("WEB", "Web wallpaper started (pid %d, %ux%u): %s", child, width, height, path.c_str());
+    if (ctx.web_devtools)
+        LOG_TAG_I("WEB", "DevTools: open http://localhost:%d in a browser to inspect the page", ctx.web_devtools_port);
     return true;
 }
 

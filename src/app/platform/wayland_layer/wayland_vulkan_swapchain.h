@@ -16,7 +16,7 @@ struct wl_surface;
 class WaylandVulkanSwapchain {
    public:
     static std::unique_ptr<WaylandVulkanSwapchain> create(wl_display* display, wl_surface* surface, uint32_t width,
-                                                          uint32_t height);
+                                                          uint32_t height, bool vsync = true);
     ~WaylandVulkanSwapchain();
     WaylandVulkanSwapchain(const WaylandVulkanSwapchain&) = delete;
     WaylandVulkanSwapchain& operator=(const WaylandVulkanSwapchain&) = delete;
@@ -58,6 +58,7 @@ class WaylandVulkanSwapchain {
     uint32_t sync_slot_ = 0;
     uint32_t image_index_ = 0;
     bool acquired_ = false;
+    bool vsync_ = true;
 };
 
 #endif  // WAYLAND_VULKAN_SWAPCHAIN_H

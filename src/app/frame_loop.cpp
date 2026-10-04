@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "app/frame_rate.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -136,6 +137,12 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     const uint64_t frame_start = stm_now();
 #endif
     ctx.renderer.draw_calls = 0;
+
+    // Real presented rate: the wall-clock duration of the previous loop iteration
+    // (frame build + present), independent of the CPU-only frame_ms below.
+    static frame_rate::Meter frame_meter;
+    frame_meter.tick(surface::frameDuration());
+    ctx.profiler.measured_fps = frame_meter.fps();
 
     // Runtime switch requests are applied before this frame's scene work so the
     // new wallpaper is the one updated and rendered.

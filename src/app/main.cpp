@@ -11,6 +11,7 @@
 #include "app/control/control_server.h"
 #include "app/frame_limiter.h"
 #include "app/frame_loop.h"
+#include "app/frame_rate.h"
 #if LWE_LAYER_SHELL
 #include "app/platform/wayland_layer/layer_app.h"
 #endif
@@ -134,6 +135,12 @@ static void applyCliToContext() {
         LOG_W("[CONTROL] %s; using freeze", transition_mode_error.c_str());
     transition_config.continue_previous = continue_previous;
     wallpaper_mgr.setTransitionConfig(transition_config);
+
+    // Web renderer: capture at the same rate the engine runs, and honour --web-devtools.
+    const frame_rate::Policy web_policy = frame_rate::policyFor(cli.fps_limit);
+    ctx.web_render_fps = web_policy.software_limit > 0 ? web_policy.software_limit : 60;
+    ctx.web_devtools = cli.web_devtools;
+    ctx.web_devtools_port = cli.web_devtools_port;
 }
 
 static void loadInitialWallpaper() {
@@ -218,7 +225,9 @@ static void init(void) {
 
 static void frame(void) {
     runFrame(ctx, wallpaper_mgr);
-    limitFrameRate(cli.fps_limit);
+    // --fps caps the loop in software; without it, vsync (FIFO) paces us instead.
+    const frame_rate::Policy policy = frame_rate::policyFor(cli.fps_limit);
+    if (policy.software_limit > 0) limitFrameRate(policy.software_limit);
 }
 
 static void event(const sapp_event* e) {

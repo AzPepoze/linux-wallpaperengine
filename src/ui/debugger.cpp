@@ -42,10 +42,10 @@ std::string g_sandbox_status;
 SandboxPreviewRect g_sandbox_preview_rect;
 
 void drawInspectorPanel(EngineContext& ctx) {
-    const double fps = ctx.profiler.frame_avg_ms > 0.0 ? (1000.0 / ctx.profiler.frame_avg_ms) : 0.0;
+    const double fps = ctx.profiler.measured_fps;
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "INSPECTOR");
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "[ %.1f FPS | %.1f ms ]", fps, ctx.profiler.frame_avg_ms);
+    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "[ %.1f FPS | %.2f ms cpu ]", fps, ctx.profiler.frame_avg_ms);
     ImGui::Separator();
 
     if (ctx.debug.selected_object == -1 && ctx.debug.selected_node_id == 0) {

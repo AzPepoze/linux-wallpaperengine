@@ -18,8 +18,7 @@ void GlobalInspector::show(EngineContext& ctx) {
     ImGui::Text("Resolution: %.0f x %.0f", ctx.scene.scene_w, ctx.scene.scene_h);
     ImGui::Text("Render Scale: %.3f (Offsets: %.1f, %.1f)", ctx.scene.render_scale, ctx.scene.offset_x,
                 ctx.scene.offset_y);
-    ImGui::Text("FPS: %.1f | Frame Time: %.2f ms", ImGui::GetIO().Framerate,
-                1000.0f / (ImGui::GetIO().Framerate > 0.0f ? ImGui::GetIO().Framerate : 60.0f));
+    ImGui::Text("FPS: %.1f | CPU frame: %.2f ms", ctx.profiler.measured_fps, ctx.profiler.frame_avg_ms);
     ImGui::Checkbox("Show node IDs in scene tree", &ctx.debug.show_node_ids);
 
     ImGui::Separator();
