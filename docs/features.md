@@ -59,7 +59,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Missing
     - Live editing of video properties (defaults only)
     - Playback controls beyond the above
-- [-] Web wallpapers (experimental, build with `xmake f --web=y`)
+- [-] Web wallpapers (experimental; enabled automatically when Qt6 WebEngine is installed, disable with `xmake f --web=n`)
   - Works
     - HTML, CSS, JavaScript and local web assets, in a separate renderer process (Qt WebEngine) that talks to the app over a Unix socket
     - Sends the `project.json` user properties (defaults) to the page as JSON

@@ -15,7 +15,7 @@ Linux renderer for Wallpaper Engine projects.
 - FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`, `libswscale`, `libswresample`)
 - VA-API development libraries (`libva`, `libva-drm`)
 - `libdrm`
-- Optional, for web wallpapers (`xmake f --web=y`): Qt6 WebEngine (`qt6-webengine`)
+- Optional, for web wallpapers: Qt6 WebEngine (`qt6-webengine`). Detected automatically and enabled by default when installed; disable with `xmake f --web=n`. Distro package names: `qt6-webengine` (Arch), `qt6-webengine-dev` (Debian/Ubuntu), `qt6-qtwebengine-devel` (Fedora), `qt6-webengine-devel` (openSUSE).
 - A local Wallpaper Engine installation with its original `assets/` data (required at runtime; set `WALLPAPER_ENGINE_PATH` or `engine_path` in `config.json`)
 
 ### Dependencies managed by xmake

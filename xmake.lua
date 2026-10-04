@@ -16,12 +16,20 @@ add_requires("imgui", {optional = true})
 -- SceneScript (clock/date text) runs on an embedded QuickJS engine.
 add_requires("quickjs")
 
--- Off by default: the core engine build has no Qt dependency. Enable with
--- `xmake f --web=y` to build the QtWebEngine helper used by web wallpapers.
+-- On by default when Qt6 WebEngine is installed: builds the out-of-process helper used by web
+-- wallpapers. The core engine keeps no Qt dependency, and the option disables itself when the
+-- package is missing so other builds still succeed.
 option("web")
-    set_default(false)
     set_showmenu(true)
     set_description("Enable Qt6 WebEngine web wallpaper rendering")
+    on_check(function (option)
+        import("lib.detect.find_package")
+        if find_package("pkgconfig::Qt6WebEngineWidgets") then
+            option:enable(true)
+        else
+            cprint("${yellow}web disabled: install Qt6 WebEngine (e.g. qt6-webengine-dev)")
+        end
+    end)
 option_end()
 
 if has_config("web") then
