@@ -146,6 +146,27 @@ std::string findFontFile(const std::vector<std::string>& needles) {
     }
     return "";
 }
+#if defined(LWE_LAYER_SHELL)
+// A layer surface has no sokol_app clipboard, so route ImGui's clipboard through wl-clipboard when it is installed.
+const char* layerClipboardGet(ImGuiContext*) {
+    static std::string text;
+    text.clear();
+    if (FILE* pipe = popen("wl-paste --no-newline 2>/dev/null", "r")) {
+        char buffer[4096];
+        size_t read = 0;
+        while ((read = fread(buffer, 1, sizeof(buffer), pipe)) > 0) text.append(buffer, read);
+        pclose(pipe);
+    }
+    return text.c_str();
+}
+
+void layerClipboardSet(ImGuiContext*, const char* text) {
+    if (FILE* pipe = popen("wl-copy 2>/dev/null", "w")) {
+        fwrite(text, 1, strlen(text), pipe);
+        pclose(pipe);
+    }
+}
+#endif
 }  // namespace
 
 void Debugger::init() {
@@ -184,8 +205,13 @@ void Debugger::init() {
     // sokol_imgui rebuilds the font atlas texture automatically once fonts are added.
 
     if (surface::hasProvider()) {
+#if defined(LWE_LAYER_SHELL)
+        ImGui::GetPlatformIO().Platform_SetClipboardTextFn = layerClipboardSet;
+        ImGui::GetPlatformIO().Platform_GetClipboardTextFn = layerClipboardGet;
+#else
         ImGui::GetPlatformIO().Platform_SetClipboardTextFn = nullptr;
         ImGui::GetPlatformIO().Platform_GetClipboardTextFn = nullptr;
+#endif
     }
 }
 

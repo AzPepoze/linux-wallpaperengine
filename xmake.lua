@@ -46,6 +46,18 @@ option("layer_shell")
     end)
 option_end()
 
+-- On by default when libxkbcommon is installed. Turns layer-surface key codes into text for the debug UI.
+option("xkbcommon")
+    set_showmenu(true)
+    set_description("Use libxkbcommon to type into the debug UI on a layer surface")
+    on_check(function (option)
+        import("lib.detect.find_package")
+        if find_package("pkgconfig::xkbcommon") then
+            option:enable(true)
+        end
+    end)
+option_end()
+
 -- On by default when libsystemd is installed. Exposes the MPRIS media session
 -- source over sd-bus; disable with `xmake f --mpris=n`.
 option("mpris")
@@ -112,6 +124,11 @@ target("linux-wallpaperengine")
 
     if has_config("layer_shell") then
         add_syslinks("wayland-client")
+        if has_config("xkbcommon") then
+            add_packages("pkgconfig::xkbcommon")
+            add_syslinks("xkbcommon")
+            add_defines("LWE_HAVE_XKBCOMMON=1")
+        end
         on_load(generate_wayland_protocols)
     end
 

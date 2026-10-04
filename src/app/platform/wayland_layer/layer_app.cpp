@@ -128,6 +128,7 @@ struct LayerApp::Impl : SurfaceProvider {
     void forwardPointerButton(uint32_t button, bool pressed, void (*event)(const sapp_event*));
     void forwardPointerEnterLeave(bool entered, void (*event)(const sapp_event*));
     void forwardKey(uint32_t key, bool pressed, void (*event)(const sapp_event*));
+    void forwardChar(uint32_t codepoint, void (*event)(const sapp_event*));
 };
 
 void LayerApp::Impl::trackFrameTime() {
@@ -186,6 +187,13 @@ void LayerApp::Impl::forwardKey(uint32_t key, bool pressed, void (*event)(const 
     event(&e);
 }
 
+void LayerApp::Impl::forwardChar(uint32_t codepoint, void (*event)(const sapp_event*)) {
+    sapp_event e = {};
+    e.type = SAPP_EVENTTYPE_CHAR;
+    e.char_code = codepoint;
+    event(&e);
+}
+
 LayerApp::LayerApp(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 
 LayerApp::~LayerApp() = default;
@@ -216,6 +224,7 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
         [&](uint32_t button, bool pressed) { app.forwardPointerButton(button, pressed, callbacks.event); });
     app.wayland->setEnterLeaveHandler([&](bool entered) { app.forwardPointerEnterLeave(entered, callbacks.event); });
     app.wayland->setKeyHandler([&](uint32_t key, bool pressed) { app.forwardKey(key, pressed, callbacks.event); });
+    app.wayland->setCharHandler([&](uint32_t codepoint) { app.forwardChar(codepoint, callbacks.event); });
 
     callbacks.init();
     while (!app.quit.load(std::memory_order_relaxed)) {
