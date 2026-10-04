@@ -64,10 +64,8 @@ std::string nodeDisplayName(const EngineContext& ctx, const SceneTreeNode& node)
     const int layer_index = findLayerIndex(ctx, node.id);
     if (layer_index >= 0 && layer_index < (int)ctx.scene.layers.size()) {
         if (const auto* il = dynamic_cast<const ImageLayer*>(ctx.scene.layers[layer_index])) {
-            if (il->is_fullscreen)
+            if (il->is_fullscreen || il->is_compose_region)
                 variant = "Post";
-            else if (il->is_compose_region)
-                variant = "Post/Region";
             else if (il->solid_layer)
                 variant = "Solid";
         }
