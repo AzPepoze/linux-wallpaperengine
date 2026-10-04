@@ -1,5 +1,8 @@
 #include <cjson/cJSON.h>
 
+#include <algorithm>
+#include <cmath>
+
 #include "scene_2d.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
@@ -72,10 +75,19 @@ void Scene2DRuntime::initBloomPipelines() {
                 {"bloomstrength", {ctx.scene.general.bloom.hdr_strength}},
                 {"blend", {threshold, threshold - knee, 2.0f * knee, knee > 0.0f ? 0.25f / knee : 0.0f}},
                 {"bloomtint", {1.0f, 1.0f, 1.0f}},
+                {"g_RenderVar0", {0.0f, 0.0f, 0.0f, 0.0f}},
             },
             ctx);
-        bloom_pass_blur_v = createBloomPass("materials/util/hdr_downsample.json", {}, ctx);
-        bloom_pass_blur_h = createBloomPass("materials/util/hdr_upsample.json", {{"scatter", {scatter}}}, ctx);
+        bloom_pass_blur_v =
+            createBloomPass("materials/util/hdr_downsample.json", {{"g_RenderVar0", {0.0f, 0.0f, 0.0f, 0.0f}}}, ctx);
+        bloom_pass_blur_h = createBloomPass("materials/util/hdr_upsample.json",
+                                            {{"scatter", {scatter}}, {"g_RenderVar0", {0.0f, 0.0f, 0.0f, 0.0f}}}, ctx);
+        // The upsample material blends additively onto the larger level it writes into.
+        if (bloom_pass_blur_h && bloom_pass_blur_h->compiled.shader.id != SG_INVALID_ID) {
+            bloom_pass_blur_h->compiled.pipeline =
+                ShaderCompiler::makePipeline(bloom_pass_blur_h->compiled.shader,
+                                             bloom_pass_blur_h->compiled.vertex_layout, ShaderBlendMode::Additive);
+        }
         bloom_pass_combine = createBloomPass("materials/util/combine_hdr_upsample_linear.json", {}, ctx);
     } else {
         bloom_pass_extract = createBloomPass("materials/util/downsample_quarter_bloom.json",
@@ -113,6 +125,74 @@ bool Scene2DRuntime::ensureBloomTargets(int width, int height) {
     return true;
 }
 
+int Scene2DRuntime::renderHdrBloom(int current_target_index, int width, int height) {
+    const int levels = std::clamp((int)std::lround(ctx.scene.general.bloom.hdr_iterations), 1, 8);
+    const sg_pixel_format format = compositionPixelFormat();
+    bool targets_ok = (int)hdr_bloom_levels.size() == levels;
+    for (int i = 0; targets_ok && i < levels; ++i) {
+        targets_ok = hdr_bloom_levels[i].image.id != SG_INVALID_ID && hdr_bloom_levels[i].pixel_format == format &&
+                     hdr_bloom_levels[i].width == std::max(1, width >> (i + 1)) &&
+                     hdr_bloom_levels[i].height == std::max(1, height >> (i + 1));
+    }
+    if (!targets_ok) {
+        hdr_bloom_levels.clear();
+        hdr_bloom_levels.resize(levels);
+        for (int i = 0; i < levels; ++i) {
+            if (!hdr_bloom_levels[i].create(std::max(1, width >> (i + 1)), std::max(1, height >> (i + 1)), format)) {
+                hdr_bloom_levels.clear();
+                return current_target_index;
+            }
+        }
+    }
+
+    // Draws `source` through `pass` into `target`; the offsets average a 2x2 block of the source per tap.
+    const auto stage = [&](ShaderPass& pass, SceneTarget& target, sg_image source, sg_view source_view, int source_w,
+                           int source_h, sg_load_action load, sg_view bloom_view = {SG_INVALID_ID}) {
+        pass.uniforms["g_RenderVar0"] = {-0.5f / (float)source_w, -0.5f / (float)source_h, 0.5f / (float)source_w,
+                                         0.5f / (float)source_h};
+        sg_pass target_pass = colorPass(target.attachment_view, load, 1.0f);
+        sg_begin_pass(&target_pass);
+        renderer_update_viewport(&ctx.renderer, (float)target.width, (float)target.height);
+        render_effect_pass_t desc = pass.getRenderPass(ctx.profiler.frame_index, ctx.time);
+        sg_view extra[] = {bloom_view};
+        if (bloom_view.id != SG_INVALID_ID) {
+            desc.override_views = extra;
+            desc.num_override_views = 1;
+        }
+        float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        renderer_draw_sprite(ctx, &ctx.renderer, source, source_view, 0.0f, 0.0f, (float)target.width,
+                             (float)target.height, 0.0f, white, false, &desc);
+        sg_end_pass();
+    };
+
+    const SceneTarget& scene = scene_targets[current_target_index];
+    stage(*bloom_pass_extract, hdr_bloom_levels[0], scene.image, scene.texture_view, width, height,
+          SG_LOADACTION_CLEAR);
+    for (int i = 0; i + 1 < levels; ++i) {
+        stage(*bloom_pass_blur_v, hdr_bloom_levels[i + 1], hdr_bloom_levels[i].image, hdr_bloom_levels[i].texture_view,
+              hdr_bloom_levels[i].width, hdr_bloom_levels[i].height, SG_LOADACTION_CLEAR);
+    }
+    for (int i = levels - 2; i >= 0; --i) {
+        stage(*bloom_pass_blur_h, hdr_bloom_levels[i], hdr_bloom_levels[i + 1].image,
+              hdr_bloom_levels[i + 1].texture_view, hdr_bloom_levels[i + 1].width, hdr_bloom_levels[i + 1].height,
+              SG_LOADACTION_LOAD);
+    }
+
+    const int next = 1 - current_target_index;
+    sg_pass combine_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR, 1.0f);
+    sg_begin_pass(&combine_pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    render_effect_pass_t desc = bloom_pass_combine->getRenderPass(ctx.profiler.frame_index, ctx.time);
+    sg_view bloom_view[] = {hdr_bloom_levels[0].texture_view};
+    desc.override_views = bloom_view;
+    desc.num_override_views = 1;
+    float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    renderer_draw_sprite(ctx, &ctx.renderer, scene.image, scene.texture_view, 0.0f, 0.0f, (float)width, (float)height,
+                         0.0f, white, false, &desc);
+    sg_end_pass();
+    return next;
+}
+
 int Scene2DRuntime::renderBloom(int current_target_index, int width, int height) {
     if (RenderDiagnostics::instance().getConfig().disable_bloom) return current_target_index;
     const bool hdr = ctx.scene.general.hdr;
@@ -124,6 +204,8 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
     if (!bloom_pass_extract || !bloom_pass_blur_v || !bloom_pass_blur_h || !bloom_pass_combine) {
         return current_target_index;
     }
+
+    if (hdr) return renderHdrBloom(current_target_index, width, height);
 
     const int bloom_w = std::max(1, width / 4);
     const int bloom_h = std::max(1, height / 4);

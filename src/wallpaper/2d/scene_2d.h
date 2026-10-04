@@ -83,6 +83,7 @@ class Scene2DRuntime {
     int output_height = 0;
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];
+    std::vector<SceneTarget> hdr_bloom_levels;
     int scene_output_index = -1;
     bool float_composition_available_ = true;
     class ShaderPass* bloom_pass_extract = nullptr;
@@ -95,6 +96,7 @@ class Scene2DRuntime {
     sg_pixel_format compositionPixelFormat() const;
     bool ensureSceneTargets(int width, int height);
     bool ensureBloomTargets(int width, int height);
+    int renderHdrBloom(int current_target_index, int width, int height);
     int renderBloom(int current_target_index, int width, int height);
     void drawDirect();
     void drawOffscreen();

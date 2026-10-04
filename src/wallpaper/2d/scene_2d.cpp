@@ -215,6 +215,7 @@ void Scene2DRuntime::cleanup() {
     scene_targets[1].reset();
     bloom_targets[0].reset();
     bloom_targets[1].reset();
+    hdr_bloom_levels.clear();
     scene_output_index = -1;
     LOG_TAG_I("SCENE_2D", "2D scene runtime cleanup complete.");
 }
