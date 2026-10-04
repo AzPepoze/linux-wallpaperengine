@@ -40,3 +40,6 @@ linux-wallpaperengine
 # Logs & Local Config
 *.log
 config.json
+
+# Git worktrees
+.claude/worktrees/
