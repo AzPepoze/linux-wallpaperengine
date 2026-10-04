@@ -170,17 +170,20 @@ void rewriteScalarFromVectorCall(std::string& source) {
 
 namespace {
 std::string narrowStatementVectors(const std::string& statement, const std::map<std::string, int>& widths) {
-    static const std::regex declaration(R"(\b(vec|float|ivec|int)([234])\s+([A-Za-z_][A-Za-z0-9_]*)\s*=)");
-
     const size_t first = statement.find_first_not_of(" \t\r\n");
     if (first != std::string::npos && statement[first] == '#') return statement;
 
-    std::smatch declared;
-    if (!std::regex_search(statement, declared, declaration)) return statement;
-    const int target_width = declared[2].str()[0] - '0';
+    // The first `vecN`/`floatN`/`ivecN`/`intN` declaration with an initializer decides the target width.
+    int target_width = 0;
+    size_t target_position = 0;
+    forEachDeclaration(statement, "=", isVectorTypeWord,
+                       [&](const std::string& type, const std::string&, size_t name_position) {
+                           target_width = type.back() - '0';
+                           target_position = name_position;
+                           return true;
+                       });
     if (target_width != 2 && target_width != 3) return statement;
 
-    const size_t target_position = (size_t)declared.position(3);
     const std::string swizzle = swizzleForWidth(target_width);
 
     std::string result;

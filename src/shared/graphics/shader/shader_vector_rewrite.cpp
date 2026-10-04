@@ -12,26 +12,29 @@ using namespace shader_processor_internal;
 
 namespace shader_processor_internal {
 std::map<std::string, int> collectVectorWidths(const std::string& source) {
-    static const std::regex vector_decl(
-        R"(\b(vec[234]|float[234]|ivec[234]|int[234])\s+([A-Za-z_][A-Za-z0-9_]*)\s*[;=,\[\)])");
-    static const std::regex nonvector_decl(
-        R"(\b(float|double|int|uint|bool|mat[234])\s+([A-Za-z_][A-Za-z0-9_]*)\s*[;=,\[\)])");
+    static const char* const kNonVectorTypes[] = {"float", "double", "int", "uint", "bool", "mat2", "mat3", "mat4"};
+    const auto isNonVectorType = [](const std::string& word) {
+        return std::any_of(std::begin(kNonVectorTypes), std::end(kNonVectorTypes),
+                           [&](const char* type) { return word == type; });
+    };
+
     std::map<std::string, int> widths;
     std::set<std::string> conflicting;
-    for (std::sregex_iterator it(source.begin(), source.end(), vector_decl), end; it != end; ++it) {
-        const std::string type = (*it)[1].str();
-        const std::string name = (*it)[2].str();
-        const int width = type.back() - '0';
-        const auto existing = widths.find(name);
-        if (existing == widths.end()) {
-            widths[name] = width;
-        } else if (existing->second != width) {
-            conflicting.insert(name);
-        }
-    }
-    for (std::sregex_iterator it(source.begin(), source.end(), nonvector_decl), end; it != end; ++it) {
-        conflicting.insert((*it)[2].str());
-    }
+    forEachDeclaration(source, ";=,[)", isVectorTypeWord,
+                       [&](const std::string& type, const std::string& name, size_t) {
+                           const int width = type.back() - '0';
+                           const auto existing = widths.find(name);
+                           if (existing == widths.end()) {
+                               widths[name] = width;
+                           } else if (existing->second != width) {
+                               conflicting.insert(name);
+                           }
+                           return false;
+                       });
+    forEachDeclaration(source, ";=,[)", isNonVectorType, [&](const std::string&, const std::string& name, size_t) {
+        conflicting.insert(name);
+        return false;
+    });
     for (const std::string& name : conflicting) widths.erase(name);
     return widths;
 }
