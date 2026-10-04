@@ -2,7 +2,15 @@ name: check
 
 on:
   push:
+    branches: [main, dev]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Formatting and static analysis need no graphics dependencies, so they run on a stock runner.
