@@ -49,6 +49,11 @@ class TransitionShader {
     GfxView noise_view_;
     GfxImage clouds_image_;
     GfxView clouds_view_;
+    GfxBuffer brick_vertices_;
+    GfxBuffer brick_indices_;
+    GfxBuffer shatter_vertices_;
+    GfxBuffer shatter_indices_;
+    int shatter_index_count_ = 0;
     int effect_index_ = -1;
 };
 

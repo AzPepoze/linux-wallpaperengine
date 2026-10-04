@@ -1,9 +1,11 @@
 #include "wallpaper/transition/transition_shader.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <string>
+#include <vector>
 
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
@@ -40,6 +42,108 @@ void replaceAll(std::string& text, const std::string& from, const std::string& t
     }
 }
 
+// --- Bricks (#16) geometry, ported from dx11playlisttransition.geom ---------
+struct BrickVec2 {
+    float x;
+    float y;
+};
+
+constexpr int kBrickSetCount = 4;
+constexpr int kBricksPerSet = 7;
+constexpr int kBrickCount = kBrickSetCount * kBricksPerSet;
+constexpr int kBrickVertexCount = kBrickCount * 6;  // two triangles per brick
+
+float smoothstepF(float edge0, float edge1, float x) {
+    float t = (x - edge0) / (edge1 - edge0);
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t * (3.0f - 2.0f * t);
+}
+
+BrickVec2 rotateF(BrickVec2 v, float r) {
+    const float cs = cosf(r);
+    const float sn = sinf(r);
+    return {v.x * cs - v.y * sn, v.x * sn + v.y * cs};
+}
+
+void makeBrickGeom(BrickVec2 origin, float angle, BrickVec2 size, BrickVec2 uv_origin, float aspect,
+                   std::vector<vertex_t>& out) {
+    BrickVec2 half = {size.x * 0.5f * aspect, size.y * 0.5f};
+    BrickVec2 hx = rotateF({half.x, 0.0f}, angle);
+    BrickVec2 hy = rotateF({0.0f, half.y}, angle);
+    hx.x /= aspect;
+    hx.y /= aspect;
+    hy.x /= aspect;
+    hy.y /= aspect;
+
+    const BrickVec2 a00 = {origin.x - hx.x - hy.x, origin.y - hx.y - hy.y};
+    const BrickVec2 a01 = {origin.x - hx.x + hy.x, origin.y - hx.y + hy.y};
+    const BrickVec2 a10 = {origin.x + hx.x - hy.x, origin.y + hx.y - hy.y};
+    const BrickVec2 a11 = {origin.x + hx.x + hy.x, origin.y + hx.y + hy.y};
+
+    const BrickVec2 hs = {size.x * 0.5f, size.y * 0.5f};
+    const auto uv = [](BrickVec2 p) {
+        BrickVec2 u = {p.x * 0.5f + 0.5f, p.y * 0.5f + 0.5f};
+        u.y = 1.0f - u.y;
+        return u;
+    };
+    const BrickVec2 u00 = uv({uv_origin.x - hs.x, uv_origin.y - hs.y});
+    const BrickVec2 u01 = uv({uv_origin.x - hs.x, uv_origin.y + hs.y});
+    const BrickVec2 u10 = uv({uv_origin.x + hs.x, uv_origin.y - hs.y});
+    const BrickVec2 u11 = uv({uv_origin.x + hs.x, uv_origin.y + hs.y});
+
+    // Triangle strip (00,01,10,11) expanded to two triangles.
+    out.push_back({a00.x, a00.y, u00.x, u00.y});
+    out.push_back({a01.x, a01.y, u01.x, u01.y});
+    out.push_back({a10.x, a10.y, u10.x, u10.y});
+    out.push_back({a01.x, a01.y, u01.x, u01.y});
+    out.push_back({a10.x, a10.y, u10.x, u10.y});
+    out.push_back({a11.x, a11.y, u11.x, u11.y});
+}
+
+void makeBrick(BrickVec2 origin, BrickVec2 size, float progress, float aspect, std::vector<vertex_t>& out) {
+    const float anim_pos_y = origin.y * 0.5f + 0.5f;
+    const float anim_pos_x = origin.x * 0.5f + 0.5f;
+    const float fall_duration = 0.3f;
+    float fall_offset =
+        smoothstepF(0.0f, fall_duration, progress * (1.0f + fall_duration * 1.5f) - anim_pos_y - anim_pos_x * 0.2f);
+    fall_offset *= fall_offset;
+
+    BrickVec2 anim_origin = origin;
+    anim_origin.y -= fall_offset * (anim_pos_y + 0.2f) * 2.6f;
+    anim_origin.x += fall_offset * origin.x * 0.333f;
+    const float angle = fall_offset * 3.0f * (-origin.x);
+    makeBrickGeom(anim_origin, angle, size, origin, aspect, out);
+}
+
+void generateBricks(float progress, float aspect, std::vector<vertex_t>& out) {
+    out.clear();
+    out.reserve(kBrickVertexCount);
+    const float set_height = 2.0f / (float)kBrickSetCount;
+    const float brick_height = set_height * 0.5f;
+    const float brick_width = 2.0f * 0.333334f;
+    const float brick_width_half = brick_width * 0.5f;
+    const float brick_height_half = brick_height * 0.5f;
+
+    BrickVec2 pos = {-1.0f, -1.0f};
+    for (int set = 0; set < kBrickSetCount; ++set) {
+        pos.x = -1.0f;
+        for (int i = 0; i < 3; ++i) {
+            makeBrick({pos.x + brick_width_half, pos.y + brick_height_half}, {brick_width, brick_height}, progress,
+                      aspect, out);
+            pos.x += brick_width;
+        }
+        pos.x = -1.0f - brick_width_half;
+        pos.y += brick_height;
+        for (int i = 0; i < 4; ++i) {
+            makeBrick({pos.x + brick_width_half, pos.y + brick_height_half}, {brick_width, brick_height}, progress,
+                      aspect, out);
+            pos.x += brick_width;
+        }
+        pos.y += brick_height;
+    }
+}
+
 // Wallpaper Engine ships these only as DX11 fallback HLSL. Give Slang the same
 // explicit Vulkan bindings the GLSL path would have generated. `fragment`
 // gates the parts only the fragment shader declares.
@@ -64,6 +168,11 @@ std::string annotateHlsl(std::string source, int effect_index, bool fragment) {
         replaceAll(source, "SamplerState g_Texture0SamplerStateWrap:register(s1);",
                    "[[vk::binding(33,1)]] SamplerState g_Texture0SamplerStateWrap:register(s1);");
         replaceAll(source, "cbuffer g_bufDynamic:register(b0)", "[[vk::binding(0,0)]] cbuffer g_bufDynamic");
+    } else {
+        // Glass shatter's vertex stage reads g_Progress and the view-projection,
+        // so give the vertex block its own set-0 binding to avoid colliding
+        // with the fragment block.
+        replaceAll(source, "cbuffer g_bufDynamic:register(b0)", "[[vk::binding(1,0)]] cbuffer g_bufDynamic");
     }
     return source;
 }
@@ -153,6 +262,20 @@ bool TransitionShader::init(EngineContext& ctx, int effect_index) {
         clouds_view_ = sg_make_view(&view_desc);
     }
 
+    if (effect_index == (int)lwe::transition::Effect::Bricks) {
+        sg_buffer_desc vertex_desc = {};
+        vertex_desc.usage.stream_update = true;
+        vertex_desc.size = kBrickVertexCount * sizeof(vertex_t);
+        brick_vertices_ = sg_make_buffer(&vertex_desc);
+
+        uint16_t indices[kBrickVertexCount];
+        for (int i = 0; i < kBrickVertexCount; ++i) indices[i] = (uint16_t)i;
+        sg_buffer_desc index_desc = {};
+        index_desc.usage.index_buffer = true;
+        index_desc.data = {indices, sizeof(indices)};
+        brick_indices_ = sg_make_buffer(&index_desc);
+    }
+
     effect_index_ = effect_index;
     LOG_TAG_I("TRANSITION", "Loaded Wallpaper Engine transition shader '%s'", label);
     return true;
@@ -163,6 +286,8 @@ void TransitionShader::shutdown() {
     clouds_view_ = GfxView();
     noise_image_ = GfxImage();
     clouds_image_ = GfxImage();
+    brick_vertices_ = GfxBuffer();
+    brick_indices_ = GfxBuffer();
     pipeline_ = GfxPipeline();
     shader_ = GfxShader();
     effect_index_ = -1;
@@ -173,8 +298,18 @@ void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, flo
 
     sg_apply_pipeline(pipeline_);
     sg_bindings bind = {};
-    bind.vertex_buffers[0] = ctx.renderer.fullscreen_vertex_buffer;
-    bind.index_buffer = ctx.renderer.index_buffer;
+    int draw_count = 6;
+    if (effect_index_ == (int)lwe::transition::Effect::Bricks && brick_vertices_.id != SG_INVALID_ID) {
+        std::vector<vertex_t> vertices;
+        generateBricks(progress, height > 0 ? (float)width / (float)height : 1.0f, vertices);
+        sg_update_buffer(brick_vertices_, {vertices.data(), vertices.size() * sizeof(vertex_t)});
+        bind.vertex_buffers[0] = brick_vertices_;
+        bind.index_buffer = brick_indices_;
+        draw_count = kBrickVertexCount;
+    } else {
+        bind.vertex_buffers[0] = ctx.renderer.fullscreen_vertex_buffer;
+        bind.index_buffer = ctx.renderer.index_buffer;
+    }
     bind.views[0] = old_frame;
     bind.views[1] = noise_view_.id != SG_INVALID_ID ? (sg_view)noise_view_ : (sg_view)ctx.renderer.white_view;
     bind.views[2] = clouds_view_.id != SG_INVALID_ID ? (sg_view)clouds_view_ : (sg_view)ctx.renderer.white_view;
@@ -202,6 +337,6 @@ void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, flo
 
     sg_range range = {.ptr = &uniforms, .size = sizeof(uniforms)};
     sg_apply_uniforms(0, &range);
-    sg_draw(0, 6, 1);
+    sg_draw(0, draw_count, 1);
     ctx.renderer.draw_calls++;
 }
