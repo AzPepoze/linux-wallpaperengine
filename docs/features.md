@@ -386,10 +386,10 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works
     - `thisScene.createModelData({ shapes })`, `applyData`, `replaceData`, `destroyModelData`, the `IModelData.POSITION / NORMAL / UV / TANGENT_SIGNED / COLOR` constants, and `thisScene.createLayer({ model })`; asset handles from `engine.registerAsset()` work as materials and as `createLayer` arguments
     - The mesh is drawn flat into the layer's picture: each shape is textured with its material's first texture (white when it has none)
+    - Confirmed on screen: a script-made triangle renders as a solid white shape of the expected size and position on the layer origin (deterministic `--diagnose` capture of a test scene)
   - Missing
     - Depth, lighting, normals, tangents, vertex colors and the material's own shader; `perspective`
     - Shapes with more than 65535 vertices
-    - Not yet confirmed on screen (covered by unit tests of the script side only)
 
 ## Interaction
 
