@@ -122,12 +122,17 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
 }
 
 void Scene2DRuntime::draw() {
-    if (requiresOffscreenComposition())
+    if (force_offscreen_ || requiresOffscreenComposition())
         drawOffscreen();
     else {
         scene_output_index = -1;
         drawDirect();
     }
+}
+
+sg_view Scene2DRuntime::composedView() const {
+    if (scene_output_index < 0 || scene_output_index > 1) return {};
+    return scene_targets[scene_output_index].texture_view;
 }
 
 void Scene2DRuntime::drawParticleDiagnostics() {
@@ -238,5 +243,6 @@ void Scene2DRuntime::cleanup() {
     bloom_targets[1].reset();
     hdr_bloom_levels.clear();
     scene_output_index = -1;
+    force_offscreen_ = false;
     LOG_TAG_I("SCENE_2D", "2D scene runtime cleanup complete.");
 }

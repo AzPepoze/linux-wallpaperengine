@@ -21,6 +21,17 @@ class Scene2DRuntime {
     void clearScene();
     void cleanup();
 
+    // Render through the offscreen scene targets even when the scene would
+    // otherwise draw directly, so composedView() has a valid texture.
+    void setForceOffscreen(bool on) {
+        force_offscreen_ = on;
+    }
+    bool forceOffscreen() const {
+        return force_offscreen_;
+    }
+    // The composed scene texture after draw(), or an empty view when unavailable.
+    sg_view composedView() const;
+
    private:
     struct SceneTarget {
         GfxView attachment_view;
@@ -81,6 +92,7 @@ class Scene2DRuntime {
     int output_y = 0;
     int output_width = 0;
     int output_height = 0;
+    bool force_offscreen_ = false;
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];
     std::vector<SceneTarget> hdr_bloom_levels;
