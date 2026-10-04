@@ -235,6 +235,10 @@ add_test("animation_timelines_tests", {"tests/animation_timelines_test.cpp",
 add_test("transition_catalog_tests", {"tests/transition_catalog_test.cpp",
                                       "src/wallpaper/transition/transition_catalog.cpp"})
 
+add_test("transition_audio_tests", {"tests/transition_audio_test.cpp",
+                                    "src/wallpaper/transition/transition_audio.cpp",
+                                    "src/wallpaper/transition/transition_catalog.cpp"})
+
 add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio/audio_engine.cpp",
                                 "src/shared/audio/audio_engine_stream.cpp", "src/shared/audio/audio_engine_spectrum.cpp",
                                 "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},

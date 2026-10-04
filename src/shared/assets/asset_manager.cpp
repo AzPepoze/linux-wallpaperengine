@@ -61,6 +61,10 @@ AssetManager::~AssetManager() {
 }
 
 void AssetManager::init(const char* ep, const char* wp) {
+    // Drop the previous wallpaper's video decoders and audio streams. Without
+    // this, a stream handle freed by AudioEngine::destroyGroup on switch could
+    // be reused while video_textures still stored it.
+    clearVideoTextures();
     engine_path = ep ? ep : "";
     wallpaper_path = wp ? wp : "";
 

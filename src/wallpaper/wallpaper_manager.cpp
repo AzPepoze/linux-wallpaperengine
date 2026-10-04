@@ -8,6 +8,7 @@
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/transition/transition_audio.h"
 #include "wallpaper/wallpaper_loader.h"
 
 bool WallpaperManager::load(const std::string& scene_directory, EngineContext& ctx) {
@@ -121,11 +122,12 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     }
     const bool has_old = active_wallpaper_ && ctx.audio_group != AudioEngine::kDefaultGroup;
     const AudioEngine::GroupId old_group = ctx.audio_group;
-    const bool crossfade = has_old && config.selection != lwe::transition::kSelectionNone;
-    if (crossfade) audio.beginGroupFade(old_group);
+    const lwe::transition::AudioSwitchPlan plan =
+        lwe::transition::planAudioSwitch(active_wallpaper_ != nullptr, has_old, config.selection);
+    if (plan.fade_old) audio.beginGroupFade(old_group);
 
     const AudioEngine::GroupId new_group = audio.createGroup();
-    audio.setGroupVolume(new_group, crossfade ? 0.0f : 1.0f);
+    audio.setGroupVolume(new_group, plan.new_starts_silent ? 0.0f : 1.0f);
     ctx.audio_group = new_group;
     ctx.asset_mgr.setAudioGroup(new_group);
 
@@ -151,17 +153,23 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         audio.destroyGroup(new_group);
         ctx.audio_group = old_group;
         ctx.asset_mgr.setAudioGroup(old_group);
-        if (crossfade) {
+        if (lwe::transition::destroyOldGroupAfterFailure(active_wallpaper_ != nullptr)) {
+            // The outgoing wallpaper was already cleared, so no owner remains for
+            // its detached voices; free the group now instead of leaking it.
+            audio.destroyGroup(old_group);
+            ctx.audio_group = AudioEngine::kDefaultGroup;
+            ctx.asset_mgr.setAudioGroup(AudioEngine::kDefaultGroup);
+        } else if (plan.fade_old) {
             audio.setGroupVolume(old_group, 1.0f);
             audio.cancelGroupFade(old_group);
         }
         if (captured) transition_.hold();
         return true;
     }
-    fading_group_ = crossfade ? old_group : AudioEngine::kDefaultGroup;
+    fading_group_ = plan.fade_old ? old_group : AudioEngine::kDefaultGroup;
     active_group_ = new_group;
-    audio_crossfade_ = crossfade;
-    if (has_old && config.selection == lwe::transition::kSelectionNone) audio.destroyGroup(old_group);
+    audio_crossfade_ = plan.fade_old;
+    if (plan.destroy_old_now) audio.destroyGroup(old_group);
     LOG_TAG_I("WALLPAPER_MGR", "Switched to %s", request.path.c_str());
     return true;
 }
