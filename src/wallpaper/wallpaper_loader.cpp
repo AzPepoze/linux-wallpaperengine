@@ -43,7 +43,7 @@ std::unique_ptr<Wallpaper> createWallpaper(ProjectType type, EngineContext& ctx)
 }
 
 void applyVideoProperties(const VideoProperties& video, EngineContext& ctx) {
-    ctx.asset_mgr.setVideoPlayback(video.rate, video.volume);
+    ctx.asset_mgr->setVideoPlayback(video.rate, video.volume);
     // An explicit --cover on the command line keeps priority over the project's fit.
     if (video.fit != VideoFit::Default && ctx.scene.scaling_mode == SCALING_FIT)
         ctx.scene.scaling_mode = video.fit == VideoFit::Fill ? SCALING_COVER : SCALING_FIT;
@@ -74,17 +74,17 @@ bool WallpaperLoader::canLoad(const ProjectInfo& info) {
 std::unique_ptr<Wallpaper> WallpaperLoader::load(const ProjectInfo& info, EngineContext& ctx) {
     strncpy(ctx.asset_root, info.root.c_str(), sizeof(ctx.asset_root) - 1);
     ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
-    ctx.asset_mgr.init(ctx.engine_path, ctx.asset_root);
+    ctx.asset_mgr->initWallpaper(ctx.asset_root);
     loadUserProperties(info, ctx);
     ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
     ScriptEngine::instance().setWallpaperId(std::filesystem::path(info.root).filename().string());
-    ctx.asset_mgr.prefetchPackageTextures();
+    ctx.asset_mgr->prefetchPackageTextures();
     struct ReleaseDecoded {
         AssetManager& assets;
         ~ReleaseDecoded() {
             assets.releaseDecodedTextures();
         }
-    } release_decoded{ctx.asset_mgr};
+    } release_decoded{*ctx.asset_mgr};
 
     if (info.type == ProjectType::Video) applyVideoProperties(info.video, ctx);
     auto wallpaper = createWallpaper(info.type, ctx);

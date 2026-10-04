@@ -16,7 +16,7 @@
 namespace {
 bool readAssetText(EngineContext& ctx, const char* relative_path, std::string& out) {
     char path[1024] = {};
-    if (!ctx.asset_mgr.resolvePath(relative_path, path, sizeof(path))) return false;
+    if (!ctx.asset_mgr->resolvePath(relative_path, path, sizeof(path))) return false;
     FILE* file = vfs::open(path);
     if (!file) return false;
     fseek(file, 0, SEEK_END);
@@ -317,8 +317,8 @@ bool TransitionShader::init(EngineContext& ctx, int effect_index) {
         return false;
     }
 
-    noise_image_ = ctx.asset_mgr.resolveTexture("util/noise");
-    clouds_image_ = ctx.asset_mgr.resolveTexture("util/clouds_256");
+    noise_image_ = ctx.asset_mgr->resolveTexture("util/noise");
+    clouds_image_ = ctx.asset_mgr->resolveTexture("util/clouds_256");
     if (noise_image_.id != SG_INVALID_ID) {
         sg_view_desc view_desc = {};
         view_desc.texture.image = noise_image_;

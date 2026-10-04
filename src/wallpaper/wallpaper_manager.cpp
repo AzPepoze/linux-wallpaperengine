@@ -22,7 +22,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     // this only fires for the first, directly-loaded wallpaper.
     if (ctx.audio_group == AudioEngine::kDefaultGroup) {
         ctx.audio_group = AudioEngine::instance().createGroup();
-        ctx.asset_mgr.setAudioGroup(ctx.audio_group);
+        ctx.asset_mgr->setAudioGroup(ctx.audio_group);
     }
 
     clear();
@@ -129,7 +129,7 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     const AudioEngine::GroupId new_group = audio.createGroup();
     audio.setGroupVolume(new_group, plan.new_starts_silent ? 0.0f : 1.0f);
     ctx.audio_group = new_group;
-    ctx.asset_mgr.setAudioGroup(new_group);
+    ctx.asset_mgr->setAudioGroup(new_group);
 
     // Capture the outgoing frame before unloading it. The switch itself always
     // happens; only the transition is skipped for `none`.
@@ -152,13 +152,13 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         LOG_TAG_E("WALLPAPER_MGR", "Switch to %s failed; holding the previous frame", request.path.c_str());
         audio.destroyGroup(new_group);
         ctx.audio_group = old_group;
-        ctx.asset_mgr.setAudioGroup(old_group);
+        ctx.asset_mgr->setAudioGroup(old_group);
         if (lwe::transition::destroyOldGroupAfterFailure(active_wallpaper_ != nullptr)) {
             // The outgoing wallpaper was already cleared, so no owner remains for
             // its detached voices; free the group now instead of leaking it.
             audio.destroyGroup(old_group);
             ctx.audio_group = AudioEngine::kDefaultGroup;
-            ctx.asset_mgr.setAudioGroup(AudioEngine::kDefaultGroup);
+            ctx.asset_mgr->setAudioGroup(AudioEngine::kDefaultGroup);
         } else if (plan.fade_old) {
             audio.setGroupVolume(old_group, 1.0f);
             audio.cancelGroupFade(old_group);

@@ -92,9 +92,9 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
         "}\n";
 
     std::string processed_vert = ShaderSourceProcessor::processShaderSource(
-        vertex_source, "shaders/linux-wallpaperengine/image_composite.vert", ctx.asset_mgr, true);
+        vertex_source, "shaders/linux-wallpaperengine/image_composite.vert", *ctx.asset_mgr, true);
     std::string processed_frag = ShaderSourceProcessor::processShaderSource(
-        fragment_source, "shaders/linux-wallpaperengine/image_composite.frag", ctx.asset_mgr, false);
+        fragment_source, "shaders/linux-wallpaperengine/image_composite.frag", *ctx.asset_mgr, false);
 
     // Do not fall back to an approximate implementation when the authoritative WE header is missing.
     if (processed_frag.find("#include \"common_blending.h\"") != std::string::npos) {

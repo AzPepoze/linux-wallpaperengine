@@ -25,7 +25,7 @@ void load_texture0(PassTextures& pass, cJSON* tex_node, const std::string& shade
         }
 
         std::string path;
-        GfxImage img = ctx.asset_mgr.resolveTexture(tex_node->valuestring, &path);
+        GfxImage img = ctx.asset_mgr->resolveTexture(tex_node->valuestring, &path);
         if (img.id == SG_INVALID_ID) {
             effect_log.warn("ShaderPass %s: g_Texture0 - Failed to load explicit texture: %s", shader_name.c_str(),
                             tex_node->valuestring);
@@ -54,7 +54,7 @@ void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_
 
         if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {
             std::string path;
-            GfxImage img = ctx.asset_mgr.resolveTexture(tex_node->valuestring, &path);
+            GfxImage img = ctx.asset_mgr->resolveTexture(tex_node->valuestring, &path);
             textures[pass_idx] = std::move(img);
             texture_paths[pass_idx] = path;
             effect_log.info("ShaderPass %s: g_Texture%d - Loaded base texture: %s", shader_name.c_str(), source_slot,
@@ -81,7 +81,7 @@ void PassTextures::applyInstanceOverrides(cJSON* instance_config, const std::str
 
         const int pass_idx = source_slot - 1;
         std::string path;
-        GfxImage img = ctx.asset_mgr.resolveTexture(tex_node->valuestring, &path);
+        GfxImage img = ctx.asset_mgr->resolveTexture(tex_node->valuestring, &path);
         if (img.id == SG_INVALID_ID) continue;
 
         ensure_slot(*this, pass_idx);
@@ -99,7 +99,7 @@ bool PassTextures::resolveDepth(const char* source_tex_path, const std::string& 
 
     if (textures.empty() || textures[0].id == SG_INVALID_ID) {
         std::string depth_path;
-        GfxImage depth_img = ctx.asset_mgr.resolveTexture(source_tex_path, &depth_path, 1);
+        GfxImage depth_img = ctx.asset_mgr->resolveTexture(source_tex_path, &depth_path, 1);
         if (depth_img.id != SG_INVALID_ID) {
             ensure_slot(*this, 0);
             textures[0] = std::move(depth_img);

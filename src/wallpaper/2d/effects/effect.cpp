@@ -60,7 +60,7 @@ Effect* Effect::load(const char* rel_path, cJSON* instance_config, EngineContext
     if (!rel_path || !rel_path[0]) return nullptr;
 
     char abs_path[1024];
-    if (!ctx.asset_mgr.resolvePath(rel_path, abs_path, sizeof(abs_path))) {
+    if (!ctx.asset_mgr->resolvePath(rel_path, abs_path, sizeof(abs_path))) {
         effect_log.warn("Effect definition not found: %s", rel_path);
         return nullptr;
     }

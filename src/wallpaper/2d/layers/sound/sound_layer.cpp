@@ -34,7 +34,7 @@ SoundLayer* SoundLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
     if (layer->name.empty()) layer->name = "Sound Layer";
     for (const std::string& sound : object.sound.sounds) {
         char resolved[1024];
-        if (ctx.asset_mgr.resolvePath(sound.c_str(), resolved, sizeof(resolved))) {
+        if (ctx.asset_mgr->resolvePath(sound.c_str(), resolved, sizeof(resolved))) {
             layer->paths.emplace_back(resolved);
         } else {
             LOG_TAG_W("SOUND", "Sound file not found: %s", sound.c_str());

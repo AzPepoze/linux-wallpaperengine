@@ -68,7 +68,7 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
     UiComponents::PropertyRow("SPIR-V Cache:", "%llu Hits / %llu Misses", static_cast<unsigned long long>(shd_hits),
                               static_cast<unsigned long long>(shd_misses));
 
-    const auto& videos = ctx.asset_mgr.getVideoTextures();
+    const auto& videos = ctx.asset_mgr->getVideoTextures();
     if (!videos.empty()) {
         UiComponents::SectionHeader("Video Pipeline", "Zero-Copy HW");
         for (size_t i = 0; i < videos.size(); ++i) {

@@ -308,7 +308,7 @@ bool TextLayer::resolveFontPath(EngineContext& ctx) {
     if (candidate.empty() || candidate.rfind("systemfont", 0) == 0) candidate = "fonts/NotoSans-Regular.ttf";
 
     char resolved[1024] = {};
-    if (ctx.asset_mgr.resolvePath(candidate.c_str(), resolved, sizeof(resolved))) {
+    if (ctx.asset_mgr->resolvePath(candidate.c_str(), resolved, sizeof(resolved))) {
         font_path_ = resolved;
         return true;
     }

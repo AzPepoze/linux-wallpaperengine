@@ -15,9 +15,9 @@ bool VideoWallpaper::load(const std::string& path, EngineContext& ctx) {
 }
 
 void VideoWallpaper::pause() {
-    ctx_.asset_mgr.setVideoPaused(true);
+    ctx_.asset_mgr->setVideoPaused(true);
 }
 
 void VideoWallpaper::resume() {
-    ctx_.asset_mgr.setVideoPaused(false);
+    ctx_.asset_mgr->setVideoPaused(false);
 }

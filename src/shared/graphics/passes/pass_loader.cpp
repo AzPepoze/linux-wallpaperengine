@@ -17,7 +17,7 @@ std::unique_ptr<ShaderPass> PassLoader::loadPassFromMaterial(const char* materia
     if (!material_rel_path || material_rel_path[0] == '\0') return nullptr;
 
     char abs_path[1024];
-    if (!ctx.asset_mgr.resolvePath(material_rel_path, abs_path, sizeof(abs_path))) return nullptr;
+    if (!ctx.asset_mgr->resolvePath(material_rel_path, abs_path, sizeof(abs_path))) return nullptr;
 
     char* json_str = read_file_to_string(abs_path);
     if (!json_str) return nullptr;

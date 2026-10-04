@@ -26,7 +26,7 @@ bool readFileBytes(const char* path, std::vector<uint8_t>& out) {
 
 void ImageLayer::loadPuppet(const char* mdl_rel_path, EngineContext& ctx) {
     char abs_path[1024];
-    if (!ctx.asset_mgr.resolvePath(mdl_rel_path, abs_path, sizeof(abs_path))) return;
+    if (!ctx.asset_mgr->resolvePath(mdl_rel_path, abs_path, sizeof(abs_path))) return;
     std::vector<uint8_t> bytes;
     if (!readFileBytes(abs_path, bytes)) return;
 

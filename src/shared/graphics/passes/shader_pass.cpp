@@ -58,7 +58,7 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
     const cJSON* material_reference = cJSON_GetObjectItemCaseSensitive(config, "material");
     if (cJSON_IsString(material_reference) && material_reference->valuestring) {
         char material_path[1024];
-        if (ctx.asset_mgr.resolvePath(material_reference->valuestring, material_path, sizeof(material_path))) {
+        if (ctx.asset_mgr->resolvePath(material_reference->valuestring, material_path, sizeof(material_path))) {
             char* material_text = read_file_to_string(material_path);
             if (material_text) {
                 cJSON* material_document = cJSON_Parse(material_text);
@@ -95,10 +95,10 @@ ShaderPass::ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx
 namespace {
 bool readShaderStage(EngineContext& ctx, const char* relative_path, char* absolute_path, size_t capacity,
                      std::string& source) {
-    if (!ctx.asset_mgr.resolvePath(relative_path, absolute_path, (int)capacity)) {
+    if (!ctx.asset_mgr->resolvePath(relative_path, absolute_path, (int)capacity)) {
         char extracted_path[512];
         snprintf(extracted_path, sizeof(extracted_path), "extracted/%s", relative_path);
-        if (!ctx.asset_mgr.resolvePath(extracted_path, absolute_path, (int)capacity)) return false;
+        if (!ctx.asset_mgr->resolvePath(extracted_path, absolute_path, (int)capacity)) return false;
     }
     char* text = read_file_to_string(absolute_path);
     if (!text) return false;
@@ -297,8 +297,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     is_fullscreen_quad = !render_target.empty() && (!has_mvp || vertical == 0);
 
     const std::string prefix = ShaderSourceProcessor::buildShaderPrefix();
-    sources.processed_vs = ShaderSourceProcessor::processShaderSource(sources.raw_vs, abs_vert, ctx.asset_mgr, true);
-    sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, ctx.asset_mgr, false);
+    sources.processed_vs = ShaderSourceProcessor::processShaderSource(sources.raw_vs, abs_vert, *ctx.asset_mgr, true);
+    sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, *ctx.asset_mgr, false);
 
     // Shared includes can declare material uniforms, so inspect the expanded sources.
     std::vector<ShaderUniformConfig>& shader_uniforms = prepared->shader_uniforms;

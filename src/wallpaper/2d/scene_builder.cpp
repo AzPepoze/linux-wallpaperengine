@@ -133,7 +133,7 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
     if (!video_path || video_path[0] == '\0') return {};
 
     std::string resolved_path;
-    GfxImage img = ctx.asset_mgr.resolveTexture(video_path, &resolved_path);
+    GfxImage img = ctx.asset_mgr->resolveTexture(video_path, &resolved_path);
     if (img.id == SG_INVALID_ID) {
         LOG_E("Failed to resolve video texture for wallpaper: %s", video_path);
         return {};
@@ -148,8 +148,8 @@ ParsedScene SceneBuilder::buildVideoScene(const char* video_path, EngineContext&
 
     auto* layer = out.layers.empty() ? nullptr : static_cast<ImageLayer*>(out.layers.front());
     if (layer) {
-        const auto* v = ctx.asset_mgr.findVideoTexture(layer->img);
-        if (!v && !layer->path.empty()) v = ctx.asset_mgr.findVideoTexture(layer->path);
+        const auto* v = ctx.asset_mgr->findVideoTexture(layer->img);
+        if (!v && !layer->path.empty()) v = ctx.asset_mgr->findVideoTexture(layer->path);
         if (v && v->decoder) layer->bound_video_decoder = v->decoder.get();
 
         LOG_I("Built video wallpaper scene (%ux%u): %s", (uint32_t)w, (uint32_t)h, layer->path.c_str());

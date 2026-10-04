@@ -69,7 +69,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     static wallpaper_engine::MediaScriptBridge media_bridge;
     media_bridge.update();
 
-    ctx.asset_mgr.updateVideoTextures(dt, ctx.scene.layers);
+    ctx.asset_mgr->updateVideoTextures(dt, ctx.scene.layers);
     parallax_update(ctx, dt, surface::width(), surface::height());
     mgr.update(dt, ctx);
 }

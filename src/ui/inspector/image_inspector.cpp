@@ -175,8 +175,8 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
         ImGui::Text("Screen Padding:   (Offset X: %.1f px, Offset Y: %.1f px)", ctx.scene.offset_x, ctx.scene.offset_y);
     }
 
-    const auto* video = ctx.asset_mgr.findVideoTexture(il.img);
-    if (!video && !il.path.empty()) video = ctx.asset_mgr.findVideoTexture(il.path);
+    const auto* video = ctx.asset_mgr->findVideoTexture(il.img);
+    if (!video && !il.path.empty()) video = ctx.asset_mgr->findVideoTexture(il.path);
     if (video && video->decoder) {
         if (ImGui::CollapsingHeader("Video Stream & Hardware Acceleration", ImGuiTreeNodeFlags_DefaultOpen)) {
             const auto& dec = *video->decoder;

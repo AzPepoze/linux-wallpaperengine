@@ -18,7 +18,7 @@ void ImageLayer::updateAnimatedFrame(EngineContext& ctx) {
             // Keep only the active extra page; large animated atlases can occupy
             // hundreds of megabytes if every page is uploaded at once.
             animation_page_view = {};
-            animation_page = ctx.asset_mgr.resolveTexture(path.c_str(), nullptr, (int)frame->image_index);
+            animation_page = ctx.asset_mgr->resolveTexture(path.c_str(), nullptr, (int)frame->image_index);
             animation_page_index = frame->image_index;
             if (animation_page.id != SG_INVALID_ID) {
                 sg_view_desc view_desc = {};

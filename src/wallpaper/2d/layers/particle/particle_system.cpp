@@ -24,7 +24,7 @@ ParticleSpawnType parseSpawnType(const std::string& type) {
 bool materialUsesAdditiveBlend(const std::string& material_path, EngineContext& ctx, bool fallback) {
     char absolute_path[1024];
     if (material_path.empty() ||
-        !ctx.asset_mgr.resolvePath(material_path.c_str(), absolute_path, sizeof(absolute_path)))
+        !ctx.asset_mgr->resolvePath(material_path.c_str(), absolute_path, sizeof(absolute_path)))
         return fallback;
 
     char* text = read_file_to_string(absolute_path);
@@ -99,7 +99,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
                                                float scene_height, const ParticleObjectConfig& overrides) {
     if (!particle_path || !particle_path[0]) return nullptr;
     char absolute_path[1024];
-    if (!ctx.asset_mgr.resolvePath(particle_path, absolute_path, sizeof(absolute_path))) return nullptr;
+    if (!ctx.asset_mgr->resolvePath(particle_path, absolute_path, sizeof(absolute_path))) return nullptr;
     char* document_text = read_file_to_string(absolute_path);
     if (!document_text) return nullptr;
     cJSON* document = cJSON_Parse(document_text);
@@ -159,7 +159,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
 
         if (pass->pass_textures.texture0.id == SG_INVALID_ID) {
             std::string fallback_path;
-            pass->pass_textures.texture0 = ctx.asset_mgr.resolveTexture("materials/particle.tex", &fallback_path);
+            pass->pass_textures.texture0 = ctx.asset_mgr->resolveTexture("materials/particle.tex", &fallback_path);
             pass->pass_textures.texture0_path = fallback_path;
         }
         particle_system->texture_path = pass->pass_textures.texture0_path;

@@ -17,6 +17,7 @@
 #include "app/package_extractor.h"
 #include "app/signals.h"
 #include "shared/assets/media/media_source.h"
+#include "shared/assets/shared_assets.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/engine_context.h"
@@ -52,6 +53,11 @@ ControlServer control_server;
 
 static EngineContext ctx;
 static bool layer_active = false;
+
+// Process-wide shared assets and the active wallpaper's asset manager. The
+// manager becomes per-instance in the next task; for now it is a single owner.
+static AssetManager asset_manager;
+static SharedAssets shared_assets;
 
 #if DEBUG_BUILD
 static bool loadSandboxPreviewScene(const char* scene_path) {
@@ -135,7 +141,7 @@ static void loadInitialWallpaper() {
         return;
     }
     strcpy(ctx.asset_root, "extracted");
-    ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path);
+    ctx.asset_mgr->initWallpaper(ctx.wallpaper_path);
     std::string asset_root;
     {
         PhaseTimer timer("package mount / extract");
@@ -169,7 +175,13 @@ static void init(void) {
         LOG_E("A Wallpaper Engine installation with its original assets is required");
         exit(EXIT_FAILURE);
     }
-    ctx.asset_mgr.init(ctx.engine_path, ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
+    ctx.asset_mgr = &asset_manager;
+    shared_assets.engine_path = ctx.engine_path;
+    shared_assets.engine_provider = std::make_unique<EngineAssetProvider>(ctx.engine_path);
+    shared_assets.internal_provider = std::make_unique<InternalAssetProvider>();
+    shared_assets.decode_cache = std::make_unique<TextureDecodeCache>();
+    ctx.asset_mgr->attachShared(&shared_assets);
+    ctx.asset_mgr->initWallpaper(ctx.wallpaper_path[0] ? ctx.wallpaper_path : "extracted");
 
     wallpaper_engine::setVideoLoadInRam(cli.video_ram);
     {
@@ -223,7 +235,7 @@ static void cleanup(void) {
 
     wallpaper_mgr.clear();
     wallpaper_mgr.shutdownTransition();
-    ctx.asset_mgr.clearVideoTextures();
+    ctx.asset_mgr->clearVideoTextures();
     AudioEngine::instance().shutdown();
     renderer_cleanup(&ctx.renderer);
 

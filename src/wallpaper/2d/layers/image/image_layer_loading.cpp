@@ -46,7 +46,7 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
         if (config.is_model || config.asset_path.find(".json") != std::string::npos)
             layer->loadModel(config.asset_path.c_str(), ctx);
         else
-            layer->img = ctx.asset_mgr.resolveTexture(config.asset_path.c_str(), &layer->path);
+            layer->img = ctx.asset_mgr->resolveTexture(config.asset_path.c_str(), &layer->path);
 
         if (layer->img.id != SG_INVALID_ID) {
             sg_image_desc desc = sg_query_image_desc(layer->img);
@@ -54,8 +54,8 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
                 layer->size[0] = (float)desc.width;
                 layer->size[1] = (float)desc.height;
             }
-            const auto* v = ctx.asset_mgr.findVideoTexture(layer->img);
-            if (!v && !layer->path.empty()) v = ctx.asset_mgr.findVideoTexture(layer->path);
+            const auto* v = ctx.asset_mgr->findVideoTexture(layer->img);
+            if (!v && !layer->path.empty()) v = ctx.asset_mgr->findVideoTexture(layer->path);
             if (v && v->decoder) layer->bound_video_decoder = v->decoder.get();
         }
     }
@@ -71,16 +71,16 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
 }
 
 void ImageLayer::loadMaterial(const char* mat_rel_path, EngineContext& ctx) {
-    img = ctx.asset_mgr.resolveMaterialTexture(mat_rel_path, &path);
+    img = ctx.asset_mgr->resolveMaterialTexture(mat_rel_path, &path);
     updateCachedView();
-    const auto* v = ctx.asset_mgr.findVideoTexture(img);
-    if (!v && !path.empty()) v = ctx.asset_mgr.findVideoTexture(path);
+    const auto* v = ctx.asset_mgr->findVideoTexture(img);
+    if (!v && !path.empty()) v = ctx.asset_mgr->findVideoTexture(path);
     if (v && v->decoder) bound_video_decoder = v->decoder.get();
 }
 
 void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {
     char abs_path[1024];
-    if (!ctx.asset_mgr.resolvePath(mdl_rel_path, abs_path, sizeof(abs_path))) return;
+    if (!ctx.asset_mgr->resolvePath(mdl_rel_path, abs_path, sizeof(abs_path))) return;
     char* json_str = read_file_to_string(abs_path);
     if (!json_str) return;
     cJSON* mdl_json = cJSON_Parse(json_str);

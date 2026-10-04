@@ -23,7 +23,7 @@ namespace {
 ShaderPass* createBloomPass(const char* material_relpath,
                             const std::map<std::string, std::vector<float>>& custom_constants, EngineContext& ctx) {
     char material_path[1024];
-    if (!ctx.asset_mgr.resolvePath(material_relpath, material_path, sizeof(material_path))) {
+    if (!ctx.asset_mgr->resolvePath(material_relpath, material_path, sizeof(material_path))) {
         LOG_TAG_E("BLOOM", "Failed to resolve bloom material: %s", material_relpath);
         return nullptr;
     }

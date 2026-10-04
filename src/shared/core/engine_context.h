@@ -120,7 +120,7 @@ struct EngineContext {
 
     scene_type_t scene_type = SCENE_TYPE_2D;
     renderer_t renderer = {};
-    AssetManager asset_mgr = {};
+    AssetManager* asset_mgr = nullptr;
     profiler_stats_t profiler = {};
 
     InputState input;
