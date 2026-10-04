@@ -132,6 +132,12 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
         runtime ? (runtime->requiresOffscreenComposition() || mgr.isTransitioning()) : false;
     if (offscreen_composition && runtime) runtime->draw();
 
+#if DEBUG_BUILD
+    // Capture the transition overlay into the diagnostics bundle before the
+    // swapchain pass starts (a pass cannot be nested).
+    if (mgr.isTransitioning() && RenderDiagnostics::instance().isCapturingFrame()) mgr.captureTransitionStage(ctx);
+#endif
+
     sg_pass pass = {};
     pass.action = ctx.pass_action;
     pass.swapchain = surface::acquireSwapchain();

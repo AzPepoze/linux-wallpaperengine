@@ -5,6 +5,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/surface.h"
+#include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/render.h"
 
 bool WallpaperTransition::ensureTarget(int width, int height) {
@@ -95,6 +96,16 @@ void WallpaperTransition::update(float dt) {
     if (progress_ >= 1.0f) active_ = false;
 }
 
+void WallpaperTransition::drawOverlay(EngineContext& ctx, int width, int height) {
+    if (shader_.ready()) {
+        shader_.drawOldOverNew(ctx, texture_view_, progress_, width, height, switch_seed_);
+        return;
+    }
+    float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f - progress_};
+    renderer_draw_sprite(ctx, &ctx.renderer, image_, texture_view_, 0.0f, 0.0f, (float)width, (float)height, 0.0f, tint,
+                         false, nullptr);
+}
+
 void WallpaperTransition::composite(EngineContext& ctx) {
     if (!active_ || texture_view_.id == SG_INVALID_ID) return;
 
@@ -103,14 +114,43 @@ void WallpaperTransition::composite(EngineContext& ctx) {
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     sg_apply_viewport(0, 0, width, height, true);
     sg_apply_scissor_rect(0, 0, width, height, true);
+    drawOverlay(ctx, width, height);
+}
 
-    float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f - progress_};
-    if (shader_.ready()) {
-        shader_.drawOldOverNew(ctx, texture_view_, progress_, width, height, switch_seed_);
-        return;
-    }
-    renderer_draw_sprite(ctx, &ctx.renderer, image_, texture_view_, 0.0f, 0.0f, (float)width, (float)height, 0.0f, tint,
-                         false, nullptr);
+void WallpaperTransition::captureStage(EngineContext& ctx) {
+    if (!active_ || texture_view_.id == SG_INVALID_ID) return;
+    const int width = surface::width();
+    const int height = surface::height();
+    if (width <= 0 || height <= 0) return;
+
+    sg_image_desc image_desc = {};
+    image_desc.usage.color_attachment = true;
+    image_desc.width = width;
+    image_desc.height = height;
+    image_desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+    const sg_image image = sg_make_image(&image_desc);
+    if (image.id == SG_INVALID_ID) return;
+    sg_view_desc texture_desc = {};
+    texture_desc.texture.image = image;
+    const sg_view texture_view = sg_make_view(&texture_desc);
+    sg_view_desc attachment_desc = {};
+    attachment_desc.color_attachment.image = image;
+    const sg_view attachment_view = sg_make_view(&attachment_desc);
+
+    sg_pass pass = {};
+    pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
+    pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
+    pass.attachments.colors[0] = attachment_view;
+    sg_begin_pass(&pass);
+    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    sg_apply_viewport(0, 0, width, height, true);
+    sg_apply_scissor_rect(0, 0, width, height, true);
+    drawOverlay(ctx, width, height);
+    sg_end_pass();
+
+    const lwe::transition::EffectInfo* info = lwe::transition::effectByIndex(config_.selection);
+    const std::string name = info ? info->name : "fade";
+    renderObserver().recordSceneStage("transition-" + name, image, texture_view, attachment_view);
 }
 
 void WallpaperTransition::cancel() {

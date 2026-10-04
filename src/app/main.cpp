@@ -282,7 +282,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
     // Hand a switch to an existing instance on this display, or become that
     // instance. Must run before any GPU work so a handoff process stays cheap.
-    if (!cli.no_control && !cli.sandbox && !cli.diagnostics.enabled) {
+    if (!cli.no_control && !cli.sandbox) {
         const std::string key = controlKey(cli.screen_root, cli.layer);
         if (!wallpaper_source.path.empty()) {
             int transition = 0;

@@ -33,12 +33,16 @@ class WallpaperTransition {
     }
     // Draws the snapshot over the currently bound target.
     void composite(EngineContext& ctx);
+    // Renders the overlay into a fresh offscreen image and registers it as a
+    // diagnostic scene stage. Call before the swapchain pass.
+    void captureStage(EngineContext& ctx);
     void cancel();
     void shutdown();
 
    private:
     bool ensureTarget(int width, int height);
     void destroyTarget();
+    void drawOverlay(EngineContext& ctx, int width, int height);
 
     GfxImage image_;
     GfxView texture_view_;

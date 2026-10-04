@@ -50,6 +50,9 @@ class WallpaperManager {
     void compositeTransition(EngineContext& ctx) {
         transition_.composite(ctx);
     }
+    void captureTransitionStage(EngineContext& ctx) {
+        transition_.captureStage(ctx);
+    }
     void setTransitionConfig(const TransitionConfig& config) {
         transition_config_ = config;
     }
