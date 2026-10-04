@@ -225,6 +225,9 @@ class ImageLayer : public Layer {
 
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
+    // The image the effect chain read this frame (the scene for a post-process layer); shown in the inspector.
+    sg_image effect_source_image = {SG_INVALID_ID};
+    sg_view effect_source_view = {SG_INVALID_ID};
 
    private:
     struct ChainState {

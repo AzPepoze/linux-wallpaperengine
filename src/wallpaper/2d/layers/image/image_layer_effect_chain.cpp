@@ -224,6 +224,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             base_view = cached_view;
         }
     }
+    effect_source_image = base_img;
+    effect_source_view = base_view;
     if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(base_img)) return;
 
     IRenderObserver& diag = renderObserver();
