@@ -62,7 +62,10 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
         tint[3] = evaluateImageAlpha(alpha_document, ctx.time);
     }
     if (is_fullscreen || is_compose_region) return;
-    if (has_puppet_mesh) puppet_pose.advance(puppet, puppet_layers, dt);
+    if (has_puppet_mesh) {
+        puppet_pose.advance(puppet, puppet_layers, dt);
+        dropFinishedPuppetLayers();
+    }
     if (!sprite_clock.joined && sprite_clock.playing) sprite_clock.time += (double)dt * sprite_clock.rate;
     updateAnimatedFrame(ctx);
     if (has_puppet_mesh && scene_object_id != 0 && ctx.scene.scene_tree) {

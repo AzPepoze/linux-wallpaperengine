@@ -54,6 +54,14 @@ thisLayer.setBoneAngles function
 thisLayer.getBoneScale function
 thisLayer.setBoneScale function
 thisLayer.resetBone function
+thisLayer.rotateObjectSpace function
+thisLayer.getAttachmentIndex function
+thisLayer.getAttachmentMatrix function
+thisLayer.getAttachmentOrigin function
+thisLayer.getAttachmentAngles function
+thisLayer.createAnimationLayer function
+thisLayer.destroyAnimationLayer function
+thisLayer.playSingleAnimation function
 thisLayer.play function
 thisLayer.stop function
 thisLayer.pause function
@@ -74,6 +82,11 @@ thisScene.getInitialLayerConfig function
 thisScene.getCameraTransforms function
 thisScene.setCameraTransforms function
 thisScene.bloom boolean
+thisScene.clearenabled boolean
+thisScene.camerafade boolean
+thisScene.fov number
+thisScene.nearz number
+thisScene.farz number
 thisScene.bloomstrength number
 thisScene.bloomthreshold number
 thisScene.clearcolor object

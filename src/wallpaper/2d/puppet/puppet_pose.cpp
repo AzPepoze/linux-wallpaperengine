@@ -96,15 +96,18 @@ const MdlAnimationClip* findClip(const MdlModel& model, uint32_t id) {
 
 // Every layer contributes its motion relative to its own first frame, on top of
 // the first layer's first frame, which already holds the assembled pose.
-void accumulateLayer(const MdlAnimationClip& clip, const PuppetAnimationLayer& layer, std::vector<MdlKeyframe>& pose) {
-    const float frame = wrapFrame(layer.time * clip.fps, clip.frame_count, clip.loop_mode);
+void accumulateLayer(const MdlModel& model, const MdlAnimationClip& clip, const PuppetAnimationLayer& layer,
+                     bool root_motion, std::vector<MdlKeyframe>& pose) {
+    const float frame = wrapFrame(layer.time * clip.fps, clip.frame_count, layer.once ? "single" : clip.loop_mode);
     const size_t bones = std::min(pose.size(), clip.tracks.size());
     for (size_t b = 0; b < bones; ++b) {
         const std::vector<MdlKeyframe>& track = clip.tracks[b];
         if (track.empty()) continue;
         const MdlKeyframe now = sample(track, frame);
+        const bool is_root = b < model.bones.size() && model.bones[b].parent >= model.bones.size();
         for (int i = 0; i < 3; ++i) {
-            pose[b].translation[i] += layer.blend * (now.translation[i] - track[0].translation[i]);
+            if (root_motion || !is_root)
+                pose[b].translation[i] += layer.blend * (now.translation[i] - track[0].translation[i]);
             pose[b].rotation[i] += layer.blend * (now.rotation[i] - track[0].rotation[i]);
             pose[b].scale[i] += layer.blend * (now.scale[i] - track[0].scale[i]);
         }
@@ -149,7 +152,7 @@ bool PuppetPose::localPose(const MdlModel& model, const std::vector<PuppetAnimat
             }
             seeded = true;
         }
-        accumulateLayer(*clip, layer, pose);
+        accumulateLayer(model, *clip, layer, root_motion, pose);
     }
     if (seeded) {
         for (size_t b = 0; b < std::min(pose.size(), overrides_.size()); ++b)
@@ -175,7 +178,7 @@ void PuppetPose::advance(const MdlModel& model, std::vector<PuppetAnimationLayer
         if (!layer.visible || !layer.playing) continue;
         layer.time = std::max(0.0f, layer.time + dt * layer.rate);
         const MdlAnimationClip* clip = findClip(model, layer.animation_id);
-        if (clip && clip->loop_mode == "single" && clip->fps > 0.0f &&
+        if (clip && (clip->loop_mode == "single" || layer.once) && clip->fps > 0.0f &&
             layer.time * clip->fps >= (float)clip->frame_count) {
             layer.time = (float)clip->frame_count / clip->fps;
             layer.playing = false;

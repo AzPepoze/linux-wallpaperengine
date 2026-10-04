@@ -434,9 +434,54 @@ LayerHandle.prototype.getTransformMatrix = function () {
     return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
 };
 LayerHandle.prototype.getParent = function () { return layerHandle(__lweScene('parent', this.__id)); };
-LayerHandle.prototype.setParent = function (parent) {
-    var handle = parent && typeof parent === 'object' ? parent : (parent ? thisScene.getLayer(parent) : undefined);
-    return __lweScene('setParent', this.__id, handle ? handle.__id : 0);
+// setParent(parent, adjustTransforms?) or setParent(parent, attachment, adjustTransform?)
+LayerHandle.prototype.setParent = function (parent, second, third) {
+    var handle = parent && typeof parent === 'object' ? parent : (parent !== undefined && parent !== null && parent !== ''
+                                                                  ? thisScene.getLayer(parent) : undefined);
+    var attachment = typeof second === 'string' || typeof second === 'number' ? String(second) : '';
+    var adjust = typeof second === 'boolean' ? second : !!third;
+    return __lweScene('setParent', this.__id, handle ? handle.__id : 0, attachment, adjust);
+};
+LayerHandle.prototype.rotateObjectSpace = function (angles) {
+    return __lweScene('rotateObjectSpace', this.__id, toArray(angles, 3));
+};
+LayerHandle.prototype.getAttachmentIndex = function (name) { return __lweScene('attachIndex', this.__id, String(name)); };
+LayerHandle.prototype.getAttachmentMatrix = function (attachment) {
+    var m = __lweScene('attachGet', this.__id, String(attachment), 'matrix');
+    return m && typeof g.Mat4 === 'function' ? new g.Mat4(m) : undefined;
+};
+['Origin', 'Angles'].forEach(function (what) {
+    LayerHandle.prototype['getAttachment' + what] = function (attachment) {
+        var a = __lweScene('attachGet', this.__id, String(attachment), what.toLowerCase());
+        return a ? vec3(a[0], a[1], a[2]) : undefined;
+    };
+});
+// IModelLayer
+Object.defineProperties(LayerHandle.prototype, {
+    rootmotion: {
+        get: function () { return __lweScene('get', this.__id, 'rootmotion'); },
+        set: function (value) { __lweScene('set', this.__id, 'rootmotion', !!value); }, enumerable: true
+    },
+    perspective: {
+        get: function () { return __lweScene('get', this.__id, 'perspective'); },
+        set: function (value) { __lweScene('set', this.__id, 'perspective', !!value); }, enumerable: true
+    }
+});
+function animationConfig(animation, extra) {
+    var config = typeof animation === 'object' && animation !== null ? Object.assign({}, animation) : { animation: animation };
+    if (typeof animation === 'object' && animation !== null && config.animation === undefined) config.animation = config.name;
+    return Object.assign(config, extra || {});
+}
+LayerHandle.prototype.createAnimationLayer = function (animation) {
+    return animationHandle(__lweScene('animLayerCreate', this.__id, JSON.stringify(animationConfig(animation))));
+};
+LayerHandle.prototype.playSingleAnimation = function (animation, config) {
+    return animationHandle(__lweScene('animLayerCreate', this.__id, JSON.stringify(
+        animationConfig(animation, Object.assign({}, config, { once: true, autoRemove: true })))));
+};
+LayerHandle.prototype.destroyAnimationLayer = function (animationLayer) {
+    var key = typeof animationLayer === 'object' && animationLayer !== null ? animationLayer.name : animationLayer;
+    return __lweScene('animLayerDestroy', this.__id, String(key));
 };
 LayerHandle.prototype.getChildren =function () { return __lweScene('children', this.__id).map(layerHandle); };
 function layerHandle(id) {
@@ -494,7 +539,8 @@ hide('thisScene', {
 });
 (function () {
     var kinds = {
-        bloom: 'bool', cameraparallax: 'bool', camerashake: 'bool',
+        bloom: 'bool', cameraparallax: 'bool', camerashake: 'bool', clearenabled: 'bool', camerafade: 'bool',
+        fov: 'number', nearz: 'number', farz: 'number',
         clearcolor: 'vec3', ambientcolor: 'vec3', skylightcolor: 'vec3',
         bloomstrength: 'number', bloomthreshold: 'number', cameraparallaxamount: 'number',
         cameraparallaxdelay: 'number', cameraparallaxmouseinfluence: 'number',
@@ -713,7 +759,28 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
         return array;
     }
     if (op == "parent") return JS_NewUint32(ctx, scene->parentOf(id));
-    if (op == "setParent") return JS_NewBool(ctx, scene->setParent(id, idArg(2)));
+    if (op == "setParent")
+        return JS_NewBool(ctx, scene->setParent(id, idArg(2), stringArg(3), argc > 4 && JS_ToBool(ctx, argv[4]) > 0));
+    if (op == "rotateObjectSpace" && argc > 2) {
+        double angles[3] = {0.0, 0.0, 0.0};
+        for (uint32_t i = 0; i < 3; ++i) {
+            JSValue item = JS_GetPropertyUint32(ctx, argv[2], i);
+            JS_ToFloat64(ctx, &angles[i], item);
+            JS_FreeValue(ctx, item);
+        }
+        return JS_NewBool(ctx, scene->rotateObjectSpace(id, angles));
+    }
+    if (op == "attachIndex") return JS_NewInt32(ctx, scene->findAttachment(id, stringArg(2)));
+    if (op == "attachGet") {
+        std::vector<double> values;
+        if (!scene->getAttachment(id, stringArg(2), stringArg(3), values)) return JS_UNDEFINED;
+        JSValue array = JS_NewArray(ctx);
+        for (size_t i = 0; i < values.size(); ++i)
+            JS_SetPropertyUint32(ctx, array, (uint32_t)i, JS_NewFloat64(ctx, values[i]));
+        return array;
+    }
+    if (op == "animLayerCreate") return JS_NewUint32(ctx, scene->createAnimationLayer(id, stringArg(2)));
+    if (op == "animLayerDestroy") return JS_NewBool(ctx, scene->destroyAnimationLayer(id, stringArg(2)));
     if (op == "children") return idArray(ctx, scene->childrenOf(id));
     if (op == "index") {
         const std::vector<uint32_t> layers = scene->allLayers();

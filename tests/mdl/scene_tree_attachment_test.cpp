@@ -71,5 +71,55 @@ void runSceneRotationTests() {
     check(tree.worldPosition(11, position), "rotated node world position resolves");
     check(fabsf(position[0]) < 1e-4f && fabsf(position[1] - 1.0f) < 1e-4f,
           "scene node angles are degrees: 90 rotates (1,0) to (0,1)");
+
+    // A node's local matrix splits back into the origin, scale and angles it was built from.
+    SceneTreeNode source;
+    source.id = 20;
+    source.origin = {3.0f, -4.0f, 5.0f};
+    source.scale = {2.0f, 0.5f, 3.0f};
+    source.angles = {20.0f, -35.0f, 70.0f};
+    tree.addNode(source);
+    mat4x4 local;
+    check(tree.localTransform(20, local), "local transform resolves");
+    SceneTreeNode rebuilt;
+    SceneTree::decompose(local, rebuilt);
+    bool same = true;
+    for (size_t i = 0; i < 3; ++i) {
+        same = same && fabsf(rebuilt.origin[i] - source.origin[i]) < 1e-3f;
+        same = same && fabsf(rebuilt.scale[i] - source.scale[i]) < 1e-3f;
+        same = same && fabsf(rebuilt.angles[i] - source.angles[i]) < 1e-2f;
+    }
+    check(same, "decompose recovers origin, scale and angles");
+
+    // Rotating around the node's own axes: 90 degrees about z, then 90 about local x.
+    const float z90[3] = {0.0f, 0.0f, 90.0f};
+    const float x90[3] = {90.0f, 0.0f, 0.0f};
+    mat4x4 base, extra, combined;
+    SceneTree::rotationFromAngles(z90, base);
+    SceneTree::rotationFromAngles(x90, extra);
+    mat4x4_mul(combined, base, extra);
+    float result[3];
+    SceneTree::anglesFromRotation(combined, result);
+    mat4x4 again;
+    SceneTree::rotationFromAngles(result, again);
+    bool equal = true;
+    for (int column = 0; column < 3; ++column)
+        for (int row = 0; row < 3; ++row) equal = equal && fabsf(again[column][row] - combined[column][row]) < 1e-4f;
+    check(equal, "angles taken from a combined rotation rebuild the same rotation");
+
+    // A hidden group hides what sits below it; removing a node frees its children.
+    SceneTreeNode group;
+    group.id = 30;
+    group.visible = false;
+    SceneTreeNode under;
+    under.id = 31;
+    under.parent_id = 30;
+    tree.addNode(group);
+    tree.addNode(under);
+    tree.rebuildHierarchy();
+    check(!tree.ancestorsVisible(31) && tree.ancestorsVisible(30), "a hidden group hides its children");
+    tree.removeNode(30);
+    check(tree.find(30) == nullptr && tree.find(31) && tree.find(31)->parent_id == 0,
+          "removing a node turns its children into roots");
 }
 

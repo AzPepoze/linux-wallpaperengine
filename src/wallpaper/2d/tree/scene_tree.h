@@ -33,6 +33,12 @@ class SceneTree {
     // Children of a removed node become roots.
     void removeNode(uint32_t id);
     uint32_t maxId() const;
+
+    // Rotation of the tree's node order (Rz * Ry * Rx) for angles in degrees, and its inverse for a pure rotation.
+    static void rotationFromAngles(const float angles[3], mat4x4 out);
+    static void anglesFromRotation(const mat4x4 rotation, float angles[3]);
+    // Splits an affine matrix into the node's origin, scale and angles.
+    static void decompose(const mat4x4 matrix, SceneTreeNode& node);
     // False when a group above the node is hidden.
     bool ancestorsVisible(uint32_t id) const;
 

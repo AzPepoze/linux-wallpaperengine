@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <optional>
+#include <unordered_map>
 
 #include "script_engine.h"
 #include "shared/core/logger.h"
@@ -163,6 +166,11 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
         out = layer->visible;
         return true;
     }
+    if (const auto* image = dynamic_cast<const ImageLayer*>(layer);
+        image && image->boneCount() && (property == "rootmotion" || property == "perspective")) {
+        out = property == "rootmotion" ? image->rootMotion() : image->perspective;
+        return true;
+    }
     if (const auto* image = dynamic_cast<const ImageLayer*>(layer); image && property == "video.playing") {
         if (!image->bound_video_decoder) return false;
         out = image->bound_video_decoder->isPlaying() && !image->bound_video_decoder->isPaused();
@@ -176,6 +184,15 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
 }
 
 bool SceneScriptBackend::setBool(uint32_t id, const std::string& property, bool value) {
+    if (property == "rootmotion" || property == "perspective") {
+        ImageLayer* image = imageById(id);
+        if (!image || !image->boneCount()) return false;
+        if (property == "rootmotion")
+            image->setRootMotion(value);
+        else
+            image->perspective = value;
+        return true;
+    }
     if (property != "visible") return false;
     Layer* layer = layerById(id);
     if (!layer) {
@@ -363,14 +380,106 @@ uint32_t SceneScriptBackend::parentOf(uint32_t id) {
     return node ? node->parent_id : 0;
 }
 
-bool SceneScriptBackend::setParent(uint32_t id, uint32_t parent) {
+bool SceneScriptBackend::setParent(uint32_t id, uint32_t parent, const std::string& attachment,
+                                   bool adjust_transforms) {
     SceneTree* tree = ctx_.scene.scene_tree;
     SceneTreeNode* node = tree ? tree->find(id) : nullptr;
     if (!node || (parent != 0 && !tree->find(parent))) return false;
     for (uint32_t ancestor = parent; ancestor != 0; ancestor = tree->find(ancestor)->parent_id)
         if (ancestor == id) return false;  // would make the layer its own ancestor
+
+    std::string attachment_name = attachment;
+    if (!attachment.empty() && std::all_of(attachment.begin(), attachment.end(), ::isdigit)) {
+        const ImageLayer* parent_image = imageById(parent);
+        const size_t index = std::stoul(attachment);
+        if (parent_image && index < parent_image->puppetModel().attachments.size())
+            attachment_name = parent_image->puppetModel().attachments[index].name;
+    }
+
+    mat4x4 world;
+    const bool keep_world = adjust_transforms && tree->worldTransform(id, world);
     node->parent_id = parent;
+    node->attachment = attachment_name;
     tree->rebuildHierarchy();
+    if (!keep_world) return true;
+
+    // New local transform = inverse(parent * attachment) * world.
+    mat4x4 parent_total;
+    mat4x4_identity(parent_total);
+    if (parent != 0) {
+        tree->worldTransform(parent, parent_total);
+        const SceneTreeNode* parent_node = tree->find(parent);
+        const auto matrix = parent_node ? parent_node->attachment_transforms.find(attachment_name)
+                                        : std::unordered_map<std::string, std::array<float, 16>>::const_iterator{};
+        if (parent_node && matrix != parent_node->attachment_transforms.end()) {
+            mat4x4 attached;
+            memcpy(attached, matrix->second.data(), sizeof(mat4x4));
+            mat4x4_mul(parent_total, parent_total, attached);
+        }
+    }
+    mat4x4 inverse, local;
+    mat4x4_invert(inverse, parent_total);
+    mat4x4_mul(local, inverse, world);
+    SceneTree::decompose(local, *node);
+    return true;
+}
+
+bool SceneScriptBackend::rotateObjectSpace(uint32_t id, const double angles[3]) {
+    SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(id) : nullptr;
+    if (!node) return false;
+    const float current[3] = {node->angles[0], node->angles[1], node->angles[2]};
+    const float delta[3] = {(float)angles[0], (float)angles[1], (float)angles[2]};
+    mat4x4 base, extra, combined;
+    SceneTree::rotationFromAngles(current, base);
+    SceneTree::rotationFromAngles(delta, extra);
+    mat4x4_mul(combined, base, extra);  // local axes: the new rotation is applied first
+    float result[3];
+    SceneTree::anglesFromRotation(combined, result);
+    for (size_t i = 0; i < 3; ++i) node->angles[i] = result[i];
+    return true;
+}
+
+int SceneScriptBackend::findAttachment(uint32_t layer_id, const std::string& name) {
+    const ImageLayer* image = imageById(layer_id);
+    if (!image) return -1;
+    for (size_t i = 0; i < image->puppetModel().attachments.size(); ++i)
+        if (image->puppetModel().attachments[i].name == name) return (int)i;
+    return -1;
+}
+
+bool SceneScriptBackend::getAttachment(uint32_t layer_id, const std::string& key, const std::string& field,
+                                       std::vector<double>& out) {
+    const ImageLayer* image = imageById(layer_id);
+    SceneTree* tree = ctx_.scene.scene_tree;
+    const SceneTreeNode* node = tree ? tree->find(layer_id) : nullptr;
+    if (!image || !node) return false;
+
+    std::string name = key;
+    if (!key.empty() && std::all_of(key.begin(), key.end(), ::isdigit)) {
+        const size_t index = std::stoul(key);
+        if (index >= image->puppetModel().attachments.size()) return false;
+        name = image->puppetModel().attachments[index].name;
+    }
+    const auto attachment = node->attachment_transforms.find(name);
+    mat4x4 world;
+    if (attachment == node->attachment_transforms.end() || !tree->worldTransform(layer_id, world)) return false;
+    mat4x4 local, combined;
+    memcpy(local, attachment->second.data(), sizeof(mat4x4));
+    mat4x4_mul(combined, world, local);
+
+    if (field == "matrix") {
+        out.resize(16);
+        for (int column = 0; column < 4; ++column)
+            for (int row = 0; row < 4; ++row) out[(size_t)(column * 4 + row)] = combined[column][row];
+    } else if (field == "origin") {
+        out = {combined[3][0], combined[3][1], combined[3][2]};
+    } else if (field == "angles") {
+        SceneTreeNode scratch;
+        SceneTree::decompose(combined, scratch);
+        out = {scratch.angles[0], scratch.angles[1], scratch.angles[2]};
+    } else {
+        return false;
+    }
     return true;
 }
 
@@ -415,6 +524,41 @@ const SceneScriptBackend::AnimationTarget* SceneScriptBackend::target(uint32_t h
 int SceneScriptBackend::animationLayerCount(uint32_t layer_id) {
     ImageLayer* image = imageById(layer_id);
     return image ? (int)image->puppetLayerCount() : 0;
+}
+
+uint32_t SceneScriptBackend::createAnimationLayer(uint32_t layer_id, const std::string& config_json) {
+    ImageLayer* image = imageById(layer_id);
+    cJSON* config = cJSON_Parse(config_json.c_str());
+    if (!image || !config) {
+        cJSON_Delete(config);
+        return 0;
+    }
+    const auto number = [&](const char* key, double fallback) {
+        const cJSON* item = cJSON_GetObjectItemCaseSensitive(config, key);
+        return cJSON_IsNumber(item) ? item->valuedouble : fallback;
+    };
+    const auto flag = [&](const char* key) { return cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(config, key)); };
+    std::string animation, name;
+    const cJSON* clip = cJSON_GetObjectItemCaseSensitive(config, "animation");
+    if (cJSON_IsString(clip) && clip->valuestring)
+        animation = clip->valuestring;
+    else if (cJSON_IsNumber(clip))
+        animation = std::to_string((long)clip->valuedouble);
+    const cJSON* label = cJSON_GetObjectItemCaseSensitive(config, "name");
+    if (cJSON_IsString(label) && label->valuestring) name = label->valuestring;
+
+    const int index = image->puppetLayerCreate(animation, number("rate", 1.0), number("blend", 1.0), flag("additive"),
+                                               flag("once"), flag("autoRemove"), name);
+    cJSON_Delete(config);
+    return index < 0 ? 0 : targetHandle({false, layer_id, (size_t)index});
+}
+
+bool SceneScriptBackend::destroyAnimationLayer(uint32_t layer_id, const std::string& key) {
+    ImageLayer* image = imageById(layer_id);
+    if (!image) return false;
+    int index = image->puppetLayerIndex(key);
+    if (index < 0 && !key.empty() && std::all_of(key.begin(), key.end(), ::isdigit)) index = std::stoi(key);
+    return index >= 0 && image->puppetLayerDestroy((size_t)index);
 }
 
 uint32_t SceneScriptBackend::findAnimation(uint32_t layer_id, const std::string& kind, const std::string& key) {
@@ -537,6 +681,11 @@ bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) 
         return true;
     };
     if (name == "bloom") return boolean(&general.bloom.enabled);
+    if (name == "clearenabled") return boolean(&general.clear_enabled);
+    if (name == "camerafade") return boolean(&general.camera_fade);
+    if (name == "fov") return numbers({&general.fov});
+    if (name == "nearz") return numbers({&general.near_z});
+    if (name == "farz") return numbers({&general.far_z});
     if (name == "bloomstrength") return numbers({&general.bloom.strength, &general.bloom.hdr_strength});
     if (name == "bloomthreshold") return numbers({&general.bloom.threshold, &general.bloom.hdr_threshold});
     if (name == "clearcolor") return numbers({&general.clear_color[0], &general.clear_color[1], &general.clear_color[2]});

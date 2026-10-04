@@ -34,7 +34,13 @@ class SceneScriptBackend : public ScriptSceneBackend {
     bool setString(uint32_t id, const std::string& property, const std::string& value) override;
     uint32_t parentOf(uint32_t id) override;
     std::vector<uint32_t> childrenOf(uint32_t id) override;
-    bool setParent(uint32_t id, uint32_t parent) override;
+    bool setParent(uint32_t id, uint32_t parent, const std::string& attachment, bool adjust_transforms) override;
+    bool rotateObjectSpace(uint32_t id, const double angles[3]) override;
+    int findAttachment(uint32_t layer_id, const std::string& name) override;
+    bool getAttachment(uint32_t layer_id, const std::string& key, const std::string& field,
+                       std::vector<double>& out) override;
+    uint32_t createAnimationLayer(uint32_t layer_id, const std::string& config_json) override;
+    bool destroyAnimationLayer(uint32_t layer_id, const std::string& name_or_index) override;
     uint32_t findLayerByName(const std::string& name) override;
     std::vector<uint32_t> allLayers() override;
     uint32_t findAnimation(uint32_t layer_id, const std::string& kind, const std::string& key) override;

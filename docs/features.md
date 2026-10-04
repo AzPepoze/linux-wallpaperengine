@@ -262,7 +262,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
   - Missing
     - Blend shapes (morph targets), bone constraints, inverse kinematics, spring and rigid simulation, interactive bones
     - Character sheets and texture channels
-    - Script control (`getAnimationLayer`, bone and blend-shape APIs)
+    - Script control of blend shapes
 
 ## Lighting and 3D
 
@@ -347,8 +347,9 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `color`, `alpha`, `getParent()`, `getChildren()`, `getTransformMatrix()` (`Mat4`), `getAnimation`, `getAnimationLayer`, `getAnimationLayerCount`, `getTextureAnimation`
     - Works: text layers (`text`, `font`, `pointsize`, `maxwidth`, `maxrows`, alignment) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
     - Works: `getEffect(name | index)` and `getEffectCount()`; an effect has `visible`, `name`, `getMaterial()`, `getMaterialProperty(name)` and `setMaterialProperty(name, value)` (a value set by a script replaces the constant's keyframes)
-    - Works: `setParent(layer)` (keeps the local transform)
-    - Missing: attachments, `rotateObjectSpace`, `solid`, `executeMaterialFunction`
+    - Works: `setParent(parent, adjustTransforms?)` and `setParent(parent, attachment, adjustTransform?)` (with adjust, the layer stays where it is in the world), `rotateObjectSpace`, `getAttachmentIndex`, `getAttachmentMatrix`, `getAttachmentOrigin`, `getAttachmentAngles` (puppet attachments, world space)
+    - Works: model layers (puppet): `createAnimationLayer`, `destroyAnimationLayer` (later layers shift down one index), `playSingleAnimation` (plays once and removes itself), `rootmotion` (off ignores the root bone's animated translation); `perspective` is kept but the 2D renderer ignores it
+    - Missing: `solid`, `executeMaterialFunction`
     - Not available for scripts on camera or scene-level properties (no owning layer)
   - [-] `thisObject`
     - Works: `visible`, `name`, `getAnimation()`; the effect itself for scripts on an effect property
@@ -358,7 +359,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: scene settings `bloom`, `bloomstrength`, `bloomthreshold`, `clearcolor`, `ambientcolor`, `skylightcolor`, `cameraparallax*` and `camerashake*` (read/write; bloom values apply live in HDR scenes only, other scenes bake them when the bloom passes are created)
     - Works: `getInitialLayerConfig(layer)` returns the object as authored in scene.json
     - Works: `getCameraTransforms()` and `setCameraTransforms({eye, center, up})` read and write the stored vectors, which the orthographic 2D renderer does not use, so they do not move the view
-    - Missing: `fov`, `nearz`, `farz` and the other scene settings, model data
+    - Works: `clearenabled`, `camerafade`, `fov`, `nearz`, `farz` (read/write; `fov`, `nearz` and `farz` are kept but the orthographic renderer does not use them)
+    - Missing: `createModelData` and `destroyModelData`
   - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
 - [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`)
 - [-] Events
@@ -374,12 +376,9 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Missing
     - `controlpoint0` to `controlpoint7` are stored but nothing in the simulation reads them
     - Child systems are not exposed as separate instances
-- [ ] Model data (`IModelData`)
-- [-] Bone, blend-shape and physics APIs
-  - Works
-    - Puppet skeleton on image layers: `getBoneCount`, `getBoneIndex`, `getBoneName`, `getBoneParentIndex`, `getBoneTransform` (model space `Mat4`), `getBoneOrigin/Angles/Scale` and `setBoneOrigin/Angles/Scale` (local pose, replaces the animated one), `resetBone`; bones are addressed by index or name
-  - Missing
-    - Blend shapes (the `.mdl` parser reads no morph targets), bone physics (no simulation), `IModelData` and custom meshes
+- [ ] Model data (`IModelData`: `createModelData`, `applyData`, `replaceData`). It builds custom geometry for 3D model layers, which this 2D renderer has no equivalent of (no depth buffer, 3D materials or lighting)
+- [x] Bone access. The official SceneScript reference has no bone, blend-shape or physics API, so this is a host extension that official scripts never call
+  - Puppet skeleton on image layers: `getBoneCount`, `getBoneIndex`, `getBoneName`, `getBoneParentIndex`, `getBoneTransform` (model space `Mat4`), `getBoneOrigin/Angles/Scale` and `setBoneOrigin/Angles/Scale` (local pose, replaces the animated one), `resetBone`; bones are addressed by index or name
 
 ## Interaction
 

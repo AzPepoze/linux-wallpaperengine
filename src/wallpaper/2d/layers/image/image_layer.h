@@ -53,6 +53,22 @@ class ImageLayer : public Layer {
     size_t puppetLayerCount() const {
         return puppet_layers.size();
     }
+    // Animation layers added and removed at run time (IModelLayer). `animation` is a clip name or id; the new layer's
+    // index, or -1.
+    int puppetLayerCreate(const std::string& animation, double rate, double blend, bool additive, bool once,
+                          bool remove_when_done, const std::string& name);
+    bool puppetLayerDestroy(size_t index);
+    void setRootMotion(bool enabled) {
+        puppet_pose.root_motion = enabled;
+    }
+    bool rootMotion() const {
+        return puppet_pose.root_motion;
+    }
+    const wallpaper_engine::MdlModel& puppetModel() const {
+        return puppet;
+    }
+    bool perspective = false;  // IModelLayer.perspective: kept for scripts, the 2D renderer does not use it
+
     // Skeleton access for scripts. Fields: origin, angles (degrees) and scale are the bone's local pose; matrix is its
     // model-space transform (column-major, read only).
     size_t boneCount() const {
@@ -194,6 +210,7 @@ class ImageLayer : public Layer {
     };
     void loadMaterial(const char* mat_rel_path, EngineContext& ctx);
     void loadModel(const char* mdl_rel_path, EngineContext& ctx);
+    void dropFinishedPuppetLayers();
     void loadPuppet(const char* mdl_rel_path, EngineContext& ctx);
     void setPuppetLayers();
     bool ensurePuppetTarget(int width, int height);

@@ -68,10 +68,9 @@ class ManifestScene : public ScriptSceneBackend {
         out = true;
         return true;
     }
-    bool getSceneProperty(const std::string& name, std::vector<double>& out) override {
+    bool getSceneProperty(const std::string&, std::vector<double>& out) override {
         out = {1.0, 1.0, 1.0};
-        return name.rfind("camera", 0) != std::string::npos || name.find("color") != std::string::npos ||
-               name.rfind("bloom", 0) == 0;
+        return true;
     }
 };
 

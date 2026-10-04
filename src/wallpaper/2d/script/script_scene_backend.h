@@ -43,8 +43,10 @@ class ScriptSceneBackend {
 
     virtual uint32_t parentOf(uint32_t id) = 0;
     virtual std::vector<uint32_t> childrenOf(uint32_t id) = 0;
-    // Parent 0 detaches the layer. The layer keeps its local transform.
-    virtual bool setParent(uint32_t /*id*/, uint32_t /*parent*/) {
+    // Parent 0 detaches the layer. `adjust_transforms` keeps the layer where it is in the world (its local transform
+    // is recomputed); otherwise the local transform stays. `attachment` names a puppet attachment of the parent.
+    virtual bool setParent(uint32_t /*id*/, uint32_t /*parent*/, const std::string& /*attachment*/,
+                           bool /*adjust_transforms*/) {
         return false;
     }
 
@@ -73,6 +75,26 @@ class ScriptSceneBackend {
     }
     virtual int animationLayerCount(uint32_t /*layer_id*/) {
         return 0;
+    }
+    // `config_json`: {"animation": name|id, "rate", "blend", "additive", "name", "once", "autoRemove"}. Returns the
+    // animation handle, 0 when the model has no such clip.
+    virtual uint32_t createAnimationLayer(uint32_t /*layer_id*/, const std::string& /*config_json*/) {
+        return 0;
+    }
+    virtual bool destroyAnimationLayer(uint32_t /*layer_id*/, const std::string& /*name_or_index*/) {
+        return false;
+    }
+    // Puppet attachments by name or index: fields origin, angles (degrees, world space) and matrix (world space).
+    virtual int findAttachment(uint32_t /*layer_id*/, const std::string& /*name*/) {
+        return -1;
+    }
+    virtual bool getAttachment(uint32_t /*layer_id*/, const std::string& /*name_or_index*/,
+                               const std::string& /*field*/, std::vector<double>& /*out*/) {
+        return false;
+    }
+    // Rotates around the layer's own axes; angles in degrees.
+    virtual bool rotateObjectSpace(uint32_t /*id*/, const double /*angles*/[3]) {
+        return false;
     }
 
     // Puppet skeleton: bones by index. Fields origin, angles (degrees), scale (local pose) and matrix (model space).

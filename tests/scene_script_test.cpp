@@ -101,6 +101,32 @@ class EffectScene : public CountingScene {
         visible[effect] = value;
         return true;
     }
+    uint32_t findLayerByName(const std::string&) override {
+        return 3;
+    }
+    std::string parent_call;
+    bool setParent(uint32_t id, uint32_t parent, const std::string& attachment, bool adjust) override {
+        parent_call = std::to_string(id) + ">" + std::to_string(parent) + "@" + attachment + (adjust ? "+" : "-");
+        return true;
+    }
+    std::vector<double> rotated;
+    bool rotateObjectSpace(uint32_t, const double angles[3]) override {
+        rotated.assign(angles, angles + 3);
+        return true;
+    }
+    int findAttachment(uint32_t, const std::string& name) override {
+        return name == "socket" ? 2 : -1;
+    }
+    bool getAttachment(uint32_t, const std::string& key, const std::string& field, std::vector<double>& out) override {
+        if (key != "socket" || field != "origin") return false;
+        out = {7.0, 8.0, 9.0};
+        return true;
+    }
+    std::string animation_layer_config;
+    uint32_t createAnimationLayer(uint32_t, const std::string& config) override {
+        animation_layer_config = config;
+        return 0;
+    }
     std::vector<double> bone_origin = {1.0, 2.0, 3.0};
     int boneCount(uint32_t) override {
         return 2;
@@ -392,6 +418,30 @@ export function update() {
                          ""));
         CHECK(updateText(video, out) && out == "true");
         CHECK(scene.last_command == "video.pause");
+
+        // Layer API: both setParent forms, object-space rotation, attachments, one-shot animation layers.
+        SceneScript layer_api;
+        layer_api.setLayerId(3);
+        CHECK(layer_api.load(R"JS(
+export function update() {
+    thisLayer.setParent(thisScene.getLayer('parent'), true);
+    thisLayer.rotateObjectSpace({ x: 0, y: 90, z: 0 });
+    var origin = thisLayer.getAttachmentOrigin('socket');
+    thisLayer.playSingleAnimation('wave', { rate: 2 });
+    return thisLayer.getAttachmentIndex('socket') + ':' + origin.x + ':' + origin.z;
+})JS",
+                             ""));
+        CHECK(updateText(layer_api, out) && out == "2:7:9");
+        CHECK(scene.parent_call == "3>3@+");
+        CHECK(scene.rotated.size() == 3 && scene.rotated[1] == 90.0);
+        CHECK(scene.animation_layer_config.find("\"once\":true") != std::string::npos &&
+              scene.animation_layer_config.find("\"autoRemove\":true") != std::string::npos &&
+              scene.animation_layer_config.find("\"animation\":\"wave\"") != std::string::npos);
+
+        SceneScript attached;
+        attached.setLayerId(3);
+        CHECK(attached.load("export function update() { thisLayer.setParent(thisScene.getLayer('p'), 'socket', true); return ''; }", ""));
+        CHECK(updateText(attached, out) && scene.parent_call == "3>3@socket+");
 
         // Bones by name or index.
         SceneScript bones;

@@ -233,6 +233,50 @@ bool ImageLayer::puppetLayerTakeEnded(size_t index) {
     return true;
 }
 
+int ImageLayer::puppetLayerCreate(const std::string& animation, double rate, double blend, bool additive, bool once,
+                                  bool remove_when_done, const std::string& name) {
+    if (!has_puppet_mesh) return -1;
+    const wallpaper_engine::MdlAnimationClip* found = nullptr;
+    const bool numeric = !animation.empty() && std::all_of(animation.begin(), animation.end(), ::isdigit);
+    for (const wallpaper_engine::MdlAnimationClip& clip : puppet.clips) {
+        if (clip.name == animation || (numeric && clip.id == (uint32_t)std::stoul(animation))) {
+            found = &clip;
+            break;
+        }
+    }
+    if (!found) return -1;
+
+    wallpaper_engine::PuppetAnimationLayer layer;
+    layer.animation_id = found->id;
+    layer.name = name.empty() ? found->name : name;
+    layer.rate = (float)rate;
+    layer.blend = (float)blend;
+    layer.additive = additive;
+    layer.once = once;
+    layer.remove_when_done = remove_when_done;
+    puppet_layers.push_back(layer);
+    return (int)puppet_layers.size() - 1;
+}
+
+bool ImageLayer::puppetLayerDestroy(size_t index) {
+    if (index >= puppet_layers.size()) return false;
+    puppet_layers.erase(puppet_layers.begin() + (std::ptrdiff_t)index);
+    return true;
+}
+
+void ImageLayer::dropFinishedPuppetLayers() {
+    for (size_t i = 0; i < puppet_layers.size();) {
+        wallpaper_engine::PuppetAnimationLayer& layer = puppet_layers[i];
+        if (layer.remove_when_done && !layer.playing && layer.ended) ++layer.frames_since_end;
+        // A finished layer waits a few frames so scripts can still hear that it ended.
+        const bool finished = layer.remove_when_done && !layer.playing && (!layer.ended || layer.frames_since_end > 3);
+        if (finished)
+            puppet_layers.erase(puppet_layers.begin() + (std::ptrdiff_t)i);
+        else
+            ++i;
+    }
+}
+
 int ImageLayer::boneIndex(const std::string& name) const {
     for (size_t i = 0; i < puppet.bones.size(); ++i)
         if (puppet.bones[i].name == name) return (int)i;
