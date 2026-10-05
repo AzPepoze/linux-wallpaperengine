@@ -61,3 +61,13 @@ int flag_config::integer(const char* key) {
     cJSON_Delete(config);
     return value;
 }
+
+float flag_config::real(const char* key) {
+    cJSON* config = loadConfig();
+    if (!config) return 0.0f;
+    float value = 0.0f;
+    cJSON* item = cJSON_GetObjectItemCaseSensitive(config, key);
+    if (cJSON_IsNumber(item)) value = static_cast<float>(item->valuedouble);
+    cJSON_Delete(config);
+    return value;
+}

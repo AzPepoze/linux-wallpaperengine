@@ -5,8 +5,8 @@
 #include <string.h>
 #include <sys/prctl.h>
 
-#include "app/cli_options.h"
 #include "app/cli_args.h"
+#include "app/cli_options.h"
 #include "app/control/control_client.h"
 #include "app/control/control_endpoint.h"
 #include "app/control/control_server.h"
@@ -122,10 +122,14 @@ static void applyCliToContext() {
         ctx.debug.particle_debug_velocity_scale = cli.particle_debug_velocity_scale;
     if (cli.particle_debug_max_particles > 0) ctx.debug.particle_debug_max_particles = cli.particle_debug_max_particles;
 
+    ctx.parallax_smoothing = cli.parallax.smoothing;
+    ctx.parallax_scale = cli.parallax.scale;
+
     int transition = 0;
     int transition_duration = cli.transition.duration_ms;
     std::string transition_error;
-    if (!lwe::transition::resolveTransitionSetting(cli.transition.effect, transition, transition_duration, transition_error))
+    if (!lwe::transition::resolveTransitionSetting(cli.transition.effect, transition, transition_duration,
+                                                   transition_error))
         LOG_W("[CONTROL] %s; using fade", transition_error.c_str());
     TransitionConfig transition_config;
     transition_config.selection = transition;

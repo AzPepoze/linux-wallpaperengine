@@ -8,6 +8,7 @@ namespace flag_config {
 
 std::string string(const char* key);  // "" when the key is absent
 int integer(const char* key);         // 0 when the key is absent
+float real(const char* key);          // 0 when the key is absent
 
 }  // namespace flag_config
 

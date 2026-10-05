@@ -88,6 +88,24 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
     const std::vector<std::string> args(argv, argv + argc);
+    // CLI flags override config.json, which overrides the defaults.
+    auto resolve = [&](const std::vector<std::string>& names, const char* key, const std::string& fallback) {
+        std::string value;
+        if (cli_args::optionValue(args, names, value)) return value;
+        const std::string configured = flag_config::string(key);
+        return configured.empty() ? fallback : configured;
+    };
+    auto resolveInt = [&](const std::vector<std::string>& names, const char* key, int fallback) {
+        std::string value;
+        if (cli_args::optionValue(args, names, value)) return atoi(value.c_str());
+        const int configured = flag_config::integer(key);
+        return configured != 0 ? configured : fallback;
+    };
+    auto resolveReal = [&](const char* key, float fallback) {
+        const float configured = flag_config::real(key);
+        return configured != 0.0f ? configured : fallback;
+    };
+
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.no_audio = hasDashedFlag("no-audio") || opts.no_ui || opts.diagnostics.enabled ||
                     cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
@@ -100,7 +118,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     }
 #endif
     cli_args::optionValue(args, {"--assets-dir"}, opts.assets_dir);
-    cli_args::optionValue(args, {"--scaling"}, opts.scaling);
+    opts.scaling = resolve({"--scaling"}, "scaling_mode", "");
+    opts.parallax.smoothing = resolveReal("parallax_smoothing", 0.0f);
+    opts.parallax.scale = resolveReal("parallax_scale", 0.0f);
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
@@ -136,20 +156,6 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     } else if (!opts.sandbox) {
         opts.wallpaper_arg = cli_args::positional(args);
     }
-    // CLI flags override config.json, which overrides the defaults.
-    auto resolve = [&](const std::vector<std::string>& names, const char* key, const std::string& fallback) {
-        std::string value;
-        if (cli_args::optionValue(args, names, value)) return value;
-        const std::string configured = flag_config::string(key);
-        return configured.empty() ? fallback : configured;
-    };
-    auto resolveInt = [&](const std::vector<std::string>& names, const char* key, int fallback) {
-        std::string value;
-        if (cli_args::optionValue(args, names, value)) return atoi(value.c_str());
-        const int configured = flag_config::integer(key);
-        return configured != 0 ? configured : fallback;
-    };
-
     opts.transition.effect = resolve({"--transition"}, "transition", "");
     opts.transition.duration_ms = resolveInt({"--transition-duration"}, "transition_duration_ms", 0);
     opts.transition.mode = resolve({"--transition-mode"}, "transition_mode", "");

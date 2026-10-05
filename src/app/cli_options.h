@@ -10,9 +10,15 @@
 
 // Transition settings, resolved from the CLI and config.json.
 struct TransitionOptions {
-    std::string effect;      // --transition
-    std::string mode;        // --transition-mode
-    int duration_ms = 0;     // --transition-duration
+    std::string effect;   // --transition
+    std::string mode;     // --transition-mode
+    int duration_ms = 0;  // --transition-duration
+};
+
+// Parallax settings, resolved from config.json. Zero keeps the scene/default value.
+struct ParallaxOptions {
+    float smoothing = 0.0f;  // parallax_smoothing: response time, overrides the scene
+    float scale = 0.0f;      // parallax_scale: particle parallax multiplier
 };
 
 struct CliOptions {
@@ -40,6 +46,7 @@ struct CliOptions {
     std::string layer_size;
     std::string layer_anchor;
     TransitionOptions transition;
+    ParallaxOptions parallax;
     bool no_control = false;
     bool help = false;
     bool particle_debug_bounds = false;

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "shared/assets/asset_manager.h"
+#include "shared/core/config.h"
 #include "shared/graphics/render.h"
 #include "sokol_gfx.h"
 #include "wallpaper/2d/parser/scene_document.h"
@@ -67,8 +68,9 @@ struct ParallaxState {
     float smooth_y = 0.0f;
     bool enabled = false;
     float amount = 0.0f;
-    float delay = 0.1f;
+    float delay = Config::kParallaxSmoothing;
     float mouse_influence = 0.0f;
+    float scale = Config::kParallaxScale;  // particle parallax multiplier
 };
 
 struct CameraShakeState {
@@ -130,6 +132,8 @@ struct EngineContext {
     InputState input;
     SceneState scene;
     ParallaxState parallax;
+    float parallax_smoothing = 0.0f;  // config override; 0 keeps the scene value
+    float parallax_scale = 0.0f;      // config override; 0 keeps the built-in default
     CameraShakeState shake;
     DebugState debug;
     float time = 0.0f;

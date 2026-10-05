@@ -27,7 +27,7 @@ constexpr CliOption kWallpaper[] = {
 constexpr CliOption kGraphics[] = {
     {{"--gpu", "-gpu", nullptr}, "<id>", CliBuild::All, "Select a GPU by index or name"},
     {{"--list-gpus", "-list-gpus", nullptr}, nullptr, CliBuild::All, "List available GPUs and exit"},
-    {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Cap the frame rate (default 60; 0 = display rate)"},
+    {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Frame-rate cap; 0 or omitted follows the display"},
     {{"--scaling", nullptr}, "<default|fit|fill|stretch>", CliBuild::All, "fill crops to cover, fit letterboxes"},
     {{"--clamp", nullptr}, "<mode>", CliBuild::All, "Accepted and ignored"},
     {{"--cover", nullptr}, nullptr, CliBuild::All, "Force cover scaling, ignoring the project's fit"},
@@ -37,7 +37,7 @@ constexpr CliOption kGraphics[] = {
 };
 
 constexpr CliOption kDisplay[] = {
-    {{"-r", "--screen-root", nullptr}, "<output>", CliBuild::All, "Draw as a wlr-layer-shell surface on the named output"},
+    {{"-r", "--screen-root", nullptr}, "<output>", CliBuild::All, "Draw as a layer-shell surface on the named output"},
     {{"--layer", nullptr}, "<background|bottom|top|overlay>", CliBuild::All, "Layer-shell layer (default background)"},
     {{"--layer-size", nullptr}, "<WxH>", CliBuild::Debug, "Use a small anchored rectangle (for example 320x180)"},
     {{"--layer-anchor", nullptr}, "<edges>", CliBuild::Debug, "Anchor edges for --layer-size (for example top-left)"},
@@ -47,7 +47,7 @@ constexpr CliOption kDisplay[] = {
 constexpr CliOption kTransition[] = {
     {{"--transition", nullptr}, "<name|none|random>", CliBuild::All, "Transition shader (default fade; 0-26 accepted)"},
     {{"--transition-duration", nullptr}, "<ms>", CliBuild::All, "Transition length in milliseconds (default 1000)"},
-    {{"--transition-mode", nullptr}, "<freeze|continue>", CliBuild::All, "Outgoing wallpaper behavior at transition end"},
+    {{"--transition-mode", nullptr}, "<freeze|continue>", CliBuild::All, "Outgoing wallpaper behavior during the fade"},
     kSentinel,
 };
 
@@ -64,10 +64,10 @@ constexpr CliOption kAudio[] = {
 };
 
 constexpr CliOption kWeb[] = {
-    {{"--no-web-devtools", nullptr}, nullptr, CliBuild::All, "Disable the localhost remote-debug server (on by default)"},
+    {{"--no-web-devtools", nullptr}, nullptr, CliBuild::All, "Disable the localhost remote-debug server"},
     {{"--web-devtools-port", nullptr}, "<port>", CliBuild::All, "DevTools port (default 9222)"},
-    {{"--web-devtools-browser", nullptr}, "<cmd>", CliBuild::All, "Browser command to open DevTools (default xdg-open)"},
-    {{"--web-transport", nullptr}, "<auto|dma-buf|off-screen|snapshot>", CliBuild::All, "Web frame transport (default auto)"},
+    {{"--web-devtools-browser", nullptr}, "<cmd>", CliBuild::All, "Browser command for DevTools (default xdg-open)"},
+    {{"--web-transport", nullptr}, "<auto|dma-buf|off-screen|snapshot>", CliBuild::All, "Transport (default auto)"},
     kSentinel,
 };
 
@@ -127,7 +127,9 @@ void printRow(FILE* out, const CliOption& option, size_t width) {
 
 }  // namespace
 
-const CliGroupDef* cliGroups() { return kGroups; }
+const CliGroupDef* cliGroups() {
+    return kGroups;
+}
 
 bool takesValue(const std::string& arg) {
     for (const CliGroupDef& def : kGroups)

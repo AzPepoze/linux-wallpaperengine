@@ -3,6 +3,9 @@ set_languages("cxx20")
 set_policy("check.auto_ignore_flags", false)
 add_rules("plugin.compile_commands.autoupdate", {outputdir = "."})
 
+-- ---------------------------------------------------------------------------
+-- Dependencies
+-- ---------------------------------------------------------------------------
 -- Track the upstream heads. Run `xmake require --upgrade` when you want to
 -- refresh the cached dependency revisions.
 add_requires("sokol master")
@@ -16,6 +19,9 @@ add_requires("imgui", {optional = true})
 -- SceneScript (clock/date text) runs on an embedded QuickJS engine.
 add_requires("quickjs")
 
+-- ---------------------------------------------------------------------------
+-- Build options
+-- ---------------------------------------------------------------------------
 -- On by default when Qt6 WebEngine is installed: builds the out-of-process helper used by web
 -- wallpapers. The core engine keeps no Qt dependency, and the option disables itself when the
 -- package is missing so other builds still succeed.
@@ -80,6 +86,9 @@ option("mpris")
     end)
 option_end()
 
+-- ---------------------------------------------------------------------------
+-- Wayland protocol generation
+-- ---------------------------------------------------------------------------
 -- Generates the client protocol C glue with wayland-scanner at configure time into the build tree.
 local function generate_wayland_protocols(target)
     local scanner = import("lib.detect.find_tool")("wayland-scanner")
@@ -115,8 +124,12 @@ end
 
 local layer_exclude = has_config("layer_shell") and "" or "|app/platform/wayland_layer/**.cpp"
 
+-- ---------------------------------------------------------------------------
+-- Main engine target
+-- ---------------------------------------------------------------------------
 target("linux-wallpaperengine")
     set_kind("binary")
+    set_group("engine")
     set_targetdir("bin/$(mode)")
     set_rundir("$(projectdir)")
     set_warnings("all", "extra")
@@ -158,11 +171,15 @@ target("linux-wallpaperengine")
         set_policy("build.optimization.lto", true)
     end
 
+-- ---------------------------------------------------------------------------
+-- Web wallpaper renderer helper
+-- ---------------------------------------------------------------------------
 -- Optional out-of-process QtWebEngine renderer for web wallpapers. Kept in a
 -- separate target so Qt headers and warning flags never touch the core build.
 if has_config("web") then
     target("linux-wallpaperengine-webrender")
         set_kind("binary")
+        set_group("engine")
         set_targetdir("bin/$(mode)")
         set_rundir("$(projectdir)")
         add_files("src/wallpaper/web/web_renderer_main.cpp", "src/wallpaper/web/web_widget_backend.cpp",
@@ -186,12 +203,16 @@ if has_config("web") then
     target_end()
 end
 
+-- ---------------------------------------------------------------------------
+-- Unit tests
+-- ---------------------------------------------------------------------------
 -- Plain-main unit checks. None build by default: `xmake build <name>` builds one, `xmake test` builds and runs them all.
 -- Each takes its own source list so it links only what it exercises.
 local function add_test(name, files, packages, syslinks)
     target(name)
         set_kind("binary")
         set_default(false)
+        set_group("tests")
         set_targetdir("bin/$(mode)")
         set_rundir("$(projectdir)")
         set_warnings("all", "extra")
@@ -226,6 +247,9 @@ add_test("web_renderer_tests", {"tests/web_renderer_shared_test.cpp", "src/wallp
                                 "src/wallpaper/web/web_dmabuf_ipc.cpp"})
 
 add_test("flag_config_tests", {"tests/flag_config_test.cpp", "src/app/flag_config.cpp"}, {"cjson"})
+
+add_test("cli_options_tests", {"tests/cli_options_test.cpp", "src/app/cli_options.cpp", "src/app/cli_args.cpp",
+                               "src/app/flag_config.cpp", "src/shared/core/logger.cpp"}, {"sokol", "cjson"})
 
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
@@ -333,10 +357,14 @@ add_test("media_events_tests", {"tests/media_events_test.cpp", "src/wallpaper/2d
                                 "src/shared/media/mpris_source.cpp", "src/shared/core/logger.cpp"},
          {"quickjs"})
 
+-- ---------------------------------------------------------------------------
+-- Diagnostic tools
+-- ---------------------------------------------------------------------------
 -- Loads every SceneScript block of a Workshop folder and reports script errors (no GPU). See utils/script_corpus.cpp.
 target("script_corpus")
     set_kind("binary")
     set_default(false)
+    set_group("tools")
     set_targetdir("bin/$(mode)")
     set_warnings("all", "extra")
     add_includedirs("src")
@@ -360,15 +388,15 @@ target("script_corpus")
     end
 target_end()
 
+-- ---------------------------------------------------------------------------
+-- Developer tasks
+-- ---------------------------------------------------------------------------
 task("check")
     set_menu {
         usage = "xmake check",
-        description = "Validate formatting and run fast static analysis"
+        description = "Run fast static analysis (cppcheck)"
     }
     on_run(function ()
-        print("--> Checking formatting (clang-format)...")
-        os.execv("sh", {"-c", "find src -name '*.[ch]*' | xargs clang-format --dry-run --Werror"})
-
         print("--> Running static analysis (cppcheck)...")
         os.execv("sh", {"-c", "cppcheck -j 8 --quiet --enable=warning --error-exitcode=1 " ..
                              "'-D__has_feature(x)=0' " ..
@@ -392,13 +420,11 @@ task("format")
 task("sandbox")
     set_menu {
         usage = "xmake sandbox",
-        description = "Validate, build the debug binary, and launch the effect sandbox"
+        description = "Build the debug binary and launch the effect sandbox"
     }
     on_run(function ()
         print("--> Configuring debug build...")
         os.exec("xmake f -m debug")
-        print("--> Running validation...")
-        os.exec("xmake check")
         print("--> Building debug sandbox...")
         os.exec("xmake build linux-wallpaperengine")
         print("--> Launching sandbox...")

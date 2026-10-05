@@ -83,14 +83,19 @@ sudo pacman -S --needed clang-format cppcheck
 
 The engine reads `config.json` from the working directory or one of its parents; `config.example.json` is a template. Every key is optional, and command-line flags override the file.
 
-| Key | Description |
-| --- | --- |
-| `engine_path` | Wallpaper Engine install root |
-| `default_wallpaper` | Wallpaper to open when none is given on the command line |
-| `transition` | Default transition shader (a name, `none`, `random`, or `0`-`26`) |
-| `transition_duration_ms` | Default transition length in milliseconds |
-| `transition_mode` | `freeze` or `continue` |
-| `web_transport` | Web wallpaper transport: `auto`, `dma-buf`, `off-screen` or `snapshot` |
+| Key | Value | Default | Description |
+| --- | --- | --- | --- |
+| `engine_path` | `<path>` | auto-detected | Wallpaper Engine install root |
+| `default_wallpaper` | `<path>` | — | Wallpaper to open when none is given (`wallpaper_path` is an accepted alias) |
+| `scaling_mode` | `default\|fit\|fill\|stretch` | fit | Scaling mode; same as `--scaling` |
+| `parallax_smoothing` | `<seconds>` | 0.1 | Parallax response time; overrides the scene's value |
+| `parallax_scale` | `<factor>` | 50.0 | Particle parallax multiplier |
+| `transition` | `<name\|none\|random>` | fade | Transition shader (also `0`-`26`) |
+| `transition_duration_ms` | `<ms>` | 1000 | Transition length |
+| `transition_mode` | `freeze\|continue` | freeze | What the outgoing wallpaper does during the fade |
+| `web_transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Web wallpaper frame transport |
+| `web_devtools_port` | `<port>` | 9222 | DevTools port |
+| `web_devtools_browser` | `<cmd>` | xdg-open | Browser command for DevTools |
 
 Environment variables:
 
@@ -103,94 +108,94 @@ The wallpaper path may come first or last. `-h` / `--help` prints this same refe
 
 ### Wallpaper
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--assets-dir` | `<path>` | Wallpaper Engine install root or its `assets/` directory |
-| `--pkg` | `<path>` | Treat the path as a package |
-| `--extract-only` | | Extract the package and exit |
-| `--extract-dir` | `<path>` | Extraction target, with `--extract-only` |
-| `--set-property` | `<name=value>` | Override a project property; repeatable |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--assets-dir` | `<path>` | auto-detected | Wallpaper Engine install root or its `assets/` directory |
+| `--pkg` | `<path>` | — | Treat the path as a package |
+| `--extract-only` | | off | Extract the package and exit |
+| `--extract-dir` | `<path>` | — | Extraction target, with `--extract-only` |
+| `--set-property` | `<name=value>` | — | Override a project property; repeatable |
 
 ### Graphics
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--gpu` | `<id>` | Select a GPU by index or name |
-| `--list-gpus` | | List the available GPUs and exit |
-| `-f`, `--fps` | `<n>` | Frame-rate cap; `0` follows the display (default 60) |
-| `--scaling` | `default\|fit\|fill\|stretch` | `fill` crops to cover, `fit` letterboxes |
-| `--cover` | | Force cover scaling, ignoring the project |
-| `--clamp` | `<mode>` | Accepted and ignored |
-| `--video-ram` | | Load video files into RAM instead of streaming |
-| `--script-profile` | | Log the slowest scripts every 10 seconds |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--gpu` | `<id>` | auto | Select a GPU by index or name |
+| `--list-gpus` | | off | List the available GPUs and exit |
+| `-f`, `--fps` | `<n>` | display rate | Frame-rate cap; `0` or omitted follows the display (vsync) |
+| `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops to cover, `fit` letterboxes |
+| `--cover` | | off | Force cover scaling, ignoring the project |
+| `--clamp` | `<mode>` | ignored | Accepted and ignored |
+| `--video-ram` | | off | Load video files into RAM instead of streaming |
+| `--script-profile` | | off | Log the slowest scripts every 10 seconds |
 
 ### Display
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `-r`, `--screen-root` | `<output>` | Draw as a `wlr-layer-shell` surface on this output |
-| `--layer` | `background\|bottom\|top\|overlay` | Layer-shell layer (default `background`) |
-| `--layer-size` | `<WxH>` | Debug: small anchored rectangle, e.g. `320x180` |
-| `--layer-anchor` | `<edges>` | Debug: anchor edges for `--layer-size`, e.g. `top-left` |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `-r`, `--screen-root` | `<output>` | — | Draw as a `wlr-layer-shell` surface on this output |
+| `--layer` | `background\|bottom\|top\|overlay` | background | Layer-shell layer |
+| `--layer-size` | `<WxH>` | — | Debug: small anchored rectangle, e.g. `320x180` |
+| `--layer-anchor` | `<edges>` | — | Debug: anchor edges for `--layer-size`, e.g. `top-left` |
 
 Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the output is not found, the app runs in a window.
 
 ### Transition
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--transition` | `<name\|none\|random>` | Transition shader (default `fade`) |
-| `--transition-duration` | `<ms>` | Transition length (default 1000) |
-| `--transition-mode` | `freeze\|continue` | What the outgoing wallpaper does during the fade |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--transition` | `<name\|none\|random>` | fade | Transition shader |
+| `--transition-duration` | `<ms>` | 1000 | Transition length |
+| `--transition-mode` | `freeze\|continue` | freeze | What the outgoing wallpaper does during the fade |
 
 ### Control
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--no-control` | | Don't hand off to or own a control socket |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--no-control` | | off | Don't hand off to or own a control socket |
 
 ### Audio
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--no-audio` | | Disable audio |
-| `-s`, `--silent`, `--mute` | | Disable audio (aliases of `--no-audio`) |
-| `--volume` | `<n>` | Accepted for launcher compatibility; ignored |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--no-audio` | | off | Disable audio |
+| `-s`, `--silent`, `--mute` | | off | Disable audio (aliases of `--no-audio`) |
+| `--volume` | `<n>` | ignored | Accepted for launcher compatibility; ignored |
 
 ### Web
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--web-transport` | `auto\|dma-buf\|off-screen\|snapshot` | Frame transport (default `auto`) |
-| `--no-web-devtools` | | Disable the localhost remote-debug server |
-| `--web-devtools-port` | `<port>` | DevTools port (default 9222) |
-| `--web-devtools-browser` | `<cmd>` | Browser command for DevTools (default `xdg-open`) |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--web-transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Frame transport |
+| `--no-web-devtools` | | off | Disable the localhost remote-debug server |
+| `--web-devtools-port` | `<port>` | 9222 | DevTools port |
+| `--web-devtools-browser` | `<cmd>` | xdg-open | Browser command for DevTools |
 
 `web_transport` in `config.json` sets the transport too; the CLI flag overrides it, and an unknown value is an error.
 
 ### Diagnostics (debug builds)
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--diagnose`, `--diagnostics` | | Enable render diagnostics |
-| `--diagnose-frame` | `<n>` | Frame to capture (default 100) |
-| `--diagnose-final-only` | | Capture only the final output |
-| `--diagnose-deterministic` | | Fixed 1/60 s step and seeded RNG |
-| `--exit-after-diagnose` | | Quit once the capture completes |
-| `--disable-effects` | `<pattern>` | Disable effects matching a substring (`*/all` = all) |
-| `--disable-particles` | | Disable particles |
-| `--disable-bloom` | | Disable bloom |
-| `--sandbox` | | Run the debug effect sandbox |
-| `--no-ui` | | Start without the ImGui UI |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--diagnose`, `--diagnostics` | | off | Enable render diagnostics |
+| `--diagnose-frame` | `<n>` | 100 | Frame to capture |
+| `--diagnose-final-only` | | off | Capture only the final output |
+| `--diagnose-deterministic` | | off | Fixed 1/60 s step and seeded RNG |
+| `--exit-after-diagnose` | | off | Quit once the capture completes |
+| `--disable-effects` | `<pattern>` | — | Disable effects matching a substring (`*/all` = all) |
+| `--disable-particles` | | off | Disable particles |
+| `--disable-bloom` | | off | Disable bloom |
+| `--sandbox` | | off | Run the debug effect sandbox |
+| `--no-ui` | | off | Start without the ImGui UI |
 
 ### Particles
 
-| Option | Value | Description |
-| --- | --- | --- |
-| `--particle-debug`, `--particle-debug-bounds` | | Draw particle bounds |
-| `--particle-debug-velocity` | | Draw particle velocity vectors |
-| `--particle-debug-velocity-scale` | `<f>` | Velocity vector scale |
-| `--particle-debug-max-particles` | `<n>` | Cap the number of particles drawn |
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--particle-debug`, `--particle-debug-bounds` | | off | Draw particle bounds |
+| `--particle-debug-velocity` | | off | Draw particle velocity vectors |
+| `--particle-debug-velocity-scale` | `<f>` | 0.05 | Velocity vector scale |
+| `--particle-debug-max-particles` | `<n>` | 128 | Cap the number of particles drawn |
 
 Launching with a wallpaper for a display that already has a running instance hands the switch to that instance over a Unix control socket and exits, instead of starting a second process. The running instance crossfades from its current frame to the new wallpaper using Wallpaper Engine's own transition shaders (loaded from the install). Pass `--no-control` to opt out. The effect, duration and mode can also be set per switch on the second launch. Audio crossfades too: the outgoing wallpaper's sound and the incoming wallpaper's sound ramp against the transition progress (`--transition-mode freeze|continue`, default `freeze`).
 
@@ -210,10 +215,10 @@ The Wayland layer-shell protocol XML comes from the `lib/wlr-protocols` git subm
 | Extract a package                                    | `bin/<mode>/linux-wallpaperengine --extract-only "/path/to/scene.pkg"` |
 | Keep a video file in RAM instead of streaming it     | `bin/<mode>/linux-wallpaperengine --video-ram "/path/to/video.mp4"`   |
 | Clean build outputs                                  | `xmake clean`                                                         |
-| Validate formatting and static analysis              | `xmake check`                                                         |
+| Run static analysis (cppcheck)                       | `xmake check`                                                         |
 | Build and run all unit checks                        | `xmake test`                                                          |
 | Format source files                                  | `xmake format`                                                        |
-| Validate, build, and launch the debug effect sandbox | `xmake sandbox`                                                       |
+| Build and launch the debug effect sandbox            | `xmake sandbox`                                                       |
 
 Build outputs are written to `bin/<mode>/`.
 

@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "particle_system.h"
-#include "shared/core/config.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/passes/shader_pass.h"
@@ -142,8 +141,8 @@ void ParticleSystem::draw(EngineContext& ctx) {
             sg_update_buffer(particle_vertex_buffer, &vertex_range);
             sg_update_buffer(particle_index_buffer, &index_range);
 
-            const float parallax_x = parallax[0] * ctx.parallax.smooth_x * Config::kParallaxScale;
-            const float parallax_y = parallax[1] * ctx.parallax.smooth_y * Config::kParallaxScale;
+            const float parallax_x = parallax[0] * ctx.parallax.smooth_x * ctx.parallax.scale;
+            const float parallax_y = parallax[1] * ctx.parallax.smooth_y * ctx.parallax.scale;
 
             mat4x4 projection, view, view_projection, model, mvp;
             mat4x4_identity(model);
@@ -261,8 +260,8 @@ void ParticleSystem::draw(EngineContext& ctx) {
 }
 
 void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
-    const float parallax_x = parallax[0] * ctx.parallax.smooth_x * Config::kParallaxScale;
-    const float parallax_y = parallax[1] * ctx.parallax.smooth_y * Config::kParallaxScale;
+    const float parallax_x = parallax[0] * ctx.parallax.smooth_x * ctx.parallax.scale;
+    const float parallax_y = parallax[1] * ctx.parallax.smooth_y * ctx.parallax.scale;
     if (show_bounds) {
         for (const ParticleEmitterConfig& emitter : config.emitters) {
             float color[4] = {1.0f, 1.0f, 0.0f, 1.0f};
