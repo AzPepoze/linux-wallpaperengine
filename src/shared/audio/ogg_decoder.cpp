@@ -15,7 +15,9 @@
 #include <stb/stb_vorbis.c>
 #pragma GCC diagnostic pop
 
-bool looksLikeOgg(const uint8_t* data, size_t size) { return data && size >= 4 && memcmp(data, "OggS", 4) == 0; }
+bool looksLikeOgg(const uint8_t* data, size_t size) {
+    return data && size >= 4 && memcmp(data, "OggS", 4) == 0;
+}
 
 bool decodeOggVorbis(const uint8_t* data, size_t size, std::vector<int16_t>& pcm, uint32_t& channels,
                      uint32_t& sample_rate) {

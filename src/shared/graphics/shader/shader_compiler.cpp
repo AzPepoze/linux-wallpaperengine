@@ -118,8 +118,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
     result.vertex_layout = compiled_vert_source.find("a_TexCoordC4") != std::string::npos &&
                                    compiled_vert_source.find("a_PositionVec4") != std::string::npos
                                ? ShaderVertexLayout::ParticleRope
-                               : usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
-                                                                                : ShaderVertexLayout::Sprite2D;
+                           : usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
+                                                                            : ShaderVertexLayout::Sprite2D;
 
     // Five consecutive vec4 resolutions share one array entry in Sokol's
     // limited uniform metadata. Their std140 layout and upload offsets stay identical.
@@ -134,8 +134,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
 
     sg_shader_desc shd_desc = {};
     if (result.vertex_layout == ShaderVertexLayout::ParticleRope) {
-        const char* attributes[] = {"a_PositionVec4", "a_TexCoordVec4", "a_Color", "a_TexCoordVec4C1",
-                                     "a_TexCoordVec4C2", "a_TexCoordVec4C3", "a_TexCoordC4"};
+        const char* attributes[] = {"a_PositionVec4",   "a_TexCoordVec4",   "a_Color",     "a_TexCoordVec4C1",
+                                    "a_TexCoordVec4C2", "a_TexCoordVec4C3", "a_TexCoordC4"};
         for (int i = 0; i < 7; ++i) shd_desc.attrs[i].glsl_name = attributes[i];
     } else if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
         shd_desc.attrs[0].glsl_name = "a_Position";

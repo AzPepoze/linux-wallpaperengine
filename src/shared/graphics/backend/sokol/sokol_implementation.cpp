@@ -55,12 +55,15 @@
 #undef SOKOL_NO_ENTRY
 #endif
 
+// Order matters: sokol_bgra_blit.inl calls blitImportedSurface(), which sokol_zero_copy_blit.inl defines.
+// clang-format off
 #include "sokol_debug_labels.inl"
 #include "sokol_gpu_timing.inl"
 #include "sokol_readback.inl"
 #include "sokol_ycbcr_pipeline.inl"
 #include "sokol_zero_copy_blit.inl"
 #include "sokol_bgra_blit.inl"
+// clang-format on
 
 extern "C" void lwe_vk_wait_idle(void) {
     if (sg_isvalid() && _sg.vk.dev != VK_NULL_HANDLE) {

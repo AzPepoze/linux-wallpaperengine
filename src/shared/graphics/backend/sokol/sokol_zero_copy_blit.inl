@@ -4,8 +4,8 @@
 #include "shared/assets/media/video_import_cache.h"
 
 static bool blitImportedSurface(VkImage src_image, VkDescriptorSet descriptor_set, sg_image dst_image, int width,
-                                int height, VkRenderPass render_pass, VkPipeline pipeline,
-                                VkPipelineLayout pip_layout, BlitFbCache& fb_cache) {
+                                int height, VkRenderPass render_pass, VkPipeline pipeline, VkPipelineLayout pip_layout,
+                                BlitFbCache& fb_cache) {
     if (!_sg.vk.dev || !_sg.vk.queue || dst_image.id == SG_INVALID_ID || descriptor_set == VK_NULL_HANDLE ||
         pipeline == VK_NULL_HANDLE || render_pass == VK_NULL_HANDLE || src_image == VK_NULL_HANDLE) {
         return false;
@@ -95,8 +95,8 @@ static bool blitImportedSurface(VkImage src_image, VkDescriptorSet descriptor_se
     dst_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     dst_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     dst_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &dst_barrier);
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                         0, nullptr, 0, nullptr, 1, &dst_barrier);
     dst->vk.cur_access = _SG_VK_ACCESS_TEXTURE;
 
     _sg_vk_staging_copy_end(cmd, _sg.vk.queue);

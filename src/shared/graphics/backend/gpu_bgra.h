@@ -1,9 +1,9 @@
 #ifndef GPU_BGRA_H
 #define GPU_BGRA_H
 
-#include <cstdint>
-
 #include <vulkan/vulkan.h>
+
+#include <cstdint>
 
 #include "sokol_gfx.h"
 

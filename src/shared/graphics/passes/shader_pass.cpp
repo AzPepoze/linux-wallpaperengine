@@ -1,5 +1,4 @@
 #include "shader_pass.h"
-#include "wallpaper/2d/layers/image/effect_resolution.h"
 
 #include <cctype>
 #include <cstdlib>
@@ -16,6 +15,7 @@
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/shader/shader_processor.h"
 #include "wallpaper/2d/effects/effect_parser.h"
+#include "wallpaper/2d/layers/image/effect_resolution.h"
 
 namespace {
 
@@ -165,8 +165,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     pixel_exact = effect_resolution::readsPixelPosition(sources.processed_vs) ||
                   effect_resolution::readsPixelPosition(sources.processed_fs);
     {
-        static const char* const kFrameVaryingBuiltins[] = {"g_Time",          "g_Frametime",   "g_ParallaxPosition",
-                                                           "g_PointerPosition", "g_PointerState", "g_AudioSpectrum"};
+        static const char* const kFrameVaryingBuiltins[] = {
+            "g_Time", "g_Frametime", "g_ParallaxPosition", "g_PointerPosition", "g_PointerState", "g_AudioSpectrum"};
         frame_varying = false;
         for (const char* token : kFrameVaryingBuiltins) {
             if (sources.processed_vs.find(token) != std::string::npos ||

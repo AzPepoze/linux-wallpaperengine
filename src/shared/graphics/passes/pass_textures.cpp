@@ -20,7 +20,8 @@ const char* slot_reference(cJSON* textures, cJSON* user_textures, int slot) {
     cJSON* user = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, slot) : nullptr;
     cJSON* name = cJSON_IsObject(user) ? cJSON_GetObjectItemCaseSensitive(user, "name") : nullptr;
     if (cJSON_IsString(name) && name->valuestring &&
-        (strcmp(name->valuestring, "$mediaThumbnail") == 0 || strcmp(name->valuestring, "$mediaPreviousThumbnail") == 0))
+        (strcmp(name->valuestring, "$mediaThumbnail") == 0 ||
+         strcmp(name->valuestring, "$mediaPreviousThumbnail") == 0))
         return name->valuestring;
     cJSON* node = cJSON_IsArray(textures) ? cJSON_GetArrayItem(textures, slot) : nullptr;
     return cJSON_IsString(node) ? node->valuestring : nullptr;

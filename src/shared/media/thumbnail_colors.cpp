@@ -170,8 +170,7 @@ ThumbnailColors extractThumbnailColors(const uint8_t* rgba, int width, int heigh
     // `$mediaThumbnail` texture, so keep a much larger copy for display.
     int palette_width = 0;
     int palette_height = 0;
-    std::vector<uint8_t> palette =
-        downsample(rgba, width, height, kPaletteDimension, palette_width, palette_height);
+    std::vector<uint8_t> palette = downsample(rgba, width, height, kPaletteDimension, palette_width, palette_height);
 
     std::vector<Cluster> clusters = clusterAverages(medianCut(opaquePixels(palette, palette_width, palette_height)));
     if (clusters.empty()) return result;

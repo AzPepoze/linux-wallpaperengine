@@ -116,7 +116,8 @@ std::vector<std::string> commandFor(const std::string& browser_command, const st
     size_t start = 0;
     while (start < browser_command.size()) {
         const size_t space = browser_command.find(' ', start);
-        std::string word = browser_command.substr(start, space == std::string::npos ? std::string::npos : space - start);
+        std::string word =
+            browser_command.substr(start, space == std::string::npos ? std::string::npos : space - start);
         if (!word.empty()) argv.push_back(std::move(word));
         if (space == std::string::npos) break;
         start = space + 1;

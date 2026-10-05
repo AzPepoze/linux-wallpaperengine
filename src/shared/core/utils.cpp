@@ -159,4 +159,3 @@ void detect_default_wallpaper(char* out_path, size_t max_len) {
         }
     }
 }
-
