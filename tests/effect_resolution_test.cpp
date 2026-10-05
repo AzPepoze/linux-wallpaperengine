@@ -17,9 +17,12 @@ int main() {
     CHECK(targetSize(3840, 2160, 0, 0) == std::make_pair(1, 1));
     CHECK(targetSize(3840, 2160, 1920.1, 1080) == std::make_pair(1921, 1081));
     CHECK(targetSize(3840, 2160, std::numeric_limits<double>::infinity(), 1080) == native);
-    CHECK(effect_resolution::fingerprint("a\r\nb") == effect_resolution::fingerprint("a\nb"));
-    CHECK(effect_resolution::fingerprint("shader") != effect_resolution::fingerprint("modified shader"));
-    CHECK(!effect_resolution::verifiedShake("", ""));
-    CHECK(!effect_resolution::verifiedShake("custom vertex", "custom fragment"));
+    CHECK(effect_resolution::readsPixelPosition("vec2 p = gl_FragCoord.xy;"));
+    CHECK(effect_resolution::readsPixelPosition("float d = dFdx(v);"));
+    CHECK(!effect_resolution::readsPixelPosition("vec4 c = texSample2D(g_Texture0, v_TexCoord.xy);"));
+    CHECK(effect_resolution::isCompositeBinding("_rt_FullFrameBuffer"));
+    CHECK(effect_resolution::isCompositeBinding("_rt_imageLayerComposite_12_a"));
+    CHECK(!effect_resolution::isCompositeBinding("_rt_Bloom"));
+    CHECK(!effect_resolution::isCompositeBinding("previous"));
     return test::finish("effect resolution checks");
 }

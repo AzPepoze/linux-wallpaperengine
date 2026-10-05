@@ -48,10 +48,13 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         builtin.parallax_pos[1] = ctx.parallax.smooth_y * 0.5f + 0.5f;
         builtin.time = ctx.time;
         builtin.frametime = ctx.frametime;
-        builtin.screen_res[0] = r->view_width;
-        builtin.screen_res[1] = r->view_height;
-        builtin.texel_size[0] = r->view_width > 0.0f ? 1.0f / r->view_width : 0.0f;
-        builtin.texel_size[1] = r->view_height > 0.0f ? 1.0f / r->view_height : 0.0f;
+        const float logical_scale = pass->logical_scale > 1.0f ? pass->logical_scale : 1.0f;
+        const float logical_view_width = r->view_width * logical_scale;
+        const float logical_view_height = r->view_height * logical_scale;
+        builtin.screen_res[0] = logical_view_width;
+        builtin.screen_res[1] = logical_view_height;
+        builtin.texel_size[0] = logical_view_width > 0.0f ? 1.0f / logical_view_width : 0.0f;
+        builtin.texel_size[1] = logical_view_height > 0.0f ? 1.0f / logical_view_height : 0.0f;
         builtin.pointer_position[0] = 0.5f;
         builtin.pointer_position[1] = 0.5f;
         if (ctx.input.mouse_position_valid) {
@@ -80,8 +83,10 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
 
         {
             sg_image_desc d = sg_query_image_desc(img);
-            builtin.texture_resolutions[0][0] = d.width > 0 ? (float)d.width : 1.0f;
-            builtin.texture_resolutions[0][1] = d.height > 0 ? (float)d.height : 1.0f;
+            // Render targets owned by a downscaled effect chain report their authored size.
+            const float target_scale = d.usage.color_attachment ? logical_scale : 1.0f;
+            builtin.texture_resolutions[0][0] = d.width > 0 ? (float)d.width * target_scale : 1.0f;
+            builtin.texture_resolutions[0][1] = d.height > 0 ? (float)d.height * target_scale : 1.0f;
             builtin.texture_resolutions[0][2] = builtin.texture_resolutions[0][0];
             builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
         }
@@ -127,8 +132,9 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
                 sg_image target_img = sg_query_view_image(r->bind.views[slot]);
                 if (target_img.id != SG_INVALID_ID) {
                     sg_image_desc d = sg_query_image_desc(target_img);
-                    builtin.texture_resolutions[slot][0] = d.width > 0 ? (float)d.width : 1.0f;
-                    builtin.texture_resolutions[slot][1] = d.height > 0 ? (float)d.height : 1.0f;
+                    const float target_scale = d.usage.color_attachment ? logical_scale : 1.0f;
+                    builtin.texture_resolutions[slot][0] = d.width > 0 ? (float)d.width * target_scale : 1.0f;
+                    builtin.texture_resolutions[slot][1] = d.height > 0 ? (float)d.height * target_scale : 1.0f;
                     builtin.texture_resolutions[slot][2] = builtin.texture_resolutions[slot][0];
                     builtin.texture_resolutions[slot][3] = builtin.texture_resolutions[slot][1];
                 } else {

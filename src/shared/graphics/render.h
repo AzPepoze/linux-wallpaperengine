@@ -31,6 +31,8 @@ typedef struct {
     bool repeat_effect_input;
     // Bit n marks texture slot n + 1 as defaulting to white when nothing is bound (shader `"default":"util/white"`).
     unsigned int white_default_slots;
+    // Render targets and the screen size seen by this pass are reported this many times larger (0 or 1 = actual size).
+    float logical_scale;
 } render_effect_pass_t;
 
 typedef struct {

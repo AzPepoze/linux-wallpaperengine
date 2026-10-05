@@ -217,6 +217,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - An effect chain is skipped on frames where nothing it reads changed: same source image, same uniform values (keyframed constants are evaluated first) and no pass that reads time, pointer, parallax or audio built-ins; the previous output is reused
     - Layers hidden by their own flag or by an ancestor group keep running scripts and animation but skip effect chains, puppet rendering and text rasterization until they become visible
     - `--performance-profile` also reports a GPU time per layer draw and composite (`draw/<layer>`, `composite/<layer>`) next to the per-pass spans
+    - Effect chains on layers authored larger than they are drawn (including puppets and multi-target effects such as shine) run at the on-screen size; shaders still see the authored size in `g_TextureNResolution`, `g_Screen` and `g_TexelSize`, so texel-offset blurs keep their look. Shaders that read the pixel position (`gl_FragCoord`, derivatives) and full-screen layers keep the full size; `--effect-resolution native` disables the reduction
     - Vertex inputs are bound by the pipeline layout order, so shaders may declare attributes in any order (the native rope particle shader does)
   - Missing
     - Full vertex attribute support (2D `a_Position` / `a_TexCoord` and the particle layout only)

@@ -46,7 +46,8 @@ class ShaderPass {
     std::map<std::string, int> combos;
     std::map<int, std::string> texture_labels;
     unsigned int white_default_slots = 0;
-    bool display_resolution_safe = false;
+    // The shader reads the pixel position (gl_FragCoord or derivatives), so it must run at the authored resolution.
+    bool pixel_exact = true;
     // The shader reads a built-in that changes without any uniform changing (time, pointer, parallax, audio), so its
     // output can differ every frame. Until the sources are known it is assumed to vary.
     bool frame_varying = true;

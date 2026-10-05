@@ -162,7 +162,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     sources.processed_vs = ShaderSourceProcessor::processShaderSource(sources.raw_vs, abs_vert, *ctx.asset_mgr, true);
     sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, *ctx.asset_mgr, false);
 
-    display_resolution_safe = effect_resolution::verifiedShake(sources.processed_vs, sources.processed_fs);
+    pixel_exact = effect_resolution::readsPixelPosition(sources.processed_vs) ||
+                  effect_resolution::readsPixelPosition(sources.processed_fs);
     {
         static const char* const kFrameVaryingBuiltins[] = {"g_Time",          "g_Frametime",   "g_ParallaxPosition",
                                                            "g_PointerPosition", "g_PointerState", "g_AudioSpectrum"};
@@ -192,7 +193,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     stored_fs_source = sources.full_fs;
     sources.full_fs =
         renderObserver().overrideFragmentSource(shader_name, sources.full_fs, debug_view_mode, debug_step);
-    display_resolution_safe = display_resolution_safe && sources.full_fs == stored_fs_source;
+    // A debug override replaces the fragment source, so its pixel reads are unknown.
+    pixel_exact = pixel_exact || sources.full_fs != stored_fs_source;
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(sources.raw_fs.c_str());
     white_default_slots = ShaderSourceProcessor::extractWhiteTextureDefaults(sources.raw_fs.c_str());

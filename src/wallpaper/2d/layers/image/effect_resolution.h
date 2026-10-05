@@ -7,18 +7,20 @@
 #include <utility>
 
 namespace effect_resolution {
-// Fingerprints of the verified, expanded shake stages (including common.h).
-// Ignore CR so Windows and Unix line endings have identical eligibility.
-inline uint64_t fingerprint(std::string_view source) {
-    uint64_t hash = UINT64_C(14695981039346656037);
-    for (unsigned char byte : source) {
-        if (byte != '\r') hash = (hash ^ byte) * UINT64_C(1099511628211);
+// Effect targets may be smaller than the authored layer, with `g_TextureNResolution` still reporting the authored
+// size, so texel-offset shaders (blur, shine) produce the same UV offsets. Only shaders that read the pixel position
+// itself would change with the target size.
+inline bool readsPixelPosition(std::string_view source) {
+    for (std::string_view token : {"gl_FragCoord", "dFdx", "dFdy", "fwidth", "ddx", "ddy"}) {
+        if (source.find(token) != std::string_view::npos) return true;
     }
-    return hash;
+    return false;
 }
 
-inline bool verifiedShake(std::string_view vertex, std::string_view fragment) {
-    return fingerprint(vertex) == UINT64_C(0xafdc66a32c97bde8) && fingerprint(fragment) == UINT64_C(0x86017c9437f8c7da);
+// Bindings that read the accumulated scene (full-screen buffers) must keep the physical size.
+inline bool isCompositeBinding(std::string_view name) {
+    if (name.rfind("_rt_", 0) != 0) return false;
+    return name.find("FrameBuffer") != std::string_view::npos || name.rfind("_rt_imageLayerComposite_", 0) == 0;
 }
 
 inline std::pair<int, int> targetSize(int source_width, int source_height, double displayed_width,

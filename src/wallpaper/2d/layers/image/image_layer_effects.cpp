@@ -11,16 +11,22 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
     if (source_desc.width <= 0 || source_desc.height <= 0) return false;
     int width = source_desc.width;
     int height = source_desc.height;
+    // Layers drawn larger than the screen run their effects at the on-screen size. The shaders still see the authored
+    // size in their resolution uniforms (see effect_logical_scale), so only the sampling density changes.
     bool eligible = !ctx.native_effect_resolution && !is_fullscreen && !copy_background && !is_compose_region &&
-                    !puppet_resolved && !effects.empty();
+                    !effects.empty();
     for (const Effect* effect : effects) {
         if (!effect || effect->passes.empty()) {
             eligible = false;
             break;
         }
         for (const ShaderPass* pass : effect->passes) {
-            if (!pass || !pass->display_resolution_safe || !pass->render_target.empty() ||
-                !pass->render_texture_bindings.empty() || pass->pass_textures.texture0.id != SG_INVALID_ID) {
+            bool composite_binding = false;
+            if (pass) {
+                for (const auto& [slot, binding] : pass->render_texture_bindings)
+                    composite_binding = composite_binding || effect_resolution::isCompositeBinding(binding);
+            }
+            if (!pass || pass->pixel_exact || composite_binding || pass->pass_textures.texture0.id != SG_INVALID_ID) {
                 eligible = false;
                 break;
             }
@@ -42,6 +48,7 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
         width = dimensions.first;
         height = dimensions.second;
     }
+    effect_logical_scale = std::max(1.0f, (float)source_desc.width / (float)std::max(1, width));
     if (effect_target_width == width && effect_target_height == height && effect_targets[0].image.id != SG_INVALID_ID &&
         effect_targets[1].image.id != SG_INVALID_ID && effect_targets[0].texture_view.id != SG_INVALID_ID &&
         effect_targets[1].texture_view.id != SG_INVALID_ID && effect_targets[0].attachment_view.id != SG_INVALID_ID &&

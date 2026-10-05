@@ -272,6 +272,8 @@ class ImageLayer : public Layer {
     sg_image effect_output_image = {SG_INVALID_ID};
     sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, NamedRenderTarget> named_effect_targets;
+    // Authored effect size divided by the size of the effect targets; shaders see their targets this much larger.
+    float effect_logical_scale = 1.0f;
     // Fingerprint of everything the last effect chain run depended on; 0 when the chain cannot be reused.
     uint64_t effect_chain_signature = 0;
 

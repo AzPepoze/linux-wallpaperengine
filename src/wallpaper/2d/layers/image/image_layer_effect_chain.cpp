@@ -369,6 +369,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
             render_pass.is_fullscreen_quad = pass->is_fullscreen_quad;
+            render_pass.logical_scale = effect_logical_scale;
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             renderer_draw_sprite(ctx, &ctx.renderer, inputs.image, inputs.view, 0.0f, 0.0f, (float)target_width,
                                  (float)target_height, 0.0f, effect_tint, false, &render_pass);
