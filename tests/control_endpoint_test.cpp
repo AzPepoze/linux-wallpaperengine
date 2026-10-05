@@ -1,7 +1,8 @@
+#include "app/control/control_endpoint.h"
+
 #include <cstdlib>
 #include <string>
 
-#include "app/control/control_endpoint.h"
 #include "test_util.h"
 
 int main() {

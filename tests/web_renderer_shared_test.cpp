@@ -1,7 +1,4 @@
-#include "wallpaper/web/web_ipc.h"
-#include "wallpaper/web/web_dmabuf_ipc.h"
 #include "wallpaper/web/web_renderer_shared.h"
-#include "wallpaper/web/web_transport.h"
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -12,6 +9,9 @@
 #include <vector>
 
 #include "test_util.h"
+#include "wallpaper/web/web_dmabuf_ipc.h"
+#include "wallpaper/web/web_ipc.h"
+#include "wallpaper/web/web_transport.h"
 
 int main() {
     // The shim embeds the properties and applies them itself.

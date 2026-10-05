@@ -23,8 +23,8 @@ class ManifestScene : public ScriptSceneBackend {
         return "layer";
     }
     bool getVector(uint32_t, const std::string& property, double out[3], int& components) override {
-        static const char* const names[] = {"origin",     "scale",   "angles", "size", "parallaxDepth",
-                                            "color",      "backgroundcolor", "particle.color"};
+        static const char* const names[] = {"origin",        "scale", "angles",          "size",
+                                            "parallaxDepth", "color", "backgroundcolor", "particle.color"};
         bool known = property.rfind("particle.controlpoint", 0) == 0;
         for (const char* name : names) known = known || property == name;
         if (!known) return false;
@@ -140,7 +140,9 @@ int main() {
     list << "]";
     const std::string source =
         "export function update() {\n"
-        "  var entries = " + list.str() + ";\n"
+        "  var entries = " +
+        list.str() +
+        ";\n"
         "  var types = {};\n"
         "  var bad = [];\n"
         "  entries.forEach(function (e) {\n"

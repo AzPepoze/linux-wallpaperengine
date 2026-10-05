@@ -1,9 +1,10 @@
+#include "wallpaper/transition/transition_catalog.h"
+
 #include <cstdint>
 #include <cstring>
 #include <string>
 
 #include "test_util.h"
-#include "wallpaper/transition/transition_catalog.h"
 
 using namespace lwe::transition;
 

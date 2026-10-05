@@ -1,17 +1,17 @@
 #include "wallpaper/2d/parser/scene_parser.h"
 
+#include <cjson/cJSON.h>
 #include <unistd.h>
 
-#include <cstdio>
-#include <string>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <set>
-#include <cjson/cJSON.h>
-#include "shared/core/vfs.h"
-#include "app/package_extractor.h"
+#include <string>
 
+#include "app/package_extractor.h"
+#include "shared/core/vfs.h"
 #include "test_util.h"
 #include "wallpaper/user_properties.h"
 
@@ -356,9 +356,15 @@ void testPackageMetadata() {
         std::ofstream file(folder / "scene.pkg", std::ios::binary);
         file.write("PKGV0001", 8);
         const auto word = [&](uint32_t n) { file.write(reinterpret_cast<const char*>(&n), sizeof(n)); };
-        word(1); word((uint32_t)entry.size()); file.write(entry.data(), entry.size());
-        word(0); word((uint32_t)scene.size()); file.write(scene.data(), scene.size());
-        if (metadata) std::ofstream(folder / "project.json") << R"({"general":{"properties":{"scale":{"type":"slider","value":0.308}}}})";
+        word(1);
+        word((uint32_t)entry.size());
+        file.write(entry.data(), entry.size());
+        word(0);
+        word((uint32_t)scene.size());
+        file.write(scene.data(), scene.size());
+        if (metadata)
+            std::ofstream(folder / "project.json")
+                << R"({"general":{"properties":{"scale":{"type":"slider","value":0.308}}}})";
         return folder;
     };
     const fs::path a = writePackage("wallpaper-a", true), b = writePackage("wallpaper-b", false);
@@ -391,7 +397,10 @@ void testInstalledCorpus(const char* directory) {
         if (!std::filesystem::is_regular_file(pkg)) continue;
         const std::string label = entry.path().filename().string();
         test::expect(label.c_str(), vfs::mount(pkg.c_str()), "package mounts");
-        if (!vfs::exists("pkg:/scene.json")) { vfs::unmount(); continue; }
+        if (!vfs::exists("pkg:/scene.json")) {
+            vfs::unmount();
+            continue;
+        }
         test::expect(label.c_str(), vfs::sourceDirectory() == std::filesystem::absolute(entry.path()).string(),
                      "mounted package retains its sidecar directory");
         UserProperties properties;
@@ -400,7 +409,10 @@ void testInstalledCorpus(const char* directory) {
         SceneDocument document;
         const bool parsed = parseSceneFile("pkg:/scene.json", document, &properties);
         test::expect(label.c_str(), parsed, "production scene parser accepts package");
-        if (!parsed) { vfs::unmount(); continue; }
+        if (!parsed) {
+            vfs::unmount();
+            continue;
+        }
         std::vector<uint8_t> bytes;
         vfs::readAll("pkg:/scene.json", bytes);
         cJSON* raw = cJSON_ParseWithLength(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -412,7 +424,8 @@ void testInstalledCorpus(const char* directory) {
             const auto& object = document.objects[i];
             const cJSON* source = cJSON_GetArrayItem(authored, (int)i);
             const cJSON* id = cJSON_GetObjectItemCaseSensitive(source, "id");
-            test::expect(label.c_str(), cJSON_IsNumber(id) && object.node.valid && object.node.id == (uint32_t)id->valuedouble,
+            test::expect(label.c_str(),
+                         cJSON_IsNumber(id) && object.node.valid && object.node.id == (uint32_t)id->valuedouble,
                          "object ID is retained");
             test::expect(label.c_str(), ids.insert(object.node.id).second, "object IDs are unique");
             const cJSON* parent = cJSON_GetObjectItemCaseSensitive(source, "parent");

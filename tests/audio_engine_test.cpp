@@ -27,7 +27,7 @@ int main() {
     CHECK(!audio.groupFading(g1));
 
     audio.destroyGroup(g1);
-    audio.destroyGroup(AudioEngine::kDefaultGroup); 
+    audio.destroyGroup(AudioEngine::kDefaultGroup);
     CHECK(audio.groupVolume(AudioEngine::kDefaultGroup) == 1.0f);
 
     const AudioEngine::StreamHandle stream = audio.createStream(48000, 2);

@@ -5,7 +5,9 @@
 #include "test_util.h"
 
 namespace {
-bool near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
+bool near(float a, float b) {
+    return std::fabs(a - b) < 1e-5f;
+}
 }  // namespace
 
 int main() {

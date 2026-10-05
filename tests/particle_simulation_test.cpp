@@ -16,7 +16,9 @@ ParticleSystem::~ParticleSystem() {
 }
 
 namespace {
-bool near(float a, float b, float tolerance = 0.01f) { return std::fabs(a - b) <= tolerance * std::max(1.0f, std::fabs(b)); }
+bool near(float a, float b, float tolerance = 0.01f) {
+    return std::fabs(a - b) <= tolerance * std::max(1.0f, std::fabs(b));
+}
 
 // Tests spawn by hand (emitParticles) or through instances, so their emitters must not emit on their own; the
 // struct default is Wallpaper Engine's rate of 5.
@@ -191,8 +193,7 @@ void testAngularMovementAndAttract() {
     const Particle untouched = particleAt(repel, 0.005f, 40.0f, 0.05f);
     CHECK(near(untouched.velocity[0], 0.0f));
     // A positive scale pulls it in.
-    const char* pull =
-        R"({"operator":[{"name":"controlpointattract","controlpoint":1,"scale":512,"threshold":64}]})";
+    const char* pull = R"({"operator":[{"name":"controlpointattract","controlpoint":1,"scale":512,"threshold":64}]})";
     CHECK(particleAt(pull, 0.005f, 20.0f, 0.05f).velocity[0] < -10.0f);
 }
 

@@ -1,5 +1,6 @@
-#include "test_util.h"
 #include "wallpaper/transition/transition_audio.h"
+
+#include "test_util.h"
 #include "wallpaper/transition/transition_catalog.h"
 
 using namespace lwe::transition;

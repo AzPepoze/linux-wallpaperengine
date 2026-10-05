@@ -1,7 +1,7 @@
+#include <unistd.h>
+
 #include <string>
 #include <vector>
-
-#include <unistd.h>
 
 #include "app/control/control_client.h"
 #include "app/control/control_server.h"

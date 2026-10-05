@@ -68,12 +68,14 @@ void testMprisMetadataKeyMapping() {
     expect("mpris-keys", classifyMprisMetadataKey("xesam:title") == MprisMetadataField::Title, "title");
     expect("mpris-keys", classifyMprisMetadataKey("xesam:artist") == MprisMetadataField::Artist, "artist");
     expect("mpris-keys", classifyMprisMetadataKey("xesam:album") == MprisMetadataField::Album, "album");
-    expect("mpris-keys", classifyMprisMetadataKey("xesam:albumArtist") == MprisMetadataField::AlbumArtist, "album artist");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:albumArtist") == MprisMetadataField::AlbumArtist,
+           "album artist");
     expect("mpris-keys", classifyMprisMetadataKey("xesam:genre") == MprisMetadataField::Genre, "genre");
     expect("mpris-keys", classifyMprisMetadataKey("mpris:length") == MprisMetadataField::Length, "length");
     // Regression: the art URL was previously dropped, leaving $mediaThumbnail empty.
     expect("mpris-keys", classifyMprisMetadataKey("mpris:artUrl") == MprisMetadataField::ArtUrl, "art url");
-    expect("mpris-keys", classifyMprisMetadataKey("xesam:trackNumber") == MprisMetadataField::Ignore, "unknown ignored");
+    expect("mpris-keys", classifyMprisMetadataKey("xesam:trackNumber") == MprisMetadataField::Ignore,
+           "unknown ignored");
     expect("mpris-keys", classifyMprisMetadataKey(nullptr) == MprisMetadataField::Ignore, "null ignored");
 }
 

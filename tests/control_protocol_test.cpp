@@ -1,6 +1,7 @@
+#include "app/control/control_protocol.h"
+
 #include <string>
 
-#include "app/control/control_protocol.h"
 #include "test_util.h"
 #include "wallpaper/transition/transition_catalog.h"
 

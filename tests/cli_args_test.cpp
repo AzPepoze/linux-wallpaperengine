@@ -59,7 +59,8 @@ int main() {
     CHECK(cli_args::optionValue(mode, {"--transition-mode"}, value) && value == "freeze");
     CHECK(cli_args::takesValue("--transition-mode"));
 
-    const V devtools = {"app", "--web-devtools", "--web-devtools-port", "9333", "--web-devtools-browser", "chromium --app", "/wp"};
+    const V devtools = {
+        "app", "--web-devtools", "--web-devtools-port", "9333", "--web-devtools-browser", "chromium --app", "/wp"};
     CHECK(cli_args::positional(devtools) == "/wp");
     CHECK(cli_args::hasFlag(devtools, {"--web-devtools"}));
     CHECK(cli_args::optionValue(devtools, {"--web-devtools-port"}, value) && value == "9333");

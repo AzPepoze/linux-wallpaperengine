@@ -6,7 +6,9 @@
 using namespace shader_backend_internal;
 
 namespace {
-bool contains(const std::string& text, const std::string& needle) { return text.find(needle) != std::string::npos; }
+bool contains(const std::string& text, const std::string& needle) {
+    return text.find(needle) != std::string::npos;
+}
 
 // The vertex declaration order differs from the pipeline layout (a_Color is declared last), which is how
 // the native rope particle shader is written.

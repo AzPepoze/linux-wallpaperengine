@@ -1,9 +1,8 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "wallpaper/2d/tree/scene_tree.h"
-
 #include "../test_util.h"
+#include "wallpaper/2d/tree/scene_tree.h"
 using test::check;
 
 void runSceneRotationTests();
@@ -83,9 +82,9 @@ void runSceneWorldPlacementTests() {
     mirrored.scale = {-2.0f, 3.0f, 1.0f};
     tree.addNode(mirrored);
     check(tree.worldPlacement(200, placement) && fabsf(placement.scale[0] - 2.0f) < 1e-4f &&
-              fabsf(placement.scale[1] + 3.0f) < 1e-4f, "mirrored placement preserves reflection");
-    check(fabsf(fabsf(placement.rotation_deg) - 180.0f) < 1e-3f,
-          "mirrored placement rotation follows the X basis");
+              fabsf(placement.scale[1] + 3.0f) < 1e-4f,
+          "mirrored placement preserves reflection");
+    check(fabsf(fabsf(placement.rotation_deg) - 180.0f) < 1e-3f, "mirrored placement rotation follows the X basis");
 
     SceneTreeNode rot_parent;
     rot_parent.id = 300;

@@ -484,7 +484,7 @@ export function update() {
     thisScene.destroyModelData(model);
     return String(IModelData.TANGENT_SIGNED);
 })JS",
-                              ""));
+                             ""));
         CHECK(updateText(model_api, out) && out == "tangent_signed");
         CHECK(scene.model_shapes.size() == 1 && scene.model_shapes[0].data.vertices.size() == 24 &&
               scene.model_shapes[0].data.vertices[1] == 300.0f && scene.model_shapes[0].data.format.size() == 3 &&
@@ -532,7 +532,9 @@ export function update() {
 
         SceneScript attached;
         attached.setLayerId(3);
-        CHECK(attached.load("export function update() { thisLayer.setParent(thisScene.getLayer('p'), 'socket', true); return ''; }", ""));
+        CHECK(attached.load(
+            "export function update() { thisLayer.setParent(thisScene.getLayer('p'), 'socket', true); return ''; }",
+            ""));
         CHECK(updateText(attached, out) && scene.parent_call == "3>3@socket+");
 
         // Bones by name or index.
@@ -562,10 +564,9 @@ export function update() {
     }
 
     // Invalid results must preserve all components atomically, including authoring mistakes.
-    for (const char* source : {
-            "export function update(v) { v.x = 8; v.y = undefined; return v; }",
-            "export function update(v) { return { x: 8, y: Infinity, z: 2 }; }",
-            "export function update(v) { return Infinity; }"}) {
+    for (const char* source : {"export function update(v) { v.x = 8; v.y = undefined; return v; }",
+                               "export function update(v) { return { x: 8, y: Infinity, z: 2 }; }",
+                               "export function update(v) { return Infinity; }"}) {
         SceneScript invalid;
         CHECK(invalid.load(source, ""));
         ScriptValue value = ScriptValue::makeVec3(0.75, 0.75, 0.75);
