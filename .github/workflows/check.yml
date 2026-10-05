@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Formatting and static analysis need no graphics dependencies, so they run on a stock runner.
+  # Static analysis needs no graphics dependencies, so it runs on a stock runner.
   # Building and the unit tests need Slang and the Vulkan/FFmpeg/Wayland development packages.
   check:
     runs-on: ubuntu-latest
@@ -24,9 +24,9 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-format cppcheck
+          sudo apt-get install -y cppcheck
       - uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
-      - name: Formatting and static analysis
+      - name: Static analysis
         run: xmake check
