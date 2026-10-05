@@ -1,9 +1,9 @@
 #include "app/cli_options.h"
 
 #include <stdlib.h>
-#include <cmath>
 #include <string.h>
 
+#include <cmath>
 #include <string>
 #include <vector>
 

@@ -3,10 +3,10 @@
 #include <algorithm>
 
 #include "app/frame_rate.h"
-#include "shared/graphics/backend/performance_profile.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/pointer_state.h"
 #include "shared/media/media_thumbnail_texture.h"

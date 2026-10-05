@@ -1,5 +1,4 @@
 #include "app/platform/wayland_layer/layer_app.h"
-#include "shared/graphics/backend/performance_profile.h"
 
 #include <stdlib.h>
 #include <time.h>
@@ -7,11 +6,12 @@
 #include <algorithm>
 #include <atomic>
 
-#include "app/platform/layer_options.h"
 #include "app/frame_rate.h"
+#include "app/platform/layer_options.h"
 #include "app/platform/wayland_layer/wayland_layer_surface.h"
 #include "app/platform/wayland_layer/wayland_vulkan_swapchain.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/backend/surface.h"
 
 namespace {
@@ -35,44 +35,82 @@ sapp_keycode sappKeycodeFromEvdev(uint32_t key) {
     if (key >= 44 && key <= 50) return (sapp_keycode)(SAPP_KEYCODE_Z + (key - 44));
     if (key >= 59 && key <= 68) return (sapp_keycode)(SAPP_KEYCODE_F1 + (key - 59));
     switch (key) {
-        case 1: return SAPP_KEYCODE_ESCAPE;
-        case 12: return SAPP_KEYCODE_MINUS;
-        case 13: return SAPP_KEYCODE_EQUAL;
-        case 14: return SAPP_KEYCODE_BACKSPACE;
-        case 15: return SAPP_KEYCODE_TAB;
-        case 26: return SAPP_KEYCODE_LEFT_BRACKET;
-        case 27: return SAPP_KEYCODE_RIGHT_BRACKET;
-        case 28: return SAPP_KEYCODE_ENTER;
-        case 29: return SAPP_KEYCODE_LEFT_CONTROL;
-        case 39: return SAPP_KEYCODE_SEMICOLON;
-        case 40: return SAPP_KEYCODE_APOSTROPHE;
-        case 41: return SAPP_KEYCODE_GRAVE_ACCENT;
-        case 42: return SAPP_KEYCODE_LEFT_SHIFT;
-        case 43: return SAPP_KEYCODE_BACKSLASH;
-        case 51: return SAPP_KEYCODE_COMMA;
-        case 52: return SAPP_KEYCODE_PERIOD;
-        case 53: return SAPP_KEYCODE_SLASH;
-        case 54: return SAPP_KEYCODE_RIGHT_SHIFT;
-        case 56: return SAPP_KEYCODE_LEFT_ALT;
-        case 57: return SAPP_KEYCODE_SPACE;
-        case 58: return SAPP_KEYCODE_CAPS_LOCK;
-        case 87: return SAPP_KEYCODE_F11;
-        case 88: return SAPP_KEYCODE_F12;
-        case 97: return SAPP_KEYCODE_RIGHT_CONTROL;
-        case 100: return SAPP_KEYCODE_RIGHT_ALT;
-        case 102: return SAPP_KEYCODE_HOME;
-        case 103: return SAPP_KEYCODE_UP;
-        case 104: return SAPP_KEYCODE_PAGE_UP;
-        case 105: return SAPP_KEYCODE_LEFT;
-        case 106: return SAPP_KEYCODE_RIGHT;
-        case 107: return SAPP_KEYCODE_END;
-        case 108: return SAPP_KEYCODE_DOWN;
-        case 109: return SAPP_KEYCODE_PAGE_DOWN;
-        case 110: return SAPP_KEYCODE_INSERT;
-        case 111: return SAPP_KEYCODE_DELETE;
-        case 125: return SAPP_KEYCODE_LEFT_SUPER;
-        case 126: return SAPP_KEYCODE_RIGHT_SUPER;
-        default: return SAPP_KEYCODE_INVALID;
+        case 1:
+            return SAPP_KEYCODE_ESCAPE;
+        case 12:
+            return SAPP_KEYCODE_MINUS;
+        case 13:
+            return SAPP_KEYCODE_EQUAL;
+        case 14:
+            return SAPP_KEYCODE_BACKSPACE;
+        case 15:
+            return SAPP_KEYCODE_TAB;
+        case 26:
+            return SAPP_KEYCODE_LEFT_BRACKET;
+        case 27:
+            return SAPP_KEYCODE_RIGHT_BRACKET;
+        case 28:
+            return SAPP_KEYCODE_ENTER;
+        case 29:
+            return SAPP_KEYCODE_LEFT_CONTROL;
+        case 39:
+            return SAPP_KEYCODE_SEMICOLON;
+        case 40:
+            return SAPP_KEYCODE_APOSTROPHE;
+        case 41:
+            return SAPP_KEYCODE_GRAVE_ACCENT;
+        case 42:
+            return SAPP_KEYCODE_LEFT_SHIFT;
+        case 43:
+            return SAPP_KEYCODE_BACKSLASH;
+        case 51:
+            return SAPP_KEYCODE_COMMA;
+        case 52:
+            return SAPP_KEYCODE_PERIOD;
+        case 53:
+            return SAPP_KEYCODE_SLASH;
+        case 54:
+            return SAPP_KEYCODE_RIGHT_SHIFT;
+        case 56:
+            return SAPP_KEYCODE_LEFT_ALT;
+        case 57:
+            return SAPP_KEYCODE_SPACE;
+        case 58:
+            return SAPP_KEYCODE_CAPS_LOCK;
+        case 87:
+            return SAPP_KEYCODE_F11;
+        case 88:
+            return SAPP_KEYCODE_F12;
+        case 97:
+            return SAPP_KEYCODE_RIGHT_CONTROL;
+        case 100:
+            return SAPP_KEYCODE_RIGHT_ALT;
+        case 102:
+            return SAPP_KEYCODE_HOME;
+        case 103:
+            return SAPP_KEYCODE_UP;
+        case 104:
+            return SAPP_KEYCODE_PAGE_UP;
+        case 105:
+            return SAPP_KEYCODE_LEFT;
+        case 106:
+            return SAPP_KEYCODE_RIGHT;
+        case 107:
+            return SAPP_KEYCODE_END;
+        case 108:
+            return SAPP_KEYCODE_DOWN;
+        case 109:
+            return SAPP_KEYCODE_PAGE_DOWN;
+        case 110:
+            return SAPP_KEYCODE_INSERT;
+        case 111:
+            return SAPP_KEYCODE_DELETE;
+        case 125:
+            return SAPP_KEYCODE_LEFT_SUPER;
+        case 126:
+            return SAPP_KEYCODE_RIGHT_SUPER;
+        default:
+            return SAPP_KEYCODE_INVALID;
     }
 }
 
@@ -211,10 +249,9 @@ std::unique_ptr<LayerApp> LayerApp::create(const CliOptions& cli) {
     auto impl = std::make_unique<Impl>();
     impl->wayland = WaylandLayerSurface::create(config);
     if (!impl->wayland) return nullptr;
-    impl->swapchain = WaylandVulkanSwapchain::create(impl->wayland->display(), impl->wayland->surface(),
-                                                     static_cast<uint32_t>(impl->wayland->pixelWidth()),
-                                                     static_cast<uint32_t>(impl->wayland->pixelHeight()),
-                                                     frame_rate::policyFor(cli.fps_limit).vsync);
+    impl->swapchain = WaylandVulkanSwapchain::create(
+        impl->wayland->display(), impl->wayland->surface(), static_cast<uint32_t>(impl->wayland->pixelWidth()),
+        static_cast<uint32_t>(impl->wayland->pixelHeight()), frame_rate::policyFor(cli.fps_limit).vsync);
     if (!impl->swapchain) return nullptr;
     return std::unique_ptr<LayerApp>(new LayerApp(std::move(impl)));
 }
@@ -239,8 +276,7 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
         callbacks.frame();
         const double present_start = performance_profile::enabled() ? nowSeconds() : 0.0;
         app.swapchain->present();
-        if (performance_profile::enabled())
-            performance_profile::recordPresent((nowSeconds() - present_start) * 1000.0);
+        if (performance_profile::enabled()) performance_profile::recordPresent((nowSeconds() - present_start) * 1000.0);
     }
     if (app.wayland->closed()) LOG_I("[LAYER] the compositor closed the surface");
     callbacks.cleanup();

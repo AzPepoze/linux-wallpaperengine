@@ -17,7 +17,6 @@
 #include "app/platform/wayland_layer/layer_app.h"
 #endif
 #include "app/package_extractor.h"
-#include "shared/graphics/backend/performance_profile.h"
 #include "app/signals.h"
 #include "shared/assets/media/media_source.h"
 #include "shared/assets/shared_assets.h"
@@ -28,6 +27,7 @@
 #include "shared/core/phase_timer.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/backend/sokol/sokol_sync.h"
 #include "shared/graphics/backend/surface.h"
 #include "sokol_app.h"
@@ -35,9 +35,9 @@
 #include "sokol_glue.h"
 #include "sokol_log.h"
 #include "sokol_time.h"
-#include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/project_info.h"
 #include "wallpaper/transition/transition_catalog.h"
 #include "wallpaper/wallpaper_manager.h"
@@ -114,7 +114,8 @@ static void applyCliToContext() {
 
     ctx.debug.show_ui = DEBUG_BUILD && !cli.no_ui;
     ctx.debug.selected_object = -1;
-    ctx.scene.scaling_mode = (cli.cover || cli.scaling == "default" || cli.scaling == "fill") ? SCALING_COVER : SCALING_FIT;
+    ctx.scene.scaling_mode =
+        (cli.cover || cli.scaling == "default" || cli.scaling == "fill") ? SCALING_COVER : SCALING_FIT;
     if (!cli.cover && cli.scaling == "stretch") ctx.scene.scaling_mode = SCALING_STRETCH;
     if (layer_active) ctx.debug.show_ui = false;
     ctx.debug.particle_debug_bounds = cli.particle_debug_bounds;

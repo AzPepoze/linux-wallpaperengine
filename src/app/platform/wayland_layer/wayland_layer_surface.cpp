@@ -206,9 +206,8 @@ void WaylandLayerSurface::Impl::keyboardKeymap(void* data, wl_keyboard*, uint32_
         void* map = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (map != MAP_FAILED) {
             if (!self->xkb_ctx) self->xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-            xkb_keymap* keymap =
-                xkb_keymap_new_from_string(self->xkb_ctx, (const char*)map, XKB_KEYMAP_FORMAT_TEXT_V1,
-                                           XKB_KEYMAP_COMPILE_NO_FLAGS);
+            xkb_keymap* keymap = xkb_keymap_new_from_string(self->xkb_ctx, (const char*)map, XKB_KEYMAP_FORMAT_TEXT_V1,
+                                                            XKB_KEYMAP_COMPILE_NO_FLAGS);
             munmap(map, size);
             if (keymap) {
                 if (self->keymap) xkb_keymap_unref(self->keymap);
@@ -226,12 +225,13 @@ void WaylandLayerSurface::Impl::keyboardKeymap(void* data, wl_keyboard*, uint32_
     if (fd >= 0) close(fd);
 }
 
-void WaylandLayerSurface::Impl::keyboardKey(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
+void WaylandLayerSurface::Impl::keyboardKey(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key,
+                                            uint32_t state) {
     static_cast<Impl*>(data)->onKey(key, state);
 }
 
-void WaylandLayerSurface::Impl::keyboardModifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed, uint32_t latched,
-                                                  uint32_t locked, uint32_t group) {
+void WaylandLayerSurface::Impl::keyboardModifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed,
+                                                  uint32_t latched, uint32_t locked, uint32_t group) {
     static_cast<Impl*>(data)->onModifiers(depressed, latched, locked, group);
 }
 

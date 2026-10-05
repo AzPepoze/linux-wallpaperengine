@@ -127,8 +127,9 @@ bool showBlendModeSelector(const char* label, int& blend_mode) {
 namespace Inspector {
 
 void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
-    ImGui::Text("Type: %s",
-                (il.is_fullscreen || il.is_compose_region) ? "Post-Process" : (il.solid_layer ? "Solid Layer" : "Image Layer"));
+    ImGui::Text("Type: %s", (il.is_fullscreen || il.is_compose_region)
+                                ? "Post-Process"
+                                : (il.solid_layer ? "Solid Layer" : "Image Layer"));
     if (!il.is_fullscreen) {
         showBlendModeSelector("Blend Mode", il.color_blend_mode);
     }

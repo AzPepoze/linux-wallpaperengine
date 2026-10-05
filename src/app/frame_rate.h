@@ -15,7 +15,9 @@ Policy policyFor(int fps_limit);
 class Meter {
    public:
     void tick(double dt_seconds);
-    double fps() const { return fps_; }
+    double fps() const {
+        return fps_;
+    }
 
    private:
     double accum_ = 0.0;

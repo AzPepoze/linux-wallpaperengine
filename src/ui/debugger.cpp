@@ -9,10 +9,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <unordered_set>
 #include <vector>
-#include <limits>
 
 #include "imgui.h"
 #include "sandbox_catalog.h"
@@ -196,11 +196,11 @@ void Debugger::init() {
         if (!path.empty()) io.Fonts->AddFontFromFileTTF(path.c_str(), 16.0f, &merge, ranges);
     };
     // Merge whatever script fonts the system has, so non-Latin names render instead of "????".
-    const std::string cjk = findFontFile(
-        {"notosanscjk", "notoserifcjk", "sourcehansans", "sourcehanserif", "wqy", "wenquanyi",
-         "droidsansfallback", "notosanssc", "notosansjp", "notosanskr", "unifont", "arpluming", "arplukai"});
-    const std::string latin = findFontFile({"notosans-regular", "notosans", "dejavusans", "liberationsans",
-                                            "freesans", "arial", "segoeui"});
+    const std::string cjk = findFontFile({"notosanscjk", "notoserifcjk", "sourcehansans", "sourcehanserif", "wqy",
+                                          "wenquanyi", "droidsansfallback", "notosanssc", "notosansjp", "notosanskr",
+                                          "unifont", "arpluming", "arplukai"});
+    const std::string latin =
+        findFontFile({"notosans-regular", "notosans", "dejavusans", "liberationsans", "freesans", "arial", "segoeui"});
     const std::string thai = findFontFile({"notosansthai", "garuda", "norasi", "dejavusans", "freesans"});
     if (!cjk.empty()) {
         merge_font(cjk, io.Fonts->GetGlyphRangesChineseFull());
@@ -310,7 +310,10 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
         if (group && ctx.scene.scene_tree) {
             const SceneTreeNode* node = ctx.scene.scene_tree->find(image->scene_object_id);
             for (size_t steps = 0; node && steps < ctx.scene.scene_tree->size(); ++steps) {
-                if (node->id == selected) { included = true; break; }
+                if (node->id == selected) {
+                    included = true;
+                    break;
+                }
                 node = ctx.scene.scene_tree->find(node->parent_id);
             }
         }
@@ -319,8 +322,10 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
         ImVec2 points[4];
         for (int i = 0; i < 4; ++i) {
             points[i] = ImVec2(corners[i * 2] * sx, corners[i * 2 + 1] * sy);
-            lo.x = std::min(lo.x, points[i].x); lo.y = std::min(lo.y, points[i].y);
-            hi.x = std::max(hi.x, points[i].x); hi.y = std::max(hi.y, points[i].y);
+            lo.x = std::min(lo.x, points[i].x);
+            lo.y = std::min(lo.y, points[i].y);
+            hi.x = std::max(hi.x, points[i].x);
+            hi.y = std::max(hi.y, points[i].y);
         }
         bounded = true;
         overlay->AddPolyline(points, 4, IM_COL32(40, 255, 160, 230), ImDrawFlags_Closed, 2.0f);
@@ -330,7 +335,7 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
         float origin[3];
         if (ctx.scene.scene_tree->worldPosition(selected, origin)) {
             const ImVec2 p((ctx.scene.offset_x + origin[0] * ctx.scene.render_scale) * sx,
-                          (ctx.scene.offset_y + (ctx.scene.scene_h - origin[1]) * ctx.scene.render_scale) * sy);
+                           (ctx.scene.offset_y + (ctx.scene.scene_h - origin[1]) * ctx.scene.render_scale) * sy);
             overlay->AddLine(ImVec2(p.x - 7, p.y), ImVec2(p.x + 7, p.y), IM_COL32(255, 210, 50, 255), 2);
             overlay->AddLine(ImVec2(p.x, p.y - 7), ImVec2(p.x, p.y + 7), IM_COL32(255, 210, 50, 255), 2);
         }

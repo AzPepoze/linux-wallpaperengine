@@ -6,8 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <vector>
 #include <filesystem>
+#include <vector>
 
 #include "shared/assets/unpack.h"
 #include "shared/core/build_config.h"
