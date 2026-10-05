@@ -1,5 +1,7 @@
 #include "mdl_parser.h"
 
+#include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 namespace wallpaper_engine {
@@ -80,8 +82,49 @@ bool parseBones(Reader& r, const uint8_t* data, size_t size, MdlModel& out) {
         }
         std::string info;
         if (!r.cstring(info) || !r.cstring(bone.name)) return false;
+        if (info.find("\"ik\":true") != std::string::npos) {
+            const size_t depth = info.find("\"ikd\":");
+            if (depth != std::string::npos) bone.ik_depth = (uint32_t)strtoul(info.c_str() + depth + 6, nullptr, 10);
+        }
         bone.parent = parent;
         out.bones.push_back(std::move(bone));
+    }
+
+    // Older skeletons append IK target and effector records. Each record has
+    // a byte delimiter, a bone index, a target flag and a world bind matrix.
+    // Their animation tracks follow the ordinary bone tracks.
+    while (r.pos + 73 <= size && r.pos + 73 <= next_offset && data[r.pos] == 0) {
+        Reader controller_reader{data, size, r.pos + 1};
+        uint32_t bone = 0, target = 0;
+        if (!controller_reader.u32(bone) || !controller_reader.u32(target) || bone >= out.bones.size() || target > 1 ||
+            out.bones[bone].ik_depth == 0)
+            break;
+        float matrix[16];
+        bool valid = true;
+        for (float& value : matrix) valid = controller_reader.f32(value) && valid;
+        if (!valid || matrix[3] != 0.0f || matrix[7] != 0.0f || matrix[11] != 0.0f || matrix[15] != 1.0f) break;
+        out.controllers.push_back({bone, target != 0});
+        r.pos = controller_reader.pos;
+    }
+
+    // A second matrix array is the assembled reference pose. IK bones keep
+    // their sheet coordinates in ordinary tracks; their chain uses this pose.
+    if (!out.controllers.empty() && next_offset <= size && r.pos + 1 + num_bones * 64 <= next_offset &&
+        data[r.pos] == 1) {
+        ++r.pos;
+        out.reference_pose.resize(num_bones);
+        for (auto& pose : out.reference_pose) {
+            float matrix[16];
+            for (float& value : matrix)
+                if (!r.f32(value)) return false;
+            for (int axis = 0; axis < 3; ++axis) {
+                pose.translation[axis] = matrix[12 + axis];
+                pose.scale[axis] =
+                    sqrtf(matrix[axis * 4] * matrix[axis * 4] + matrix[axis * 4 + 1] * matrix[axis * 4 + 1] +
+                          matrix[axis * 4 + 2] * matrix[axis * 4 + 2]);
+            }
+            pose.rotation[2] = atan2f(matrix[1], matrix[0]);
+        }
     }
 
     // Keep the cursor consistent with the section's declared end so the next
@@ -124,14 +167,18 @@ bool readKeyframes(Reader& r, std::vector<MdlKeyframe>& track, size_t count) {
     return true;
 }
 
-// Real clips carry a few more equally sized tracks than the declared count.
-void skipExtraTracks(Reader& r, size_t keyframe_bytes) {
+// Controller tracks follow the declared bone tracks and use the same sample layout.
+bool readExtraTracks(Reader& r, size_t keyframe_bytes, MdlAnimationClip& clip) {
     while (r.pos + 8 + keyframe_bytes <= r.size) {
+        if (clip.tracks.size() >= 4096) return false;
         uint32_t declared = 0;
         memcpy(&declared, r.data + r.pos + 4, 4);
-        if (declared != keyframe_bytes) return;
-        r.pos += 8 + keyframe_bytes;
+        if (declared != keyframe_bytes) break;
+        r.pos += 8;
+        clip.tracks.emplace_back();
+        if (!readKeyframes(r, clip.tracks.back(), keyframe_bytes / 36)) return false;
     }
+    return true;
 }
 
 bool parseClip(Reader& r, uint32_t id, MdlAnimationClip& clip) {
@@ -157,8 +204,7 @@ bool parseClip(Reader& r, uint32_t id, MdlAnimationClip& clip) {
         if (keyframe_bytes != expected_bytes || r.pos + keyframe_bytes > r.size) return false;
         if (!readKeyframes(r, clip.tracks[t], (size_t)clip.frame_count + 1)) return false;
     }
-    skipExtraTracks(r, expected_bytes);
-    return true;
+    return readExtraTracks(r, expected_bytes, clip);
 }
 
 bool parseAnimations(Reader& r, MdlModel& out) {

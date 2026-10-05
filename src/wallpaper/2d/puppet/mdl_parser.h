@@ -53,6 +53,7 @@ struct MdlBone {
     // Row-major 4x4 bind transform, translation in row 3.
     float bind_matrix[16] = {};
     std::string name;
+    uint32_t ik_depth = 0;
 };
 
 struct MdlKeyframe {
@@ -78,6 +79,11 @@ struct MdlAttachment {
     float matrix[16] = {};
 };
 
+struct MdlController {
+    uint32_t bone_index = 0;
+    bool pole = false;
+};
+
 struct MdlModel {
     std::string version;
     std::string material;
@@ -85,6 +91,10 @@ struct MdlModel {
     std::vector<MdlTriangle> triangles;
     std::vector<MdlBone> bones;
     std::vector<MdlAttachment> attachments;
+    // Extra animation tracks follow these records in skeleton order.
+    std::vector<MdlController> controllers;
+    // Authored assembled local pose, distinct from the sprite-sheet bind pose.
+    std::vector<MdlKeyframe> reference_pose;
     std::vector<MdlAnimationClip> clips;
 };
 

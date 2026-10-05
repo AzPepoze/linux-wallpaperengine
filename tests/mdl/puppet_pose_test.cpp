@@ -120,4 +120,56 @@ void runPuppetPoseTests() {
     pose.clearBoneOverride(0);
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 160.0f) < 1e-3f, "clearing the override restores the animation");
+    // A sheet-space chain is assembled by a separate reference pose. Its IK
+    // endpoint and pole are world-space tracks after the ordinary bone tracks.
+    MdlModel limb;
+    limb.bones.resize(3);
+    for (auto& bone : limb.bones)
+        bone.bind_matrix[0] = bone.bind_matrix[5] = bone.bind_matrix[10] = bone.bind_matrix[15] = 1.0f;
+    limb.bones[1].parent = 0;
+    limb.bones[1].bind_matrix[12] = 10.0f;
+    limb.bones[2].parent = 1;
+    limb.bones[2].bind_matrix[12] = 10.0f;
+    limb.bones[2].ik_depth = 2;
+    limb.controllers = {{2, true}, {2, false}};
+    limb.reference_pose.resize(3);
+    limb.reference_pose[1].translation[0] = 10.0f;
+    limb.reference_pose[2].translation[0] = 10.0f;
+    MdlAnimationClip reach;
+    reach.id = 9;
+    reach.fps = 1;
+    reach.frame_count = 1;
+    reach.loop_mode = "single";
+    reach.tracks.resize(5);
+    for (size_t b = 0; b < 3; ++b) reach.tracks[b] = {limb.reference_pose[b], limb.reference_pose[b]};
+    MdlKeyframe pole, endpoint;
+    pole.translation[1] = 20;
+    endpoint.translation[0] = endpoint.translation[1] = 10;
+    reach.tracks[3] = {pole, pole};
+    reach.tracks[4] = {endpoint, endpoint};
+    reach.tracks[4][1].translation[0] = 15;
+    reach.tracks[4][1].translation[1] = 0;
+    limb.clips.push_back(reach);
+    MdlVertex tip;
+    tip.position[0] = 20;
+    tip.bone_indices[0] = 2;
+    tip.bone_weights[0] = 1;
+    limb.vertices.push_back(tip);
+    PuppetPose limb_pose;
+    limb_pose.init(limb);
+    std::vector<PuppetAnimationLayer> reach_layers(1);
+    reach_layers[0].animation_id = 9;
+    limb_pose.worldMatrices(limb, reach_layers, world);
+    check(fabsf(world[2].m[12] - 10) < 1e-3f && fabsf(world[2].m[13] - 10) < 1e-3f,
+          "two-bone IK reaches its world-space endpoint");
+    check(world[1].m[13] > 9.9f, "pole selects the elbow bend side");
+    limb_pose.skin(limb, reach_layers, out);
+    check(fabsf(out[0] - 10) < 1e-3f && fabsf(out[1] - 10) < 1e-3f, "IK skins the sheet-space vertex");
+    limb_pose.advance(limb, reach_layers, 1);
+    limb_pose.worldMatrices(limb, reach_layers, world);
+    check(fabsf(world[2].m[12] - 15) < 1e-3f && fabsf(world[2].m[13]) < 1e-3f,
+          "animated controller moves the endpoint without stretching the chain");
+    reach_layers[0].visible = false;
+    limb_pose.skin(limb, reach_layers, out);
+    check(fabsf(out[0] - 20) < 1e-3f && fabsf(out[1]) < 1e-3f, "hidden IK animation keeps the bind pose");
 }

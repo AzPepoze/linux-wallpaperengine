@@ -69,7 +69,7 @@ void appendVertex(std::vector<uint8_t>& out, float x, float y, float u, float v,
     appendF32(out, v);
 }
 
-std::vector<uint8_t> makeMdl() {
+std::vector<uint8_t> makeMdl(bool controllers = false) {
     std::vector<uint8_t> out;
     appendText(out, "MDLV0023");
     appendU8(out, 0);            // reserved
@@ -98,6 +98,7 @@ std::vector<uint8_t> makeMdl() {
     // MDLS: one root bone with an identity bind matrix.
     appendText(out, "MDLS0004");
     appendU8(out, 0);
+    const size_t skeleton_end_offset_pos = out.size();
     appendU32(out, 0);  // next offset (patched below)
     appendU32(out, 1);  // bone count
     appendU8(out, 0);   // reserved
@@ -105,9 +106,20 @@ std::vector<uint8_t> makeMdl() {
     appendU32(out, 0xFFFFFFFFu);
     appendU32(out, 64);
     for (int i = 0; i < 16; ++i) appendF32(out, i % 5 == 0 ? 1.0f : 0.0f);
-    appendU8(out, 0);         // empty info JSON
+    if (controllers) appendText(out, "{\"ik\":true,\"ikd\":1}");
+    appendU8(out, 0);         // info JSON terminator
     appendText(out, "root");  // bone name
     appendU8(out, 0);
+
+    if (controllers) {
+        appendU8(out, 0);
+        appendU32(out, 0);  // controller bone
+        appendU32(out, 0);  // endpoint, rather than pole
+        for (int i = 0; i < 16; ++i) appendF32(out, i % 5 == 0 ? 1.0f : 0.0f);
+        appendU8(out, 1);  // assembled reference pose present
+        for (int i = 0; i < 16; ++i) appendF32(out, i == 12 ? 25.0f : (i % 5 == 0 ? 1.0f : 0.0f));
+    }
+    patchU32(out, skeleton_end_offset_pos, (uint32_t)out.size());
 
     // MDAT: one attachment on the root bone, translated by (3, 4, 0).
     appendText(out, "MDAT0001");
@@ -153,6 +165,15 @@ std::vector<uint8_t> makeMdl() {
         appendF32(out, 1.0f);
         appendF32(out, 1.0f);
         appendF32(out, 1.0f);
+    }
+    if (controllers) {
+        appendU32(out, 1);
+        appendU32(out, 72);
+        for (int frame = 0; frame < 2; ++frame) {
+            for (int axis = 0; axis < 3; ++axis) appendF32(out, axis == 0 ? 25.0f + frame : 0.0f);
+            for (int axis = 0; axis < 3; ++axis) appendF32(out, 0.0f);
+            for (int axis = 0; axis < 3; ++axis) appendF32(out, 1.0f);
+        }
     }
     return out;
 }
@@ -208,6 +229,18 @@ int main() {
     const uint8_t junk[4] = {1, 2, 3, 4};
     check(!wallpaper_engine::parseMdl(junk, sizeof(junk), rejected), "short buffer rejected");
     check(!wallpaper_engine::parseMdl(nullptr, 0, rejected), "null buffer rejected");
+
+    const auto ik_bytes = makeMdl(true);
+    wallpaper_engine::MdlModel ik_model;
+    check(wallpaper_engine::parseMdl(ik_bytes.data(), ik_bytes.size(), ik_model), "IK skeleton parses");
+    check(ik_model.bones.size() == 1 && ik_model.bones[0].ik_depth == 1, "IK chain depth is retained");
+    check(ik_model.controllers.size() == 1 && !ik_model.controllers[0].pole,
+          "endpoint controller is retained in track order");
+    check(ik_model.reference_pose.size() == 1 && ik_model.reference_pose[0].translation[0] == 25,
+          "assembled reference pose differs from sheet bind pose");
+    check(ik_model.clips.size() == 1 && ik_model.clips[0].tracks.size() == 2 &&
+              ik_model.clips[0].tracks[1][1].translation[0] == 26,
+          "extra controller tracks retain animated samples");
 
     runPuppetPoseTests();
     runSceneAttachmentTests();

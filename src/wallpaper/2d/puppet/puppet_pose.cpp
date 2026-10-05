@@ -114,6 +114,101 @@ void accumulateLayer(const MdlModel& model, const MdlAnimationClip& clip, const 
     }
 }
 
+void solveControllers(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
+                      std::vector<MdlKeyframe>& pose) {
+    if (model.controllers.empty()) return;
+    std::vector<MdlKeyframe> controls(model.controllers.size());
+    std::vector<bool> available(model.controllers.size(), false);
+    bool seeded = false;
+    for (const auto& layer : layers) {
+        const auto* clip = layer.visible ? findClip(model, layer.animation_id) : nullptr;
+        if (!clip) continue;
+        const float frame =
+            wrapFrame(layer.time * clip->fps, clip->frame_count, layer.once ? "single" : clip->loop_mode);
+        for (size_t c = 0; c < controls.size(); ++c) {
+            const size_t track_index = model.bones.size() + c;
+            if (track_index >= clip->tracks.size() || clip->tracks[track_index].empty()) continue;
+            const auto& track = clip->tracks[track_index];
+            if (!available[c]) controls[c] = track[0];
+            available[c] = true;
+            const auto now = sample(track, frame);
+            for (int axis = 0; axis < 3; ++axis) {
+                controls[c].translation[axis] += layer.blend * (now.translation[axis] - track[0].translation[axis]);
+                controls[c].rotation[axis] += layer.blend * (now.rotation[axis] - track[0].rotation[axis]);
+                controls[c].scale[axis] += layer.blend * (now.scale[axis] - track[0].scale[axis]);
+            }
+        }
+        seeded = true;
+    }
+    if (!seeded) return;
+    std::vector<PuppetMatrix> world(pose.size());
+    auto update_world = [&] {
+        for (size_t b = 0; b < pose.size(); ++b) {
+            const auto local = composeLocal(pose[b]);
+            const auto parent = model.bones[b].parent;
+            world[b] = parent < b ? multiply(world[parent], local) : local;
+        }
+    };
+    for (size_t c = 0; c < controls.size(); ++c) {
+        const auto& controller = model.controllers[c];
+        if (!available[c] || controller.bone_index >= pose.size()) continue;
+        if (controller.pole) continue;  // Pole controls select the limb's bend direction.
+        const uint32_t end = controller.bone_index;
+        if (model.bones[end].ik_depth == 0 || model.bones[end].ik_depth > 2) continue;
+        const uint32_t mid = model.bones[end].parent;
+        if (mid >= pose.size()) continue;
+        const uint32_t base = model.bones[end].ik_depth == 2 ? model.bones[mid].parent : mid;
+        if (base >= pose.size()) continue;
+        update_world();
+        const auto reference = world[base];
+        const auto target = composeLocal(controls[c]);
+        const float target_angle = atan2f(target.m[1], target.m[0]);
+        if (base != mid) {
+            const float l1 = hypotf(pose[mid].translation[0], pose[mid].translation[1]);
+            const float l2 = hypotf(pose[end].translation[0], pose[end].translation[1]);
+            const float dx = target.m[12] - reference.m[12];
+            const float dy = target.m[13] - reference.m[13];
+            const float distance = hypotf(dx, dy);
+            if (l1 > 1e-5f && l2 > 1e-5f && distance > 1e-5f) {
+                float side = 1.0f;
+                for (size_t pole = 0; pole < controls.size(); ++pole) {
+                    if (!available[pole] || !model.controllers[pole].pole || model.controllers[pole].bone_index != end)
+                        continue;
+                    const auto pole_world = composeLocal(controls[pole]);
+                    const float px = pole_world.m[12] - reference.m[12];
+                    const float py = pole_world.m[13] - reference.m[13];
+                    side = dx * py - dy * px < 0.0f ? -1.0f : 1.0f;
+                    break;
+                }
+                const float reach = std::clamp(distance, fabsf(l1 - l2) + 1e-5f, l1 + l2);
+                const float cosine = std::clamp((l1 * l1 + reach * reach - l2 * l2) / (2.0f * l1 * reach), -1.0f, 1.0f);
+                const float direction = atan2f(dy, dx) + side * acosf(cosine);
+                const uint32_t parent = model.bones[base].parent;
+                const float parent_angle =
+                    parent < world.size() ? atan2f(world[parent].m[1], world[parent].m[0]) : 0.0f;
+                pose[base].rotation[2] =
+                    direction - parent_angle - atan2f(pose[mid].translation[1], pose[mid].translation[0]);
+                update_world();
+                const float endpoint_x = reference.m[12] + dx * reach / distance;
+                const float endpoint_y = reference.m[13] + dy * reach / distance;
+                const float second_direction = atan2f(endpoint_y - world[mid].m[13], endpoint_x - world[mid].m[12]);
+                const float base_angle = atan2f(world[base].m[1], world[base].m[0]);
+                pose[mid].rotation[2] =
+                    second_direction - base_angle - atan2f(pose[end].translation[1], pose[end].translation[0]);
+            }
+        } else {
+            const float dx = target.m[12] - world[mid].m[12];
+            const float dy = target.m[13] - world[mid].m[13];
+            const uint32_t parent = model.bones[mid].parent;
+            const float parent_angle = parent < world.size() ? atan2f(world[parent].m[1], world[parent].m[0]) : 0.0f;
+            pose[mid].rotation[2] =
+                atan2f(dy, dx) - parent_angle - atan2f(pose[end].translation[1], pose[end].translation[0]);
+        }
+        update_world();
+        pose[end].rotation[2] = target_angle - atan2f(world[mid].m[1], world[mid].m[0]);
+    }
+}
+
 }  // namespace
 
 void PuppetPose::init(const MdlModel& model) {
@@ -148,13 +243,17 @@ bool PuppetPose::localPose(const MdlModel& model, const std::vector<PuppetAnimat
         if (!clip) continue;
         if (!seeded) {
             for (size_t b = 0; b < std::min(pose.size(), clip->tracks.size()); ++b) {
-                if (!clip->tracks[b].empty()) pose[b] = clip->tracks[b][0];
+                if (b < model.reference_pose.size())
+                    pose[b] = model.reference_pose[b];
+                else if (!clip->tracks[b].empty())
+                    pose[b] = clip->tracks[b][0];
             }
             seeded = true;
         }
         accumulateLayer(model, *clip, layer, root_motion, pose);
     }
     if (seeded) {
+        solveControllers(model, layers, pose);
         for (size_t b = 0; b < std::min(pose.size(), overrides_.size()); ++b)
             if (overrides_[b].active) pose[b] = overrides_[b].pose;
     }
