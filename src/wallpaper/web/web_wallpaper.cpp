@@ -23,6 +23,7 @@
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/scene_builder.h"
+#include "wallpaper/web/web_dmabuf_ipc.h"
 #include "wallpaper/web/web_ipc.h"
 
 extern char** environ;
@@ -200,6 +201,7 @@ bool WebWallpaper::load(const std::string& path, EngineContext& ctx) {
     desc.width = static_cast<int>(width);
     desc.height = static_cast<int>(height);
     desc.pixel_format = SG_PIXELFORMAT_BGRA8;
+    desc.usage.color_attachment = true;
     desc.usage.stream_update = true;
     desc.data.mip_levels[0] = {initial.data(), initial.size()};
     const sg_image image = sg_make_image(&desc);
@@ -258,6 +260,11 @@ void WebWallpaper::pollChild() {
     }
     if (!frame_ || image_.id == SG_INVALID_ID) return;
 
+    if (frame_->transport == 1) {
+        pollDmaBuf();
+        return;
+    }
+
     const int lock_result = pthread_mutex_lock(&frame_->mutex);
     if (lock_result == EOWNERDEAD)
         pthread_mutex_consistent(&frame_->mutex);
@@ -272,6 +279,45 @@ void WebWallpaper::pollChild() {
         sg_update_image(image_, &data);
     }
     pthread_mutex_unlock(&frame_->mutex);
+}
+
+void WebWallpaper::pollDmaBuf() {
+    if (!dmabuf_offer_received_ && ctrl_fd_ >= 0) {
+        int fds[kWebDmaBufBuffers] = {};
+        const int count = web_renderer::receiveDmaBufOffer(ctrl_fd_, fds, kWebDmaBufBuffers);
+        if (count < 0) {
+            dmabuf_offer_received_ = true;
+            LOG_TAG_W("WEB", "DMA-BUF offer failed; frame transport unavailable");
+            return;
+        }
+        if (count == 0) return;
+        dmabuf_offer_received_ = true;
+
+        if (count != static_cast<int>(kWebDmaBufBuffers) || !gpu_init_zero_copy_bgra()) {
+            for (int i = 0; i < count; ++i) close(fds[i]);
+            LOG_TAG_W("WEB", "DMA-BUF import unavailable; frame transport disabled");
+            return;
+        }
+        dmabuf_ready_ = true;
+        for (int i = 0; i < count; ++i) {
+            if (dmabuf_ready_) dmabuf_ready_ = gpu_import_bgra_dmabuf(fds[i], width_, height_, surfaces_[i]);
+            close(fds[i]);
+        }
+        if (!dmabuf_ready_) {
+            for (ImportedBgraSurface& surface : surfaces_) gpu_destroy_bgra_surface(surface);
+            LOG_TAG_W("WEB", "DMA-BUF import failed; frame transport disabled");
+        }
+    }
+    if (!dmabuf_ready_) return;
+
+    const uint64_t published = frame_->published_frame.load(std::memory_order_acquire);
+    if (published == last_published_) return;
+    last_published_ = published;
+
+    const uint32_t index = frame_->published_index.load(std::memory_order_acquire);
+    if (index < kWebDmaBufBuffers)
+        gpu_blit_zero_copy_bgra(surfaces_[index], image_, static_cast<int>(width_), static_cast<int>(height_));
+    frame_->consumed_frame.store(published, std::memory_order_release);
 }
 
 void WebWallpaper::update(float dt, EngineContext& ctx) {
@@ -341,7 +387,13 @@ void WebWallpaper::stopChild() {
 }
 
 void WebWallpaper::clear() {
+    if (frame_ && dmabuf_ready_)
+        frame_->consumed_frame.store(frame_->published_frame.load(std::memory_order_acquire));
     stopChild();
+    for (ImportedBgraSurface& surface : surfaces_) gpu_destroy_bgra_surface(surface);
+    dmabuf_offer_received_ = false;
+    dmabuf_ready_ = false;
+    last_published_ = 0;
     if (frame_) {
         pthread_mutex_destroy(&frame_->mutex);
         munmap(frame_, shm_size_);

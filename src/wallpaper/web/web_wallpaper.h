@@ -7,9 +7,9 @@
 #include <string>
 
 #include "sokol_gfx.h"
+#include "shared/graphics/backend/gpu_bgra.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
-
-struct WebFrameBuffer;
+#include "wallpaper/web/web_ipc.h"
 
 // Web wallpapers are rendered by an optional out-of-process QtWebEngine helper
 // (see web_renderer_main.cpp) that streams BGRA frames through shared memory.
@@ -29,6 +29,7 @@ class WebWallpaper : public Scene2DWallpaper {
 
    private:
     void pollChild();
+    void pollDmaBuf();
     void stopChild();
 
     pid_t child_pid_ = -1;
@@ -40,6 +41,11 @@ class WebWallpaper : public Scene2DWallpaper {
     uint64_t last_frame_counter_ = 0;
     uint32_t width_ = 0;
     uint32_t height_ = 0;
+
+    bool dmabuf_offer_received_ = false;
+    bool dmabuf_ready_ = false;
+    uint64_t last_published_ = 0;
+    ImportedBgraSurface surfaces_[kWebDmaBufBuffers];
 };
 
 #endif  // WEB_WALLPAPER_H
