@@ -235,13 +235,15 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 - [-] Particle systems
   - Works
     - Emitters: sphere random, box random, point (default); multiple emitters per system
-    - Initializers: lifetime, size, velocity, color, alpha, rotation, angular velocity, turbulent velocity
-    - Operators: movement (gravity and drag), alpha fade, alpha/size/position oscillation, turbulence
+    - Initializers: lifetime, size, velocity, color, alpha, rotation, angular velocity, turbulent velocity; bounds a file omits take Wallpaper Engine's defaults (for example alpha 0.05..1, size 0..20, velocity -32..32) and an `exponent` skews the random draw
+    - Emitter defaults when keys are omitted: rate 5 per second, distance 256
+    - Operators: movement (gravity and drag), alpha fade (fade-in completes at `fadeintime`, fade-out starts at `fadeouttime`, both default 0.5), size, alpha and color change, angular movement, control-point attract/repel (local-space systems), alpha/size/position oscillation, turbulence
     - Renderers: sprite, sprite trail, trail (beam aspect ratio, camera-depth trails), connected rope and per-particle rope trails using the native rope shader
     - Blend modes: translucent and additive
     - Sprite sheets (grids and TEXS frame data) with sequence, random-frame and once modes, and frame blending through the `SPRITESHEETBLEND` combo
     - Refraction through the `REFRACT` combo with a normal map, reading the scene color
-    - Child systems: `static`, `eventfollow`, `eventspawn`, `eventdeath` with origin, angles, scale, `maxcount` and probability
+    - Child systems: `static`, `eventfollow`, `eventspawn`, `eventdeath` with origin, scale, `maxcount` and probability. Event children get one instance per parent particle with its own particle capacity; follow instances track the parent and are cleared when it ends; `instantaneous` emitters burst on creation and again whenever their instance is empty
+    - Worldspace systems (particle flag bit 1): spawn position and velocity take the layer's origin, rotation and scale once, then simulate in scene coordinates, so gravity and drag are unscaled and sizes are not multiplied by the layer scale
     - Maximum particle count, start-time warm-up, perspective particles
     - Instance overrides: alpha, rate (time scale), size, count (emission scale), speed, lifetime, color, plus the per-override disable flags
     - Mouse-following control points, configured offsets and emitter control-point selection
@@ -249,10 +251,11 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Rope trails sample their history once per system and blend between samples in the shader, so trails move smoothly
     - A hidden particle layer (its own visibility or a hidden parent) freezes: state is kept and it resumes without catching up; visibility scripts keep running
   - Missing
-    - Other emitters and operators (anything not listed above is ignored)
+    - Other emitters, initializers and operators (anything not listed above is ignored), for example vortex and maintain-distance
+    - Child `angles` (the child's own rotation), the movement operator's separate worldspace option
     - Rope subdivisions and UV scrolling/smoothing
     - Audio-responsive particles
-    - World-space particles, material lighting
+    - Material lighting
     - Script control of particle systems (control points)
 
 ## Animations

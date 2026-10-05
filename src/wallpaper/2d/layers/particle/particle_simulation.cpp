@@ -5,6 +5,16 @@
 
 #include "particle_system.h"
 
+namespace {
+// Value held at `start_value` until `start`, then a linear ramp to `end_value` at `end`, held afterwards.
+float rampValue(float life, float start, float end, float start_value, float end_value) {
+    if (life <= start) return start_value;
+    if (life > end || end <= start) return end_value;
+    const float pass = (life - start) / (end - start);
+    return start_value + (end_value - start_value) * pass;
+}
+}  // namespace
+
 ParticleSystem::ParticleSystem(ParticleSystemConfig config, float scene_width, float scene_height)
     : config(std::move(config)), scene_w(scene_width), scene_h(scene_height) {
     max_particles = std::max(0, this->config.max_particles);
@@ -159,6 +169,24 @@ void ParticleSystem::step(float real_dt) {
             --index;
             continue;
         }
+        for (const ParticleOperatorConfig& attract : config.operators) {
+            if (attract.type != "controlpointattract" || attract.attract_threshold <= 0.0f) continue;
+            // Control points live in the layer's local space, so worldspace systems are not attracted.
+            if (simulatesInWorld()) break;
+            const float* center = control_points[attract.attract_control_point];
+            const float difference[2] = {center[0] + attract.attract_origin[0] - particle.position[0],
+                                         center[1] + attract.attract_origin[1] - particle.position[1]};
+            const float distance = std::hypot(difference[0], difference[1]);
+            if (distance <= 0.0f || distance >= attract.attract_threshold) continue;
+            float impulse = attract.attract_scale * dt * (1.0f - distance / attract.attract_threshold);
+            if (attract.attract_flags & 2) impulse = std::min(distance, impulse);
+            particle.velocity[0] += difference[0] * (impulse / distance);
+            particle.velocity[1] += difference[1] * (impulse / distance);
+        }
+        for (const ParticleOperatorConfig& angular : config.operators) {
+            if (angular.type != "angularmovement") continue;
+            particle.angular_vel += (angular.angular_force[2] - angular.drag * particle.rotation) * dt;
+        }
         particle.velocity[0] += particle.gravity[0] * dt;
         particle.velocity[1] += particle.gravity[1] * dt;
         if (particle.drag > 0) {
@@ -202,12 +230,28 @@ void ParticleSystem::step(float real_dt) {
                 (sinf(global_time * particle.osc_alpha_freq + particle.random_seed * 10.0f) + 1.0f) * 0.5f;
             alpha *= particle.osc_alpha_min + wave * (1.0f - particle.osc_alpha_min);
         }
-        particle.alpha = alpha;
         float size = particle.initial_size;
         if (particle.osc_size_freq > 0) {
             const float wave = (sinf(global_time * particle.osc_size_freq) + 1.0f) * 0.5f;
             size *= particle.osc_size_min + wave * (particle.osc_size_max - particle.osc_size_min);
         }
+        // Size, alpha and color change operators ramp a multiplier over the particle's life.
+        vec3_dup(particle.color, particle.initial_color);
+        for (const ParticleOperatorConfig& change : config.operators) {
+            if (change.type == "sizechange") {
+                size *= rampValue(life_norm, change.change_start_time, change.change_end_time,
+                                  change.change_start_value, change.change_end_value);
+            } else if (change.type == "alphachange") {
+                alpha *= rampValue(life_norm, change.change_start_time, change.change_end_time,
+                                   change.change_start_value, change.change_end_value);
+            } else if (change.type == "colorchange") {
+                for (int channel = 0; channel < 3; ++channel)
+                    particle.color[channel] *= rampValue(life_norm, change.change_start_time, change.change_end_time,
+                                                         change.change_start_color[channel],
+                                                         change.change_end_color[channel]);
+            }
+        }
+        particle.alpha = alpha;
         particle.size = size;
 
         if (spritesheet_frames > 1 && config.animation_mode != "randomframe" && particle.max_life > 0.0f) {

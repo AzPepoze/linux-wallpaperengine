@@ -1,5 +1,7 @@
 #include "particle_parser.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -146,9 +148,11 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         const cJSON* type = cJSON_GetObjectItemCaseSensitive(emitter, "name");
         if (cJSON_IsString(type) && type->valuestring) emitter_config.type = type->valuestring;
         readVec3(cJSON_GetObjectItemCaseSensitive(emitter, "origin"), emitter_config.origin);
-        readVec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), emitter_config.distance_max);
+        if (const cJSON* distance_max = cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"))
+            readVec3(distance_max, emitter_config.distance_max);
         emitter_config.distance_min = readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "distancemin"));
-        emitter_config.rate = readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "rate"));
+        if (const cJSON* rate = cJSON_GetObjectItemCaseSensitive(emitter, "rate"))
+            emitter_config.rate = readFloat(rate);
         emitter_config.instantaneous = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "instantaneous"));
         emitter_config.flags = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "flags"));
         emitter_config.control_point = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "controlpoint"));
@@ -170,6 +174,30 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         }
         initializer_config.minimum_scalar = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "min"));
         initializer_config.maximum_scalar = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "max"));
+        if (const cJSON* exponent = cJSON_GetObjectItemCaseSensitive(initializer, "exponent"))
+            initializer_config.exponent = readFloat(exponent);
+        {
+            // Bounds an initializer leaves out take Wallpaper Engine's defaults, not zero.
+            const bool has_min = cJSON_GetObjectItemCaseSensitive(initializer, "min") != nullptr;
+            const bool has_max = cJSON_GetObjectItemCaseSensitive(initializer, "max") != nullptr;
+            ParticleInitializerConfig& value = initializer_config;
+            if (value.type == "lifetimerandom") {
+                if (!has_max) value.maximum_scalar = 1.0f;
+            } else if (value.type == "sizerandom") {
+                if (!has_max) value.maximum_scalar = 20.0f;
+            } else if (value.type == "alpharandom") {
+                if (!has_min) value.minimum_scalar = 0.05f;
+                if (!has_max) value.maximum_scalar = 1.0f;
+            } else if (value.type == "velocityrandom") {
+                if (!has_min) value.minimum[0] = value.minimum[1] = -32.0f;
+                if (!has_max) value.maximum[0] = value.maximum[1] = 32.0f;
+            } else if (value.type == "rotationrandom") {
+                if (!has_max) value.maximum[2] = 2.0f * (float)M_PI;
+            } else if (value.type == "angularvelocityrandom") {
+                if (!has_min) value.minimum[2] = -5.0f;
+                if (!has_max) value.maximum[2] = 5.0f;
+            }
+        }
         initializer_config.turbulence_offset = readFloat(cJSON_GetObjectItemCaseSensitive(initializer, "offset"));
         const cJSON* turbulence_scale = cJSON_GetObjectItemCaseSensitive(initializer, "scale");
         if (turbulence_scale) initializer_config.turbulence_scale = readFloat(turbulence_scale);
@@ -200,6 +228,30 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         operator_config.scale_max = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "scalemax"));
         operator_config.speed_min = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "speedmin"));
         operator_config.speed_max = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "speedmax"));
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "starttime"))
+            operator_config.change_start_time = readFloat(node);
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "endtime"))
+            operator_config.change_end_time = readFloat(node);
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "startvalue")) {
+            operator_config.change_start_value = readFloat(node);
+            readVec3(node, operator_config.change_start_color);
+        }
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "endvalue")) {
+            operator_config.change_end_value = readFloat(node);
+            readVec3(node, operator_config.change_end_color);
+        }
+        readVec3(cJSON_GetObjectItemCaseSensitive(particle_operator, "force"), operator_config.angular_force);
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "controlpoint"))
+            operator_config.attract_control_point = std::clamp((int)readFloat(node), 0, 7);
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "flags"))
+            operator_config.attract_flags = (int)readFloat(node);
+        if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "threshold"))
+            operator_config.attract_threshold = readFloat(node);
+        if (operator_config.type == "controlpointattract") {
+            if (const cJSON* node = cJSON_GetObjectItemCaseSensitive(particle_operator, "scale"))
+                operator_config.attract_scale = readFloat(node);
+            readVec3(cJSON_GetObjectItemCaseSensitive(particle_operator, "origin"), operator_config.attract_origin);
+        }
         config.operators.push_back(operator_config);
     }
 

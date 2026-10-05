@@ -18,6 +18,15 @@ ParticleSystem::~ParticleSystem() {
 namespace {
 bool near(float a, float b, float tolerance = 0.01f) { return std::fabs(a - b) <= tolerance * std::max(1.0f, std::fabs(b)); }
 
+// Tests spawn by hand (emitParticles) or through instances, so their emitters must not emit on their own; the
+// struct default is Wallpaper Engine's rate of 5.
+ParticleEmitterConfig manualEmitter() {
+    ParticleEmitterConfig emitter;
+    emitter.rate = 0.0f;
+    emitter.distance_max[0] = emitter.distance_max[1] = emitter.distance_max[2] = 0.0f;  // spawn exactly at origin
+    return emitter;
+}
+
 ParticleInitializerConfig scalarInitializer(const char* type, float value) {
     ParticleInitializerConfig initializer;
     initializer.type = type;
@@ -37,7 +46,7 @@ ParticleSystemConfig makeConfig(int flags, float gravity_y = -40.0f) {
     ParticleSystemConfig config;
     config.flags = flags;
     config.max_particles = 16;
-    ParticleEmitterConfig emitter;
+    ParticleEmitterConfig emitter = manualEmitter();
     emitter.type = "sphererandom";  // zero radius: always the emitter origin
     config.emitters.push_back(emitter);
     config.initializers.push_back(scalarInitializer("lifetimerandom", 4.0f));
@@ -68,12 +77,35 @@ void testParsing() {
     CHECK(config.emitters.size() == 1 && config.emitters[0].instantaneous == 3);
 }
 
+// Keys a preset leaves out take Wallpaper Engine's defaults rather than zero.
+void testDefaultsForOmittedKeys() {
+    cJSON* json = cJSON_Parse(R"({
+        "emitter":[{"name":"boxrandom"}],
+        "initializer":[{"name":"alpharandom"},{"name":"sizerandom"},{"name":"lifetimerandom"},
+                       {"name":"velocityrandom"},{"name":"rotationrandom"},{"name":"angularvelocityrandom"},
+                       {"name":"alpharandom","min":0.1,"max":0.2,"exponent":2}]})");
+    const ParticleSystemConfig config = ParticleParser::parse(json);
+    cJSON_Delete(json);
+    CHECK(config.emitters.size() == 1);
+    if (config.emitters.empty() || config.initializers.size() != 7) return;
+    CHECK(near(config.emitters[0].rate, 5.0f));
+    CHECK(near(config.emitters[0].distance_max[0], 256.0f) && near(config.emitters[0].distance_max[1], 256.0f));
+    CHECK(near(config.initializers[0].minimum_scalar, 0.05f) && near(config.initializers[0].maximum_scalar, 1.0f));
+    CHECK(near(config.initializers[1].maximum_scalar, 20.0f));
+    CHECK(near(config.initializers[2].maximum_scalar, 1.0f));
+    CHECK(near(config.initializers[3].minimum[0], -32.0f) && near(config.initializers[3].maximum[1], 32.0f));
+    CHECK(near(config.initializers[4].maximum[2], 2.0f * (float)M_PI));
+    CHECK(near(config.initializers[5].minimum[2], -5.0f) && near(config.initializers[5].maximum[2], 5.0f));
+    CHECK(near(config.initializers[6].minimum_scalar, 0.1f) && near(config.initializers[6].maximum_scalar, 0.2f));
+    CHECK(near(config.initializers[6].exponent, 2.0f));
+}
+
 float alphaAtLifeFraction(const char* json, float fraction) {
     cJSON* document = cJSON_Parse(json);
     ParticleSystemConfig config = ParticleParser::parse(document);
     cJSON_Delete(document);
     config.max_particles = 4;
-    config.emitters.push_back(ParticleEmitterConfig{});
+    config.emitters.push_back(manualEmitter());
     config.initializers.push_back(scalarInitializer("lifetimerandom", 10.0f));
     ParticleSystem system(config, 3840.0f, 2160.0f);
     system.emitParticles(1);
@@ -101,6 +133,67 @@ void testAlphaFade() {
     // No alphafade operator: alpha is untouched.
     CHECK(near(alphaAtLifeFraction(R"({"operator":[]})", 0.05f), 1.0f));
     CHECK(near(alphaAtLifeFraction(R"({"operator":[]})", 0.95f), 1.0f));
+}
+
+// One particle (lifetime 10 s, size 10, white, at (x, 0)) advanced to a fraction of its life with the given JSON
+// operators. Steps are small so the integration error stays negligible.
+Particle particleAt(const char* json, float fraction, float x = 0.0f, float step = 0.05f) {
+    cJSON* document = cJSON_Parse(json);
+    ParticleSystemConfig config = ParticleParser::parse(document);
+    cJSON_Delete(document);
+    config.max_particles = 4;
+    ParticleEmitterConfig emitter = manualEmitter();
+    emitter.origin[0] = x;
+    config.emitters.push_back(emitter);
+    config.initializers.push_back(scalarInitializer("lifetimerandom", 10.0f));
+    config.initializers.push_back(scalarInitializer("sizerandom", 10.0f));
+    ParticleSystem system(config, 3840.0f, 2160.0f);
+    system.emitParticles(1);
+    const int steps = (int)std::lround(10.0f * fraction / step);
+    for (int index = 0; index < steps; ++index) system.update(step);
+    return system.particles.empty() ? Particle{} : system.particles[0];
+}
+
+void testSizeAndColorChange() {
+    // Defaults: start 1, end 0, from 0 to 1 of the life; here the ramp only starts at half.
+    const char* shrink = R"({"operator":[{"name":"sizechange","starttime":0.5}]})";
+    CHECK(near(particleAt(shrink, 0.25f).size, 10.0f));
+    CHECK(near(particleAt(shrink, 0.75f).size, 5.0f));
+    CHECK(near(particleAt(shrink, 0.95f).size, 1.0f, 0.2f));
+
+    const char* grow = R"({"operator":[{"name":"sizechange","startvalue":0,"endvalue":2}]})";
+    CHECK(near(particleAt(grow, 0.5f).size, 10.0f));
+
+    // Color: per channel multiplier from "1 1 1" to the end value.
+    const char* tint = R"({"operator":[{"name":"colorchange","endvalue":"0.5 0.25 1"}]})";
+    const Particle half = particleAt(tint, 0.5f);
+    CHECK(near(half.color[0], 0.75f) && near(half.color[1], 0.625f) && near(half.color[2], 1.0f));
+    const Particle fade_to_black = particleAt(R"({"operator":[{"name":"colorchange"}]})", 0.5f);
+    CHECK(near(fade_to_black.color[0], 0.5f));
+
+    const char* alpha_change = R"({"operator":[{"name":"alphachange","starttime":0,"endtime":1}]})";
+    CHECK(near(particleAt(alpha_change, 0.5f).alpha, 0.5f));
+}
+
+void testAngularMovementAndAttract() {
+    // Angular acceleration of -1 rad/s^2 for 2 s: angular velocity -2, rotation about -2.
+    const Particle spinning = particleAt(R"({"operator":[{"name":"angularmovement","force":"0 0 -1"}]})", 0.2f);
+    CHECK(near(spinning.angular_vel, -2.0f));
+    CHECK(near(spinning.rotation, -2.05f, 0.05f));
+
+    // Control point attract: a negative scale pushes a particle inside the threshold away from the control point.
+    const char* repel =
+        R"({"operator":[{"name":"controlpointattract","controlpoint":1,"scale":-1024,"threshold":32,"origin":"0 0 0"}]})";
+    const Particle pushed = particleAt(repel, 0.005f, 10.0f, 0.05f);
+    // impulse = scale * dt * (1 - distance / threshold) = 1024 * 0.05 * (1 - 10 / 32), applied along the line away.
+    CHECK(near(pushed.velocity[0], 35.2f, 0.02f));
+    // Outside the threshold nothing happens.
+    const Particle untouched = particleAt(repel, 0.005f, 40.0f, 0.05f);
+    CHECK(near(untouched.velocity[0], 0.0f));
+    // A positive scale pulls it in.
+    const char* pull =
+        R"({"operator":[{"name":"controlpointattract","controlpoint":1,"scale":512,"threshold":64}]})";
+    CHECK(particleAt(pull, 0.005f, 20.0f, 0.05f).velocity[0] < -10.0f);
 }
 
 void testWorldSpaceSpawn() {
@@ -146,7 +239,7 @@ void testLocalSpaceUnchanged() {
 ParticleSystem* makeFollowChild(ParticleSystem& parent, float lifetime) {
     ParticleSystemConfig config;
     config.max_particles = 8;
-    ParticleEmitterConfig emitter;
+    ParticleEmitterConfig emitter = manualEmitter();
     emitter.type = "sphererandom";
     emitter.instantaneous = 1;
     config.emitters.push_back(emitter);
@@ -217,7 +310,7 @@ void testPerInstanceCapacity() {
     ParticleSystem parent(makeConfig(0, 0.0f), 3840.0f, 2160.0f);
     ParticleSystemConfig config;
     config.max_particles = 2;  // capacity of each instance
-    ParticleEmitterConfig emitter;
+    ParticleEmitterConfig emitter = manualEmitter();
     emitter.type = "sphererandom";
     emitter.instantaneous = 5;  // asks for more than one instance may hold
     config.emitters.push_back(emitter);
@@ -240,7 +333,7 @@ void testEventDeathBurst() {
     ParticleSystem parent(makeConfig(0, 0.0f), 3840.0f, 2160.0f);
     ParticleSystemConfig config;
     config.max_particles = 8;
-    config.emitters.push_back(ParticleEmitterConfig{});
+    config.emitters.push_back(manualEmitter());
     config.initializers.push_back(scalarInitializer("lifetimerandom", 1.0f));
     auto* child = new ParticleSystem(config, 3840.0f, 2160.0f);
     child->spawn_type = ParticleSpawnType::EventDeath;
@@ -258,7 +351,10 @@ void testEventDeathBurst() {
 
 int main() {
     testParsing();
+    testDefaultsForOmittedKeys();
     testAlphaFade();
+    testSizeAndColorChange();
+    testAngularMovementAndAttract();
     testWorldSpaceSpawn();
     testLocalSpaceUnchanged();
     testFollowChild();

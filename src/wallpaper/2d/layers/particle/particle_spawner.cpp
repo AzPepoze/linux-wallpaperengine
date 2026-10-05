@@ -9,6 +9,12 @@ namespace {
 float randomFloat() {
     return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
+
+// Initializer draws are pow(random, exponent) between the bounds; an exponent of 1 is a plain uniform draw.
+float randomFloat(float exponent) {
+    const float value = randomFloat();
+    return exponent == 1.0f ? value : powf(value, exponent);
+}
 }  // namespace
 
 void ParticleSystem::placementMatrix(float matrix[4]) const {
@@ -137,18 +143,18 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     particle.position[2] += child_offset[2];
     for (const ParticleInitializerConfig& initializer : config.initializers) {
         if (initializer.type == "lifetimerandom") {
-            particle.max_life =
-                initializer.minimum_scalar + randomFloat() * (initializer.maximum_scalar - initializer.minimum_scalar);
+            particle.max_life = initializer.minimum_scalar +
+                                randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.life = particle.max_life;
         } else if (initializer.type == "sizerandom") {
-            particle.size =
-                initializer.minimum_scalar + randomFloat() * (initializer.maximum_scalar - initializer.minimum_scalar);
+            particle.size = initializer.minimum_scalar +
+                            randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.initial_size = particle.size;
         } else if (initializer.type == "velocityrandom") {
             particle.velocity[0] =
-                initializer.minimum[0] + randomFloat() * (initializer.maximum[0] - initializer.minimum[0]);
+                initializer.minimum[0] + randomFloat(initializer.exponent) * (initializer.maximum[0] - initializer.minimum[0]);
             particle.velocity[1] =
-                initializer.minimum[1] + randomFloat() * (initializer.maximum[1] - initializer.minimum[1]);
+                initializer.minimum[1] + randomFloat(initializer.exponent) * (initializer.maximum[1] - initializer.minimum[1]);
         } else if (initializer.type == "colorrandom") {
             // One blend factor for all channels: independent draws would tint ranges such as white..grey.
             const float blend = randomFloat();
@@ -158,8 +164,8 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
                      blend * (initializer.maximum[component] - initializer.minimum[component])) /
                     255.0f;
         } else if (initializer.type == "alpharandom") {
-            particle.alpha =
-                initializer.minimum_scalar + randomFloat() * (initializer.maximum_scalar - initializer.minimum_scalar);
+            particle.alpha = initializer.minimum_scalar +
+                             randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.initial_alpha = particle.alpha;
         } else if (initializer.type == "rotationrandom") {
             particle.rotation =
@@ -186,6 +192,7 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
             particle.color[component] = authored_color * authored_color;
         }
     }
+    vec3_dup(particle.initial_color, particle.color);
     particle.max_life *= override_lifetime;
     particle.life = particle.max_life;
     particle.velocity[0] *= override_speed;

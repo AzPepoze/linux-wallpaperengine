@@ -36,9 +36,9 @@ struct ParticleObjectConfig {
 struct ParticleEmitterConfig {
     std::string type;
     vec3 origin = {0, 0, 0};
-    vec3 distance_max = {0, 0, 0};
+    vec3 distance_max = {256, 256, 256};
     float distance_min = 0.0f;
-    float rate = 0.0f;
+    float rate = 5.0f;  // emissions per second when the emitter omits it
     // Particles emitted at once whenever the emitting instance has none alive (event child systems).
     int instantaneous = 0;
     int flags = 0;
@@ -56,6 +56,8 @@ struct ParticleInitializerConfig {
     vec3 maximum = {0, 0, 0};
     float minimum_scalar = 0.0f;
     float maximum_scalar = 0.0f;
+    // Random values are drawn as pow(random, exponent) between min and max.
+    float exponent = 1.0f;
     float turbulence_offset = 0.0f;
     float turbulence_scale = 1.0f;
     float turbulence_speed_min = 100.0f;
@@ -77,6 +79,22 @@ struct ParticleOperatorConfig {
     float scale_max = 0.0f;
     float speed_min = 0.0f;
     float speed_max = 0.0f;
+    // sizechange / alphachange / colorchange: the value ramps between start and end over these lifetime fractions
+    // (scalar for size and alpha, per channel for color).
+    float change_start_time = 0.0f;
+    float change_end_time = 1.0f;
+    float change_start_value = 1.0f;
+    float change_end_value = 0.0f;
+    vec3 change_start_color = {1.0f, 1.0f, 1.0f};
+    vec3 change_end_color = {0.0f, 0.0f, 0.0f};
+    // angularmovement: angular acceleration (the z component spins a 2D sprite); `drag` slows the rotation.
+    vec3 angular_force = {0, 0, 0};
+    // controlpointattract: a pull (positive scale) or push (negative) towards a control point within `threshold`.
+    int attract_control_point = 0;
+    int attract_flags = 2;  // bit 2 limits the velocity change close to the control point
+    float attract_scale = 512.0f;
+    float attract_threshold = 512.0f;
+    vec3 attract_origin = {0, 0, 0};
 };
 
 struct ParticleRendererConfig {

@@ -21,6 +21,7 @@ struct Particle {
     vec3 base_position = {0, 0, 0};
     vec3 velocity = {0, 0, 0};
     vec3 color = {1, 1, 1};
+    vec3 initial_color = {1, 1, 1};  // colorchange scales this every frame
     float life = 0.0f;
     float max_life = 0.0f;
     float alpha = 1.0f;
