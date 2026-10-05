@@ -149,6 +149,7 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         readVec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), emitter_config.distance_max);
         emitter_config.distance_min = readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "distancemin"));
         emitter_config.rate = readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "rate"));
+        emitter_config.instantaneous = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "instantaneous"));
         emitter_config.flags = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "flags"));
         emitter_config.control_point = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "controlpoint"));
         config.emitters.push_back(emitter_config);
@@ -189,8 +190,10 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         if (cJSON_IsString(type) && type->valuestring) operator_config.type = type->valuestring;
         readVec3(cJSON_GetObjectItemCaseSensitive(particle_operator, "gravity"), operator_config.gravity);
         operator_config.drag = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "drag"));
-        operator_config.fade_in_time = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "fadeintime"));
-        operator_config.fade_out_time = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "fadeouttime"));
+        if (const cJSON* fade_in = cJSON_GetObjectItemCaseSensitive(particle_operator, "fadeintime"))
+            operator_config.fade_in_time = readFloat(fade_in);
+        if (const cJSON* fade_out = cJSON_GetObjectItemCaseSensitive(particle_operator, "fadeouttime"))
+            operator_config.fade_out_time = readFloat(fade_out);
         operator_config.frequency_min = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "frequencymin"));
         operator_config.frequency_max = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "frequencymax"));
         operator_config.scale_min = readFloat(cJSON_GetObjectItemCaseSensitive(particle_operator, "scalemin"));

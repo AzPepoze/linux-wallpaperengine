@@ -39,6 +39,8 @@ struct ParticleEmitterConfig {
     vec3 distance_max = {0, 0, 0};
     float distance_min = 0.0f;
     float rate = 0.0f;
+    // Particles emitted at once whenever the emitting instance has none alive (event child systems).
+    int instantaneous = 0;
     int flags = 0;
     int control_point = 0;
 };
@@ -65,8 +67,10 @@ struct ParticleOperatorConfig {
     std::string type;
     vec3 gravity = {0, 0, 0};
     float drag = 0.0f;
-    float fade_in_time = 0.0f;
-    float fade_out_time = 0.0f;
+    // Alpha fade, as fractions of the particle's lifetime: fade-in completes at fade_in_time, fade-out starts at
+    // fade_out_time. Both default to 0.5 when the operator omits them.
+    float fade_in_time = 0.5f;
+    float fade_out_time = 0.5f;
     float frequency_min = 0.0f;
     float frequency_max = 0.0f;
     float scale_min = 0.0f;

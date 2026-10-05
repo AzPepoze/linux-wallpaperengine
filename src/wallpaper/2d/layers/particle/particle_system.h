@@ -12,6 +12,11 @@
 struct Particle {
     uint64_t serial = 0;
     std::vector<std::array<float, 3>> history;
+    // Non-zero for particles of an event child system that follow a parent particle (see ChildInstance); then
+    // `base_position` is the offset from that instance rather than an absolute position.
+    uint64_t instance_id = 0;
+    // The instance that emitted this particle (0 for particles of root and static systems).
+    uint64_t source_instance = 0;
     vec3 position = {0, 0, 0};
     vec3 base_position = {0, 0, 0};
     vec3 velocity = {0, 0, 0};
@@ -30,8 +35,10 @@ struct Particle {
 
     float drag = 0.0f;
     vec3 gravity = {0, 0, 0};
+    // Alpha fade as lifetime fractions: the fade-in completes at fade_in, the fade-out starts at fade_out.
+    // The defaults mean "no alphafade operator": no fade in, fade-out never starts.
     float fade_in = 0.0f;
-    float fade_out = 0.0f;
+    float fade_out = 1.0f;
 
     float osc_alpha_freq = 0.0f;
     float osc_alpha_min = 1.0f;
@@ -55,6 +62,24 @@ enum class ParticleSpawnType {
     EventFollow,  // created per parent particle and follows it
     EventSpawn,   // created when a parent particle spawns
     EventDeath,   // created where a parent particle dies
+};
+
+// Authored placement of the particle layer in scene (Y-up) coordinates, without camera parallax.
+struct ParticlePlacement {
+    float origin[3] = {0, 0, 0};
+    float scale[3] = {1, 1, 1};
+    float rotation_deg = 0.0f;
+};
+
+// One emitting instance of an event child system: it is created for a parent particle, follows it (event follow) or
+// stays where the event happened, and emits the child's particles around its position.
+struct ChildInstance {
+    uint64_t id = 0;
+    uint64_t parent_serial = 0;
+    vec3 position = {0, 0, 0};  // in the parent's simulation space
+    bool follow = false;
+    bool alive = true;  // the parent particle still exists
+    float emit_timer = 0.0f;
 };
 
 class ParticleSystem {
@@ -93,7 +118,16 @@ class ParticleSystem {
     vec3 child_scale = {1, 1, 1};
     int child_maxcount = 20;
     float child_probability = 1.0f;
-    float attached_emitter_timer = 0.0f;
+    // Particle flag bit 1: particles ignore the system's transform after they spawn.
+    bool world_space = false;
+    ParticlePlacement placement;
+    bool has_placement = false;
+    float camera_offset[2] = {0.0f, 0.0f};
+    ParticleSystem* parent_system = nullptr;
+    std::vector<ChildInstance> instances;
+    uint64_t next_instance_id = 1;
+    // Start-time warm-up runs on the first update, once the placement is known.
+    float pending_warmup = 0.0f;
 
     int spritesheet_cols = 0;
     int spritesheet_rows = 0;
@@ -133,9 +167,11 @@ class ParticleSystem {
                                           const ParticleObjectConfig& overrides = {});
 
     void update(float dt);
-    // Emits this (child) system's particles from each parent particle's current
-    // position, matching Wallpaper Engine's attached child-system behaviour.
-    void emitFromParents(const ParticleSystem& parent, float dt);
+    // Worldspace systems (particle flag bit 1) convert spawn positions and velocities to scene coordinates with
+    // this placement and simulate there afterwards. Also applied to child systems.
+    void setPlacement(const ParticlePlacement& value, float camera_offset_x, float camera_offset_y);
+    // True when particle positions are scene coordinates rather than the layer's local space.
+    bool simulatesInWorld() const;
     void draw(EngineContext& ctx);
     void drawDebugBounds(EngineContext& ctx);
     bool requiresSceneColor() const;
@@ -154,7 +190,17 @@ class ParticleSystem {
     GfxBuffer particle_index_buffer;
     sg_view scene_color_view = {SG_INVALID_ID};
 
-    void spawnParticle(const float* parent_position = nullptr);
+    void step(float dt);
+    void spawnParticle(const ChildInstance* instance = nullptr);
+    void createInstance(const Particle& parent_particle, bool follow);
+    void endInstances(uint64_t parent_serial);
+    // Stops an instance's emission; a follow child's particles end with their parent particle.
+    void retireInstance(ChildInstance& instance);
+    void updateInstances(float dt);
+    ChildInstance* findInstance(uint64_t id);
+    void placementMatrix(float matrix[4]) const;
+    void toWorldPosition(const float* local, float* world) const;
+    float placementSizeScale() const;
     void initParticleBuffers();
 };
 

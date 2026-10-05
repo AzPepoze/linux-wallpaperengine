@@ -261,6 +261,11 @@ add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/
 
 add_test("particle_data_tests", {"tests/particle_data_test.cpp", "src/wallpaper/2d/layers/particle/particle_parser.cpp"},
          {"cjson", "linmath.h"})
+add_test("particle_simulation_tests", {"tests/particle_simulation_test.cpp",
+                                       "src/wallpaper/2d/layers/particle/particle_simulation.cpp",
+                                       "src/wallpaper/2d/layers/particle/particle_spawner.cpp",
+                                       "src/wallpaper/2d/layers/particle/particle_parser.cpp"},
+         {"sokol", "cjson", "linmath.h"})
 add_test("media_thumbnail_texture_tests", {"tests/media_thumbnail_texture_test.cpp",
                                          "src/shared/media/media_thumbnail_texture.cpp"}, {"sokol"})
 add_test("readback_pixels_tests", {"tests/readback_pixels_test.cpp"}, {"sokol"})

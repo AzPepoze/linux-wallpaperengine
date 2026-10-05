@@ -183,13 +183,22 @@ void ParticleSystem::draw(EngineContext& ctx) {
                 mat4x4_identity(view_projection);
                 // Convert Wallpaper Engine's Y-up particle space exactly once at
                 // the particle-to-screen boundary. Image layers remain untouched.
-                mat4x4_translate_in_place(
-                    model, ctx.scene.offset_x + (layer_origin[0] + parallax_x) * ctx.scene.render_scale,
-                    ctx.scene.offset_y + (scene_h - layer_origin[1] - parallax_y) * ctx.scene.render_scale,
-                    layer_origin[2] * ctx.scene.render_scale);
-                mat4x4_rotate_Z(model, model, -layer_rotation * (float)(M_PI / 180.0));
-                mat4x4_scale_aniso(model, model, ctx.scene.render_scale * layer_scale[0],
-                                   -ctx.scene.render_scale * layer_scale[1], layer_scale[2]);
+                if (simulatesInWorld()) {
+                    // Positions are already scene coordinates (the layer transform was applied at spawn), so
+                    // only the camera offset and the view fit remain; sizes are not scaled by the layer.
+                    mat4x4_translate_in_place(
+                        model, ctx.scene.offset_x + (camera_offset[0] + parallax_x) * ctx.scene.render_scale,
+                        ctx.scene.offset_y + (scene_h - camera_offset[1] - parallax_y) * ctx.scene.render_scale, 0.0f);
+                    mat4x4_scale_aniso(model, model, ctx.scene.render_scale, -ctx.scene.render_scale, 1.0f);
+                } else {
+                    mat4x4_translate_in_place(
+                        model, ctx.scene.offset_x + (layer_origin[0] + parallax_x) * ctx.scene.render_scale,
+                        ctx.scene.offset_y + (scene_h - layer_origin[1] - parallax_y) * ctx.scene.render_scale,
+                        layer_origin[2] * ctx.scene.render_scale);
+                    mat4x4_rotate_Z(model, model, -layer_rotation * (float)(M_PI / 180.0));
+                    mat4x4_scale_aniso(model, model, ctx.scene.render_scale * layer_scale[0],
+                                       -ctx.scene.render_scale * layer_scale[1], layer_scale[2]);
+                }
                 mat4x4_dup(view_projection, projection);
             }
             mat4x4_mul(mvp, view_projection, model);

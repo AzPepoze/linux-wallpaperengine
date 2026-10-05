@@ -29,8 +29,36 @@ ParticleLayer* ParticleLayer::createFromDocument(const wallpaper_engine::SceneOb
     return nullptr;
 }
 
+ParticlePlacement ParticleLayer::authoredPlacement(EngineContext& ctx) const {
+    ParticlePlacement result;
+    for (int axis = 0; axis < 3; ++axis) {
+        result.origin[axis] = origin[axis];
+        result.scale[axis] = scale[axis];
+    }
+    result.rotation_deg = rotation;
+    if (scene_object_id != 0 && ctx.scene.scene_tree) {
+        ScenePlacement placement;
+        if (ctx.scene.scene_tree->worldPlacement(scene_object_id, placement)) {
+            for (size_t axis = 0; axis < 3; ++axis) {
+                result.origin[axis] = placement.origin[axis];
+                result.scale[axis] = placement.scale[axis];
+            }
+            result.rotation_deg = placement.rotation_deg;
+        }
+    }
+    return result;
+}
+
+void ParticleLayer::applyPlacement(EngineContext& ctx) {
+    const ParticlePlacement placement = authoredPlacement(ctx);
+    float origin_copy[3] = {placement.origin[0], placement.origin[1], placement.origin[2]};
+    const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, origin_copy, parallax);
+    ps->setPlacement(placement, camera_offset.x, camera_offset.y);
+}
+
 void ParticleLayer::update(float dt, EngineContext& ctx) {
     if (!ps) return;
+    applyPlacement(ctx);
     mat4x4 world;
     mat4x4_identity(world);
     if (ctx.scene.scene_tree) ctx.scene.scene_tree->worldTransform(scene_object_id, world);
@@ -47,6 +75,7 @@ void ParticleLayer::update(float dt, EngineContext& ctx) {
 
 void ParticleLayer::draw(EngineContext& ctx) {
     if (!ps) return;
+    applyPlacement(ctx);
 
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
@@ -81,6 +110,7 @@ void ParticleLayer::draw(EngineContext& ctx) {
 
 void ParticleLayer::drawDebug(EngineContext& ctx) {
     if (!ps) return;
+    applyPlacement(ctx);
 
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
     float layer_scale[3] = {scale[0], scale[1], scale[2]};

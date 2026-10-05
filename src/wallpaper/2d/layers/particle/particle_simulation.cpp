@@ -46,10 +46,83 @@ void ParticleSystem::clearParticles() {
 }
 
 void ParticleSystem::update(float real_dt) {
+    if (pending_warmup > 0.0f && (!simulatesInWorld() || has_placement)) {
+        const float warmup = pending_warmup;
+        pending_warmup = 0.0f;
+        for (float time = 0.0f; time < warmup; time += 0.1f) step(0.1f);
+    }
+    step(real_dt);
+}
+
+void ParticleSystem::updateInstances(float dt) {
+    if (instances.empty()) return;
+    int burst = 0;
+    float rate = 0.0f;
+    for (const ParticleEmitterConfig& emitter : config.emitters) {
+        burst += std::max(0, emitter.instantaneous);
+        rate += emitter.rate;
+    }
+    rate *= override_count;
+
+    for (ChildInstance& instance : instances) {
+        if (!instance.alive) continue;
+        const Particle* parent_particle = nullptr;
+        if (parent_system) {
+            for (const Particle& candidate : parent_system->particles) {
+                if (candidate.serial == instance.parent_serial) {
+                    parent_particle = &candidate;
+                    break;
+                }
+            }
+        }
+        if (!parent_particle) {
+            retireInstance(instance);
+            continue;
+        }
+        if (instance.follow)
+            for (int axis = 0; axis < 3; ++axis) instance.position[axis] = parent_particle->position[axis];
+        if (!emitting) continue;
+
+        // An instantaneous emitter fires again whenever its instance has nothing left alive.
+        if (burst > 0) {
+            bool empty = true;
+            for (const Particle& particle : particles) {
+                if (particle.source_instance == instance.id) {
+                    empty = false;
+                    break;
+                }
+            }
+            if (empty)
+                for (int index = 0; index < burst; ++index) spawnParticle(&instance);
+        }
+        if (rate > 0.0f) {
+            instance.emit_timer += dt * rate;
+            int emitted = 0;
+            while (instance.emit_timer >= 1.0f && emitted++ < 64) {
+                instance.emit_timer -= 1.0f;
+                spawnParticle(&instance);
+            }
+            instance.emit_timer = std::min(instance.emit_timer, 1.0f);
+        }
+    }
+
+    // Finished instances go away once none of their particles remain.
+    instances.erase(std::remove_if(instances.begin(), instances.end(),
+                                   [&](const ChildInstance& instance) {
+                                       if (instance.alive) return false;
+                                       for (const Particle& particle : particles)
+                                           if (particle.source_instance == instance.id) return false;
+                                       return true;
+                                   }),
+                    instances.end());
+}
+
+void ParticleSystem::step(float real_dt) {
     if (paused) return;
     // `rate` scales this system's own clock: emission, lifetimes and motion all run faster or slower.
     const float dt = real_dt * fmaxf(0.0f, override_rate);
     global_time += dt;
+    updateInstances(dt);
     if (spawn_type == ParticleSpawnType::Static && emitting) {
         for (size_t emitter_index = 0; emitter_index < config.emitters.size(); ++emitter_index) {
             const float rate = config.emitters[emitter_index].rate * override_count;
@@ -76,12 +149,10 @@ void ParticleSystem::update(float real_dt) {
         Particle& particle = particles[index];
         particle.life -= dt;
         if (particle.life <= 0) {
-            // Event-death children are created where this particle died.
+            // Event-death children are created where this particle died; follow and spawn instances end with it.
             for (ParticleSystem* child : children) {
-                if (child->spawn_type != ParticleSpawnType::EventDeath) continue;
-                if (child->child_probability < 1.0f && (float)rand() / (float)RAND_MAX > child->child_probability)
-                    continue;
-                child->spawnParticle(particle.position);
+                if (child->spawn_type == ParticleSpawnType::EventDeath) child->createInstance(particle, false);
+                else child->endInstances(particle.serial);
             }
             particles[index] = particles.back();
             particles.pop_back();
@@ -102,8 +173,11 @@ void ParticleSystem::update(float real_dt) {
         particle.base_position[0] += particle.velocity[0] * dt;
         particle.base_position[1] += particle.velocity[1] * dt;
         particle.rotation += particle.angular_vel * dt;
-        particle.position[0] = particle.base_position[0];
-        particle.position[1] = particle.base_position[1];
+        // Follow particles are offsets from their instance, which tracks the parent particle.
+        const ChildInstance* anchor = particle.instance_id != 0 ? findInstance(particle.instance_id) : nullptr;
+        particle.position[0] = particle.base_position[0] + (anchor ? anchor->position[0] : 0.0f);
+        particle.position[1] = particle.base_position[1] + (anchor ? anchor->position[1] : 0.0f);
+        if (anchor) particle.position[2] = particle.base_position[2] + anchor->position[2];
         if (particle.osc_pos_freq > 0) {
             const float wave = sinf(global_time * particle.osc_pos_freq + particle.random_seed * 100.0f);
             const float amplitude = particle.osc_pos_min + (particle.osc_pos_max - particle.osc_pos_min) * 0.5f;
@@ -117,9 +191,12 @@ void ParticleSystem::update(float real_dt) {
         const float age = particle.max_life - particle.life;
         float alpha = particle.initial_alpha * override_alpha;
         const float life_norm = particle.max_life > 0.0f ? age / particle.max_life : 0.0f;
-        const float remain_norm = particle.max_life > 0.0f ? particle.life / particle.max_life : 0.0f;
-        if (particle.fade_in > 0.0f && life_norm < particle.fade_in) alpha *= life_norm / particle.fade_in;
-        if (particle.fade_out > 0.0f && remain_norm < particle.fade_out) alpha *= remain_norm / particle.fade_out;
+        // Alpha fade operator: ramp up until fade_in, then down from fade_out to the end of the life.
+        if (particle.fade_in > 0.0f && life_norm <= particle.fade_in) {
+            alpha *= life_norm / particle.fade_in;
+        } else if (particle.fade_out < 1.0f && life_norm > particle.fade_out) {
+            alpha *= 1.0f - (life_norm - particle.fade_out) / (1.0f - particle.fade_out);
+        }
         if (particle.osc_alpha_freq > 0) {
             const float wave =
                 (sinf(global_time * particle.osc_alpha_freq + particle.random_seed * 10.0f) + 1.0f) * 0.5f;
@@ -144,31 +221,5 @@ void ParticleSystem::update(float real_dt) {
             particle.frame = frame;
         }
     }
-    for (ParticleSystem* child : children) {
-        if (child->spawn_type == ParticleSpawnType::EventFollow) child->emitFromParents(*this, real_dt);
-        child->update(real_dt);
-    }
-}
-
-void ParticleSystem::emitFromParents(const ParticleSystem& parent, float real_dt) {
-    if (parent.particles.empty()) return;
-    const float dt = real_dt * fmaxf(0.0f, override_rate);
-    float rate = 0.0f;
-    for (const ParticleEmitterConfig& emitter : config.emitters) {
-        rate += emitter.rate;
-    }
-    rate *= override_count;
-    if (rate <= 0.0f) return;
-
-    // Each parent particle owns an emitter instance, so the effective rate scales
-    // with the live parent count.
-    attached_emitter_timer += dt * rate * (float)parent.particles.size();
-    while (attached_emitter_timer >= 1.0f) {
-        attached_emitter_timer -= 1.0f;
-        if (child_probability < 1.0f && (float)rand() / (float)RAND_MAX > child_probability) continue;
-        const size_t count = parent.particles.size();
-        size_t index = (size_t)((float)rand() / (float)RAND_MAX * (float)count);
-        if (index >= count) index = count - 1;
-        spawnParticle(parent.particles[index].position);
-    }
+    for (ParticleSystem* child : children) child->update(real_dt);
 }

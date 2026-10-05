@@ -1,6 +1,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <algorithm>
+
 #include "particle_system.h"
 
 namespace {
@@ -9,8 +11,92 @@ float randomFloat() {
 }
 }  // namespace
 
-void ParticleSystem::spawnParticle(const float* parent_position) {
+void ParticleSystem::placementMatrix(float matrix[4]) const {
+    // Column-major R(rotation) * diag(scale): world = origin + M * local.
+    const float radians = placement.rotation_deg * (float)(M_PI / 180.0);
+    const float c = cosf(radians), s = sinf(radians);
+    matrix[0] = c * placement.scale[0];
+    matrix[1] = s * placement.scale[0];
+    matrix[2] = -s * placement.scale[1];
+    matrix[3] = c * placement.scale[1];
+}
+
+void ParticleSystem::toWorldPosition(const float* local, float* world) const {
+    float matrix[4];
+    placementMatrix(matrix);
+    world[0] = placement.origin[0] + matrix[0] * local[0] + matrix[2] * local[1];
+    world[1] = placement.origin[1] + matrix[1] * local[0] + matrix[3] * local[1];
+    world[2] = placement.origin[2] + local[2] * placement.scale[2];
+}
+
+float ParticleSystem::placementSizeScale() const {
+    return fabsf(placement.scale[0]);
+}
+
+void ParticleSystem::setPlacement(const ParticlePlacement& value, float camera_offset_x, float camera_offset_y) {
+    placement = value;
+    has_placement = true;
+    camera_offset[0] = camera_offset_x;
+    camera_offset[1] = camera_offset_y;
+    for (ParticleSystem* child : children) child->setPlacement(value, camera_offset_x, camera_offset_y);
+}
+
+bool ParticleSystem::simulatesInWorld() const {
+    return world_space || (parent_system && parent_system->simulatesInWorld());
+}
+
+ChildInstance* ParticleSystem::findInstance(uint64_t id) {
+    for (ChildInstance& instance : instances)
+        if (instance.id == id) return &instance;
+    return nullptr;
+}
+
+void ParticleSystem::createInstance(const Particle& parent_particle, bool follow) {
+    if (child_probability < 1.0f && randomFloat() > child_probability) return;
+    if (child_maxcount > 0) {
+        int alive = 0;
+        for (const ChildInstance& existing : instances) alive += existing.alive ? 1 : 0;
+        if (alive >= child_maxcount) return;
+    }
+    ChildInstance instance;
+    instance.id = next_instance_id++;
+    instance.parent_serial = parent_particle.serial;
+    for (int axis = 0; axis < 3; ++axis) instance.position[axis] = parent_particle.position[axis];
+    instance.follow = follow;
+    instance.alive = spawn_type != ParticleSpawnType::EventDeath;
+    instances.push_back(instance);
+
+    int burst = 0;
+    for (const ParticleEmitterConfig& emitter : config.emitters) burst += std::max(0, emitter.instantaneous);
+    // An event child without an instantaneous count still marks the event with one particle.
+    if (burst == 0 && spawn_type == ParticleSpawnType::EventDeath) burst = 1;
+    const ChildInstance created = instances.back();
+    for (int index = 0; index < burst; ++index) spawnParticle(&created);
+}
+
+void ParticleSystem::retireInstance(ChildInstance& instance) {
+    if (!instance.alive) return;
+    instance.alive = false;
+    // Wallpaper Engine clears a follow instance's particles as soon as its parent particle ends (no fade); spawn
+    // and death children keep theirs until they expire.
+    if (spawn_type != ParticleSpawnType::EventFollow) return;
+    for (Particle& particle : particles)
+        if (particle.source_instance == instance.id) particle.life = 0.0f;
+}
+
+void ParticleSystem::endInstances(uint64_t parent_serial) {
+    for (ChildInstance& instance : instances)
+        if (instance.parent_serial == parent_serial) retireInstance(instance);
+}
+
+void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     if (static_cast<int>(particles.size()) >= max_particles) return;
+    if (instance) {
+        // Every instance has its own particle capacity (the particle file's max count).
+        int owned = 0;
+        for (const Particle& existing : particles) owned += existing.source_instance == instance->id ? 1 : 0;
+        if (owned >= std::max(1, config.max_particles)) return;
+    }
     Particle particle = {};
     particle.serial = next_serial++;
     particle.random_seed = randomFloat();
@@ -39,17 +125,11 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
             particle.position[0] = emitter.origin[0];
             particle.position[1] = emitter.origin[1];
         }
-        if (!parent_position) {
+        if (!instance) {
             const int point = emitter.control_point;
             if (point >= 0 && point < 8)
                 for (int axis = 0; axis < 3; ++axis) particle.position[axis] += control_points[point][axis];
         }
-    }
-    if (parent_position) {
-        // Attached child systems spawn around their parent particle.
-        particle.position[0] += parent_position[0];
-        particle.position[1] += parent_position[1];
-        particle.position[2] += parent_position[2];
     }
     // Child instance offset (WE "Children" component).
     particle.position[0] += child_offset[0];
@@ -115,17 +195,69 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
     particle.initial_size *= override_size;
     particle.size *= child_scale[0];
     particle.initial_size *= child_scale[0];
-    particle.base_position[0] = particle.position[0];
-    particle.base_position[1] = particle.position[1];
-    particle.base_position[2] = particle.position[2];
+
+    // Positions are authored in the system's local space. Worldspace systems leave it here: position and velocity
+    // take the layer's origin, rotation and scale once, and everything after that happens in scene coordinates.
+    const bool parent_in_world = instance && parent_system && parent_system->simulatesInWorld();
+    float matrix[4];
+    placementMatrix(matrix);
+    auto transformVelocity = [&]() {
+        const float x = particle.velocity[0], y = particle.velocity[1];
+        particle.velocity[0] = matrix[0] * x + matrix[2] * y;
+        particle.velocity[1] = matrix[1] * x + matrix[3] * y;
+    };
+    bool offset_from_instance = false;
+    if (instance) {
+        particle.source_instance = instance->id;
+        if (world_space) {
+            float anchor[3] = {instance->position[0], instance->position[1], instance->position[2]};
+            if (!parent_in_world && parent_system) parent_system->toWorldPosition(instance->position, anchor);
+            const float x = particle.position[0], y = particle.position[1];
+            particle.position[0] = anchor[0] + matrix[0] * x + matrix[2] * y;
+            particle.position[1] = anchor[1] + matrix[1] * x + matrix[3] * y;
+            particle.position[2] = anchor[2] + particle.position[2] * placement.scale[2];
+            transformVelocity();
+        } else if (parent_in_world) {
+            // A local-space child of a worldspace parent is drawn with the layer transform around its anchor.
+            const float x = particle.position[0], y = particle.position[1];
+            particle.position[0] = matrix[0] * x + matrix[2] * y;
+            particle.position[1] = matrix[1] * x + matrix[3] * y;
+            transformVelocity();
+            particle.size *= placementSizeScale();
+            particle.initial_size *= placementSizeScale();
+            offset_from_instance = instance->follow;
+            if (!offset_from_instance)
+                for (int axis = 0; axis < 3; ++axis) particle.position[axis] += instance->position[axis];
+        } else {
+            offset_from_instance = instance->follow;
+            if (!offset_from_instance)
+                for (int axis = 0; axis < 3; ++axis) particle.position[axis] += instance->position[axis];
+        }
+        if (offset_from_instance) particle.instance_id = instance->id;
+    } else if (world_space) {
+        float world[3];
+        toWorldPosition(particle.position, world);
+        for (int axis = 0; axis < 3; ++axis) particle.position[axis] = world[axis];
+        transformVelocity();
+    }
+    if (offset_from_instance)
+        for (int axis = 0; axis < 3; ++axis) particle.position[axis] += instance->position[axis];
+    particle.base_position[0] = offset_from_instance ? particle.position[0] - instance->position[0] : particle.position[0];
+    particle.base_position[1] = offset_from_instance ? particle.position[1] - instance->position[1] : particle.position[1];
+    particle.base_position[2] = offset_from_instance ? particle.position[2] - instance->position[2] : particle.position[2];
     if (is_rope_trail) particle.history.push_back({particle.position[0], particle.position[1], particle.position[2]});
     for (const ParticleOperatorConfig& particle_operator : config.operators) {
         if (particle_operator.type == "movement") {
             vec3_dup(particle.gravity, particle_operator.gravity);
+            if (parent_in_world && !world_space) {
+                // Gravity authored for a local-space child turns with the layer.
+                particle.gravity[0] = matrix[0] * particle_operator.gravity[0] + matrix[2] * particle_operator.gravity[1];
+                particle.gravity[1] = matrix[1] * particle_operator.gravity[0] + matrix[3] * particle_operator.gravity[1];
+            }
             particle.drag = particle_operator.drag;
         } else if (particle_operator.type == "alphafade") {
             particle.fade_in = particle_operator.fade_in_time;
-            particle.fade_out = particle_operator.fade_out_time == 0 ? 1.0f : particle_operator.fade_out_time;
+            particle.fade_out = particle_operator.fade_out_time;
         } else if (particle_operator.type == "oscillatealpha") {
             particle.osc_alpha_freq =
                 particle_operator.frequency_min +
@@ -149,10 +281,10 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
     }
     particles.push_back(particle);
 
-    // Event-spawn children are created where this particle spawned.
+    // Event children get one instance per parent particle: spawn children stay where the particle was created,
+    // follow children track it until it dies.
     for (ParticleSystem* child : children) {
-        if (child->spawn_type != ParticleSpawnType::EventSpawn) continue;
-        if (child->child_probability < 1.0f && randomFloat() > child->child_probability) continue;
-        child->spawnParticle(particle.position);
+        if (child->spawn_type == ParticleSpawnType::EventSpawn) child->createInstance(particle, false);
+        else if (child->spawn_type == ParticleSpawnType::EventFollow) child->createInstance(particle, true);
     }
 }

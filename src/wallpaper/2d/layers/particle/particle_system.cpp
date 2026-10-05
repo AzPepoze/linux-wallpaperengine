@@ -127,6 +127,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
     particle_system->is_trail =
         particle_system->config.renderer.type == "spritetrail" || particle_system->config.renderer.type == "trail";
     particle_system->use_perspective = (particle_system->config.flags & 4) != 0;
+    particle_system->world_space = (particle_system->config.flags & 1) != 0;
     particle_system->is_additive =
         materialUsesAdditiveBlend(particle_system->config.material_path, ctx, particle_system->config.additive);
 
@@ -218,10 +219,21 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
             }
             child_system->child_maxcount = child.maxcount;
             child_system->child_probability = child.probability;
+            child_system->parent_system = particle_system;
+            if (child_system->spawn_type == ParticleSpawnType::EventFollow ||
+                child_system->spawn_type == ParticleSpawnType::EventSpawn) {
+                // The particle file's max count is the capacity of each instance; the system needs room for all of
+                // its instances (the child entry's max count) at once.
+                const int instances = std::clamp(child.maxcount, 1, 128);
+                child_system->max_particles = std::max(child_system->max_particles, child_system->config.max_particles * instances);
+                child_system->particles.reserve((size_t)child_system->max_particles);
+                child_system->initParticleBuffers();
+            }
             particle_system->children.push_back(child_system);
         }
     }
-    for (float time = 0.0f; time < particle_system->config.start_time; time += 0.1f) particle_system->update(0.1f);
+    // Pre-simulation needs the layer placement for worldspace systems, so it runs on the first update.
+    particle_system->pending_warmup = particle_system->config.start_time;
     return particle_system;
 }
 
