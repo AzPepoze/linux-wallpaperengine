@@ -45,6 +45,10 @@ struct AudioEngine::Impl {
         ma_sound sound = {};
         ma_decoder decoder = {};
         bool has_decoder = false;
+        // Ogg Vorbis is decoded up front (see ogg_decoder.h); the buffer plays from this PCM.
+        std::vector<int16_t> vorbis_pcm;
+        ma_audio_buffer vorbis_buffer = {};
+        bool has_vorbis_buffer = false;
         bool active = false;
         GroupId group = kDefaultGroup;
         float base_volume = 1.0f;
@@ -54,6 +58,9 @@ struct AudioEngine::Impl {
             ma_sound_uninit(&sound);
             if (has_decoder) ma_decoder_uninit(&decoder);
             has_decoder = false;
+            if (has_vorbis_buffer) ma_audio_buffer_uninit(&vorbis_buffer);
+            has_vorbis_buffer = false;
+            vorbis_pcm.clear();
             active = false;
         }
     };

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <vector>
 
+#include "particle_rope.h"
 #include "particle_system.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
@@ -57,89 +58,109 @@ void ParticleSystem::draw(EngineContext& ctx) {
     if (RenderDiagnostics::instance().getConfig().disable_particles) return;
 
     ShaderPass* pass = material_pass;
+
     const bool material_ready = pass && pass->pass_textures.texture0.id != SG_INVALID_ID &&
                                 pass->pass_textures.texture0_view.id != SG_INVALID_ID;
 
     if (material_ready && !particles.empty() && pass->compiled.pipeline.id != SG_INVALID_ID &&
-        pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite &&
-        particle_vertex_buffer.id != SG_INVALID_ID && particle_index_buffer.id != SG_INVALID_ID) {
+        pass->compiled.vertex_layout != ShaderVertexLayout::Sprite2D && particle_vertex_buffer.id != SG_INVALID_ID &&
+        particle_index_buffer.id != SG_INVALID_ID) {
         std::vector<ParticleVertex> vertices;
+        std::vector<ParticleRopeVertex> rope_vertices;
         std::vector<uint32_t> indices;
         vertices.reserve(particles.size() * 4);
         indices.reserve(particles.size() * 6);
 
-        for (const Particle& particle : particles) {
-            if (!std::isfinite(particle.position[0]) || !std::isfinite(particle.position[1]) ||
-                !std::isfinite(particle.position[2]) || !std::isfinite(particle.size) || particle.size <= 0.0f)
-                continue;
-
-            const float age = particle.max_life - particle.life;
-            float lifetime = particle.max_life > 0.0f ? std::clamp(age / particle.max_life, 0.0f, 1.0f) : 0.0f;
-            if (spritesheet_frames > 1 && particle.frame >= 0.0f) {
-                if (config.animation_mode == "randomframe")
-                    lifetime = (particle.frame + 0.5f) / (float)spritesheet_frames;
-                else
-                    lifetime = particle.frame / (float)spritesheet_frames;
+        if (is_rope) {
+            std::vector<ParticleRopePoint> points;
+            if (is_rope_trail) {
+                for (const Particle& particle : particles) {
+                    points.clear();
+                    // Newest first: the trail shader maps its head to UV zero.
+                    points.push_back({{particle.position[0], particle.position[1], particle.position[2]},
+                                      {particle.color[0], particle.color[1], particle.color[2], particle.alpha},
+                                      particle.size});
+                    for (auto it = particle.history.rbegin(); it != particle.history.rend(); ++it)
+                        points.push_back({*it, points.front().color, particle.size});
+                    appendParticleRope(points, rope_vertices, indices);
+                }
+            } else {
+                std::vector<const Particle*> ordered;
+                for (const Particle& particle : particles) ordered.push_back(&particle);
+                std::sort(ordered.begin(), ordered.end(),
+                          [](const Particle* a, const Particle* b) { return a->serial < b->serial; });
+                for (const Particle* particle : ordered)
+                    points.push_back({{particle->position[0], particle->position[1], particle->position[2]},
+                                      {particle->color[0], particle->color[1], particle->color[2], particle->alpha},
+                                      particle->size});
+                appendParticleRope(points, rope_vertices, indices);
             }
-
-            const uint32_t base = (uint32_t)vertices.size();
-            auto add_vertex = [&](float u, float v) {
-                ParticleVertex vertex = {};
-                vertex.position[0] = particle.position[0];
-                vertex.position[1] = particle.position[1];
-                vertex.position[2] = particle.position[2];
-                vertex.texcoord[0] = u;
-                vertex.texcoord[1] = v;
-                vertex.texcoord[2] = particle.rotation;
-                // Sprite quads take the half-extent (size * 0.5); trails keep the full size so their aspect ratio
-                // is preserved.
-                vertex.texcoord[3] = is_trail ? particle.size : particle.size * 0.5f;
-                vertex.color[0] = particle.color[0];
-                vertex.color[1] = particle.color[1];
-                vertex.color[2] = particle.color[2];
-                vertex.color[3] = particle.alpha;
-                float velocity_x = particle.velocity[0];
-                float velocity_y = particle.velocity[1];
-                // ComputeParticleTrailTangents normalizes the cross product.
-                // Avoid feeding it a zero vector for incomplete/static presets.
-                if (is_trail && velocity_x * velocity_x + velocity_y * velocity_y < 1e-8f) velocity_y = 0.001f;
-                vertex.texcoord_c1[0] = velocity_x;
-                vertex.texcoord_c1[1] = velocity_y;
-                vertex.texcoord_c1[2] = particle.velocity[2];
-                vertex.texcoord_c1[3] = lifetime;
-                vertex.texcoord_c2[0] = 0.0f;
-                vertex.texcoord_c2[1] = 0.0f;
-                vertices.push_back(vertex);
-            };
-
-            add_vertex(0.0f, 1.0f);
-            add_vertex(1.0f, 1.0f);
-            add_vertex(1.0f, 0.0f);
-            add_vertex(0.0f, 0.0f);
-            indices.push_back(base + 0);
-            indices.push_back(base + 1);
-            indices.push_back(base + 2);
-            indices.push_back(base + 2);
-            indices.push_back(base + 3);
-            indices.push_back(base + 0);
         }
 
-        if (!vertices.empty() && !indices.empty()) {
-            const size_t max_vertices = (size_t)max_particles * 4;
-            const size_t max_indices = (size_t)max_particles * 6;
-            if (vertices.size() > max_vertices) vertices.resize(max_vertices);
-            if (indices.size() > max_indices) indices.resize(max_indices);
+        if (!is_rope)
+            for (const Particle& particle : particles) {
+                if (!std::isfinite(particle.position[0]) || !std::isfinite(particle.position[1]) ||
+                    !std::isfinite(particle.position[2]) || !std::isfinite(particle.size) || particle.size <= 0.0f)
+                    continue;
 
-            for (size_t i = 0; i < indices.size(); ++i) {
-                if (indices[i] >= vertices.size()) {
-                    indices[i] = 0;
+                const float age = particle.max_life - particle.life;
+                float lifetime = particle.max_life > 0.0f ? std::clamp(age / particle.max_life, 0.0f, 1.0f) : 0.0f;
+                if (spritesheet_frames > 1 && particle.frame >= 0.0f) {
+                    if (config.animation_mode == "randomframe")
+                        lifetime = (particle.frame + 0.5f) / (float)spritesheet_frames;
+                    else
+                        lifetime = particle.frame / (float)spritesheet_frames;
                 }
+
+                const uint32_t base = (uint32_t)vertices.size();
+                auto add_vertex = [&](float u, float v) {
+                    ParticleVertex vertex = {};
+                    vertex.position[0] = particle.position[0];
+                    vertex.position[1] = particle.position[1];
+                    vertex.position[2] = particle.position[2];
+                    vertex.texcoord[0] = u;
+                    vertex.texcoord[1] = v;
+                    vertex.texcoord[2] = particle.rotation;
+                    // Sprite quads take the half-extent (size * 0.5); trails keep the full size so their aspect ratio
+                    // is preserved.
+                    vertex.texcoord[3] = is_trail ? particle.size : particle.size * 0.5f;
+                    vertex.color[0] = particle.color[0];
+                    vertex.color[1] = particle.color[1];
+                    vertex.color[2] = particle.color[2];
+                    vertex.color[3] = particle.alpha;
+                    float velocity_x = particle.velocity[0];
+                    float velocity_y = particle.velocity[1];
+                    // ComputeParticleTrailTangents normalizes the cross product.
+                    // Avoid feeding it a zero vector for incomplete/static presets.
+                    if (is_trail && velocity_x * velocity_x + velocity_y * velocity_y < 1e-8f) velocity_y = 0.001f;
+                    vertex.texcoord_c1[0] = velocity_x;
+                    vertex.texcoord_c1[1] = velocity_y;
+                    vertex.texcoord_c1[2] = particle.velocity[2];
+                    vertex.texcoord_c1[3] = lifetime;
+                    vertex.texcoord_c2[0] = 0.0f;
+                    vertex.texcoord_c2[1] = 0.0f;
+                    vertices.push_back(vertex);
+                };
+
+                add_vertex(0.0f, 1.0f);
+                add_vertex(1.0f, 1.0f);
+                add_vertex(1.0f, 0.0f);
+                add_vertex(0.0f, 0.0f);
+                indices.push_back(base + 0);
+                indices.push_back(base + 1);
+                indices.push_back(base + 2);
+                indices.push_back(base + 2);
+                indices.push_back(base + 3);
+                indices.push_back(base + 0);
             }
 
-            sg_range vertex_range = {.ptr = vertices.data(), .size = vertices.size() * sizeof(ParticleVertex)};
-            sg_range index_range = {.ptr = indices.data(), .size = indices.size() * sizeof(uint32_t)};
-            sg_update_buffer(particle_vertex_buffer, &vertex_range);
-            sg_update_buffer(particle_index_buffer, &index_range);
+        if (!indices.empty() && (!vertices.empty() || !rope_vertices.empty())) {
+            const sg_range vertex_data =
+                is_rope ? sg_range{rope_vertices.data(), rope_vertices.size() * sizeof(ParticleRopeVertex)}
+                        : sg_range{vertices.data(), vertices.size() * sizeof(ParticleVertex)};
+            const sg_range index_data = {indices.data(), indices.size() * sizeof(uint32_t)};
+            sg_update_buffer(particle_vertex_buffer, &vertex_data);
+            sg_update_buffer(particle_index_buffer, &index_data);
 
             const float parallax_x = parallax[0] * ctx.parallax.smooth_x * ctx.parallax.scale;
             const float parallax_y = parallax[1] * ctx.parallax.smooth_y * ctx.parallax.scale;
@@ -224,7 +245,11 @@ void ParticleSystem::draw(EngineContext& ctx) {
             if (frame_width > 0.0f && frame_height > 0.0f && texture_width > 0 && texture_height > 0) {
                 texture_ratio = ((float)texture_height * frame_height) / ((float)texture_width * frame_width);
             }
-            if (is_trail) {
+            if (is_rope) {
+                fillVec4(particle_builtins.render_var0, (float)trailSegments(), 0.0f,
+                         is_rope_trail ? trailSampleFraction() : 1.0f,
+                         (float)(is_rope_trail ? trailSegments() + 1 : std::max<size_t>(2, particles.size())));
+            } else if (is_trail) {
                 fillVec4(particle_builtins.render_var0, config.renderer.length, config.renderer.max_length, 0.0f,
                          (float)std::max(0, max_particles - 1));
             } else {
@@ -233,7 +258,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
             fillVec4(particle_builtins.render_var1, frame_width, frame_height, (float)spritesheet_frames,
                      texture_ratio);
 
-            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index, ctx.time);
+            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index, ctx.scene.elapsed_time);
             sg_view overrides[11] = {};
             if (has_refract && scene_color_view.id != SG_INVALID_ID) overrides[2] = scene_color_view;
             render_pass.override_views = overrides;

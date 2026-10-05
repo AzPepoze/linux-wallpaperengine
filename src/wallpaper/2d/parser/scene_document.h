@@ -128,6 +128,8 @@ struct TextObjectDocument {
     float pointsize = 12.0f;
     std::array<float, 3> color = {1.0f, 1.0f, 1.0f};
     float alpha = 1.0f;
+    float brightness = 1.0f;
+    float background_brightness = 1.0f;
     std::array<float, 2> size = {0.0f, 0.0f};
     float maxwidth = 0.0f;
     bool limit_width = false;
@@ -197,6 +199,7 @@ struct SceneGeneralDocument {
     bool clear_enabled = true;
     bool hdr = true;
     float zoom = 1.0f;
+    ScriptedValue zoom_script;
     float fov = 50.0f;
     float near_z = 0.01f;
     float far_z = 10000.0f;

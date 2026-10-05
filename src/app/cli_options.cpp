@@ -1,6 +1,7 @@
 #include "app/cli_options.h"
 
 #include <stdlib.h>
+#include <cmath>
 #include <string.h>
 
 #include <string>
@@ -118,6 +119,19 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
                configured != 0.0f ? "config" : "default");
         return configured != 0.0f ? configured : fallback;
     };
+
+    auto introValue = [&](const char* option, const char* key, const char* fallback) {
+        const std::string text = resolve({option}, key, fallback);
+        char* end = nullptr;
+        const float value = strtof(text.c_str(), &end);
+        if (end == text.c_str() || *end || !std::isfinite(value) || value <= 0.0f) {
+            fprintf(stderr, "Invalid %s '%s'; using %s\n", option, text.c_str(), fallback);
+            return strtof(fallback, nullptr);
+        }
+        return value;
+    };
+    opts.intro_zoom = introValue("--intro-zoom", "intro_zoom", "1.0");
+    opts.intro_duration = introValue("--intro-duration", "intro_duration", "4");
 
     const std::string effect_resolution = resolve({"--effect-resolution"}, "effect_resolution", "auto");
     opts.native_effect_resolution = effect_resolution == "native";

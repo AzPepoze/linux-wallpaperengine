@@ -125,10 +125,10 @@ std::vector<std::string> layoutLines(const stbtt_fontinfo& font, float scale, co
     return lines;
 }
 
-// Pixels are RGBA8 as a little-endian word: alpha in the top byte, red in the lowest. Text is white and the layer tint
-// colors it; over an opaque background the glyph coverage mixes the background toward white instead.
-void blitLine(std::vector<uint32_t>& pixels, int canvas_w, int canvas_h, const stbtt_fontinfo& font, float scale,
-              const std::string& line, float pen_x, float baseline, bool opaque_background) {
+// Floating-point pixels retain HDR brightness. The layer tint colors the glyphs; opaque
+// backgrounds blend glyph coverage into their background color.
+void blitLine(std::vector<float>& pixels, int canvas_w, int canvas_h, const stbtt_fontinfo& font, float scale,
+              const std::string& line, float pen_x, float baseline, bool opaque_background, float brightness) {
     size_t index = 0;
     while (index < line.size()) {
         const int cp = nextCodepoint(line, index);
@@ -154,18 +154,14 @@ void blitLine(std::vector<uint32_t>& pixels, int canvas_w, int canvas_h, const s
                 for (int x = 0; x < gw; ++x) {
                     const int px = gx + x;
                     if (px < 0 || px >= canvas_w) continue;
-                    const uint32_t coverage = bitmap[(size_t)y * (size_t)gw + x];
-                    uint32_t& dst = pixels[(size_t)py * (size_t)canvas_w + px];
+                    const float coverage = bitmap[(size_t)y * (size_t)gw + x] / 255.0f;
+                    float* dst = &pixels[((size_t)py * canvas_w + px) * 4];
                     if (opaque_background) {
-                        uint32_t mixed = 0xFF000000u;
-                        for (int channel = 0; channel < 3; ++channel) {
-                            const uint32_t below = (dst >> (8 * channel)) & 0xFFu;
-                            const uint32_t above = below + (255u - below) * coverage / 255u;
-                            mixed |= std::max(below, above) << (8 * channel);
-                        }
-                        dst = mixed;
-                    } else if (coverage > (dst >> 24)) {
-                        dst = (coverage << 24) | 0x00FFFFFFu;
+                        for (int channel = 0; channel < 3; ++channel)
+                            dst[channel] += (brightness - dst[channel]) * coverage;
+                    } else if (coverage > dst[3]) {
+                        dst[0] = dst[1] = dst[2] = brightness;
+                        dst[3] = coverage;
                     }
                 }
             }
@@ -191,17 +187,6 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     layer->tint[2] = config.color[2];
     layer->tint[3] = std::clamp(config.alpha, 0.0f, 1.0f);
     layer->rebuild(ctx);
-    if (!doc.text.script.empty()) {
-        layer->script_ = std::make_unique<SceneScript>();
-        layer->script_->setLayerId(doc.node.id);
-        layer->script_->setProperty("text");
-        if (layer->script_->load(doc.text.script, doc.text.script_properties_json)) {
-            layer->script_timer_ = 1.0f;  // evaluate on the first update
-            LOG_I("Text layer '%s': SceneScript loaded", config.name.c_str());
-        } else {
-            layer->script_.reset();
-        }
-    }
     LOG_I("Created text layer '%s' (font='%s', pointsize=%.1f)", config.name.c_str(), config.font.c_str(),
           config.pointsize);
     return layer;
@@ -291,6 +276,10 @@ bool TextLayer::propertyGetNumber(const std::string& name, double& out) const {
         out = config_.max_rows;
     else if (name == "alpha")
         out = config_.alpha;
+    else if (name == "brightness")
+        out = config_.brightness;
+    else if (name == "backgroundbrightness")
+        out = config_.background_brightness;
     else if (name == "padding")
         out = config_.padding;
     else
@@ -303,7 +292,11 @@ bool TextLayer::propertySetNumber(const std::string& name, double value) {
         config_.alpha = (float)value;
         return true;
     }
-    if (name == "pointsize")
+    if (name == "brightness")
+        config_.brightness = (float)value;
+    else if (name == "backgroundbrightness")
+        config_.background_brightness = (float)value;
+    else if (name == "pointsize")
         config_.pointsize = (float)value;
     else if (name == "maxwidth")
         config_.maxwidth = (float)value;
@@ -342,15 +335,7 @@ ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
     return rect;
 }
 
-void TextLayer::update(float dt, EngineContext& ctx) {
-    if (script_ && script_->valid()) {
-        script_timer_ += dt;
-        if (script_timer_ >= 0.25f) {
-            script_timer_ = 0.0f;
-            ScriptValue text = ScriptValue::makeString(current_text_);
-            if (script_->updateValue(text) && !text.text.empty()) config_.text = text.text;
-        }
-    }
+void TextLayer::update(float, EngineContext& ctx) {
     if (config_.text != current_text_ || needs_rebuild_) {
         needs_rebuild_ = false;
         rebuild(ctx);
@@ -374,7 +359,7 @@ bool TextLayer::resolveFontPath(EngineContext& ctx) {
     return false;
 }
 
-bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height, float& pixel_scale) const {
+bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, float& pixel_scale) const {
     const LoadedFont* loaded = loadFont(font_path_);
     if (!loaded) return false;
     const stbtt_fontinfo& font = loaded->info;
@@ -408,12 +393,10 @@ bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height
 
     // Padding is empty border around the text, so effects have room to draw outside the glyphs.
     const float pad = std::max(0.0f, config_.padding) * pixel_scale;
-    width = std::clamp(config_.size[0] > 0.0f ? (int)lroundf(config_.size[0] * pixel_scale)
-                                              : (int)ceilf(natural_width + 2.0f * pad),
-                       1, kMaxTextureSize);
-    height = std::clamp(config_.size[1] > 0.0f ? (int)lroundf(config_.size[1] * pixel_scale)
-                                               : (int)ceilf(block_height + 2.0f * pad),
-                        1, kMaxTextureSize);
+    width =
+        std::clamp((int)ceilf(std::max(config_.size[0] * pixel_scale, natural_width + 2.0f * pad)), 1, kMaxTextureSize);
+    height =
+        std::clamp((int)ceilf(std::max(config_.size[1] * pixel_scale, block_height + 2.0f * pad)), 1, kMaxTextureSize);
 
     float start_y = pad + ((float)height - 2.0f * pad - block_height) * 0.5f;
     if (config_.vertical_align == "top")
@@ -421,17 +404,16 @@ bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height
     else if (config_.vertical_align == "bottom")
         start_y = (float)height - pad - block_height;
 
-    // Over an opaque background the tint multiplies it too, so divide the tint out of the stored color.
-    uint32_t background = 0u;
+    // Glyph brightness is stored before effects, without clipping HDR values or changing coverage.
+    float background[4] = {};
     if (config_.opaque_background) {
-        background = 0xFF000000u;
-        for (int channel = 0; channel < 3; ++channel) {
-            const float shown = std::clamp(config_.background_color[(size_t)channel] / std::max(tint[channel], 1.0f / 255.0f),
-                                           0.0f, 1.0f);
-            background |= (uint32_t)lroundf(shown * 255.0f) << (8 * channel);
-        }
+        background[3] = 1.0f;
+        for (int channel = 0; channel < 3; ++channel)
+            background[channel] = config_.background_color[(size_t)channel] * config_.background_brightness /
+                                  std::max(tint[channel], 1.0f / 255.0f);
     }
-    pixels.assign((size_t)width * (size_t)height, background);
+    pixels.resize((size_t)width * height * 4);
+    for (size_t i = 0; i < pixels.size(); i += 4) std::copy(background, background + 4, pixels.begin() + i);
     for (size_t i = 0; i < lines.size(); ++i) {
         const float line_width = measureText(font, scale, lines[i]);
         float pen_x = pad + ((float)width - 2.0f * pad - line_width) * 0.5f;
@@ -441,30 +423,30 @@ bool TextLayer::rasterize(std::vector<uint32_t>& pixels, int& width, int& height
             pen_x = (float)width - pad - line_width;
 
         const float baseline = start_y + (float)i * line_advance + ascent_px;
-        blitLine(pixels, width, height, font, scale, lines[i], pen_x, baseline, config_.opaque_background);
+        blitLine(pixels, width, height, font, scale, lines[i], pen_x, baseline, config_.opaque_background,
+                 config_.brightness);
     }
     return true;
 }
 
 bool TextLayer::rebuild(EngineContext& ctx) {
     current_text_ = config_.text;
-    if (config_.text.empty()) return false;
     if (!resolveFontPath(ctx)) return false;
 
-    std::vector<uint32_t> pixels;
+    std::vector<float> pixels;
     int width = 0;
     int height = 0;
     float pixel_scale = 1.0f;
     if (!rasterize(pixels, width, height, pixel_scale) || pixels.empty()) return false;
 
-    if (config_.size[0] <= 0.0f) size[0] = (float)width / pixel_scale;
-    if (config_.size[1] <= 0.0f) size[1] = (float)height / pixel_scale;
+    size[0] = (float)width / pixel_scale;
+    size[1] = (float)height / pixel_scale;
 
     sg_image_desc desc = {};
     desc.width = width;
     desc.height = height;
-    desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-    desc.data.mip_levels[0] = {pixels.data(), pixels.size() * sizeof(uint32_t)};
+    desc.pixel_format = SG_PIXELFORMAT_RGBA32F;
+    desc.data.mip_levels[0] = {pixels.data(), pixels.size() * sizeof(float)};
     const sg_image image = sg_make_image(&desc);
     if (image.id == SG_INVALID_ID) return false;
 

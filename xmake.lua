@@ -259,6 +259,12 @@ add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer
 
 add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/2d/input/pointer_input.cpp"})
 
+add_test("particle_data_tests", {"tests/particle_data_test.cpp", "src/wallpaper/2d/layers/particle/particle_parser.cpp"},
+         {"cjson", "linmath.h"})
+add_test("media_thumbnail_texture_tests", {"tests/media_thumbnail_texture_test.cpp",
+                                         "src/shared/media/media_thumbnail_texture.cpp"}, {"sokol"})
+add_test("readback_pixels_tests", {"tests/readback_pixels_test.cpp"}, {"sokol"})
+
 add_test("scene_script_tests", {"tests/scene_script_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
                                 "src/wallpaper/2d/script/script_engine.cpp",
                                 "src/wallpaper/2d/script/script_engine_prelude.cpp",
@@ -288,6 +294,13 @@ add_test("shader_tests", {"tests/shader_preprocess_test.cpp", "src/shared/graphi
                           "src/shared/graphics/shader/shader_swizzle_rewrite.cpp", "src/shared/core/vfs.cpp",
                           "src/shared/core/logger.cpp", "src/shared/core/disk_cache.cpp"},
          {"sokol"})
+
+add_test("vulkan_source_tests", {"tests/vulkan_source_test.cpp", "src/shared/graphics/shader/shader_vulkan_source.cpp",
+                                  "src/shared/core/logger.cpp", "src/shared/core/disk_cache.cpp"},
+         {"sokol"})
+target("vulkan_source_tests")
+    add_includedirs("/usr/include/shader-slang")
+target_end()
 
 add_test("project_tests", {"tests/project_info_test.cpp", "src/wallpaper/project_info.cpp",
                            "src/wallpaper/video/video_properties.cpp", "src/shared/core/vfs.cpp",
@@ -334,8 +347,13 @@ add_test("wallpaper_instance_tests", {"tests/wallpaper_instance_test.cpp", "src/
 
 add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio/audio_engine.cpp",
                                 "src/shared/audio/audio_engine_stream.cpp", "src/shared/audio/audio_engine_spectrum.cpp",
-                                "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
+                                "src/shared/audio/ogg_decoder.cpp", "src/shared/core/vfs.cpp",
+                                "src/shared/core/logger.cpp"},
          {"miniaudio", "lz4", "stb"}, {"dl", "m", "pthread"})
+
+add_test("intro_zoom_tests", {"tests/intro_zoom_test.cpp"})
+
+add_test("ogg_decoder_tests", {"tests/ogg_decoder_test.cpp", "src/shared/audio/ogg_decoder.cpp"}, {"stb"})
 
 add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp",
                                     "src/wallpaper/transition/transition_catalog.cpp"}, {"cjson"})

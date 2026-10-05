@@ -159,6 +159,8 @@ void parseTextFields(const cJSON* object, TextObjectDocument& text_doc) {
     parseFloat(member(object, "pointsize"), text_doc.pointsize);
     parseVec(member(object, "color"), text_doc.color.data(), 3);
     parseFloat(member(object, "alpha"), text_doc.alpha);
+    parseFloat(member(object, "brightness"), text_doc.brightness);
+    parseFloat(member(object, "backgroundbrightness"), text_doc.background_brightness);
     parseVec(member(object, "size"), text_doc.size.data(), 2);
     parseFloat(member(object, "maxwidth"), text_doc.maxwidth);
     text_doc.limit_width = parseBool(member(object, "limitwidth"), false);

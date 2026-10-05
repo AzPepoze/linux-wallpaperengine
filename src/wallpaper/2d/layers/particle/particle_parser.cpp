@@ -118,6 +118,8 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         if (cJSON_IsString(type) && type->valuestring) config.renderer.type = type->valuestring;
         config.renderer.length = readFloat(cJSON_GetObjectItemCaseSensitive(renderer, "length"));
         config.renderer.max_length = readFloat(cJSON_GetObjectItemCaseSensitive(renderer, "maxlength"));
+        if (const cJSON* segments = cJSON_GetObjectItemCaseSensitive(renderer, "segments"); cJSON_IsNumber(segments))
+            config.renderer.segments = segments->valueint;
     }
 
     // Legacy particle files may carry a pass directly; the referenced material still wins.
@@ -127,6 +129,15 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
     config.additive =
         cJSON_IsString(blending) && blending->valuestring && strcmp(blending->valuestring, "additive") == 0;
     config.start_time = readFloat(cJSON_GetObjectItemCaseSensitive(document, "starttime"));
+
+    const cJSON* control_points = cJSON_GetObjectItemCaseSensitive(document, "controlpoint");
+    cJSON* point;
+    cJSON_ArrayForEach(point, control_points) {
+        const int index = (int)readFloat(cJSON_GetObjectItemCaseSensitive(point, "id"));
+        if (index < 0 || index >= 8) continue;
+        config.control_points[index].flags = (int)readFloat(cJSON_GetObjectItemCaseSensitive(point, "flags"));
+        readVec3(cJSON_GetObjectItemCaseSensitive(point, "offset"), config.control_points[index].offset);
+    }
 
     const cJSON* emitters = cJSON_GetObjectItemCaseSensitive(document, "emitter");
     cJSON* emitter;
@@ -138,6 +149,8 @@ ParticleSystemConfig ParticleParser::parse(const cJSON* document) {
         readVec3(cJSON_GetObjectItemCaseSensitive(emitter, "distancemax"), emitter_config.distance_max);
         emitter_config.distance_min = readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "distancemin"));
         emitter_config.rate = readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "rate"));
+        emitter_config.flags = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "flags"));
+        emitter_config.control_point = (int)readFloat(cJSON_GetObjectItemCaseSensitive(emitter, "controlpoint"));
         config.emitters.push_back(emitter_config);
     }
 

@@ -270,6 +270,16 @@ std::string make_vulkan_source(const sg_shader_desc& desc, const std::string& or
     std::string source = strip_version(original);
     remove_precision_statement(source);
 
+    if (stage == SG_SHADERSTAGE_VERTEX) {
+        // Slang numbers vertex inputs by declaration order, but the pipeline layout follows desc.attrs.
+        std::map<std::string, int> attribute_locations;
+        for (int slot = 0; slot < SG_MAX_VERTEX_ATTRIBUTES; ++slot) {
+            const char* attribute_name = desc.attrs[slot].glsl_name;
+            if (attribute_name && attribute_name[0]) attribute_locations.emplace(attribute_name, slot);
+        }
+        source = apply_varying_locations(source, "in", attribute_locations);
+    }
+
     std::string declarations;
 
     for (int slot = 0; slot < SG_MAX_UNIFORMBLOCK_BINDSLOTS; ++slot) {

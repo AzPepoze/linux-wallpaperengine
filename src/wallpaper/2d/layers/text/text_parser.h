@@ -13,6 +13,8 @@ struct TextObjectConfig {
     float pointsize = 12.0f;
     std::array<float, 3> color = {1.0f, 1.0f, 1.0f};
     float alpha = 1.0f;
+    float brightness = 1.0f;
+    float background_brightness = 1.0f;
     std::array<float, 2> size = {0.0f, 0.0f};
     float maxwidth = 0.0f;
     bool limit_width = false;

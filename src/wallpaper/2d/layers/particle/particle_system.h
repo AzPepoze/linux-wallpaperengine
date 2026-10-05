@@ -2,6 +2,7 @@
 #define PARTICLE_SYSTEM_H
 
 #include <string>
+#include <array>
 #include <vector>
 
 #include "linmath.h"
@@ -9,6 +10,8 @@
 #include "shared/graphics/gfx_resource.h"
 
 struct Particle {
+    uint64_t serial = 0;
+    std::vector<std::array<float, 3>> history;
     vec3 position = {0, 0, 0};
     vec3 base_position = {0, 0, 0};
     vec3 velocity = {0, 0, 0};
@@ -73,6 +76,14 @@ class ParticleSystem {
     bool is_additive = false;
     bool has_refract = false;
     bool is_trail = false;
+    bool is_rope = false;
+    bool is_rope_trail = false;
+    uint64_t next_serial = 0;
+    size_t trailSegments() const;
+    // Trail history is sampled by the whole system at once so one shader value can blend between samples.
+    float trailSampleInterval() const;
+    float trailSampleFraction() const;
+    float trail_sample_timer = 0.0f;
     bool use_perspective = false;
     // A child system is emitted from its parent's particles rather than from its
     // own emitter region; this tracks its accumulated emission time.
@@ -106,8 +117,9 @@ class ParticleSystem {
     // Script playback control: `stop` ends emission and lets live particles finish, `pause` freezes the simulation.
     bool emitting = true;
     bool paused = false;
-    // Control points are stored for scripts; nothing in the simulation reads them yet.
+    // Control points are in the particle system's local coordinate space.
     float control_points[8][3] = {};
+    void updateControlPoints(const float* cursor_local);
     void emitParticles(int count);
     void clearParticles();
 

@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../gpu_readback.h"
+#include "../readback_pixels.h"
 
 GpuImageReadbackResult gpu_readback_image_rgba8(sg_image image) {
     GpuImageReadbackResult result = {};
@@ -15,7 +16,10 @@ GpuImageReadbackResult gpu_readback_image_rgba8(sg_image image) {
     const int height = img->cmn.height;
     if (width <= 0 || height <= 0) return result;
 
-    const VkDeviceSize num_bytes = (VkDeviceSize)width * (VkDeviceSize)height * 4;
+    const size_t pixel_size = readbackPixelSize(img->cmn.pixel_format);
+    if (!pixel_size) return result;
+    const size_t pixel_count = (size_t)width * height;
+    const VkDeviceSize num_bytes = (VkDeviceSize)pixel_count * pixel_size;
 
     VkBuffer staging_buf = VK_NULL_HANDLE;
     VkDeviceMemory staging_mem = VK_NULL_HANDLE;
@@ -81,8 +85,8 @@ GpuImageReadbackResult gpu_readback_image_rgba8(sg_image image) {
     if (vkMapMemory(_sg.vk.dev, staging_mem, 0, num_bytes, 0, &mapped_ptr) == VK_SUCCESS && mapped_ptr) {
         result.width = width;
         result.height = height;
-        result.rgba_data.resize((size_t)num_bytes);
-        memcpy(result.rgba_data.data(), mapped_ptr, (size_t)num_bytes);
+        result.rgba_data.resize(pixel_count * 4);
+        convertReadbackPixels((const uint8_t*)mapped_ptr, result.rgba_data.data(), pixel_count, img->cmn.pixel_format);
         vkUnmapMemory(_sg.vk.dev, staging_mem);
         result.success = true;
     }

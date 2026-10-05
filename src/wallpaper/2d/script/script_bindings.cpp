@@ -35,7 +35,7 @@ void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& obje
     if (!object.node.valid) return;
     const uint32_t id = object.node.id;
     backend_.rememberConfig(id, object.raw_json);
-    const auto bind =[&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
+    const auto bind = [&](const wallpaper_engine::ScriptedValue& scripted, BoundProperty property) {
         if (!scripted.empty()) add(id, property, scripted.script, scripted.properties_json);
     };
     if (!object.animations.empty()) animations_.add(id, object.animations);
@@ -45,6 +45,8 @@ void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& obje
     bind(object.visible_script, BoundProperty::Visible);
     bind(object.image.color_script, BoundProperty::Color);
     bind(object.image.size_script, BoundProperty::Size);
+    if (!object.text.script.empty())
+        add(id, BoundProperty::Text, object.text.script, object.text.script_properties_json);
     for (size_t i = 0; i < object.effects.size(); ++i) {
         const auto& effect = object.effects[i];
         if (!effect.visible_script.empty())
@@ -58,8 +60,8 @@ void ScriptBindings::addObject(const wallpaper_engine::SceneObjectDocument& obje
                 animations_.add(id, {animation});
             }
             if (!constant.script.empty())
-                add(id, BoundProperty::EffectConstant, constant.script.script, constant.script.properties_json,
-                    (int)i, constant.name);
+                add(id, BoundProperty::EffectConstant, constant.script.script, constant.script.properties_json, (int)i,
+                    constant.name);
         }
     }
 }
@@ -88,7 +90,8 @@ bool sceneField(EngineContext& ctx, const std::string& name, SceneField& field) 
     if (name == "farz") return numbers({&general.far_z});
     if (name == "bloomstrength") return numbers({&general.bloom.strength, &general.bloom.hdr_strength});
     if (name == "bloomthreshold") return numbers({&general.bloom.threshold, &general.bloom.hdr_threshold});
-    if (name == "clearcolor") return numbers({&general.clear_color[0], &general.clear_color[1], &general.clear_color[2]});
+    if (name == "clearcolor")
+        return numbers({&general.clear_color[0], &general.clear_color[1], &general.clear_color[2]});
     if (name == "ambientcolor")
         return numbers({&general.ambient_color[0], &general.ambient_color[1], &general.ambient_color[2]});
     if (name == "skylightcolor")
@@ -323,7 +326,8 @@ std::vector<uint32_t> SceneScriptBackend::takeDestroyed() {
 
 bool SceneScriptBackend::sortLayer(uint32_t id, int index) {
     auto& layers = ctx_.scene.layers;
-    const auto it = std::find_if(layers.begin(), layers.end(), [&](const Layer* l) { return l->scene_object_id == id; });
+    const auto it =
+        std::find_if(layers.begin(), layers.end(), [&](const Layer* l) { return l->scene_object_id == id; });
     if (it == layers.end()) return false;
     Layer* layer = *it;
     layers.erase(it);
@@ -369,6 +373,12 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
     auto loaded = std::make_unique<SceneScript>();
     loaded->setLayerId(object_id);
     switch (property) {
+        case BoundProperty::Text:
+            loaded->setProperty("text");
+            break;
+        case BoundProperty::SceneZoom:
+            loaded->setProperty("zoom");
+            break;
         case BoundProperty::Origin:
             loaded->setProperty("origin");
             break;
@@ -413,6 +423,15 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
 bool ScriptBindings::read(const Binding& binding, ScriptValue& value) {
     const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(binding.object_id) : nullptr;
     switch (binding.property) {
+        case BoundProperty::Text: {
+            std::string text;
+            if (!backend_.getString(binding.object_id, "text", text)) return false;
+            value = ScriptValue::makeString(text);
+            return true;
+        }
+        case BoundProperty::SceneZoom:
+            value = ScriptValue::makeNumber(ctx_.scene.general.zoom);
+            return true;
         case BoundProperty::Origin:
         case BoundProperty::Scale:
         case BoundProperty::Angles: {
@@ -469,6 +488,12 @@ bool ScriptBindings::read(const Binding& binding, ScriptValue& value) {
 void ScriptBindings::write(const Binding& binding, const ScriptValue& value) {
     SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(binding.object_id) : nullptr;
     switch (binding.property) {
+        case BoundProperty::Text:
+            backend_.setString(binding.object_id, "text", value.text);
+            return;
+        case BoundProperty::SceneZoom:
+            if (std::isfinite(value.number) && value.number > 0.0) ctx_.scene.general.zoom = (float)value.number;
+            return;
         case BoundProperty::Origin:
         case BoundProperty::Scale:
         case BoundProperty::Angles: {
@@ -476,6 +501,8 @@ void ScriptBindings::write(const Binding& binding, const ScriptValue& value) {
             std::array<float, 3>& v = binding.property == BoundProperty::Origin  ? node->origin
                                       : binding.property == BoundProperty::Scale ? node->scale
                                                                                  : node->angles;
+            for (int i = 0; i < 3; ++i)
+                if (!std::isfinite((float)value.vec[i])) return;
             for (int i = 0; i < 3; ++i) v[i] = (float)value.vec[i];
             return;
         }
@@ -566,8 +593,8 @@ void ScriptBindings::dispatchPointer() {
     if (cursor_layers_.empty()) return;
 
     std::optional<LocalHit> hit;
+    std::vector<HitCandidate> candidates;
     if (input.mouse_position_valid && ctx_.scene.scene_tree) {
-        std::vector<HitCandidate> candidates;
         const SceneVisibility visibility(ctx_);
         for (Layer* layer : ctx_.scene.layers) {
             auto* image = dynamic_cast<ImageLayer*>(layer);
@@ -589,7 +616,10 @@ void ScriptBindings::dispatchPointer() {
         hit = hitTest({input.mouse_world_x, input.mouse_world_y}, candidates);
     }
 
-    for (const PointerEvent& event : pointer_.update(hit, input.buttons)) {
+    const std::optional<WorldPoint> cursor = input.mouse_position_valid
+                                                 ? std::optional<WorldPoint>{{input.mouse_world_x, input.mouse_world_y}}
+                                                 : std::nullopt;
+    for (const PointerEvent& event : pointer_.update(hit, input.buttons, cursor, candidates)) {
         // Press, release and click are the primary button's; hover events are the same for every button.
         const bool button_event = event.type == PointerEventType::Down || event.type == PointerEventType::Up ||
                                   event.type == PointerEventType::Click;

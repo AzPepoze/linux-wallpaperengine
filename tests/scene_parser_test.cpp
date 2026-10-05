@@ -104,6 +104,21 @@ SceneDocument parseText(const char* json) {
     return doc;
 }
 
+void testTextAndSceneZoomFields() {
+    const auto doc = parseText(R"({
+        "general": {"zoom": {"value": 1.01, "script": "export function applyUserProperties(p) {}"}},
+        "objects": [{"id": 1, "text": "Clock", "brightness": 2.39, "backgroundbrightness": 0.4,
+                     "scale": {"value": 0.75, "script": "export function update(v) { v.x = undefined; return v; }"}}]
+    })");
+    CHECK(doc.general.zoom_script.script.find("applyUserProperties") != std::string::npos);
+    CHECK(std::fabs(doc.general.zoom - 1.01f) < 1e-6);
+    CHECK(doc.objects.size() == 1);
+    if (doc.objects.empty()) return;
+    CHECK(doc.objects[0].node.scale == (std::array<float, 3>{0.75, 0.75, 0.75}));
+    CHECK(std::fabs(doc.objects[0].text.brightness - 2.39f) < 1e-6);
+    CHECK(std::fabs(doc.objects[0].text.background_brightness - 0.4f) < 1e-6);
+}
+
 void testObjects() {
     const SceneDocument doc = parseText(kScene);
     test::expect("objects", doc.objects.size() == 6, "every object is kept");
@@ -437,6 +452,7 @@ int main(int argc, char** argv) {
         testInstalledCorpus(argv[2]);
         return test::finish("scene corpus checks");
     }
+    testTextAndSceneZoomFields();
     testObjects();
     testScriptedValues();
     testEffectScripts();

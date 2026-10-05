@@ -11,10 +11,13 @@
 #include <string.h>
 
 #include <algorithm>
+#include <fstream>
+#include <iterator>
 #include <mutex>
 #include <vector>
 
 #include "audio_engine_internal.h"
+#include "ogg_decoder.h"
 #include "shared/core/logger.h"
 #include "shared/core/vfs.h"
 
@@ -256,6 +259,32 @@ AudioEngine::SoundHandle AudioEngine::play(const std::string& path, bool loop, f
         }
     } else {
         loaded = ma_sound_init_from_file(&impl->engine, path.c_str(), 0, nullptr, nullptr, &slot->sound) == MA_SUCCESS;
+    }
+    if (!loaded) {
+        std::vector<uint8_t> file_bytes;
+        const uint8_t* bytes = packaged;
+        size_t byte_count = packaged_size;
+        if (!bytes) {
+            std::ifstream file(path, std::ios::binary);
+            file_bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+            bytes = file_bytes.data();
+            byte_count = file_bytes.size();
+        }
+        uint32_t channels = 0;
+        uint32_t sample_rate = 0;
+        if (decodeOggVorbis(bytes, byte_count, slot->vorbis_pcm, channels, sample_rate)) {
+            ma_audio_buffer_config buffer_config = ma_audio_buffer_config_init(
+                ma_format_s16, channels, slot->vorbis_pcm.size() / channels, slot->vorbis_pcm.data(), nullptr);
+            buffer_config.sampleRate = sample_rate;
+            slot->has_vorbis_buffer = ma_audio_buffer_init(&buffer_config, &slot->vorbis_buffer) == MA_SUCCESS;
+            loaded = slot->has_vorbis_buffer && ma_sound_init_from_data_source(&impl->engine, &slot->vorbis_buffer, 0,
+                                                                               nullptr, &slot->sound) == MA_SUCCESS;
+            if (!loaded && slot->has_vorbis_buffer) ma_audio_buffer_uninit(&slot->vorbis_buffer);
+            if (!loaded) {
+                slot->has_vorbis_buffer = false;
+                slot->vorbis_pcm.clear();
+            }
+        }
     }
     if (!loaded) {
         LOG_TAG_W("AUDIO", "Failed to decode sound: %s", path.c_str());

@@ -69,6 +69,7 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
     out.general.clear_enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "clearenabled"), true);
     out.general.hdr = parseBool(cJSON_GetObjectItemCaseSensitive(general, "hdr"), true);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "zoom"), out.general.zoom);
+    readScript(cJSON_GetObjectItemCaseSensitive(general, "zoom"), out.general.zoom_script);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "fov"), out.general.fov);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "nearz"), out.general.near_z);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "farz"), out.general.far_z);

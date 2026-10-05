@@ -1,7 +1,41 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <algorithm>
+
 #include "particle_system.h"
+
+ParticleSystem::ParticleSystem(ParticleSystemConfig config, float scene_width, float scene_height)
+    : config(std::move(config)), scene_w(scene_width), scene_h(scene_height) {
+    max_particles = std::max(0, this->config.max_particles);
+    particles.reserve(max_particles);
+    is_additive = this->config.additive;
+    emitter_timers.resize(this->config.emitters.size(), 0.0f);
+    is_rope_trail = this->config.renderer.type == "ropetrail";
+    is_rope = is_rope_trail || this->config.renderer.type == "rope";
+    for (int i = 0; i < 8; ++i) vec3_dup(control_points[i], this->config.control_points[i].offset);
+}
+
+size_t ParticleSystem::trailSegments() const {
+    return (size_t)std::clamp(config.renderer.segments, 2, 64);
+}
+
+float ParticleSystem::trailSampleInterval() const {
+    return (config.renderer.length > 0.0f ? config.renderer.length : 1.0f) / (float)trailSegments();
+}
+
+float ParticleSystem::trailSampleFraction() const {
+    return std::clamp(trail_sample_timer / trailSampleInterval(), 0.0f, 1.0f);
+}
+
+void ParticleSystem::updateControlPoints(const float* cursor_local) {
+    for (int i = 0; i < 8; ++i) {
+        if ((config.control_points[i].flags & 1) && cursor_local)
+            for (int axis = 0; axis < 3; ++axis)
+                control_points[i][axis] = cursor_local[axis] + config.control_points[i].offset[axis];
+    }
+    for (ParticleSystem* child : children) child->updateControlPoints(cursor_local);
+}
 
 void ParticleSystem::emitParticles(int count) {
     for (int i = 0; i < count && i < 1000; ++i) spawnParticle();
@@ -27,6 +61,15 @@ void ParticleSystem::update(float real_dt) {
                     emitter_timers[emitter_index] -= interval;
                 }
             }
+        }
+    }
+    bool sample_trail_history = false;
+    if (is_rope_trail) {
+        trail_sample_timer += dt;
+        const float sample_interval = trailSampleInterval();
+        if (trail_sample_timer >= sample_interval) {
+            trail_sample_timer = fmodf(trail_sample_timer, sample_interval);
+            sample_trail_history = true;
         }
     }
     for (size_t index = 0; index < particles.size(); ++index) {
@@ -66,6 +109,10 @@ void ParticleSystem::update(float real_dt) {
             const float amplitude = particle.osc_pos_min + (particle.osc_pos_max - particle.osc_pos_min) * 0.5f;
             particle.position[0] += wave * amplitude;
             particle.position[1] += cosf(global_time * particle.osc_pos_freq) * amplitude;
+        }
+        if (sample_trail_history) {
+            particle.history.push_back({particle.position[0], particle.position[1], particle.position[2]});
+            if (particle.history.size() > trailSegments()) particle.history.erase(particle.history.begin());
         }
         const float age = particle.max_life - particle.life;
         float alpha = particle.initial_alpha * override_alpha;

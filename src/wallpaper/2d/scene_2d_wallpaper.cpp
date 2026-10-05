@@ -18,6 +18,7 @@ bool Scene2DWallpaper::applyParsedScene(ParsedScene parsed, EngineContext& ctx) 
         return false;
     }
 
+    ctx.scene.elapsed_time = 0.0f;
     ctx.scene.camera = parsed.camera;
     ctx.scene.general = parsed.general;
     ctx.scene_type = parsed.type;

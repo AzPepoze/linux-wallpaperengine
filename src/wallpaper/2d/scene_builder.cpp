@@ -121,6 +121,9 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     }
 
     for (const auto& object : document.objects) out.scripts->addObject(object);
+    if (!document.general.zoom_script.empty())
+        out.scripts->add(0, BoundProperty::SceneZoom, document.general.zoom_script.script,
+                        document.general.zoom_script.properties_json);
 
     LOG_I("Built scene tree with %zu nodes, %zu layers and %zu property scripts", out.scene_tree->size(),
           out.layers.size(), out.scripts->size());

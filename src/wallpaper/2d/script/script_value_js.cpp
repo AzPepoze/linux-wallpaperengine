@@ -1,5 +1,7 @@
 #include "script_value_js.h"
 
+#include <cmath>
+
 namespace {
 
 JSValue makeVector(JSContext* ctx, const char* constructor, const double* v, int count) {
@@ -23,7 +25,7 @@ JSValue makeVector(JSContext* ctx, const char* constructor, const double* v, int
 
 bool readNumber(JSContext* ctx, JSValueConst value, double& out) {
     double number = 0.0;
-    if (!JS_IsNumber(value) || JS_ToFloat64(ctx, &number, value) != 0 || number != number) return false;
+    if (!JS_IsNumber(value) || JS_ToFloat64(ctx, &number, value) != 0 || !std::isfinite(number)) return false;
     out = number;
     return true;
 }

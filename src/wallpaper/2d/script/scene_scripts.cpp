@@ -327,6 +327,8 @@ bool SceneScriptBackend::executeMaterialFunction(uint32_t layer_id, int effect, 
 }
 
 bool SceneScriptBackend::layerCommand(uint32_t id, const std::string& command) {
+    if (!hasParticlePrefix(command) && particleSystemOf(layerById(id)))
+        return layerCommand(id, std::string(kParticlePrefix) + command);
     if (hasParticlePrefix(command)) {
         ParticleSystem* ps = particleSystemOf(layerById(id));
         if (!ps) return false;

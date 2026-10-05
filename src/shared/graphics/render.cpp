@@ -98,6 +98,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             } else if (pass->extra_views && i < (int)pass->num_extra_views &&
                        pass->extra_views[i].id != SG_INVALID_ID) {
                 r->bind.views[slot] = pass->extra_views[i];
+            } else if (pass->white_default_slots & (1u << i)) {
+                r->bind.views[slot] = r->white_view;
             } else if (i == 0) {
                 // WE metadata: black for a missing depthparallax depth, full mask for waterwaves.
                 if (is_waterwaves) {

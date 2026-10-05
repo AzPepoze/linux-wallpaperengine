@@ -32,6 +32,8 @@ struct CliOptions {
     bool list_gpus = false;
     bool no_audio = false;
     bool video_ram = false;
+    float intro_zoom = 1.0f;
+    float intro_duration = 4.0f;
     bool native_effect_resolution = false;
     bool performance_profile = false;
     bool script_profile = false;  // log the most expensive scripts every few seconds

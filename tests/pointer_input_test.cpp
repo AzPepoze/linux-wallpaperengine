@@ -191,8 +191,31 @@ void checkTrackerNoClickElsewhere() {
     CHECK(!has(events, PointerEventType::Click, 2));
     CHECK(has(events, PointerEventType::Leave, 1));
     CHECK(has(events, PointerEventType::Enter, 2));
-    // Up targets the layer under the release so Down/Up stay paired; Click does not fire.
-    CHECK(has(events, PointerEventType::Up, 2));
+    // Release returns to the pressed layer even when another layer is under the pointer.
+    CHECK(has(events, PointerEventType::Up, 1));
+    CHECK(!has(events, PointerEventType::Up, 2));
+}
+
+void checkCapturedDrag() {
+    float matrix[16];
+    trs(matrix, 100, 50, -2, 1, 0);
+    const std::vector<HitCandidate> candidates = {candidate(1, matrix, 20, 20, true, true)};
+    PointerTracker tracker;
+    const WorldPoint start{100, 50}, outside{180, 80};
+    tracker.update(hitTest(start, candidates), 1, start, candidates);
+    auto events = tracker.update(std::nullopt, 1, outside, candidates);
+    CHECK(has(events, PointerEventType::Move, 1));
+    for (const auto& event : events)
+        if (event.type == PointerEventType::Move) {
+            CHECK(near(event.world_x, 180) && near(event.world_y, 80));
+            CHECK(near(event.local_x, -30) && near(event.local_y, -20));
+        }
+    events = tracker.update(makeHit(2, 200, 100), 0, WorldPoint{200, 100}, candidates);
+    CHECK(has(events, PointerEventType::Up, 1));
+    CHECK(!has(events, PointerEventType::Up, 2));
+    CHECK(!has(events, PointerEventType::Click, 1));
+    events = tracker.update(std::nullopt, 0, outside, candidates);
+    CHECK(!has(events, PointerEventType::Move, 1));
 }
 
 void checkTrackerLeaveEnterOrder() {
@@ -218,6 +241,7 @@ int main() {
     checkNegativeScale();
     checkParentTransform();
     checkTopmostAndFiltering();
+    checkCapturedDrag();
     checkTrackerClick();
     checkTrackerNoClickElsewhere();
     checkTrackerLeaveEnterOrder();

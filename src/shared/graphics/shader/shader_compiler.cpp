@@ -51,7 +51,16 @@ GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout la
     pip_desc.depth.write_enabled = false;
     pip_desc.stencil.enabled = false;
 
-    if (layout == ShaderVertexLayout::ParticleSprite) {
+    if (layout == ShaderVertexLayout::ParticleRope) {
+        pip_desc.layout.buffers[0].stride = sizeof(float) * 26;
+        for (int i = 0; i < 6; ++i) {
+            pip_desc.layout.attrs[i].format = SG_VERTEXFORMAT_FLOAT4;
+            pip_desc.layout.attrs[i].offset = sizeof(float) * 4 * i;
+        }
+        pip_desc.layout.attrs[6].format = SG_VERTEXFORMAT_FLOAT2;
+        pip_desc.layout.attrs[6].offset = sizeof(float) * 24;
+        pip_desc.index_type = SG_INDEXTYPE_UINT32;
+    } else if (layout == ShaderVertexLayout::ParticleSprite) {
         pip_desc.layout.buffers[0].stride = sizeof(float) * 17;
         pip_desc.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT3;
         pip_desc.layout.attrs[0].offset = 0;
@@ -106,8 +115,11 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
     std::string compiled_frag_source = fragSource;
     ShaderSourceProcessor::normalizePreprocessor(compiled_vert_source);
     ShaderSourceProcessor::normalizePreprocessor(compiled_frag_source);
-    result.vertex_layout = usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
-                                                                          : ShaderVertexLayout::Sprite2D;
+    result.vertex_layout = compiled_vert_source.find("a_TexCoordC4") != std::string::npos &&
+                                   compiled_vert_source.find("a_PositionVec4") != std::string::npos
+                               ? ShaderVertexLayout::ParticleRope
+                               : usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
+                                                                                : ShaderVertexLayout::Sprite2D;
 
     // Five consecutive vec4 resolutions share one array entry in Sokol's
     // limited uniform metadata. Their std140 layout and upload offsets stay identical.
@@ -121,7 +133,11 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
     }
 
     sg_shader_desc shd_desc = {};
-    if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+    if (result.vertex_layout == ShaderVertexLayout::ParticleRope) {
+        const char* attributes[] = {"a_PositionVec4", "a_TexCoordVec4", "a_Color", "a_TexCoordVec4C1",
+                                     "a_TexCoordVec4C2", "a_TexCoordVec4C3", "a_TexCoordC4"};
+        for (int i = 0; i < 7; ++i) shd_desc.attrs[i].glsl_name = attributes[i];
+    } else if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
         shd_desc.attrs[0].glsl_name = "a_Position";
         shd_desc.attrs[1].glsl_name = "a_TexCoordVec4";
         shd_desc.attrs[2].glsl_name = "a_Color";
@@ -181,7 +197,7 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].type = SG_UNIFORMTYPE_FLOAT4;
 
     int next_uniform_slot = 3;
-    if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+    if (result.vertex_layout != ShaderVertexLayout::Sprite2D) {
         configureParticleBuiltins(shd_desc);
         next_uniform_slot = 4;
     }

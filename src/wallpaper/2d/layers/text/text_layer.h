@@ -9,7 +9,7 @@
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/script/scene_script.h"
 
-// Rasterises a text object into an RGBA8 texture and reuses ImageLayer's draw,
+// Rasterises a text object into a floating-point RGBA texture and reuses ImageLayer's draw,
 // transform and effect handling.
 class TextLayer : public ImageLayer {
    public:
@@ -33,15 +33,13 @@ class TextLayer : public ImageLayer {
 
    private:
     bool rebuild(EngineContext& ctx);
-    bool rasterize(std::vector<uint32_t>& pixels, int& width, int& height, float& pixel_scale) const;
+    bool rasterize(std::vector<float>& pixels, int& width, int& height, float& pixel_scale) const;
     bool resolveFontPath(EngineContext& ctx);
 
     TextObjectConfig config_;
     std::string current_text_;
     std::string font_path_;
     bool needs_rebuild_ = false;
-    std::unique_ptr<SceneScript> script_;
-    float script_timer_ = 0.0f;
 };
 
 #endif  // TEXT_LAYER_H

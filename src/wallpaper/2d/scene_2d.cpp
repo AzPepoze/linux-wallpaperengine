@@ -1,4 +1,5 @@
 #include "scene_2d.h"
+#include "camera/intro_zoom.h"
 
 #include <cjson/cJSON.h>
 
@@ -36,6 +37,8 @@ void Scene2DRuntime::precompileBlendModes() {
 }
 
 void Scene2DRuntime::update(float dt) {
+    if (!first_frame_drawn_) dt = 0.0f;
+    ctx.scene.elapsed_time += dt;
     ScriptEngine::instance().setActiveScope(ctx.scene.scripts);
     if (ctx.scene.scripts) ctx.scene.scripts->update(dt);
     if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
@@ -43,7 +46,11 @@ void Scene2DRuntime::update(float dt) {
         ctx.scene.layers[ctx.debug.selected_object]->update(dt, ctx);
         return;
     }
-    for (auto layer : ctx.scene.layers) layer->update(dt, ctx);
+    const SceneVisibility visibility(ctx);
+    for (auto layer : ctx.scene.layers) {
+        if (dynamic_cast<ParticleLayer*>(layer) && !visibility.visible(*layer)) continue;
+        layer->update(dt, ctx);
+    }
 }
 
 bool Scene2DRuntime::requiresOffscreenComposition() const {
@@ -120,12 +127,14 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
 }
 
 void Scene2DRuntime::draw() {
+    updateViewport();
     if (force_offscreen_ || requiresOffscreenComposition())
         drawOffscreen();
     else {
         scene_output_index = -1;
         drawDirect();
     }
+    first_frame_drawn_ = true;
 }
 
 sg_view Scene2DRuntime::composedView() const {
@@ -194,6 +203,7 @@ void Scene2DRuntime::updateViewport() {
     }
     // Zoom is part of the authored camera transform, not an editor-only hint.
     ctx.scene.render_scale *= std::max(ctx.scene.general.zoom, 0.001f);
+    ctx.scene.render_scale *= introZoom(ctx.intro_zoom, ctx.intro_duration, ctx.scene.elapsed_time);
 
     // Camera-path entry animation: zoom about the view centre plus a relative origin pan (camera moves opposite to
     // the content).
@@ -202,14 +212,14 @@ void Scene2DRuntime::updateViewport() {
     if (!camera.zoom_curve.keys.empty()) {
         const auto& curve = camera.zoom_curve;
         ctx.scene.render_scale *=
-            std::max(evaluateCurve(curve.keys, curve.fps, curve.length, curve.mode, ctx.time), 0.001f);
+            std::max(evaluateCurve(curve.keys, curve.fps, curve.length, curve.mode, ctx.scene.elapsed_time), 0.001f);
     }
     const auto& origin_x = camera.origin_curves[0];
     const auto& origin_y = camera.origin_curves[1];
     if (!origin_x.keys.empty())
-        pan_x = -evaluateCurve(origin_x.keys, origin_x.fps, origin_x.length, origin_x.mode, ctx.time);
+        pan_x = -evaluateCurve(origin_x.keys, origin_x.fps, origin_x.length, origin_x.mode, ctx.scene.elapsed_time);
     if (!origin_y.keys.empty())
-        pan_y = evaluateCurve(origin_y.keys, origin_y.fps, origin_y.length, origin_y.mode, ctx.time);
+        pan_y = evaluateCurve(origin_y.keys, origin_y.fps, origin_y.length, origin_y.mode, ctx.scene.elapsed_time);
 
     ctx.scene.offset_x = (sw - ctx.scene.scene_w * ctx.scene.render_scale) * 0.5f + pan_x * ctx.scene.render_scale;
     ctx.scene.offset_y = (sh - ctx.scene.scene_h * ctx.scene.render_scale) * 0.5f + pan_y * ctx.scene.render_scale;

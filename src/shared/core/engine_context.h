@@ -84,6 +84,7 @@ struct CameraShakeState {
 };
 
 struct SceneState {
+    float elapsed_time = 0.0f;
     wallpaper_engine::SceneCameraDocument camera = {};
     wallpaper_engine::SceneGeneralDocument general = {};
 
@@ -115,6 +116,8 @@ struct DebugState {
 };
 
 struct EngineContext {
+    float intro_zoom = 1.0f;
+    float intro_duration = 4.0f;
     bool native_effect_resolution = false;
     bool performance_profile = false;
     sg_pass_action pass_action = {};

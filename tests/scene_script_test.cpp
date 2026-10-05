@@ -561,5 +561,17 @@ export function update() {
         engine.setCreationScope(nullptr);
     }
 
+    // Invalid results must preserve all components atomically, including authoring mistakes.
+    for (const char* source : {
+            "export function update(v) { v.x = 8; v.y = undefined; return v; }",
+            "export function update(v) { return { x: 8, y: Infinity, z: 2 }; }",
+            "export function update(v) { return Infinity; }"}) {
+        SceneScript invalid;
+        CHECK(invalid.load(source, ""));
+        ScriptValue value = ScriptValue::makeVec3(0.75, 0.75, 0.75);
+        CHECK(!invalid.updateValue(value));
+        CHECK(value.vec[0] == 0.75 && value.vec[1] == 0.75 && value.vec[2] == 0.75);
+    }
+
     return test::finish("scene script tests");
 }

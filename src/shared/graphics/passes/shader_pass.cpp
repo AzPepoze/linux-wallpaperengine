@@ -183,6 +183,7 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     display_resolution_safe = display_resolution_safe && sources.full_fs == stored_fs_source;
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(sources.raw_fs.c_str());
+    white_default_slots = ShaderSourceProcessor::extractWhiteTextureDefaults(sources.raw_fs.c_str());
 
     int texture_count = (int)pass_textures.textures.size();
     for (const auto& [slot, binding] : render_texture_bindings) {

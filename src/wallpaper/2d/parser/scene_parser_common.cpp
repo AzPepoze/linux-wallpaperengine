@@ -25,6 +25,11 @@ bool parseVec(const cJSON* raw, float* out, int count) {
     const cJSON* node = propertyValue(raw);
     if (!node || !out || count <= 0) return false;
 
+    if (cJSON_IsNumber(node)) {
+        for (int i = 0; i < count; ++i) out[i] = (float)node->valuedouble;
+        return true;
+    }
+
     if (cJSON_IsString(node) && node->valuestring) {
         if (count == 2) return sscanf(node->valuestring, "%f %f", &out[0], &out[1]) == 2;
         if (count == 3) return sscanf(node->valuestring, "%f %f %f", &out[0], &out[1], &out[2]) == 3;

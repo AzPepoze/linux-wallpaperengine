@@ -39,6 +39,13 @@ struct ParticleEmitterConfig {
     vec3 distance_max = {0, 0, 0};
     float distance_min = 0.0f;
     float rate = 0.0f;
+    int flags = 0;
+    int control_point = 0;
+};
+
+struct ParticleControlPointConfig {
+    int flags = 0;
+    vec3 offset = {0, 0, 0};
 };
 
 struct ParticleInitializerConfig {
@@ -72,6 +79,7 @@ struct ParticleRendererConfig {
     std::string type = "sprite";
     float length = 0.0f;
     float max_length = 0.0f;
+    int segments = 10;
 };
 
 struct ParticleSystemConfig {
@@ -87,6 +95,7 @@ struct ParticleSystemConfig {
     std::vector<ParticleInitializerConfig> initializers;
     std::vector<ParticleOperatorConfig> operators;
     std::vector<ParticleObjectConfig> children;
+    ParticleControlPointConfig control_points[8];
 };
 
 // Parses the scalar/vector value forms accepted by particle JSON files.

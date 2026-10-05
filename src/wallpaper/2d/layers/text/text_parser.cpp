@@ -10,6 +10,8 @@ TextObjectConfig TextParser::parse(const wallpaper_engine::SceneObjectDocument& 
     config.pointsize = document.text.pointsize;
     config.color = document.text.color;
     config.alpha = document.text.alpha;
+    config.brightness = document.text.brightness;
+    config.background_brightness = document.text.background_brightness;
     config.size = document.text.size;
     config.maxwidth = document.text.maxwidth;
     config.limit_width = document.text.limit_width;

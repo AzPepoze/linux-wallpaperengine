@@ -12,6 +12,7 @@ float randomFloat() {
 void ParticleSystem::spawnParticle(const float* parent_position) {
     if (static_cast<int>(particles.size()) >= max_particles) return;
     Particle particle = {};
+    particle.serial = next_serial++;
     particle.random_seed = randomFloat();
     particle.spawn_time = global_time;
     particle.alpha = 1.0f;
@@ -37,6 +38,11 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
         } else {
             particle.position[0] = emitter.origin[0];
             particle.position[1] = emitter.origin[1];
+        }
+        if (!parent_position) {
+            const int point = emitter.control_point;
+            if (point >= 0 && point < 8)
+                for (int axis = 0; axis < 3; ++axis) particle.position[axis] += control_points[point][axis];
         }
     }
     if (parent_position) {
@@ -111,6 +117,8 @@ void ParticleSystem::spawnParticle(const float* parent_position) {
     particle.initial_size *= child_scale[0];
     particle.base_position[0] = particle.position[0];
     particle.base_position[1] = particle.position[1];
+    particle.base_position[2] = particle.position[2];
+    if (is_rope_trail) particle.history.push_back({particle.position[0], particle.position[1], particle.position[2]});
     for (const ParticleOperatorConfig& particle_operator : config.operators) {
         if (particle_operator.type == "movement") {
             vec3_dup(particle.gravity, particle_operator.gravity);

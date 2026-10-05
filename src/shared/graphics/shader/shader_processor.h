@@ -14,6 +14,8 @@ class ShaderSourceProcessor {
     static void rewriteGlslCompatibility(std::string& source);
     static std::string extractCombos(const char* fsSource);
     static std::map<int, std::string> extractTextureLabels(const char* fsSource);
+    // Bit n is set when g_Texture(n + 1) declares `"default":"util/white"` in its metadata comment.
+    static unsigned int extractWhiteTextureDefaults(const char* fsSource);
     static std::string buildShaderPrefix();
 };
 

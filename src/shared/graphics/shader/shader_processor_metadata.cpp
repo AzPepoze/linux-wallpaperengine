@@ -90,6 +90,33 @@ std::map<int, std::string> ShaderSourceProcessor::extractTextureLabels(const cha
     return labels;
 }
 
+unsigned int ShaderSourceProcessor::extractWhiteTextureDefaults(const char* fsSource) {
+    unsigned int mask = 0;
+    const char* p = fsSource;
+    while (p && *p) {
+        const char* line_end = strchr(p, '\n');
+        const std::string line = line_end ? std::string(p, line_end - p) : std::string(p);
+        p = line_end ? line_end + 1 : nullptr;
+
+        const size_t uniform_pos = line.find("uniform");
+        const size_t tex_pos = line.find("g_Texture");
+        const size_t comment_pos = line.find("//");
+        if (uniform_pos == std::string::npos || line.find("sampler2D") == std::string::npos ||
+            tex_pos == std::string::npos || comment_pos == std::string::npos || comment_pos < tex_pos)
+            continue;
+
+        const int slot = atoi(line.c_str() + tex_pos + 9);
+        if (slot < 1 || slot > 11) continue;
+        const size_t default_pos = line.find("\"default\"", comment_pos);
+        if (default_pos == std::string::npos) continue;
+        const size_t quote1 = line.find('"', line.find(':', default_pos));
+        const size_t quote2 = quote1 == std::string::npos ? quote1 : line.find('"', quote1 + 1);
+        if (quote2 == std::string::npos) continue;
+        if (line.compare(quote1 + 1, quote2 - quote1 - 1, "util/white") == 0) mask |= 1u << (slot - 1);
+    }
+    return mask;
+}
+
 std::string ShaderSourceProcessor::buildShaderPrefix() {
     return "#version 330\n"
            "#define HLSL 0\n"

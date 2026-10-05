@@ -29,6 +29,8 @@ typedef struct {
     void* user_data;
     bool is_fullscreen_quad;
     bool repeat_effect_input;
+    // Bit n marks texture slot n + 1 as defaulting to white when nothing is bound (shader `"default":"util/white"`).
+    unsigned int white_default_slots;
 } render_effect_pass_t;
 
 typedef struct {

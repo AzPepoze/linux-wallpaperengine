@@ -11,6 +11,7 @@
 enum class ShaderVertexLayout {
     Sprite2D,
     ParticleSprite,
+    ParticleRope,
 };
 
 enum class ShaderBlendMode {

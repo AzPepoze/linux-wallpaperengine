@@ -1,6 +1,7 @@
 #include "particle_system.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -66,14 +67,6 @@ int wallpaperTextureFormatForImage(sg_image image) {
 
 }  // namespace
 
-ParticleSystem::ParticleSystem(ParticleSystemConfig config, float scene_width, float scene_height)
-    : config(std::move(config)), scene_w(scene_width), scene_h(scene_height) {
-    max_particles = std::max(0, this->config.max_particles);
-    particles.reserve(max_particles);
-    is_additive = this->config.additive;
-    emitter_timers.resize(this->config.emitters.size(), 0.0f);
-}
-
 ParticleSystem::~ParticleSystem() {
     delete material_pass;
     for (ParticleSystem* child : children) delete child;
@@ -83,13 +76,14 @@ void ParticleSystem::initParticleBuffers() {
     if (max_particles <= 0) return;
 
     sg_buffer_desc vertex_desc = {};
-    vertex_desc.size = (size_t)max_particles * 4 * 17 * sizeof(float);
+    const size_t segments = is_rope_trail ? trailSegments() : 1;
+    vertex_desc.size = (size_t)max_particles * segments * 4 * (is_rope ? 26 : 17) * sizeof(float);
     vertex_desc.usage.vertex_buffer = true;
     vertex_desc.usage.stream_update = true;
     particle_vertex_buffer = sg_make_buffer(&vertex_desc);
 
     sg_buffer_desc index_desc = {};
-    index_desc.size = (size_t)max_particles * 6 * sizeof(uint32_t);
+    index_desc.size = (size_t)max_particles * segments * 6 * sizeof(uint32_t);
     index_desc.usage.index_buffer = true;
     index_desc.usage.stream_update = true;
     particle_index_buffer = sg_make_buffer(&index_desc);
@@ -143,8 +137,11 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         cJSON_Delete(material_reference);
 
         ShaderPass* pass = particle_system->material_pass;
+        if (particle_system->is_rope && pass->shader_name == "genericparticle") pass->shader_name = "genericropeparticle";
         pass->effect_file = particle_system->config.material_path;
         pass->combos["THICKFORMAT"] = 1;
+        pass->combos["GS_ENABLED"] = 0;
+        if (particle_system->is_rope_trail) pass->combos["TRAILRENDERER"] = 1;
         if (particle_system->is_trail) pass->combos["TRAILRENDERER"] = 1;
 
         particle_system->has_refract = pass->combos.count("REFRACT") && pass->combos.at("REFRACT") != 0;
@@ -192,7 +189,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
 
         pass->init(ctx);
         if (pass->compiled.shader.id != SG_INVALID_ID &&
-            pass->compiled.vertex_layout == ShaderVertexLayout::ParticleSprite) {
+            pass->compiled.vertex_layout != ShaderVertexLayout::Sprite2D) {
             const ShaderBlendMode blend =
                 particle_system->is_additive ? ShaderBlendMode::Additive : ShaderBlendMode::Alpha;
             pass->compiled.pipeline =

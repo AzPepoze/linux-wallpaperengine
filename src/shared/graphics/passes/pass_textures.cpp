@@ -19,7 +19,8 @@ void ensure_slot(PassTextures& pass, int slot) {
 const char* slot_reference(cJSON* textures, cJSON* user_textures, int slot) {
     cJSON* user = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, slot) : nullptr;
     cJSON* name = cJSON_IsObject(user) ? cJSON_GetObjectItemCaseSensitive(user, "name") : nullptr;
-    if (cJSON_IsString(name) && name->valuestring && strcmp(name->valuestring, "$mediaThumbnail") == 0)
+    if (cJSON_IsString(name) && name->valuestring &&
+        (strcmp(name->valuestring, "$mediaThumbnail") == 0 || strcmp(name->valuestring, "$mediaPreviousThumbnail") == 0))
         return name->valuestring;
     cJSON* node = cJSON_IsArray(textures) ? cJSON_GetArrayItem(textures, slot) : nullptr;
     return cJSON_IsString(node) ? node->valuestring : nullptr;
@@ -64,7 +65,7 @@ void load_texture0(PassTextures& pass, const char* reference, const std::string&
 void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_name, EngineContext& ctx) {
     cJSON* textures_node = cJSON_GetObjectItemCaseSensitive(base_config, "textures");
     cJSON* user_textures = cJSON_GetObjectItemCaseSensitive(base_config, "usertextures");
-    if (!cJSON_IsArray(textures_node)) return;
+    if (!cJSON_IsArray(textures_node) && !cJSON_IsArray(user_textures)) return;
     const int slots = slot_count(textures_node, user_textures);
 
     if (slots > 0) {

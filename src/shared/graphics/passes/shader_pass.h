@@ -45,6 +45,7 @@ class ShaderPass {
     std::map<std::string, std::vector<float>> uniforms;
     std::map<std::string, int> combos;
     std::map<int, std::string> texture_labels;
+    unsigned int white_default_slots = 0;
     bool display_resolution_safe = false;
     bool enabled = true;
     bool show_files = false;
@@ -102,7 +103,8 @@ class ShaderPass {
         current_frame = frame_index;
         updateAnimatedUniforms(time);
         if (!geometry_classified) {
-            is_fullscreen_quad = effectShaderUsesClipSpaceGeometry(stored_vs_source, shader_name.c_str());
+            is_fullscreen_quad = compiled.vertex_layout == ShaderVertexLayout::Sprite2D &&
+                                 effectShaderUsesClipSpaceGeometry(stored_vs_source, shader_name.c_str());
             geometry_classified = true;
         }
 
@@ -119,6 +121,7 @@ class ShaderPass {
         r.is_fullscreen_quad = is_fullscreen_quad;
         const auto repeat = combos.find("REPEAT");
         r.repeat_effect_input = repeat != combos.end() && repeat->second != 0;
+        r.white_default_slots = white_default_slots;
         return r;
     }
 

@@ -94,6 +94,7 @@ class Scene2DRuntime {
     int output_y = 0;
     int output_width = 0;
     int output_height = 0;
+    bool first_frame_drawn_ = false;
     bool force_offscreen_ = false;
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];

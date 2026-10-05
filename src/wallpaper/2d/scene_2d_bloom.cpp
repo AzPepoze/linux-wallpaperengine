@@ -153,7 +153,7 @@ int Scene2DRuntime::renderHdrBloom(int current_target_index, int width, int heig
         sg_pass target_pass = colorPass(target.attachment_view, load, 1.0f);
         sg_begin_pass(&target_pass);
         renderer_update_viewport(&ctx.renderer, (float)target.width, (float)target.height);
-        render_effect_pass_t desc = pass.getRenderPass(ctx.profiler.frame_index, ctx.time);
+        render_effect_pass_t desc = pass.getRenderPass(ctx.profiler.frame_index, ctx.scene.elapsed_time);
         sg_view extra[] = {bloom_view};
         if (bloom_view.id != SG_INVALID_ID) {
             desc.override_views = extra;
@@ -182,7 +182,7 @@ int Scene2DRuntime::renderHdrBloom(int current_target_index, int width, int heig
     sg_pass combine_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR, 1.0f);
     sg_begin_pass(&combine_pass);
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    render_effect_pass_t desc = bloom_pass_combine->getRenderPass(ctx.profiler.frame_index, ctx.time);
+    render_effect_pass_t desc = bloom_pass_combine->getRenderPass(ctx.profiler.frame_index, ctx.scene.elapsed_time);
     sg_view bloom_view[] = {hdr_bloom_levels[0].texture_view};
     desc.override_views = bloom_view;
     desc.num_override_views = 1;
@@ -216,7 +216,7 @@ int Scene2DRuntime::renderBloom(int current_target_index, int width, int height)
         sg_begin_pass(&target_pass);
         renderer_update_viewport(&ctx.renderer, (float)target_w, (float)target_h);
 
-        render_effect_pass_t pass_desc = pass.getRenderPass(ctx.profiler.frame_index, ctx.time);
+        render_effect_pass_t pass_desc = pass.getRenderPass(ctx.profiler.frame_index, ctx.scene.elapsed_time);
         sg_view extra_views[] = {bloom_view};
         if (bloom_view.id != SG_INVALID_ID) {
             pass_desc.override_views = extra_views;

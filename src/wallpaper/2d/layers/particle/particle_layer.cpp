@@ -1,5 +1,7 @@
 #include "particle_layer.h"
 
+#include <cmath>
+
 #include "particle_parser.h"
 #include "particle_system.h"
 #include "shared/core/engine_context.h"
@@ -28,8 +30,19 @@ ParticleLayer* ParticleLayer::createFromDocument(const wallpaper_engine::SceneOb
 }
 
 void ParticleLayer::update(float dt, EngineContext& ctx) {
-    (void)ctx;
-    if (ps) ps->update(dt);
+    if (!ps) return;
+    mat4x4 world;
+    mat4x4_identity(world);
+    if (ctx.scene.scene_tree) ctx.scene.scene_tree->worldTransform(scene_object_id, world);
+    const float determinant = world[0][0] * world[1][1] - world[0][1] * world[1][0];
+    if (ctx.input.mouse_position_valid && fabsf(determinant) > 1e-12f) {
+        const float x = ctx.input.mouse_world_x - world[3][0];
+        const float y = ctx.input.mouse_world_y - world[3][1];
+        vec3 local = {(world[1][1] * x - world[1][0] * y) / determinant,
+                      (world[0][0] * y - world[0][1] * x) / determinant, 0.0f};
+        ps->updateControlPoints(local);
+    }
+    ps->update(dt);
 }
 
 void ParticleLayer::draw(EngineContext& ctx) {

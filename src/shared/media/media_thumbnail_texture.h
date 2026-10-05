@@ -17,7 +17,7 @@ class MediaThumbnailTexture {
 
     static MediaThumbnailTexture& instance();
 
-    sg_image create();
+    sg_image create(bool previous = false);
     // Keeps the newest thumbnail; it reaches the images on the next flush().
     void setThumbnail(const ThumbnailColors& thumbnail);
     // Uploads pending changes. Call once per frame from the render thread.
@@ -25,6 +25,7 @@ class MediaThumbnailTexture {
     bool inUse();
 
    private:
+    static MediaThumbnailTexture& previous();
     void prune();
 
     std::vector<uint32_t> images_;

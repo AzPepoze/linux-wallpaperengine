@@ -72,5 +72,12 @@ int main() {
     }
 
     chdir("/");
+    {
+        const auto opts = parse({"test", "--intro-zoom", "1.08", "--intro-duration", "4", "/wp"});
+        CHECK(opts.intro_zoom == 1.08f && opts.intro_duration == 4.0f);
+        CHECK(opts.wallpaper_arg == "/wp");
+        const auto invalid = parse({"test", "--intro-zoom", "nan", "--intro-duration", "-1", "/wp"});
+        CHECK(invalid.intro_zoom == 1.0f && invalid.intro_duration == 4.0f);
+    }
     return test::finish("cli options checks");
 }

@@ -302,15 +302,22 @@ GfxImage AssetManager::resolveTexture(const char* name, std::string* out_path, i
 GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out_path, int image_index,
                                               bool warn_on_failure) const {
     if (!name || name[0] == '\0') return {};
-    if (strcmp(name, "$mediaThumbnail") == 0) {
+    if (strcmp(name, "$mediaThumbnail") == 0 || strcmp(name, "$mediaPreviousThumbnail") == 0) {
         if (out_path) *out_path = name;
-        return GfxImage(wallpaper_engine::MediaThumbnailTexture::instance().create());
+        return GfxImage(wallpaper_engine::MediaThumbnailTexture::instance().create(
+            strcmp(name, "$mediaPreviousThumbnail") == 0));
     }
     if (strncmp(name, "_rt_", 4) == 0|| strstr(name, "/_rt_") != nullptr) return {};
 
     char abs_path[1024];
     char name_with_ext[256] = {};
-    if (!strstr(name, "."))
+    const char* suffix = strrchr(name, '.');
+    const bool has_extension = suffix &&
+        (strcasecmp(suffix, ".tex") == 0 || strcasecmp(suffix, ".png") == 0 || strcasecmp(suffix, ".jpg") == 0 ||
+         strcasecmp(suffix, ".jpeg") == 0 || strcasecmp(suffix, ".gif") == 0 || strcasecmp(suffix, ".mp4") == 0 ||
+         strcasecmp(suffix, ".webm") == 0 || strcasecmp(suffix, ".mkv") == 0 || strcasecmp(suffix, ".avi") == 0 ||
+         strcasecmp(suffix, ".mov") == 0 || strcasecmp(suffix, ".wmv") == 0);
+    if (!has_extension)
         snprintf(name_with_ext, sizeof(name_with_ext), "%s.tex", name);
     else
         strncpy(name_with_ext, name, sizeof(name_with_ext) - 1);
@@ -381,8 +388,10 @@ GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::str
         cJSON* first_user = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, 0) : nullptr;
         cJSON* user_name = cJSON_IsObject(first_user) ? cJSON_GetObjectItemCaseSensitive(first_user, "name") : nullptr;
         const bool media_thumbnail =
-            cJSON_IsString(user_name) && user_name->valuestring && strcmp(user_name->valuestring, "$mediaThumbnail") == 0;
-        if (media_thumbnail) img = resolveTextureInternal("$mediaThumbnail", out_path, 0, false);
+            cJSON_IsString(user_name) && user_name->valuestring &&
+            (strcmp(user_name->valuestring, "$mediaThumbnail") == 0 ||
+             strcmp(user_name->valuestring, "$mediaPreviousThumbnail") == 0);
+        if (media_thumbnail) img = resolveTextureInternal(user_name->valuestring, out_path, 0, false);
         if (!media_thumbnail && cJSON_IsArray(textures)) {
             cJSON* tex_node = cJSON_GetArrayItem(textures, 0);
             if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {

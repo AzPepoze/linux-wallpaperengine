@@ -120,11 +120,13 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
     - Origin, scale, angles and color keyframe animation and scripts (only alpha is animated)
 - [-] Text layers
   - Works
-    - Font loading (TrueType through stb_truetype), default font `NotoSans-Regular.ttf` for `systemfont`
+    - Font loading (TrueType and supported OpenType fonts through stb_truetype), default font `NotoSans-Regular.ttf` for `systemfont`
     - `pointsize`, `color`, `alpha` (including the alpha animation curve), `size`, `maxwidth`, row and width limits
     - Horizontal and vertical alignment
     - `opaquebackground`, `backgroundcolor` and `padding` are parsed and rasterized
-    - Text driven by a SceneScript `update()` (clock and date wallpapers), re-evaluated about four times per second
+    - Text scripts use the shared `init`, per-frame `update` and user-property lifecycle (clocks and typing animations)
+    - Text canvases expand to fit current content; empty script results clear the text
+    - HDR `brightness` and `backgroundbrightness`, including script changes
   - Missing
     - Dynamic screen anchoring (`anchor` is retained but not applied)
     - Scripts on text color, alpha, point size or visibility
@@ -166,6 +168,8 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [x] Orthographic scenes with `fit` and `fill` scaling (`stretch` is accepted but behaves like `fit`)
 - [x] Camera parallax: enabled flag, amount, delay and mouse influence, plus the `g_ParallaxPosition` shader uniform and the Depth Parallax effect
 - [x] Camera shake: enabled, amplitude, speed and roughness
+- [x] Optional opening zoom: `--intro-zoom <start>` (default 1.0 = off) eases the view from that zoom to 1.0 over `--intro-duration <seconds>` (default 4) with a smoothstep curve, starting on the first displayed frame; it multiplies the authored and script camera zoom and a resize does not restart it. Also available as the `intro_zoom` / `intro_duration` config keys
+- [x] Authored camera animation and effect timelines run on scene-relative time (started on the first displayed frame) rather than application uptime
 - [-] Camera paths (entry animations)
   - Works
     - Zoom curve and the X/Y origin curves of a visible camera object, in single, loop and mirror modes
@@ -208,7 +212,8 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Runtime Slang compilation to SPIR-V with a persistent on-disk cache (under `$XDG_CACHE_HOME`)
     - Pointer uniforms `g_PointerPosition`, `g_PointerPositionLast` and `g_PointerState` (normalized to the output surface), which Cursor Ripple needs; its projection back into layer space assumes the layer fills the screen
     - Built-in uniforms: time, texture resolutions, `g_ParallaxPosition`, effect texture projection matrices, pointer position, ambient and skylight colors, screen size, texel size, model-view-projection, audio spectrum (16/32/64 bands)
-    - Texture bindings `g_Texture0..N`
+    - Texture bindings `g_Texture0..N`; an unbound slot uses the shader's declared `"default":"util/white"` (for example an opacity mask) instead of black
+    - Vertex inputs are bound by the pipeline layout order, so shaders may declare attributes in any order (the native rope particle shader does)
   - Missing
     - Full vertex attribute support (2D `a_Position` / `a_TexCoord` and the particle layout only)
     - Some GLSL constructs the rewrites do not cover
@@ -232,17 +237,21 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Emitters: sphere random, box random, point (default); multiple emitters per system
     - Initializers: lifetime, size, velocity, color, alpha, rotation, angular velocity, turbulent velocity
     - Operators: movement (gravity and drag), alpha fade, alpha/size/position oscillation, turbulence
-    - Renderers: sprite, sprite trail, trail (beam aspect ratio, camera-depth trails)
+    - Renderers: sprite, sprite trail, trail (beam aspect ratio, camera-depth trails), connected rope and per-particle rope trails using the native rope shader
     - Blend modes: translucent and additive
     - Sprite sheets (grids and TEXS frame data) with sequence, random-frame and once modes, and frame blending through the `SPRITESHEETBLEND` combo
     - Refraction through the `REFRACT` combo with a normal map, reading the scene color
     - Child systems: `static`, `eventfollow`, `eventspawn`, `eventdeath` with origin, angles, scale, `maxcount` and probability
     - Maximum particle count, start-time warm-up, perspective particles
     - Instance overrides: alpha, rate (time scale), size, count (emission scale), speed, lifetime, color, plus the per-override disable flags
+    - Mouse-following control points, configured offsets and emitter control-point selection
+    - Direct particle-layer `play`, `pause`, `stop` and `isPlaying` commands
+    - Rope trails sample their history once per system and blend between samples in the shader, so trails move smoothly
+    - A hidden particle layer (its own visibility or a hidden parent) freezes: state is kept and it resumes without catching up; visibility scripts keep running
   - Missing
     - Other emitters and operators (anything not listed above is ignored)
-    - Control points (only `controlpointstartindex` for child systems is read)
-    - Mouse-interactive and audio-responsive particles
+    - Rope subdivisions and UV scrolling/smoothing
+    - Audio-responsive particles
     - World-space particles, material lighting
     - Script control of particle systems (control points)
 
@@ -293,7 +302,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 
 ## Audio
 
-- [x] Audio playback (WAV, MP3, OGG, FLAC through miniaudio), loop playback
+- [x] Audio playback (WAV, MP3, FLAC through miniaudio; Ogg Vorbis is decoded with stb_vorbis into memory when the sound loads), loop playback
 - [x] Sound layers (see [Scene layers](#scene-layers)) and video audio
 - [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute`; diagnostic runs are always silent
 - [-] System audio capture and spectrum
@@ -309,6 +318,8 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Shader effects that read the spectrum uniforms (subject to the shader compiling)
     - Scripts that read the audio buffers
   - Missing
+    - Other emitters and operators (anything not listed above is ignored)
+    - Rope subdivisions and UV scrolling/smoothing
     - Audio-responsive particles
 
 ## Media integration
@@ -318,7 +329,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - A source module (`src/shared/media/`) reads track title, artist, album, playback state and timeline from MPRIS players over sd-bus, and decodes album art from `file://` URLs
     - Median-cut color extraction (primary, secondary, tertiary, text, high-contrast)
     - Built only when libsystemd is available (`mpris` option); otherwise it is a no-op
-    - Events reach scripts (`media*Changed`), and a material that lists `$mediaThumbnail` under `usertextures` samples the album art as a 256x256 texture
+    - Events reach scripts (`media*Changed`), and materials can sample `$mediaThumbnail` and `$mediaPreviousThumbnail` as 256x256 textures; artwork changes retain the preceding image for transitions
   - Missing
     - `http(s)` album art URLs
 
@@ -336,11 +347,12 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works
     - `origin`, `scale`, `angles`, `visible`, `color` and image `size` of a scene object: `init(value)` runs once on the first frame (after the whole scene exists), then `update(value)` every frame with the property's current value; the result is written to the scene tree node or the layer. Values arrive as real `Vec2`/`Vec3` objects, and a number returned for a vector broadcasts to every component
     - Image `alpha` (`init(value)`, then `update(value)` every frame; a keyframed alpha is passed in as the value)
-    - Text content (`update(string)`, about four times per second)
+    - Text content (`init(string)` and per-frame `update(string)`)
     - `visible` of a group (an object without a layer) hides everything beneath it
     - Effect `visible` and effect constants (number, `Vec2`, `Vec3`); `thisObject` is the effect, and its `getAnimation()` controls the constant's keyframe animation (`startpaused`, `play()`, `rate`...)
+    - Scene `general.zoom` scripts, including `applyUserProperties`
   - Missing
-    - Particle fields and camera properties
+    - Other particle fields and camera properties
     - Scripts on text color, point size and other text properties
     - Four-component effect constants
 - [-] Globals
@@ -353,7 +365,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - [x] `Vec2`, `Vec3`, `Vec4`, `Mat3`, `Mat4`, `WEMath`, `WEColor`, `WEVector`, `MediaPlaybackEvent` (from the install)
   - [-] `thisLayer`
     - Works: `origin`, `scale`, `angles` (degrees), `parallaxDepth`, `visible` (read/write), `size` and `name` (read), `color`, `alpha`, `getParent()`, `getChildren()`, `getTransformMatrix()` (`Mat4`), `getAnimation`, `getAnimationLayer`, `getAnimationLayerCount`, `getTextureAnimation`
-    - Works: text layers (`text`, `color`, `alpha`, `font`, `pointsize`, `padding`, `horizontalalign`, `verticalalign`, `limitwidth`, `maxwidth`, `limitrows`, `maxrows`, `opaquebackground`, `backgroundcolor`; `anchor` is kept but the layout does not follow screen edges) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
+    - Works: text layers (`text`, `color`, `alpha`, `font`, `pointsize`, `padding`, `horizontalalign`, `verticalalign`, `limitwidth`, `maxwidth`, `limitrows`, `maxrows`, `opaquebackground`, `backgroundcolor`, `brightness`, `backgroundbrightness`; `anchor` is kept but the layout does not follow screen edges) and sound layers (`volume`, `play`, `stop`, `pause`, `isPlaying`)
     - Works: `solid` (the layer receives cursor events)
     - Works: `getEffect(name | index)` and `getEffectCount()`; an effect has `visible`, `name`, `getMaterialCount()`, `getMaterial(index)` (every shader constant of that pass is a property), `setMaterialProperty(name, value)`, `getMaterialProperty(name)` and `executeMaterialFunction(name)` (functions an effect defines to clear its buffers); a value set by a script replaces the constant's keyframes
     - Works: `transformAttachmentToTexture(layer, attachment)` (a `Mat3` into this layer's texture space)
@@ -406,12 +418,15 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Wayland layer-shell surfaces forward `wl_pointer` button and enter/leave events; the frame loop tracks the pressed-button mask and the cursor's scene-world position
     - A tested hit-test module finds the topmost visible solid layer under the cursor (rotation, non-uniform and negative scale, parents) and a tracker produces enter, leave, move, down, up and click
     - Solid image layers with cursor hooks are hit targets and their scripts receive the events
+    - A pressed layer retains move/up delivery outside its bounds, with current local coordinates for dragging
   - Missing
     - Live delivery to a background layer-shell surface has not been confirmed
 - [ ] Keyboard, touch and gamepad input
 - [ ] Interactive effects, particles and puppet bones
 
 ## Textures and asset formats
+
+- [x] Asset names containing dots (such as a `.COM` fragment) still resolve their `.tex` file.
 
 - [x] Wallpaper Engine `.tex`: RGBA8, RG8, R8, BC1/DXT1, BC2/DXT3, BC3/DXT5, LZ4-compressed payloads, multiple images and mip levels
 - [x] Embedded PNG/JPEG payloads, GIF containers and MP4 video payloads inside `.tex`
@@ -444,6 +459,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - A runtime control interface beyond the command line and the liquid-wallpaper switch socket
 - [x] Unit tests in `tests/` (`xmake test`) and the script corpus runner in `utils/` (`xmake build script_corpus`)
 - [x] CI runs formatting and static analysis (`xmake check`)
+
+- [x] Diagnostic readback converts float/HDR and single/dual-channel targets to RGBA8 before PNG export.
 
 ## RGB hardware
 

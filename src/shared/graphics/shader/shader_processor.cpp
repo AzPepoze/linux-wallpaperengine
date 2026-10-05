@@ -164,6 +164,10 @@ std::string ShaderSourceProcessor::processShaderSource(const std::string& source
     std::string result = expandIncludes(source, source_path ? source_path : "", assets, active, expanded);
 
     if (is_vertex) replaceAll(result, "uniform vec3 g_Screen;", "uniform vec2 g_Screen;");
+    // The non-GS rope variant must offset symmetrically across the centerline.
+    // Its shipped expression subtracts one from the position instead of the UV.
+    if (is_vertex && result.find("a_TexCoordC4") != std::string::npos)
+        replaceAll(result, "right * uvs.x * 2.0 - 1.0", "right * (uvs.x * 2.0 - 1.0)");
 
     size_t version_pos = 0;
     while ((version_pos = result.find("#version", version_pos)) != std::string::npos) {

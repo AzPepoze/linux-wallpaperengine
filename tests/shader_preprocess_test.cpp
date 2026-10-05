@@ -191,7 +191,25 @@ void testRepeatedSwizzleNotIntroducedOnAssignmentTarget() {
     expectContains("rewrite.repeated_swizzle_target", source, "n.xw =");
 }
 
+void testWhiteTextureDefaults() {
+    const char* source =
+        "uniform sampler2D g_Texture0; // {\"material\":\"framebuffer\",\"hidden\":true}\n"
+        "uniform sampler2D g_Texture1; // {\"combo\":\"OPACITY\",\"default\":\"util/white\",\"material\":\"mask\"}\n"
+        "uniform sampler2D g_Texture2; // {\"default\":\"util/black\",\"format\":\"r8\"}\n"
+        "uniform sampler2D g_Texture3; // {\"label\":\"x\",\"default\": \"util/white\"}\n"
+        "// uniform sampler2D g_Texture4; not a declaration {\"default\":\"util/white\"}\n"
+        "float g_Texture5 = 1.0; // {\"default\":\"util/white\"}\n";
+    const unsigned int mask = ShaderSourceProcessor::extractWhiteTextureDefaults(source);
+    CHECK((mask & 1u) != 0);   // g_Texture1
+    CHECK((mask & 2u) == 0);   // g_Texture2 defaults to black
+    CHECK((mask & 4u) != 0);   // g_Texture3, with whitespace after the colon
+    CHECK((mask & 8u) == 0);   // commented-out declaration
+    CHECK((mask & 16u) == 0);  // not a sampler
+    CHECK((mask & ~(1u | 4u)) == 0);
+}
+
 int main() {
+    testWhiteTextureDefaults();
     testRepeatedSwizzleNeverAssigned();
     testRepeatedSwizzleNotIntroducedOnAssignmentTarget();
     testPreprocessorUndefinedMacro();
