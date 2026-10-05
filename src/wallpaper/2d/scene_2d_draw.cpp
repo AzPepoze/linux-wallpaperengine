@@ -144,8 +144,23 @@ void Scene2DRuntime::drawOffscreen() {
         if (!raw_layer) ++layer_index;
     };
 
+    // Consecutive plain layers share one render pass: a pass per layer loads and stores the whole float scene target
+    // each time. The batch ends before anything that needs its own pass (scene-color layers, captures, bloom).
+    bool batch_open = false;
+    int batch_gpu_token = -1;
+    auto close_batch = [&] {
+        if (!batch_open) return;
+        sg_end_pass();
+        if (ctx.performance_profile) gpu_timing_end_pass(batch_gpu_token);
+        batch_open = false;
+    };
+
     auto draw_layer = [&](Layer* layer) {
         auto* particle = dynamic_cast<ParticleLayer*>(layer);
+        const auto* image_layer = dynamic_cast<const ImageLayer*>(layer);
+        const bool needs_scene_color = (particle && particle->requiresSceneColor()) ||
+                                       (image_layer && image_layer->requiresSceneColor());
+        if (needs_scene_color || renderObserver().isCapturingFrame()) close_batch();
         if (particle && particle->requiresSceneColor()) {
             particle->setSceneColorView(scene_targets[current].texture_view);
             capture_layer_result(layer, true);
@@ -190,19 +205,27 @@ void Scene2DRuntime::drawOffscreen() {
             return;
         }
 
-        capture_layer_result(layer, true);
+        if (renderObserver().isCapturingFrame()) {
+            capture_layer_result(layer, true);
+            sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+            sg_begin_pass(&layer_pass);
+            layer->draw(ctx);
+            sg_end_pass();
+            capture_layer_result(layer, false);
+            return;
+        }
 
-        sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
-        const int gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("draw/" + layer->name) : -1;
-        sg_begin_pass(&layer_pass);
+        if (!batch_open) {
+            sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+            batch_gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("draw/batch") : -1;
+            sg_begin_pass(&layer_pass);
+            batch_open = true;
+        }
         layer->draw(ctx);
-        sg_end_pass();
-        if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
-
-        capture_layer_result(layer, false);
     };
 
     forEachDrawnLayer(ctx, draw_layer);
+    close_batch();
 
     current = renderBloom(current, width, height);
     // The layer snapshots stop before post-processing; capture one final post-bloom
