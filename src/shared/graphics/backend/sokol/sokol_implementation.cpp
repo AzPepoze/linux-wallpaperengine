@@ -56,6 +56,7 @@
 #endif
 
 #include "sokol_debug_labels.inl"
+#include "sokol_gpu_timing.inl"
 #include "sokol_readback.inl"
 #include "sokol_ycbcr_pipeline.inl"
 #include "sokol_zero_copy_blit.inl"

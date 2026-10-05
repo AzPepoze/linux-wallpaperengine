@@ -222,7 +222,7 @@ class ImageLayer : public Layer {
     void updatePuppetPositions(int width, int height);
     void updateCachedView();
     void updateAnimatedFrame(EngineContext& ctx);
-    bool ensureEffectTargets(sg_image source_image = {SG_INVALID_ID});
+    bool ensureEffectTargets(EngineContext& ctx, sg_image source_image = {SG_INVALID_ID});
 
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});

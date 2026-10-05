@@ -119,9 +119,15 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         return configured != 0.0f ? configured : fallback;
     };
 
+    const std::string effect_resolution = resolve({"--effect-resolution"}, "effect_resolution", "auto");
+    opts.native_effect_resolution = effect_resolution == "native";
+    if (effect_resolution != "auto" && effect_resolution != "native")
+        fprintf(stderr, "Unknown effect resolution '%s'; using auto\n", effect_resolution.c_str());
+
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.no_audio = hasDashedFlag("no-audio") || opts.no_ui || opts.diagnostics.enabled ||
                     cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    opts.performance_profile = cli_args::hasFlag(args, {"--performance-profile"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"});
     opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});
 #if DEBUG_BUILD

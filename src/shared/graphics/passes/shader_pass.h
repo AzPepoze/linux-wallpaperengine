@@ -45,6 +45,7 @@ class ShaderPass {
     std::map<std::string, std::vector<float>> uniforms;
     std::map<std::string, int> combos;
     std::map<int, std::string> texture_labels;
+    bool display_resolution_safe = false;
     bool enabled = true;
     bool show_files = false;
     bool is_fullscreen_quad = false;

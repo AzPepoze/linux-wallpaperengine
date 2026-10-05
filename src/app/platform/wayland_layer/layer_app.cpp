@@ -1,4 +1,5 @@
 #include "app/platform/wayland_layer/layer_app.h"
+#include "shared/graphics/backend/performance_profile.h"
 
 #include <stdlib.h>
 #include <time.h>
@@ -236,7 +237,10 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
                                   static_cast<uint32_t>(app.wayland->pixelHeight()));
         app.trackFrameTime();
         callbacks.frame();
+        const double present_start = performance_profile::enabled() ? nowSeconds() : 0.0;
         app.swapchain->present();
+        if (performance_profile::enabled())
+            performance_profile::recordPresent((nowSeconds() - present_start) * 1000.0);
     }
     if (app.wayland->closed()) LOG_I("[LAYER] the compositor closed the surface");
     callbacks.cleanup();

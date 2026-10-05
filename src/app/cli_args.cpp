@@ -25,6 +25,8 @@ constexpr CliOption kWallpaper[] = {
 };
 
 constexpr CliOption kGraphics[] = {
+    {{"--performance-profile", nullptr}, nullptr, CliBuild::All, "Log presented FPS and frame intervals every 10 s"},
+    {{"--effect-resolution", nullptr}, "<auto|native>", CliBuild::All, "Verified shake effect resolution (default auto)"},
     {{"--gpu", "-gpu", nullptr}, "<id>", CliBuild::All, "Select a GPU by index or name"},
     {{"--list-gpus", "-list-gpus", nullptr}, nullptr, CliBuild::All, "List available GPUs and exit"},
     {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Frame-rate cap; 0 or omitted follows the display"},

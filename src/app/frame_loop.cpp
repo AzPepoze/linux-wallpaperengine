@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "app/frame_rate.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -149,11 +150,14 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 #if DEBUG_BUILD
     const uint64_t frame_start = stm_now();
 #endif
+    const uint64_t profile_cpu_start = ctx.performance_profile ? stm_now() : 0;
     ctx.renderer.draw_calls = 0;
 
     // Presented rate from the previous loop iteration (frame build + present).
     static frame_rate::Meter frame_meter;
-    frame_meter.tick(surface::frameDuration());
+    const double presented_dt = surface::frameDuration();
+    frame_meter.tick(presented_dt);
+    if (ctx.performance_profile) performance_profile::beginFrame(presented_dt);
     ctx.profiler.measured_fps = frame_meter.fps();
 
     // Runtime switch requests are applied before this frame's scene work so the
@@ -167,6 +171,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 #endif
 
     Scene2DRuntime* runtime = activeRuntime(mgr);
+    if (ctx.performance_profile) performance_profile::beginRender();
     updateFrame(ctx, mgr, runtime);
     mgr.updateTransition((float)surface::frameDuration());
     // continue mode: step/render the outgoing instance and feed the live source
@@ -194,7 +199,9 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
+    const uint64_t acquire_start = ctx.performance_profile ? stm_now() : 0;
     pass.swapchain = surface::acquireSwapchain();
+    if (ctx.performance_profile) performance_profile::recordAcquire(stm_ms(stm_since(acquire_start)));
     sg_begin_pass(&pass);
 
     if (offscreen_composition && runtime)
@@ -215,7 +222,9 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 #endif
 
     sg_end_pass();
+    if (ctx.performance_profile) performance_profile::endRender();
     sg_commit();
+    if (ctx.performance_profile) performance_profile::recordCpuFrame(stm_ms(stm_since(profile_cpu_start)));
 
 #if DEBUG_BUILD
     RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);

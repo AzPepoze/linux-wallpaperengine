@@ -240,6 +240,10 @@ add_test("alpha_tests", {"tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_c
 add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
 
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
+add_test("effect_resolution_tests", {"tests/effect_resolution_test.cpp"})
+add_test("gpu_timing_tests", {"tests/gpu_timing_test.cpp"})
+add_test("performance_profile_tests", {"tests/performance_profile_test.cpp",
+    "src/shared/graphics/backend/performance_profile.cpp", "src/shared/core/logger.cpp"})
 
 add_test("web_devtools_tests", {"tests/web_devtools_test.cpp", "src/shared/core/web_devtools.cpp"})
 

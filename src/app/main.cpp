@@ -17,6 +17,7 @@
 #include "app/platform/wayland_layer/layer_app.h"
 #endif
 #include "app/package_extractor.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "app/signals.h"
 #include "shared/assets/media/media_source.h"
 #include "shared/assets/shared_assets.h"
@@ -122,6 +123,8 @@ static void applyCliToContext() {
         ctx.debug.particle_debug_velocity_scale = cli.particle_debug_velocity_scale;
     if (cli.particle_debug_max_particles > 0) ctx.debug.particle_debug_max_particles = cli.particle_debug_max_particles;
 
+    ctx.performance_profile = cli.performance_profile;
+    ctx.native_effect_resolution = cli.native_effect_resolution;
     ctx.parallax_smoothing = cli.parallax.smoothing;
     ctx.parallax_scale = cli.parallax.scale;
 
@@ -210,6 +213,7 @@ static void init(void) {
     Debugger::init();
 #endif
     applyCliToContext();
+    performance_profile::initialize(ctx.performance_profile);
 
 #if DEBUG_BUILD
     if (ctx.runtime_mode == RuntimeMode::Sandbox) {
@@ -240,6 +244,7 @@ static void cleanup(void) {
     LOG_I("[APP] Shutting down");
     control_server.close();
     lwe_vk_wait_idle();
+    performance_profile::shutdown();
 
 #if DEBUG_BUILD
     RenderDiagnostics::instance().shutdown(terminationRequested());

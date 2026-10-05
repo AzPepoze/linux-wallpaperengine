@@ -1,23 +1,58 @@
+#include "effect_resolution.h"
 #include "image_layer.h"
+#include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "wallpaper/2d/effects/effect.h"
 
-bool ImageLayer::ensureEffectTargets(sg_image source_image) {
+bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) {
     sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
     if (target_source.id == SG_INVALID_ID) return false;
     const sg_image_desc source_desc = sg_query_image_desc(target_source);
     if (source_desc.width <= 0 || source_desc.height <= 0) return false;
-    if (effect_target_width == source_desc.width && effect_target_height == source_desc.height &&
-        effect_targets[0].image.id != SG_INVALID_ID && effect_targets[1].image.id != SG_INVALID_ID &&
-        effect_targets[0].texture_view.id != SG_INVALID_ID && effect_targets[1].texture_view.id != SG_INVALID_ID &&
-        effect_targets[0].attachment_view.id != SG_INVALID_ID &&
+    int width = source_desc.width;
+    int height = source_desc.height;
+    bool eligible = !ctx.native_effect_resolution && !is_fullscreen && !copy_background && !is_compose_region &&
+                    !puppet_resolved && !effects.empty();
+    for (const Effect* effect : effects) {
+        if (!effect || effect->passes.empty()) {
+            eligible = false;
+            break;
+        }
+        for (const ShaderPass* pass : effect->passes) {
+            if (!pass || !pass->display_resolution_safe || !pass->render_target.empty() ||
+                !pass->render_texture_bindings.empty() || pass->pass_textures.texture0.id != SG_INVALID_ID) {
+                eligible = false;
+                break;
+            }
+        }
+        if (!eligible) break;
+    }
+    if (eligible) {
+        const ScreenRect rect = screenRect(ctx);
+        const double sx = ctx.renderer.view_width > 0 && ctx.scene.physical_view_width > 0
+                              ? ctx.scene.physical_view_width / ctx.renderer.view_width
+                              : 1.0;
+        const double sy = ctx.renderer.view_height > 0 && ctx.scene.physical_view_height > 0
+                              ? ctx.scene.physical_view_height / ctx.renderer.view_height
+                              : 1.0;
+        const double angle = rect.rotation * 3.141592653589793 / 180.0;
+        const double c = std::cos(angle), s = std::sin(angle);
+        const auto dimensions = effect_resolution::targetSize(width, height, rect.width * std::hypot(c * sx, s * sy),
+                                                              rect.height * std::hypot(s * sx, c * sy));
+        width = dimensions.first;
+        height = dimensions.second;
+    }
+    if (effect_target_width == width && effect_target_height == height && effect_targets[0].image.id != SG_INVALID_ID &&
+        effect_targets[1].image.id != SG_INVALID_ID && effect_targets[0].texture_view.id != SG_INVALID_ID &&
+        effect_targets[1].texture_view.id != SG_INVALID_ID && effect_targets[0].attachment_view.id != SG_INVALID_ID &&
         effect_targets[1].attachment_view.id != SG_INVALID_ID) {
         return true;
     }
     for (int index = 0; index < 2; ++index) {
         effect_targets[index].reset();
     }
-    effect_target_width = source_desc.width;
-    effect_target_height = source_desc.height;
+    effect_target_width = width;
+    effect_target_height = height;
     effect_output_image = {SG_INVALID_ID};
     effect_output_view = {SG_INVALID_ID};
     for (int index = 0; index < 2; ++index) {

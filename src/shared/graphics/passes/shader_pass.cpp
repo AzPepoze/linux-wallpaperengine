@@ -1,4 +1,5 @@
 #include "shader_pass.h"
+#include "wallpaper/2d/layers/image/effect_resolution.h"
 
 #include <cctype>
 #include <cstdlib>
@@ -161,6 +162,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     sources.processed_vs = ShaderSourceProcessor::processShaderSource(sources.raw_vs, abs_vert, *ctx.asset_mgr, true);
     sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, *ctx.asset_mgr, false);
 
+    display_resolution_safe = effect_resolution::verifiedShake(sources.processed_vs, sources.processed_fs);
+
     // Shared includes can declare material uniforms, so inspect the expanded sources.
     std::vector<ShaderUniformConfig>& shader_uniforms = prepared->shader_uniforms;
     shader_uniforms = EffectParser::extractShaderUniforms(sources.processed_vs);
@@ -177,6 +180,7 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     stored_fs_source = sources.full_fs;
     sources.full_fs =
         renderObserver().overrideFragmentSource(shader_name, sources.full_fs, debug_view_mode, debug_step);
+    display_resolution_safe = display_resolution_safe && sources.full_fs == stored_fs_source;
 
     texture_labels = ShaderSourceProcessor::extractTextureLabels(sources.raw_fs.c_str());
 

@@ -93,6 +93,8 @@ struct SceneState {
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;
+    float physical_view_width = 0.0f;
+    float physical_view_height = 0.0f;
     float render_scale = 1.0f;
     float offset_x = 0.0f;
     float offset_y = 0.0f;
@@ -113,6 +115,8 @@ struct DebugState {
 };
 
 struct EngineContext {
+    bool native_effect_resolution = false;
+    bool performance_profile = false;
     sg_pass_action pass_action = {};
     char wallpaper_path[512] = {};
     char engine_path[512] = {};

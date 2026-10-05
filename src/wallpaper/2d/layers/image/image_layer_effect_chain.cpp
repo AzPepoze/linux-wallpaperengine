@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "image_layer.h"
+#include "shared/graphics/backend/gpu_timing.h"
 #include "image_parser.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
@@ -226,7 +227,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     }
     effect_source_image = base_img;
     effect_source_view = base_view;
-    if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(base_img)) return;
+    if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(ctx, base_img)) return;
 
     IRenderObserver& diag = renderObserver();
 
@@ -236,7 +237,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     ChainState state;
     state.layer_source_image = state.input_image = state.chain_image = base_img;
     state.layer_source_view = state.input_view = state.chain_view = base_view;
-    diag.onSourceImage(0, state.input_image, effect_target_width, effect_target_height);
+    const sg_image_desc source_desc = sg_query_image_desc(state.input_image);
+    diag.onSourceImage(0, state.input_image, source_desc.width, source_desc.height);
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
@@ -294,7 +296,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             }
 
             PassInputs inputs = resolvePassInputs(*pass, state);
-            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index, ctx.time);
+            render_effect_pass_t render_pass = pass->getRenderPass(ctx.profiler.frame_index, ctx.scene.elapsed_time);
             if (inputs.has_overrides) {
                 render_pass.override_views = inputs.override_views.data();
                 render_pass.num_override_views = inputs.override_views.size();
@@ -305,6 +307,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 continue;
             }
 
+            const int gpu_token = ctx.performance_profile
+                ? gpu_timing_begin_pass(name + "/" + std::to_string(eff_idx) + "/" + std::to_string(pass_idx) + "/" + pass->shader_name) : -1;
             sg_pass offscreen_pass = colorPass(output_attachment, SG_LOADACTION_CLEAR);
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
@@ -313,6 +317,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             renderer_draw_sprite(ctx, &ctx.renderer, inputs.image, inputs.view, 0.0f, 0.0f, (float)target_width,
                                  (float)target_height, 0.0f, effect_tint, false, &render_pass);
             sg_end_pass();
+            if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 
             if (diag.isTracingPasses()) {
                 tracePass(diag, ctx, *effect, *pass, eff_idx, pass_idx, inputs, state, named_target, output_image,

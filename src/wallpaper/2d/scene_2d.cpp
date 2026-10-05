@@ -174,6 +174,8 @@ void Scene2DRuntime::present() {
 void Scene2DRuntime::updateViewport() {
     float sw = output_width > 0 ? (float)output_width : (float)surface::width();
     float sh = output_height > 0 ? (float)output_height : (float)surface::height();
+    ctx.scene.physical_view_width = sw;
+    ctx.scene.physical_view_height = sh;
     // A scene-aspect projection mapped onto the physical viewport stretches both
     // image and particle geometry together, including rotated layers.
     if (ctx.scene.scene_w > 0 && ctx.scene.scene_h > 0 && ctx.scene.scaling_mode == SCALING_STRETCH)

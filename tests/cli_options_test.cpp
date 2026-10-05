@@ -30,7 +30,7 @@ int main() {
     CHECK(config != nullptr);
     fputs(
         "{\"scaling_mode\":\"fill\",\"parallax_smoothing\":0.25,\"parallax_scale\":40.0,"
-        "\"transition\":\"crt\",\"web_transport\":\"snapshot\"}",
+        "\"transition\":\"crt\",\"web_transport\":\"snapshot\",\"effect_resolution\":\"native\"}",
         config);
     fclose(config);
 
@@ -38,6 +38,7 @@ int main() {
     {
         const CliOptions opts = parse({"app", "/wp"});
         CHECK(opts.scaling == "fill");
+        CHECK(opts.native_effect_resolution);
         CHECK(std::find(opts.startup_options.begin(), opts.startup_options.end(),
                         "scaling_mode=fill (source: config)") != opts.startup_options.end());
         CHECK(std::find(opts.startup_options.begin(), opts.startup_options.end(), "fps_limit=0 (source: default)") !=
@@ -55,6 +56,19 @@ int main() {
         CHECK(std::find(opts.startup_options.begin(), opts.startup_options.end(), "scaling_mode=fit (source: CLI)") !=
               opts.startup_options.end());
         CHECK(opts.web.transport == WebTransport::DmaBuf);
+    }
+
+    {
+        const CliOptions opts = parse({"app", "--effect-resolution", "native", "/wp"});
+        CHECK(opts.native_effect_resolution);
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    {
+        const CliOptions opts = parse({"app", "--effect-resolution", "auto", "--performance-profile", "/wp"});
+        CHECK(!opts.native_effect_resolution);
+        CHECK(opts.performance_profile);
+        CHECK(opts.wallpaper_arg == "/wp");
     }
 
     chdir("/");

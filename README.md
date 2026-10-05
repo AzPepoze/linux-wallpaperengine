@@ -127,6 +127,8 @@ The wallpaper path may come first or last. `-h` / `--help` prints this same refe
 | `--cover` | | off | Force cover scaling, ignoring the project |
 | `--clamp` | `<mode>` | ignored | Accepted and ignored |
 | `--video-ram` | | off | Load video files into RAM instead of streaming |
+| `--performance-profile` | | off | Log presented FPS, mean/p95 frame intervals, CPU work/acquisition/presentation, and asynchronous GPU frame/image-effect spans after a 5-second warmup. GPU spans can include queue dependencies; window presentation timing may be unavailable. |
+| `--effect-resolution` | `auto\|native` | auto | Size verified shake chains to their displayed size; native preserves source resolution. Also configurable as `effect_resolution` in config.json. |
 | `--script-profile` | | off | Log the slowest scripts every 10 seconds |
 
 ### Display
