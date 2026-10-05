@@ -274,12 +274,21 @@ bool parseMdl(const uint8_t* data, size_t size, MdlModel& out) {
         size_t uv_offset;
     };
     constexpr size_t kNoBones = (size_t)-1;
-    const MeshLayout kLayouts[] = {
+    MeshLayout kLayouts[] = {
         {80, 40, 56, 72},
         {48, kNoBones, kNoBones, 40},
         {52, 12, 28, 44},
         {84, 44, 60, 76},
     };
+
+    // Legacy skinned vertices omit normals and tangents. Their byte count
+    // can also divide by 48 with every triangle still in range, so use the
+    // version to prefer the 52-byte skinning layout over an unskinned mesh.
+    if (out.version >= "MDLV0013" && out.version <= "MDLV0016") {
+        const MeshLayout unskinned = kLayouts[1];
+        kLayouts[1] = kLayouts[2];
+        kLayouts[2] = unskinned;
+    }
 
     size_t block_offset = 0;
     size_t indices_offset = 0;

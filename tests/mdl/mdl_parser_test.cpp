@@ -230,6 +230,31 @@ int main() {
     check(!wallpaper_engine::parseMdl(junk, sizeof(junk), rejected), "short buffer rejected");
     check(!wallpaper_engine::parseMdl(nullptr, 0, rejected), "null buffer rejected");
 
+    // 60 legacy vertices occupy 3120 bytes, also divisible by the 48-byte
+    // unskinned stride. Both interpretations accept all triangle indices.
+    auto legacy_bytes = makeMdl();
+    memcpy(legacy_bytes.data(), "MDLV0016", 8);
+    const size_t mesh = 21 + strlen("materials/test.json") + 1 + 28;
+    std::vector<uint8_t> legacy_vertices;
+    for (int i = 0; i < 60; ++i) {
+        std::vector<uint8_t> vertex;
+        appendVertex(vertex, (float)i, 20, 0.25f, 0.5f, 0, 0, 1, 0);
+        legacy_vertices.insert(legacy_vertices.end(), vertex.begin(), vertex.begin() + 12);
+        legacy_vertices.insert(legacy_vertices.end(), vertex.begin() + 40, vertex.end());
+    }
+    legacy_bytes.erase(legacy_bytes.begin() + mesh + 8, legacy_bytes.begin() + mesh + 8 + 160);
+    legacy_bytes.insert(legacy_bytes.begin() + mesh + 8, legacy_vertices.begin(), legacy_vertices.end());
+    patchU32(legacy_bytes, mesh + 4, (uint32_t)legacy_vertices.size());
+    legacy_bytes[mesh + 8 + legacy_vertices.size() + 4 + 2] = 59;
+    wallpaper_engine::MdlModel legacy;
+    check(wallpaper_engine::parseMdl(legacy_bytes.data(), legacy_bytes.size(), legacy), "ambiguous legacy mesh parses");
+    check(legacy.vertices.size() == 60, "legacy version prefers 52-byte skinned vertices over 48-byte vertices");
+    if (legacy.vertices.size() == 60) {
+        check(legacy.vertices[59].position[0] == 59 && legacy.vertices[59].uv[0] == 0.25f,
+              "legacy stride retains final vertex position and UV");
+        check(legacy.vertices[59].bone_weights[0] == 1, "legacy stride retains skinning weights");
+    }
+
     const auto ik_bytes = makeMdl(true);
     wallpaper_engine::MdlModel ik_model;
     check(wallpaper_engine::parseMdl(ik_bytes.data(), ik_bytes.size(), ik_model), "IK skeleton parses");
