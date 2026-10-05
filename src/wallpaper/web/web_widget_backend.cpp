@@ -8,12 +8,14 @@
 #include <unistd.h>
 
 #include <QApplication>
+#include <QColor>
 #include <QImage>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPoint>
 #include <QTimer>
 #include <QUrl>
+#include <QWebEnginePage>
 #include <QWebEngineScript>
 #include <QWebEngineScriptCollection>
 #include <QWebEngineSettings>
@@ -35,6 +37,7 @@ WidgetBackend::~WidgetBackend() {
 
 bool WidgetBackend::start(const std::string& html_path, const std::string& user_properties_json, int ctrl_fd) {
     view_ = new QWebEngineView();
+    view_->page()->setBackgroundColor(Qt::black);
     view_->resize(static_cast<int>(width_), static_cast<int>(height_));
     QWebEngineSettings* settings = view_->settings();
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);

@@ -1,5 +1,6 @@
 #include "wallpaper/web/web_quick_view.h"
 
+#include <QColor>
 #include <QCoreApplication>
 #include <QMouseEvent>
 #include <QQmlComponent>
@@ -28,6 +29,8 @@ QuickWebView createQuickWebView(QQuickWindow& window, const std::string& html_pa
     shim.setRunsOnSubFrames(true);
     QWebEngineProfile::defaultProfile()->scripts()->insert(shim);
 
+    window.setColor(Qt::black);
+
     QuickWebView view;
     view.engine = std::make_unique<QQmlEngine>();
     view.component = std::make_unique<QQmlComponent>(view.engine.get());
@@ -35,6 +38,7 @@ QuickWebView createQuickWebView(QQuickWindow& window, const std::string& html_pa
     const QString url = QUrl::fromLocalFile(QString::fromStdString(html_path)).toString();
     view.component->setData(QStringLiteral("import QtQuick\nimport QtWebEngine\n"
                                            "WebEngineView { width: %1; height: %2; url: \"%3\"\n"
+                                           "  backgroundColor: \"#000000\"\n"
                                            "  settings.localContentCanAccessFileUrls: true\n"
                                            "  settings.localContentCanAccessRemoteUrls: true\n"
                                            "}\n")
