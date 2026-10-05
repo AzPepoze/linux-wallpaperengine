@@ -1,5 +1,6 @@
 #include "wallpaper/web/web_renderer_shared.h"
 
+#include <sched.h>
 #include <string.h>
 
 namespace web_renderer {
@@ -110,6 +111,21 @@ bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, ui
     ++frame->frame_counter;
     pthread_mutex_unlock(&frame->mutex);
     return true;
+}
+
+int acquireDmaBuf(const WebFrameBuffer* frame) {
+    const uint32_t count = frame->buffer_count ? frame->buffer_count : kWebDmaBufBuffers;
+    for (;;) {
+        const uint64_t published = frame->published_frame.load(std::memory_order_acquire);
+        const uint64_t consumed = frame->consumed_frame.load(std::memory_order_acquire);
+        if (published - consumed < count) return static_cast<int>(published % count);
+        sched_yield();
+    }
+}
+
+void publishDmaBuf(WebFrameBuffer* frame, uint32_t index) {
+    frame->published_index.store(index, std::memory_order_relaxed);
+    frame->published_frame.fetch_add(1, std::memory_order_release);
 }
 
 }  // namespace web_renderer

@@ -36,6 +36,15 @@ RenderEvent decodeInput(const WebInputMessage& msg);
 // Returns false when the buffer or dimensions are unusable.
 bool publishFrame(WebFrameBuffer* frame, const uint8_t* bgra, uint32_t width, uint32_t height, bool flip_y = false);
 
+// Zero-copy ring (tier B). The helper calls acquireDmaBuf() for the next slot to
+// render into, then publishDmaBuf() once that frame is ready; the engine reads
+// published_frame/published_index and stores consumed_frame when it is done.
+//
+// acquireDmaBuf blocks (yielding) while all slots are still in flight, so the
+// helper never overwrites a buffer the engine may be sampling.
+int acquireDmaBuf(const WebFrameBuffer* frame);
+void publishDmaBuf(WebFrameBuffer* frame, uint32_t index);
+
 }  // namespace web_renderer
 
 #endif  // WEB_RENDERER_SHARED_H

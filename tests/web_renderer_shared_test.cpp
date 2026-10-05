@@ -53,5 +53,29 @@ int main() {
     CHECK(fb->frame_counter == 1);
     pthread_mutex_destroy(&fb->mutex);
 
+    // Zero-copy ring: acquire hands out successive slots and publish advances.
+    std::vector<uint8_t> ring_storage(sizeof(WebFrameBuffer));
+    std::memset(ring_storage.data(), 0, ring_storage.size());
+    auto* ring = reinterpret_cast<WebFrameBuffer*>(ring_storage.data());
+    new (&ring->published_frame) std::atomic<uint64_t>(0);
+    new (&ring->published_index) std::atomic<uint32_t>(0);
+    new (&ring->consumed_frame) std::atomic<uint64_t>(0);
+    ring->buffer_count = kWebDmaBufBuffers;
+    pthread_mutex_init(&ring->mutex, nullptr);
+
+    CHECK(web_renderer::acquireDmaBuf(ring) == 0);
+    web_renderer::publishDmaBuf(ring, 0);
+    CHECK(ring->published_frame.load() == 1);
+    CHECK(ring->published_index.load() == 0);
+    CHECK(web_renderer::acquireDmaBuf(ring) == 1);
+
+    // With all slots in flight, acquire blocks until the engine consumes one.
+    web_renderer::publishDmaBuf(ring, 1);
+    web_renderer::publishDmaBuf(ring, 2);
+    ring->consumed_frame.store(1);
+    CHECK(web_renderer::acquireDmaBuf(ring) == 0);
+
+    pthread_mutex_destroy(&ring->mutex);
+
     return test::finish("web renderer shared checks");
 }

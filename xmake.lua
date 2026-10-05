@@ -142,7 +142,7 @@ target("linux-wallpaperengine")
     end
 
     local web_helper_sources =
-        "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_renderer_shared.cpp"
+        "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_render_control.cpp|wallpaper/web/web_renderer_shared.cpp"
     if is_mode("debug", "asan", "ubsan") then
         add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
         -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.

@@ -8,6 +8,23 @@
 #include <pthread.h>
 #include <stdint.h>
 
+#include <atomic>
+
+// A frame the helper exported as a DMA-BUF (tier B / zero-copy). The fd is
+// owned by the helper process; the engine duplicates it before importing.
+struct WebDmaBufBuffer {
+    int32_t fd;         // exported DMA-BUF fd
+    uint32_t fourcc;    // DRM_FORMAT_* of the image
+    uint64_t modifier;  // DRM format modifier (0 = linear)
+    uint32_t stride;
+    uint32_t offset;
+    uint32_t width;
+    uint32_t height;
+};
+
+// Number of DMA-BUF buffers the helper cycles through.
+constexpr uint32_t kWebDmaBufBuffers = 3;
+
 // Header at the start of a memfd-backed region; the BGRA pixel payload of
 // width * height * 4 bytes follows immediately after.
 struct WebFrameBuffer {
@@ -17,7 +34,18 @@ struct WebFrameBuffer {
     uint32_t pixel_format;  // 1 = BGRA8
     uint32_t reserved;
     uint64_t frame_counter;
+
+    // Zero-copy transport. transport is 0 for shm pixels and 1 for the DMA-BUF
+    // ring below; the pixel payload is unused when it is 1.
+    uint32_t transport;
+    uint32_t buffer_count;
+    WebDmaBufBuffer buffers[kWebDmaBufBuffers];
+    std::atomic<uint64_t> published_frame;  // frames the helper finished writing
+    std::atomic<uint32_t> published_index;  // ring slot holding the newest frame
+    std::atomic<uint64_t> consumed_frame;   // frames the engine finished sampling
 };
+
+static_assert(std::atomic<uint64_t>::is_always_lock_free, "shared atomics must be lock-free");
 
 enum WebInputType : uint32_t {
     WEB_INPUT_MOUSE_MOVE = 1,

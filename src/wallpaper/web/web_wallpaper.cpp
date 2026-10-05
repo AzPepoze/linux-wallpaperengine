@@ -118,7 +118,14 @@ bool WebWallpaper::load(const std::string& path, EngineContext& ctx) {
         return false;
     }
     auto* frame = static_cast<WebFrameBuffer*>(mapping);
-    memset(frame, 0, sizeof(WebFrameBuffer));
+    frame->reserved = 0;
+    frame->frame_counter = 0;
+    frame->transport = 0;
+    frame->buffer_count = 0;
+    memset(frame->buffers, 0, sizeof(frame->buffers));
+    new (&frame->published_frame) std::atomic<uint64_t>(0);
+    new (&frame->published_index) std::atomic<uint32_t>(0);
+    new (&frame->consumed_frame) std::atomic<uint64_t>(0);
     pthread_mutexattr_t mutex_attr;
     pthread_mutexattr_init(&mutex_attr);
     pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
