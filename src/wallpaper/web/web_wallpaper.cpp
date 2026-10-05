@@ -389,8 +389,7 @@ void WebWallpaper::stopChild() {
 }
 
 void WebWallpaper::clear() {
-    if (frame_ && dmabuf_ready_)
-        frame_->consumed_frame.store(frame_->published_frame.load(std::memory_order_acquire));
+    if (frame_ && dmabuf_ready_) frame_->consumed_frame.store(frame_->published_frame.load(std::memory_order_acquire));
     stopChild();
     for (ImportedBgraSurface& surface : surfaces_) gpu_destroy_bgra_surface(surface);
     dmabuf_offer_received_ = false;

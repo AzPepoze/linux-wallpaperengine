@@ -5,10 +5,10 @@
 
 // Frame transports the web renderer can use.
 enum class WebTransport {
-    Auto,      // try DmaBuf, then OffScreen, then Snapshot
-    DmaBuf,    // zero-copy DMA-BUF sampled by the engine
-    OffScreen, // offscreen render-control with asynchronous readback
-    Snapshot,  // in-process widget grab
+    Auto,       // try DmaBuf, then OffScreen, then Snapshot
+    DmaBuf,     // zero-copy DMA-BUF sampled by the engine
+    OffScreen,  // offscreen render-control with asynchronous readback
+    Snapshot,   // in-process widget grab
 };
 
 // false when the name is not one of the four.

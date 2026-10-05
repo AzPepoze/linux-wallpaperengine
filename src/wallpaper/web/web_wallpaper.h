@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "sokol_gfx.h"
 #include "shared/graphics/backend/gpu_bgra.h"
+#include "sokol_gfx.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/web/web_ipc.h"
 

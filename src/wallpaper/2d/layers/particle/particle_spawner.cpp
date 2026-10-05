@@ -143,18 +143,19 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     particle.position[2] += child_offset[2];
     for (const ParticleInitializerConfig& initializer : config.initializers) {
         if (initializer.type == "lifetimerandom") {
-            particle.max_life = initializer.minimum_scalar +
-                                randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
+            particle.max_life =
+                initializer.minimum_scalar +
+                randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.life = particle.max_life;
         } else if (initializer.type == "sizerandom") {
-            particle.size = initializer.minimum_scalar +
-                            randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
+            particle.size = initializer.minimum_scalar + randomFloat(initializer.exponent) *
+                                                             (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.initial_size = particle.size;
         } else if (initializer.type == "velocityrandom") {
-            particle.velocity[0] =
-                initializer.minimum[0] + randomFloat(initializer.exponent) * (initializer.maximum[0] - initializer.minimum[0]);
-            particle.velocity[1] =
-                initializer.minimum[1] + randomFloat(initializer.exponent) * (initializer.maximum[1] - initializer.minimum[1]);
+            particle.velocity[0] = initializer.minimum[0] + randomFloat(initializer.exponent) *
+                                                                (initializer.maximum[0] - initializer.minimum[0]);
+            particle.velocity[1] = initializer.minimum[1] + randomFloat(initializer.exponent) *
+                                                                (initializer.maximum[1] - initializer.minimum[1]);
         } else if (initializer.type == "colorrandom") {
             // One blend factor for all channels: independent draws would tint ranges such as white..grey.
             const float blend = randomFloat();
@@ -164,8 +165,8 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
                      blend * (initializer.maximum[component] - initializer.minimum[component])) /
                     255.0f;
         } else if (initializer.type == "alpharandom") {
-            particle.alpha = initializer.minimum_scalar +
-                             randomFloat(initializer.exponent) * (initializer.maximum_scalar - initializer.minimum_scalar);
+            particle.alpha = initializer.minimum_scalar + randomFloat(initializer.exponent) *
+                                                              (initializer.maximum_scalar - initializer.minimum_scalar);
             particle.initial_alpha = particle.alpha;
         } else if (initializer.type == "rotationrandom") {
             particle.rotation =
@@ -249,17 +250,22 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     }
     if (offset_from_instance)
         for (int axis = 0; axis < 3; ++axis) particle.position[axis] += instance->position[axis];
-    particle.base_position[0] = offset_from_instance ? particle.position[0] - instance->position[0] : particle.position[0];
-    particle.base_position[1] = offset_from_instance ? particle.position[1] - instance->position[1] : particle.position[1];
-    particle.base_position[2] = offset_from_instance ? particle.position[2] - instance->position[2] : particle.position[2];
+    particle.base_position[0] =
+        offset_from_instance ? particle.position[0] - instance->position[0] : particle.position[0];
+    particle.base_position[1] =
+        offset_from_instance ? particle.position[1] - instance->position[1] : particle.position[1];
+    particle.base_position[2] =
+        offset_from_instance ? particle.position[2] - instance->position[2] : particle.position[2];
     if (is_rope_trail) particle.history.push_back({particle.position[0], particle.position[1], particle.position[2]});
     for (const ParticleOperatorConfig& particle_operator : config.operators) {
         if (particle_operator.type == "movement") {
             vec3_dup(particle.gravity, particle_operator.gravity);
             if (parent_in_world && !world_space) {
                 // Gravity authored for a local-space child turns with the layer.
-                particle.gravity[0] = matrix[0] * particle_operator.gravity[0] + matrix[2] * particle_operator.gravity[1];
-                particle.gravity[1] = matrix[1] * particle_operator.gravity[0] + matrix[3] * particle_operator.gravity[1];
+                particle.gravity[0] =
+                    matrix[0] * particle_operator.gravity[0] + matrix[2] * particle_operator.gravity[1];
+                particle.gravity[1] =
+                    matrix[1] * particle_operator.gravity[0] + matrix[3] * particle_operator.gravity[1];
             }
             particle.drag = particle_operator.drag;
         } else if (particle_operator.type == "alphafade") {
@@ -291,7 +297,9 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     // Event children get one instance per parent particle: spawn children stay where the particle was created,
     // follow children track it until it dies.
     for (ParticleSystem* child : children) {
-        if (child->spawn_type == ParticleSpawnType::EventSpawn) child->createInstance(particle, false);
-        else if (child->spawn_type == ParticleSpawnType::EventFollow) child->createInstance(particle, true);
+        if (child->spawn_type == ParticleSpawnType::EventSpawn)
+            child->createInstance(particle, false);
+        else if (child->spawn_type == ParticleSpawnType::EventFollow)
+            child->createInstance(particle, true);
     }
 }

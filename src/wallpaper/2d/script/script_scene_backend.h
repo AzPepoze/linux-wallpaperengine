@@ -155,8 +155,8 @@ class ScriptSceneBackend {
         return false;
     }
 
-    // Dynamic layers. `config_json` is a scene object (image, particle, text, sound...); returns the new object id, or 0.
-    // Destruction is applied between frames; sortLayer moves a layer to a draw-order index.
+    // Dynamic layers. `config_json` is a scene object (image, particle, text, sound...); returns the new object id, or
+    // 0. Destruction is applied between frames; sortLayer moves a layer to a draw-order index.
     virtual uint32_t createLayer(const std::string& /*config_json*/) {
         return 0;
     }

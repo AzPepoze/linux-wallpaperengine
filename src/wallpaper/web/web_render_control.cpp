@@ -170,7 +170,8 @@ bool RenderControlBackend::start(const std::string& html_path, const std::string
 
     QOpenGLFramebufferObjectFormat fbo_format;
     fbo_format.setInternalTextureFormat(GL_RGBA8);
-    d.fbo = std::make_unique<QOpenGLFramebufferObject>(static_cast<int>(d.width), static_cast<int>(d.height), fbo_format);
+    d.fbo =
+        std::make_unique<QOpenGLFramebufferObject>(static_cast<int>(d.width), static_cast<int>(d.height), fbo_format);
     if (!d.fbo->isValid()) return false;
     d.window->setRenderTarget(QQuickRenderTarget::fromOpenGLTexture(d.fbo->texture(), d.fbo->size()));
     d.window->resize(static_cast<int>(d.width), static_cast<int>(d.height));

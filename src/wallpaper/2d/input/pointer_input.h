@@ -58,8 +58,8 @@ class PointerTracker {
     // hit is the current layer under the cursor (if any), buttons is the live
     // press mask (bit0 left, bit1 right, bit2 middle).
     std::vector<PointerEvent> update(const std::optional<LocalHit>& hit, uint8_t buttons,
-                                   std::optional<WorldPoint> cursor = std::nullopt,
-                                   const std::vector<HitCandidate>& candidates = {});
+                                     std::optional<WorldPoint> cursor = std::nullopt,
+                                     const std::vector<HitCandidate>& candidates = {});
 
    private:
     std::optional<LocalHit> hovered_;

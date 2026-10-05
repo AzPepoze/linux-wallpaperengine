@@ -342,9 +342,11 @@ JSValue jsScene(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     }
 
     const uint32_t id = idArg(1);
-    if (op == "modelCreate" && argc > 1) return JS_NewUint32(ctx, scene->createModelData(parseShapePatches(ctx, argv[1])));
+    if (op == "modelCreate" && argc > 1)
+        return JS_NewUint32(ctx, scene->createModelData(parseShapePatches(ctx, argv[1])));
     if (op == "modelUpdate" && argc > 3)
-        return JS_NewBool(ctx, scene->updateModelData(id, parseShapePatches(ctx, argv[2]), JS_ToBool(ctx, argv[3]) > 0));
+        return JS_NewBool(ctx,
+                          scene->updateModelData(id, parseShapePatches(ctx, argv[2]), JS_ToBool(ctx, argv[3]) > 0));
     if (op == "modelDestroy") return JS_NewBool(ctx, scene->destroyModelData(id));
     if (op == "exists") return JS_NewBool(ctx, scene->layerExists(id));
     if (op == "createLayer") return JS_NewUint32(ctx, scene->createLayer(stringArg(1)));

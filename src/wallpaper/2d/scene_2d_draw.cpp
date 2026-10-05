@@ -158,8 +158,8 @@ void Scene2DRuntime::drawOffscreen() {
     auto draw_layer = [&](Layer* layer) {
         auto* particle = dynamic_cast<ParticleLayer*>(layer);
         const auto* image_layer = dynamic_cast<const ImageLayer*>(layer);
-        const bool needs_scene_color = (particle && particle->requiresSceneColor()) ||
-                                       (image_layer && image_layer->requiresSceneColor());
+        const bool needs_scene_color =
+            (particle && particle->requiresSceneColor()) || (image_layer && image_layer->requiresSceneColor());
         if (needs_scene_color || renderObserver().isCapturingFrame()) close_batch();
         if (particle && particle->requiresSceneColor()) {
             particle->setSceneColorView(scene_targets[current].texture_view);

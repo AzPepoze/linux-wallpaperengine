@@ -1,12 +1,11 @@
 #include "wallpaper/web/web_vulkan_backend.h"
 
-#include <vulkan/vulkan.h>
-
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <vulkan/vulkan.h>
 
 #include <QApplication>
 #include <QQuickGraphicsConfiguration>
@@ -162,9 +161,9 @@ void VulkanBackend::Impl::tick() {
     if (!window) return;
 
     const int slot = acquireDmaBuf(frame);
-    window->setRenderTarget(QQuickRenderTarget::fromVulkanImage(images[slot].image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                                                VK_FORMAT_B8G8R8A8_UNORM,
-                                                                QSize(static_cast<int>(width), static_cast<int>(height))));
+    window->setRenderTarget(
+        QQuickRenderTarget::fromVulkanImage(images[slot].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_FORMAT_B8G8R8A8_UNORM,
+                                            QSize(static_cast<int>(width), static_cast<int>(height))));
     renderQuickFrame(control);
     publishDmaBuf(frame, static_cast<uint32_t>(slot));
 }
@@ -182,8 +181,8 @@ bool VulkanBackend::start(const std::string& html_path, const std::string& user_
     d.vulkan.setExtensions(QQuickGraphicsConfiguration::preferredInstanceExtensions());
     if (!d.vulkan.create()) return false;
 
-    d.configuration.setDeviceExtensions({QByteArrayLiteral("VK_KHR_external_memory_fd"),
-                                         QByteArrayLiteral("VK_EXT_external_memory_dma_buf")});
+    d.configuration.setDeviceExtensions(
+        {QByteArrayLiteral("VK_KHR_external_memory_fd"), QByteArrayLiteral("VK_EXT_external_memory_dma_buf")});
 
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
     d.window = std::make_unique<QQuickWindow>(&d.control);
@@ -193,8 +192,8 @@ bool VulkanBackend::start(const std::string& html_path, const std::string& user_
     if (!d.control.initialize()) return false;
 
     auto* renderer = d.window->rendererInterface();
-    auto* device = reinterpret_cast<const VkDevice*>(renderer->getResource(d.window.get(),
-                                                                          QSGRendererInterface::DeviceResource));
+    auto* device =
+        reinterpret_cast<const VkDevice*>(renderer->getResource(d.window.get(), QSGRendererInterface::DeviceResource));
     auto* physical = reinterpret_cast<const VkPhysicalDevice*>(
         renderer->getResource(d.window.get(), QSGRendererInterface::PhysicalDeviceResource));
     if (!device || !physical) return false;

@@ -54,8 +54,8 @@ std::optional<LocalHit> hitTest(WorldPoint cursor, const std::vector<HitCandidat
 }
 
 std::vector<PointerEvent> PointerTracker::update(const std::optional<LocalHit>& hit, uint8_t buttons,
-                                               std::optional<WorldPoint> cursor,
-                                               const std::vector<HitCandidate>& candidates) {
+                                                 std::optional<WorldPoint> cursor,
+                                                 const std::vector<HitCandidate>& candidates) {
     std::vector<PointerEvent> events;
     const bool has_hit = hit.has_value();
     const bool same_layer = has_hit && hovered_.has_value() && hit->id == hovered_->id;
@@ -77,7 +77,8 @@ std::vector<PointerEvent> PointerTracker::update(const std::optional<LocalHit>& 
                 if (auto local = layerHit(*cursor, candidate, false)) current = *local;
                 break;
             }
-        } else if (hit && hit->id == current.id) current = *hit;
+        } else if (hit && hit->id == current.id)
+            current = *hit;
         if (b == 0 && (current.world_x != pressed_[b]->world_x || current.world_y != pressed_[b]->world_y))
             events.push_back(makeEvent(PointerEventType::Move, 0, current));
         pressed_[b] = current;

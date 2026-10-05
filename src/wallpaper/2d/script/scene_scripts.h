@@ -123,7 +123,18 @@ class SceneScriptBackend : public ScriptSceneBackend {
     std::function<void(const wallpaper_engine::SceneObjectDocument&)> created_handler_;
 };
 
-enum class BoundProperty { Origin, Scale, Angles, Visible, Color, Size, EffectVisible, EffectConstant, SceneZoom, Text };
+enum class BoundProperty {
+    Origin,
+    Scale,
+    Angles,
+    Visible,
+    Color,
+    Size,
+    EffectVisible,
+    EffectConstant,
+    SceneZoom,
+    Text
+};
 
 // The scene's script-driven properties: each frame the script gets the property's current value and its result is
 // written back. Owns the scene backend and keeps it registered with the script engine.

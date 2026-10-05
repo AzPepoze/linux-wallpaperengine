@@ -138,7 +138,8 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         cJSON_Delete(material_reference);
 
         ShaderPass* pass = particle_system->material_pass;
-        if (particle_system->is_rope && pass->shader_name == "genericparticle") pass->shader_name = "genericropeparticle";
+        if (particle_system->is_rope && pass->shader_name == "genericparticle")
+            pass->shader_name = "genericropeparticle";
         pass->effect_file = particle_system->config.material_path;
         pass->combos["THICKFORMAT"] = 1;
         pass->combos["GS_ENABLED"] = 0;
@@ -189,8 +190,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         }
 
         pass->init(ctx);
-        if (pass->compiled.shader.id != SG_INVALID_ID &&
-            pass->compiled.vertex_layout != ShaderVertexLayout::Sprite2D) {
+        if (pass->compiled.shader.id != SG_INVALID_ID && pass->compiled.vertex_layout != ShaderVertexLayout::Sprite2D) {
             const ShaderBlendMode blend =
                 particle_system->is_additive ? ShaderBlendMode::Additive : ShaderBlendMode::Alpha;
             pass->compiled.pipeline =
@@ -225,7 +225,8 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
                 // The particle file's max count is the capacity of each instance; the system needs room for all of
                 // its instances (the child entry's max count) at once.
                 const int instances = std::clamp(child.maxcount, 1, 128);
-                child_system->max_particles = std::max(child_system->max_particles, child_system->config.max_particles * instances);
+                child_system->max_particles =
+                    std::max(child_system->max_particles, child_system->config.max_particles * instances);
                 child_system->particles.reserve((size_t)child_system->max_particles);
                 child_system->initParticleBuffers();
             }

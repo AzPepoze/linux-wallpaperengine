@@ -186,7 +186,8 @@ bool SceneScriptBackend::getBool(uint32_t id, const std::string& property, bool&
         return true;
     }
     if (const auto* image = dynamic_cast<const ImageLayer*>(layer);
-        image && (property == "solid" || (image->boneCount() && (property == "rootmotion" || property == "perspective")))) {
+        image &&
+        (property == "solid" || (image->boneCount() && (property == "rootmotion" || property == "perspective")))) {
         if (property == "solid") {
             out = image->cursor_solid;
             return true;
@@ -538,8 +539,8 @@ bool SceneScriptBackend::transformAttachmentToTexture(uint32_t layer_id, uint32_
     mat4x4_invert(inverse, target_world);
     mat4x4_mul(in_layer, inverse, attached);
     mat4x4_mul(in_texture, to_texture, in_layer);
-    out = {in_texture[0][0], in_texture[0][1], 0.0, in_texture[1][0], in_texture[1][1],
-           0.0,              in_texture[3][0], in_texture[3][1], 1.0};
+    out = {in_texture[0][0], in_texture[0][1], 0.0, in_texture[1][0], in_texture[1][1], 0.0,
+           in_texture[3][0], in_texture[3][1], 1.0};
     return true;
 }
 

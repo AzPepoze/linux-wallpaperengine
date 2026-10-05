@@ -17,10 +17,11 @@ class SceneVisibility {
     }
 
     bool visible(const Layer& layer) const {
-        return layer.visible && (!tree_ || tree_->ancestorsVisible(layer.scene_object_id, [&](const SceneTreeNode& node) {
-            const auto found = layers_.find(node.id);
-            return found == layers_.end() ? node.visible : found->second->visible;
-        }));
+        return layer.visible &&
+               (!tree_ || tree_->ancestorsVisible(layer.scene_object_id, [&](const SceneTreeNode& node) {
+                   const auto found = layers_.find(node.id);
+                   return found == layers_.end() ? node.visible : found->second->visible;
+               }));
     }
 
    private:

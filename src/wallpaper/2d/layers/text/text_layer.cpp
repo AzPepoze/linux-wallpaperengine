@@ -71,7 +71,8 @@ const LoadedFont* fallbackFont(int codepoint) {
     if (FILE* file = fopen(found->second.c_str(), "rb")) {
         uint8_t chunk[65536];
         size_t count = 0;
-        while ((count = fread(chunk, 1, sizeof(chunk), file)) > 0) font.data.insert(font.data.end(), chunk, chunk + count);
+        while ((count = fread(chunk, 1, sizeof(chunk), file)) > 0)
+            font.data.insert(font.data.end(), chunk, chunk + count);
         fclose(file);
     }
     if (font.data.empty()) return nullptr;

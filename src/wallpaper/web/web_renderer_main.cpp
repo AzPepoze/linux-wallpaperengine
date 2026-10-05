@@ -2,6 +2,7 @@
 // page with the best available backend and publishes BGRA frames into a
 // shared-memory buffer owned by the engine process.
 
+#include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +11,6 @@
 #include <sys/prctl.h>
 
 #include <QApplication>
-#include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <memory>
 
 #include "wallpaper/web/web_ipc.h"

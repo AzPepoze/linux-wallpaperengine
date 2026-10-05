@@ -1,8 +1,8 @@
 #ifndef PARTICLE_SYSTEM_H
 #define PARTICLE_SYSTEM_H
 
-#include <string>
 #include <array>
+#include <string>
 #include <vector>
 
 #include "linmath.h"

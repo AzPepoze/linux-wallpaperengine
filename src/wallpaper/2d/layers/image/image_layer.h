@@ -279,7 +279,8 @@ class ImageLayer : public Layer {
 
     // Whether the effect source image can change without its handle changing (animation, video, puppet mesh).
     bool effectSourceIsDynamic() const {
-        return has_puppet_mesh || bound_video_decoder || current_texture_frame || animated_frame.image.id != SG_INVALID_ID;
+        return has_puppet_mesh || bound_video_decoder || current_texture_frame ||
+               animated_frame.image.id != SG_INVALID_ID;
     }
     // Fingerprint of the chain inputs, or 0 when a pass varies per frame and the chain must run.
     uint64_t effectChainSignature(EngineContext& ctx, sg_image base_image, sg_view base_view);

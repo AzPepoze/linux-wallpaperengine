@@ -8,12 +8,12 @@
 #include <vector>
 
 #include "image_layer.h"
-#include "shared/graphics/backend/gpu_timing.h"
 #include "image_parser.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
+#include "shared/graphics/backend/gpu_timing.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/pass_util.h"
 #include "shared/graphics/passes/shader_pass.h"
@@ -364,7 +364,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             }
 
             const int gpu_token = ctx.performance_profile
-                ? gpu_timing_begin_pass(name + "/" + std::to_string(eff_idx) + "/" + std::to_string(pass_idx) + "/" + pass->shader_name) : -1;
+                                      ? gpu_timing_begin_pass(name + "/" + std::to_string(eff_idx) + "/" +
+                                                              std::to_string(pass_idx) + "/" + pass->shader_name)
+                                      : -1;
             sg_pass offscreen_pass = colorPass(output_attachment, SG_LOADACTION_CLEAR);
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);

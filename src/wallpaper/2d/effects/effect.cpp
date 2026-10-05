@@ -34,7 +34,8 @@ Effect::Effect(cJSON* config, EngineContext& ctx) {
                 continue;
             cJSON* target;
             cJSON_ArrayForEach(target, targets) {
-                if (cJSON_IsString(target) && target->valuestring) functions[function->string].push_back(target->valuestring);
+                if (cJSON_IsString(target) && target->valuestring)
+                    functions[function->string].push_back(target->valuestring);
             }
         }
     }

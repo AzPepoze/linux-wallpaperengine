@@ -1,8 +1,8 @@
 #include "scene_2d.h"
-#include "camera/intro_zoom.h"
 
 #include <cjson/cJSON.h>
 
+#include "camera/intro_zoom.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/surface.h"

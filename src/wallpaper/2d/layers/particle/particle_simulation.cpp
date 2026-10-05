@@ -161,8 +161,10 @@ void ParticleSystem::step(float real_dt) {
         if (particle.life <= 0) {
             // Event-death children are created where this particle died; follow and spawn instances end with it.
             for (ParticleSystem* child : children) {
-                if (child->spawn_type == ParticleSpawnType::EventDeath) child->createInstance(particle, false);
-                else child->endInstances(particle.serial);
+                if (child->spawn_type == ParticleSpawnType::EventDeath)
+                    child->createInstance(particle, false);
+                else
+                    child->endInstances(particle.serial);
             }
             particles[index] = particles.back();
             particles.pop_back();
@@ -246,9 +248,9 @@ void ParticleSystem::step(float real_dt) {
                                    change.change_start_value, change.change_end_value);
             } else if (change.type == "colorchange") {
                 for (int channel = 0; channel < 3; ++channel)
-                    particle.color[channel] *= rampValue(life_norm, change.change_start_time, change.change_end_time,
-                                                         change.change_start_color[channel],
-                                                         change.change_end_color[channel]);
+                    particle.color[channel] *=
+                        rampValue(life_norm, change.change_start_time, change.change_end_time,
+                                  change.change_start_color[channel], change.change_end_color[channel]);
             }
         }
         particle.alpha = alpha;
