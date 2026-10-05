@@ -222,7 +222,7 @@ The Wayland layer-shell protocol XML comes from the `lib/wlr-protocols` git subm
 
 Build outputs are written to `bin/<mode>/`.
 
-Release builds read `scene.pkg` in place from a memory map, so nothing is extracted and startup does not wait on disk writes. Debug builds, `--extract-only` and packages without a `scene.json` extract to `extracted/`. Compiled shaders are cached in `$XDG_CACHE_HOME/linux-wallpaperengine/` (default `~/.cache/linux-wallpaperengine/`) and reused across launches.
+Release builds read `scene.pkg` in place from a memory map, so nothing is extracted and startup does not wait on disk writes. Debug runtime loads extract to `extracted/<wallpaper-id>/` and preserve the adjacent `project.json`; release loads read that metadata beside the original package. `--extract-only` uses its requested extraction directory. Compiled shaders are cached in `$XDG_CACHE_HOME/linux-wallpaperengine/` (default `~/.cache/linux-wallpaperengine/`) and reused across launches.
 
 ### Render Diagnostics (Debug Mode)
 

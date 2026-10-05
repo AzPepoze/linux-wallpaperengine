@@ -39,13 +39,16 @@ void ParticleLayer::draw(EngineContext& ctx) {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_rotation = rotation;
     if (scene_object_id != 0 && ctx.scene.scene_tree) {
-        if (const SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
-            layer_scale[0] = node->scale[0];
-            layer_scale[1] = node->scale[1];
-            layer_scale[2] = node->scale[2];
-            layer_rotation = node->angles[2];
+        ScenePlacement placement;
+        if (ctx.scene.scene_tree->worldPlacement(scene_object_id, placement)) {
+            layer_scale[0] = placement.scale[0];
+            layer_scale[1] = placement.scale[1];
+            layer_scale[2] = placement.scale[2];
+            layer_rotation = placement.rotation_deg;
+            layer_origin[0] = placement.origin[0];
+            layer_origin[1] = placement.origin[1];
+            layer_origin[2] = placement.origin[2];
         }
-        ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);
@@ -70,13 +73,16 @@ void ParticleLayer::drawDebug(EngineContext& ctx) {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_rotation = rotation;
     if (scene_object_id != 0 && ctx.scene.scene_tree) {
-        if (const SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
-            layer_scale[0] = node->scale[0];
-            layer_scale[1] = node->scale[1];
-            layer_scale[2] = node->scale[2];
-            layer_rotation = node->angles[2];
+        ScenePlacement placement;
+        if (ctx.scene.scene_tree->worldPlacement(scene_object_id, placement)) {
+            layer_scale[0] = placement.scale[0];
+            layer_scale[1] = placement.scale[1];
+            layer_scale[2] = placement.scale[2];
+            layer_rotation = placement.rotation_deg;
+            layer_origin[0] = placement.origin[0];
+            layer_origin[1] = placement.origin[1];
+            layer_origin[2] = placement.origin[2];
         }
-        ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     const parallax_offset_t camera_offset = parallax_layer_offset(ctx, scene_object_id, layer_origin, parallax);

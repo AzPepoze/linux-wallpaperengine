@@ -43,16 +43,31 @@ bool isNodeSelected(const EngineContext& ctx, const SceneTreeNode& node) {
     return layer_index >= 0 && ctx.debug.selected_object == layer_index;
 }
 
-void selectNode(EngineContext& ctx, const SceneTreeNode& node) {
+void selectNode(EngineContext& ctx, const SceneTreeNode& node, bool reveal_search_result = false) {
     ctx.debug.selected_node_id = node.id;
     ctx.debug.selected_object = findLayerIndex(ctx, node.id);
+    // Reveal the selected node in the normal tree, including after search clears.
+    const SceneTreeNode* parent = ctx.scene.scene_tree->find(node.parent_id);
+    for (size_t steps = 0; parent && steps < ctx.scene.scene_tree->size(); ++steps) {
+        g_expanded_nodes.insert(parent->id);
+        parent = ctx.scene.scene_tree->find(parent->parent_id);
+    }
+    g_scroll_to_selection = reveal_search_result;
 }
 
 // Visibility/solo buttons plus the spacer, shared by the tree, the search results and the flat list.
 void drawRowControls(EngineContext& ctx, const SceneTreeNode& node) {
     const int layer_index = findLayerIndex(ctx, node.id);
-    if (layer_index < 0) return;
-    UiWidgets::drawVisibilitySoloControls(*ctx.scene.layers[layer_index], "Toggle layer visibility", "Solo layer");
+    if (layer_index < 0) {
+        if (ImGui::Button(node.visible ? "V" : " ", ImVec2(25.0f, 0.0f))) {
+            if (SceneTreeNode* group = ctx.scene.scene_tree->find(node.id)) group->visible = !group->visible;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle group visibility (inherited by descendants)");
+        ImGui::SameLine();
+        ImGui::Dummy(ImVec2(25.0f, ImGui::GetFrameHeight()));
+    } else {
+        UiWidgets::drawVisibilitySoloControls(*ctx.scene.layers[layer_index], "Toggle layer visibility", "Solo layer");
+    }
     ImGui::SameLine();
 }
 
@@ -172,7 +187,7 @@ void handleTreeKeyboard(EngineContext& ctx, const std::vector<TreeRow>& rows) {
         ctx.debug.selected_node_id = rows[next].id;
         ctx.debug.selected_object = findLayerIndex(ctx, rows[next].id);
     }
-    g_scroll_to_selection = true;
+    g_scroll_to_selection = false;
 }
 
 void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
@@ -201,7 +216,10 @@ void drawSceneNode(EngineContext& ctx, const SceneTreeNode& node) {
         if (layer_index >= 0 && ImGui::GetIO().KeyCtrl)
             ctx.scene.layers[layer_index]->setSolo(!ctx.scene.layers[layer_index]->solo);
     }
-    if (isNodeSelected(ctx, node) && g_scroll_to_selection) ImGui::SetScrollHereY(0.5f);
+    if (isNodeSelected(ctx, node) && g_scroll_to_selection) {
+        ImGui::SetScrollHereY(0.5f);
+        g_scroll_to_selection = false;
+    }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Scene node %u", node.id);
 
     if (open && has_children) {
@@ -224,7 +242,17 @@ void drawSearchResults(EngineContext& ctx, const std::string& needle) {
             std::to_string(node->id).find(needle) != std::string::npos) {
             ImGui::PushID((int)node->id);
             drawRowControls(ctx, *node);
-            if (ImGui::Selectable(label.c_str(), isNodeSelected(ctx, *node))) selectNode(ctx, *node);
+            const std::string search_label = label + " (ID " + std::to_string(node->id) + ")";
+            if (ImGui::Selectable(search_label.c_str(), isNodeSelected(ctx, *node))) selectNode(ctx, *node, true);
+            if (ImGui::IsItemHovered()) {
+                std::string path = node->name;
+                const SceneTreeNode* parent = ctx.scene.scene_tree->find(node->parent_id);
+                for (size_t steps = 0; parent && steps < ctx.scene.scene_tree->size(); ++steps) {
+                    path = parent->name + " / " + path;
+                    parent = ctx.scene.scene_tree->find(parent->parent_id);
+                }
+                ImGui::SetTooltip("%s\nClear search to reveal this node in the tree.", path.c_str());
+            }
             ImGui::PopID();
         }
         for (uint32_t child : node->children) drawMatches(child);
@@ -265,7 +293,6 @@ void drawToolbar(EngineContext& ctx) {
 }
 
 void drawPanel(EngineContext& ctx) {
-    g_scroll_to_selection = false;
     const double fps = ctx.profiler.measured_fps;
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 1.0f, 1.0f), "SCENE TREE");
     ImGui::SameLine();
@@ -273,12 +300,17 @@ void drawPanel(EngineContext& ctx) {
     ImGui::Separator();
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##scene-search", "Search name or id", g_search, sizeof(g_search));
+    if (g_search[0]) {
+        if (ImGui::SmallButton("Clear search / reveal selection")) {
+            g_search[0] = '\0';
+        }
+    }
     ImGui::Separator();
 
     syncExpansionState(ctx);
 
     const bool has_tree = ctx.scene.scene_tree && ctx.scene.scene_tree->size() > 0;
-    if (has_tree) {
+    if (has_tree && !g_search[0]) {
         std::vector<TreeRow> rows;
         for (uint32_t root_id : ctx.scene.scene_tree->rootIds()) {
             collectVisibleRows(*ctx.scene.scene_tree, root_id, rows);

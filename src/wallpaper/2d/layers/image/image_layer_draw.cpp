@@ -13,24 +13,18 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     ScreenRect rect;
     rect.rotation = rotation;
     if (scene_object_id != 0 && ctx.scene.scene_tree) {
-        if (const SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
-            layer_scale[0] = node->scale[0];
-            layer_scale[1] = node->scale[1];
-            layer_scale[2] = node->scale[2];
+        ScenePlacement placement;
+        if (ctx.scene.scene_tree->worldPlacement(scene_object_id, placement)) {
+            layer_scale[0] = placement.scale[0];
+            layer_scale[1] = placement.scale[1];
+            layer_scale[2] = placement.scale[2];
+            layer_origin[0] = placement.origin[0];
+            layer_origin[1] = placement.origin[1];
+            layer_origin[2] = placement.origin[2];
             // Scene space is Y-up while sprites are drawn in Y-down screen space,
-            // so the authored Z angle is negated here (same as the attachment path).
-            rect.rotation = -node->angles[2];
-            if (!node->attachment.empty()) {
-                mat4x4 world;
-                if (ctx.scene.scene_tree->worldTransform(scene_object_id, world)) {
-                    layer_scale[0] = std::hypot(world[0][0], world[0][1]);
-                    layer_scale[1] = std::hypot(world[1][0], world[1][1]);
-                    // Scene/bone space is Y-up; sprite rotation is in screen space.
-                    rect.rotation = -std::atan2(world[0][1], world[0][0]) * 180.0f / (float)M_PI;
-                }
-            }
+            // so the accumulated Z angle is negated here.
+            rect.rotation = -placement.rotation_deg;
         }
-        ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
 
     if (is_fullscreen) {
@@ -121,16 +115,33 @@ void ImageLayer::renderRegionEffectChain(EngineContext& ctx, sg_image scene_imag
     renderEffectChain(ctx, region_source.image, region_source.texture_view);
 }
 
+std::array<float, 8> ImageLayer::screenCorners(EngineContext& ctx) const {
+    const ScreenRect rect = screenRect(ctx);
+    const float angle = rect.rotation * (float)M_PI / 180.0f;
+    const float c = std::cos(angle), s = std::sin(angle);
+    std::array<float, 8> points;
+    const float x[4] = {0.0f, rect.width, rect.width, 0.0f};
+    const float y[4] = {0.0f, 0.0f, rect.height, rect.height};
+    for (int i = 0; i < 4; ++i) {
+        points[i * 2] = rect.x + c * x[i] - s * y[i];
+        points[i * 2 + 1] = rect.y + s * x[i] + c * y[i];
+    }
+    return points;
+}
+
 void ImageLayer::drawDebug(EngineContext& ctx) {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
     if (scene_object_id != 0 && ctx.scene.scene_tree) {
-        if (const SceneTreeNode* node = ctx.scene.scene_tree->find(scene_object_id)) {
-            layer_scale[0] = node->scale[0];
-            layer_scale[1] = node->scale[1];
-            layer_scale[2] = node->scale[2];
+        ScenePlacement placement;
+        if (ctx.scene.scene_tree->worldPlacement(scene_object_id, placement)) {
+            layer_scale[0] = placement.scale[0];
+            layer_scale[1] = placement.scale[1];
+            layer_scale[2] = placement.scale[2];
+            layer_origin[0] = placement.origin[0];
+            layer_origin[1] = placement.origin[1];
+            layer_origin[2] = placement.origin[2];
         }
-        ctx.scene.scene_tree->worldPosition(scene_object_id, layer_origin);
     }
     const float width = size[0] * layer_scale[0] * ctx.scene.render_scale;
     const float height = size[1] * layer_scale[1] * ctx.scene.render_scale;

@@ -8,6 +8,7 @@
 
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
+#include "shared/core/vfs.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/video/video_wallpaper.h"
@@ -16,13 +17,14 @@
 namespace {
 // Effective user properties: project defaults, then the desktop GUI's saved values, then --set-property.
 void loadUserProperties(const ProjectInfo& info, EngineContext& ctx) {
+    const std::string property_root = info.root == vfs::kRoot && vfs::mounted() ? vfs::sourceDirectory() : info.root;
     ctx.user_properties = UserProperties();
-    ctx.user_properties.loadProject(info.root + "/project.json");
+    ctx.user_properties.loadProject(property_root + "/project.json");
     if (const char* home = getenv("HOME")) {
         std::ifstream file(std::string(home) + "/.config/linux-wallpaperengine-gui/config.json");
         std::stringstream text;
         text << file.rdbuf();
-        ctx.user_properties.applySaved(text.str(), std::filesystem::path(info.root).filename().string());
+        ctx.user_properties.applySaved(text.str(), std::filesystem::path(property_root).filename().string());
     }
     for (const auto& [key, value] : ctx.cli_properties) ctx.user_properties.setFromString(key, value);
 }

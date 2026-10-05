@@ -7,6 +7,7 @@
 using test::check;
 
 void runSceneRotationTests();
+void runSceneWorldPlacementTests();
 
 void runSceneAttachmentTests() {
     SceneTree tree;
@@ -50,6 +51,56 @@ void runSceneAttachmentTests() {
           "attachment rotation transforms child translation before parent translation");
 
     runSceneRotationTests();
+    runSceneWorldPlacementTests();
+}
+
+void runSceneWorldPlacementTests() {
+    SceneTree tree;
+    SceneTreeNode grandparent;
+    grandparent.id = 100;
+    grandparent.scale = {0.2f, 0.2f, 0.2f};
+    tree.addNode(grandparent);
+
+    SceneTreeNode parent;
+    parent.id = 101;
+    parent.parent_id = 100;
+    parent.scale = {0.19774f, 0.19774f, 0.19774f};
+    tree.addNode(parent);
+
+    SceneTreeNode child;
+    child.id = 102;
+    child.parent_id = 101;
+    child.scale = {48.4f, 48.4f, 48.4f};
+    tree.addNode(child);
+    tree.rebuildHierarchy();
+
+    ScenePlacement placement;
+    check(tree.worldPlacement(102, placement), "world placement resolves for parented node");
+    check(fabsf(placement.scale[0] - 1.914f) < 2e-3f, "parent and grandparent scale compose");
+
+    SceneTreeNode mirrored;
+    mirrored.id = 200;
+    mirrored.scale = {-2.0f, 3.0f, 1.0f};
+    tree.addNode(mirrored);
+    check(tree.worldPlacement(200, placement) && fabsf(placement.scale[0] - 2.0f) < 1e-4f &&
+              fabsf(placement.scale[1] + 3.0f) < 1e-4f, "mirrored placement preserves reflection");
+    check(fabsf(fabsf(placement.rotation_deg) - 180.0f) < 1e-3f,
+          "mirrored placement rotation follows the X basis");
+
+    SceneTreeNode rot_parent;
+    rot_parent.id = 300;
+    rot_parent.angles = {0.0f, 0.0f, 30.0f};
+    tree.addNode(rot_parent);
+
+    SceneTreeNode rot_child;
+    rot_child.id = 301;
+    rot_child.parent_id = 300;
+    rot_child.angles = {0.0f, 0.0f, 15.0f};
+    tree.addNode(rot_child);
+    check(tree.worldPlacement(301, placement) && fabsf(placement.rotation_deg - 45.0f) < 1e-3f,
+          "parent rotation composes into child rotation");
+
+    check(!tree.worldPlacement(9999, placement), "unknown node has no placement");
 }
 
 void runSceneRotationTests() {
@@ -118,8 +169,24 @@ void runSceneRotationTests() {
     tree.addNode(under);
     tree.rebuildHierarchy();
     check(!tree.ancestorsVisible(31) && tree.ancestorsVisible(30), "a hidden group hides its children");
+    SceneTreeNode grandchild;
+    grandchild.id = 32;
+    grandchild.parent_id = 31;
+    tree.addNode(grandchild);
+    check(!tree.ancestorsVisible(32), "a hidden grandparent hides nested descendants");
+    tree.find(30)->visible = true;
+    bool parent_visible = false;
+    const auto live_visibility = [&](const SceneTreeNode& node) {
+        return node.id == 31 ? parent_visible : node.visible;
+    };
+    check(!tree.ancestorsVisible(32, live_visibility), "drawable parent live visibility hides descendants");
+    parent_visible = true;
+    check(tree.ancestorsVisible(32, live_visibility), "showing a drawable parent restores descendants");
+    tree.find(32)->visible = false;
+    parent_visible = false;
+    parent_visible = true;
+    check(!tree.find(32)->visible, "parent toggles preserve a child's own hidden flag");
     tree.removeNode(30);
     check(tree.find(30) == nullptr && tree.find(31) && tree.find(31)->parent_id == 0,
           "removing a node turns its children into roots");
 }
-

@@ -44,7 +44,6 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
     - Property scripts on image alpha and text
   - Missing
     - Light layers, 3D model layers, perspective cameras
-    - User properties are not applied to scene values
     - Most SceneScript APIs (see [SceneScript](#scenescript))
 - [-] Video wallpapers
   - Works
@@ -95,7 +94,9 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [x] Wallpaper project folders and standalone `.pkg` files
 - [x] `scene.pkg` handling
   - Release builds read the package in place from a memory map
-  - Debug builds, `--extract-only` and packages without a `scene.json` extract to `extracted/`
+  - Debug runtime extraction uses a separate `extracted/<wallpaper-id>/` directory and preserves the adjacent `project.json`
+  - Memory-mapped release packages load external `project.json` from the package source directory
+  - `--extract-only` uses its requested extraction directory
 - [x] `scene.json` parsing, including the authored scene resolution (falls back to 1920x1080 when absent)
 - [x] `project.json`: `title`, `type` (scene, video, web) and `file`; the type is inferred from the file extension when needed
 - [-] `project.json` `general.properties`
@@ -103,8 +104,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
     - Video wallpapers read rate, volume and fit
     - Web wallpapers receive all properties
     - A resolver (`src/wallpaper/user_properties.*`) parses every declared property by type
-  - Missing
-    - Scene wallpapers do not apply the resolved values (see [User properties](#user-properties))
+    - Scene bindings resolve project defaults, saved settings and CLI overrides before parsing, including nested script properties
 
 ## Scene layers
 
@@ -122,10 +122,11 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Works
     - Font loading (TrueType through stb_truetype), default font `NotoSans-Regular.ttf` for `systemfont`
     - `pointsize`, `color`, `alpha` (including the alpha animation curve), `size`, `maxwidth`, row and width limits
-    - Horizontal and vertical alignment and screen-corner anchoring
+    - Horizontal and vertical alignment
+    - `opaquebackground`, `backgroundcolor` and `padding` are parsed and rasterized
     - Text driven by a SceneScript `update()` (clock and date wallpapers), re-evaluated about four times per second
   - Missing
-    - `opaquebackground`, `backgroundcolor` and `padding` are not parsed
+    - Dynamic screen anchoring (`anchor` is retained but not applied)
     - Scripts on text color, alpha, point size or visibility
 - [x] Sound layers
   - Playback modes single, loop and random with optional min/max delay
@@ -141,6 +142,11 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [-] Layer hierarchy and parent transforms
   - Works
     - Parent/child links with accumulated translation, rotation and scale
+    - Scalar scale values, including user-property sliders, apply uniformly to all three axes
+    - Nested image, text and particle placement uses accumulated parent transforms, including mirrored 2D image/text placement
+    - Visibility is inherited through groups and drawable parents; children retain their own visibility
+    - Direct rendering, offscreen composition and cursor hit testing use inherited visibility; hidden layers continue script updates
+    - Debug hierarchy and inspector expose group visibility; text inspectors show live text and whether a parent hides the layer
     - `disablepropagation` for parallax
     - Named attachment points on puppet models that child layers follow
   - Missing
@@ -279,10 +285,10 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
   - Works
     - Resolution of every `project.json` property by type (bool, slider, combo, color in 0..1 or 0..255, text)
     - Overrides from the desktop GUI's saved values and from repeatable `--set-property key=value`
+    - Scene user bindings and conditional visibility resolve before parsing, including script-property overrides
+    - Initial `engine.userProperties` and `applyUserProperties` delivery after script initialization
   - Missing
-    - Resolved values are not applied: `{ "user": ..., "value": ... }` entries in `scene.json` keep their default
-    - Property-changed events, display conditions, groups
-    - `engine.userProperties` is empty and `applyUserProperties` is never called
+    - Live property changes after loading, editor display conditions and groups
     - Texture replacement, user shortcut and file properties
 
 ## Audio
@@ -423,6 +429,9 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works: background, bottom, top and overlay layers, anchoring, output selection, pointer motion and buttons, parallax
   - Missing: `--scaling stretch` and `--clamp` are accepted but ignored
 - [x] Debug-build diagnostics: `--diagnose` family (frame capture with pass images, scene stages, render graph, shaders, uniforms), `--disable-effects`, `--disable-particles`, `--disable-bloom`, `--sandbox`, `--no-ui`, and an ImGui inspector
+- [x] Scene-tree search by name or ID: results show IDs and parent paths; selecting a result expands its ancestors, and clearing search preserves the selection. Automatic scrolling is limited to revealing search selections.
+- [x] Debug selection bounds: image/text outlines follow rotated placement; selected groups show descendant outlines, combined bounds and world origin
+- [x] Headless scene-data corpus checks: `bin/debug/scene_parser_tests --corpus <workshop-content-dir>` checks metadata, object retention, IDs, parent links, finite scales and numeric scale bindings through the production parser. These checks do not verify GPU output or unsupported scene features.
 - [-] Desktop integration
   - Works
     - Wallpaper surface through wlr-layer-shell (see above), GPU enumeration and selection (also on the layer surface), frame cap

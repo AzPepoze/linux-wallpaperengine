@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 
@@ -18,6 +19,7 @@ struct Entry {
 };
 
 struct Package {
+    std::string source_directory;
     const uint8_t* base = nullptr;
     size_t size = 0;
     std::unordered_map<std::string, Entry> files;
@@ -106,6 +108,7 @@ bool mount(const char* pkg_path) {
         unmount();
         return false;
     }
+    g_package.source_directory = std::filesystem::absolute(pkg_path).parent_path().string();
     LOG_I("vfs: mapped %s (%zu files, %zu MB)", pkg_path, g_package.files.size(), g_package.size >> 20);
     return true;
 }
@@ -117,6 +120,10 @@ void unmount() {
 
 bool mounted() {
     return g_package.base != nullptr;
+}
+
+std::string sourceDirectory() {
+    return g_package.source_directory;
 }
 
 bool isVirtual(const char* path) {

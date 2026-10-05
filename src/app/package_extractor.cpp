@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <vector>
+#include <filesystem>
 
 #include "shared/assets/unpack.h"
 #include "shared/core/build_config.h"
@@ -67,8 +68,22 @@ std::string prepareAssetRoot(const WallpaperSource& source) {
 #endif
     mkdir("extracted", 0755);
     if (has_package) {
-        extract_pkg(pkg_file.c_str(), "extracted");
-        return "extracted";
+        const std::string wallpaper_id = std::filesystem::absolute(pkg_file).parent_path().filename().string();
+        const std::filesystem::path out_dir = std::filesystem::path("extracted") / wallpaper_id;
+        if (!extract_pkg(pkg_file.c_str(), out_dir.c_str())) return {};
+        const std::filesystem::path project = std::filesystem::path(pkg_file).parent_path() / "project.json";
+        std::error_code error;
+        if (std::filesystem::exists(project, error)) {
+            std::filesystem::copy_file(project, out_dir / "project.json",
+                                       std::filesystem::copy_options::overwrite_existing, error);
+            if (error) {
+                fprintf(stderr, "Could not preserve project metadata: %s\n", error.message().c_str());
+                return {};
+            }
+        } else {
+            std::filesystem::remove(out_dir / "project.json", error);
+        }
+        return out_dir.string();
     }
     return source.path;
 }

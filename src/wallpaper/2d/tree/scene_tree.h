@@ -4,11 +4,20 @@
 #include <stdint.h>
 
 #include <array>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "linmath.h"
+
+// A node's accumulated world placement: translation, signed 2D scale, and Z rotation
+// in degrees (Y-up scene space, same convention as SceneTreeNode::angles[2]).
+struct ScenePlacement {
+    std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
+    std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};
+    float rotation_deg = 0.0f;
+};
 
 struct SceneTreeNode {
     uint32_t id = 0;
@@ -41,6 +50,7 @@ class SceneTree {
     static void decompose(const mat4x4 matrix, SceneTreeNode& node);
     // False when a group above the node is hidden.
     bool ancestorsVisible(uint32_t id) const;
+    bool ancestorsVisible(uint32_t id, const std::function<bool(const SceneTreeNode&)>& visible) const;
 
     const SceneTreeNode* find(uint32_t id) const;
     SceneTreeNode* find(uint32_t id);
@@ -49,6 +59,8 @@ class SceneTree {
     bool localTransform(uint32_t id, mat4x4 out) const;
     bool worldTransform(uint32_t id, mat4x4 out) const;
     bool worldPosition(uint32_t id, float out[3]) const;
+    // Accumulated world placement (translation, per-axis scale magnitude, Z rotation in degrees).
+    bool worldPlacement(uint32_t id, ScenePlacement& out) const;
 
     size_t size() const {
         return nodes_.size();

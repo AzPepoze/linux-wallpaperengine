@@ -19,19 +19,14 @@
 #include "wallpaper/2d/script/scene_scripts.h"
 #include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/2d/tree/scene_tree.h"
+#include "wallpaper/2d/tree/scene_visibility.h"
 
 void Scene2DRuntime::init() {
     renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height());
-#if DEBUG_BUILD
-    // The inspector can switch a layer to any blend mode at runtime, and creating a pipeline mid-render caused GPU
-    // context loss, so debug builds build them all up front.
-    renderer_precompile_blend_pipelines(ctx, &ctx.renderer);
-#endif
 }
 
 void Scene2DRuntime::precompileBlendModes() {
-    // Release builds fix every layer's blend mode when the scene loads, so only those pipelines are needed. Each
-    // costs two Slang compiles on a cold shader cache, which dominated first-launch time with all 30 built.
+    // Include hidden layers: they may become visible later. The renderer deduplicates modes and reuses pipelines.
     std::vector<int> modes;
     for (const Layer* layer : ctx.scene.layers) {
         if (const auto* image = dynamic_cast<const ImageLayer*>(layer)) modes.push_back(image->color_blend_mode);
@@ -75,8 +70,9 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
         }
     }
 
+    const SceneVisibility visibility(ctx);
     for (const auto* layer : ctx.scene.layers) {
-        if ((any_solo && !layer->solo) || (!any_solo && !layer->visible)) continue;
+        if (any_solo ? !layer->solo : !visibility.visible(*layer)) continue;
         const auto* particle = dynamic_cast<const ParticleLayer*>(layer);
         if (particle && particle->requiresSceneColor()) return true;
         const auto* image = dynamic_cast<const ImageLayer*>(layer);

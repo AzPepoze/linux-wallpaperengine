@@ -21,6 +21,7 @@
 #include "wallpaper/2d/parser/scene_parser.h"
 #include "wallpaper/2d/scene_builder.h"
 #include "wallpaper/2d/tree/scene_tree.h"
+#include "wallpaper/2d/tree/scene_visibility.h"
 
 #define TAG "SCRIPT"
 
@@ -567,6 +568,7 @@ void ScriptBindings::dispatchPointer() {
     std::optional<LocalHit> hit;
     if (input.mouse_position_valid && ctx_.scene.scene_tree) {
         std::vector<HitCandidate> candidates;
+        const SceneVisibility visibility(ctx_);
         for (Layer* layer : ctx_.scene.layers) {
             auto* image = dynamic_cast<ImageLayer*>(layer);
             if (!image || !image->cursor_solid || layer->scene_object_id == 0) continue;
@@ -581,7 +583,7 @@ void ScriptBindings::dispatchPointer() {
             candidate.size[0] = image->size[0];
             candidate.size[1] = image->size[1];
             candidate.solid = true;
-            candidate.visible = layer->visible;
+            candidate.visible = visibility.visible(*layer);
             candidates.push_back(candidate);
         }
         hit = hitTest({input.mouse_world_x, input.mouse_world_y}, candidates);

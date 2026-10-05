@@ -296,6 +296,8 @@ add_test("user_properties_tests", {"tests/user_properties_test.cpp", "src/wallpa
          {"cjson"})
 
 add_test("scene_parser_tests", {"tests/scene_parser_test.cpp", "src/wallpaper/2d/parser/scene_parser.cpp",
+                                "src/app/package_extractor.cpp", "src/shared/assets/unpack.cpp",
+                                "src/wallpaper/project_info.cpp", "src/wallpaper/video/video_properties.cpp",
                                 "src/wallpaper/2d/parser/scene_parser_common.cpp",
                                 "src/wallpaper/2d/parser/scene_parser_objects.cpp",
                                 "src/wallpaper/2d/parser/scene_parser_effects.cpp",

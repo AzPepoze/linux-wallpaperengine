@@ -151,16 +151,20 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
         showTextureSlot(0, "Post-Process Source (scene)", il.effect_source_view, "", desc.width, desc.height);
     }
 
-    SceneTreeNode* node =
-        (il.scene_object_id != 0 && ctx.scene.scene_tree) ? ctx.scene.scene_tree->find(il.scene_object_id) : nullptr;
-
-    float layer_scale[3] = {node ? node->scale[0] : il.scale[0], node ? node->scale[1] : il.scale[1],
-                            node ? node->scale[2] : il.scale[2]};
-    float layer_origin[3] = {node ? node->origin[0] : il.origin[0], node ? node->origin[1] : il.origin[1],
-                             node ? node->origin[2] : il.origin[2]};
-    float layer_rotation = node ? node->angles[2] : il.rotation;
+    float layer_scale[3] = {il.scale[0], il.scale[1], il.scale[2]};
+    float layer_origin[3] = {il.origin[0], il.origin[1], il.origin[2]};
+    float layer_rotation = il.rotation;
     if (il.scene_object_id != 0 && ctx.scene.scene_tree) {
-        ctx.scene.scene_tree->worldPosition(il.scene_object_id, layer_origin);
+        ScenePlacement placement;
+        if (ctx.scene.scene_tree->worldPlacement(il.scene_object_id, placement)) {
+            layer_scale[0] = placement.scale[0];
+            layer_scale[1] = placement.scale[1];
+            layer_scale[2] = placement.scale[2];
+            layer_origin[0] = placement.origin[0];
+            layer_origin[1] = placement.origin[1];
+            layer_origin[2] = placement.origin[2];
+            layer_rotation = placement.rotation_deg;
+        }
     }
 
     const float rendered_w = il.size[0] * layer_scale[0] * ctx.scene.render_scale;

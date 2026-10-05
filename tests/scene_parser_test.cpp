@@ -4,6 +4,13 @@
 
 #include <cstdio>
 #include <string>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <set>
+#include <cjson/cJSON.h>
+#include "shared/core/vfs.h"
+#include "app/package_extractor.h"
 
 #include "test_util.h"
 #include "wallpaper/user_properties.h"
@@ -266,12 +273,14 @@ void testUserBindings() {
     const char* project = R"JSON({"general": {"properties": {
       "opacity": {"type": "slider", "value": 1.0}, "showFish": {"type": "bool", "value": true},
       "tint": {"type": "color", "value": "1 1 1"}, "mode": {"type": "combo", "value": 1},
-      "speed": {"type": "slider", "value": 2}}}})JSON";
+      "speed": {"type": "slider", "value": 2},
+      "groupScale": {"type": "slider", "value": 0.308}}}})JSON";
     const char* scene = R"JSON({
       "camera": {"center": "0 0 0", "eye": "0 0 1", "up": "0 1 0"},
       "objects": [
         {"id": 1, "name": "A", "image": "models/a.json", "alpha": {"user": "opacity", "value": 0.5},
          "visible": {"user": "showFish", "value": true}, "color": {"user": "tint", "value": "1 1 1"},
+         "scale": {"user": "groupScale", "value": "0.308 0.308 0.308"},
          "origin": {"script": "export function update(v) { return v; }", "value": "0 0 0",
                     "scriptproperties": {"speed": {"user": "speed", "value": 1}}}},
         {"id": 2, "name": "B", "image": "models/b.json",
@@ -297,6 +306,8 @@ void testUserBindings() {
     if (resolved.objects.size() != 3 || defaults.objects.size() != 3) return;
 
     const SceneObjectDocument& a = resolved.objects[0];
+    test::expect("user", a.node.scale == std::array<float, 3>{0.308f, 0.308f, 0.308f},
+                 "a scalar scale slider broadcasts to all axes");
     test::expect("user", a.image.alpha == 0.25f && !a.visible, "plain bindings take the property value");
     test::expect("user", a.image.color[0] == 0.0f && a.image.color[1] == 0.5f && a.image.color[2] == 1.0f,
                  "a color property fills the vector");
@@ -314,14 +325,124 @@ void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
 }
+
+void testPackageMetadata() {
+    namespace fs = std::filesystem;
+    char pattern[] = "/tmp/lwe-package-metadata-XXXXXX";
+    const char* created = mkdtemp(pattern);
+    test::expect("package metadata", created != nullptr, "temporary directory created");
+    if (!created) return;
+    const fs::path base = created, previous = fs::current_path();
+    const auto writePackage = [&](const char* name, bool metadata) {
+        const fs::path folder = base / name;
+        fs::create_directories(folder);
+        const std::string scene = "{\"objects\":[]}";
+        const std::string entry = "scene.json";
+        std::ofstream file(folder / "scene.pkg", std::ios::binary);
+        file.write("PKGV0001", 8);
+        const auto word = [&](uint32_t n) { file.write(reinterpret_cast<const char*>(&n), sizeof(n)); };
+        word(1); word((uint32_t)entry.size()); file.write(entry.data(), entry.size());
+        word(0); word((uint32_t)scene.size()); file.write(scene.data(), scene.size());
+        if (metadata) std::ofstream(folder / "project.json") << R"({"general":{"properties":{"scale":{"type":"slider","value":0.308}}}})";
+        return folder;
+    };
+    const fs::path a = writePackage("wallpaper-a", true), b = writePackage("wallpaper-b", false);
+    fs::current_path(base);
+    const std::string first = prepareAssetRoot({a.string(), false});
+    UserProperties properties;
+    const std::string property_root = vfs::mounted() ? vfs::sourceDirectory() : first;
+    test::expect("package metadata", properties.loadProject(property_root + "/project.json"),
+                 "prepared package retains external project defaults");
+    const auto* scale = properties.find("scale");
+    test::expect("package metadata", scale && std::fabs(scale->n - 0.308) < 1e-6,
+                 "project slider survives package preparation");
+    vfs::unmount();
+    const std::string second = prepareAssetRoot({b.string(), false});
+    const std::string second_root = vfs::mounted() ? vfs::sourceDirectory() : second;
+    test::expect("package metadata", !fs::exists(second_root + "/project.json"),
+                 "a second wallpaper never inherits the first wallpaper's metadata");
+#if DEBUG_BUILD
+    test::expect("package metadata", first != second, "debug wallpapers have separate extraction directories");
+#endif
+    vfs::unmount();
+    fs::current_path(previous);
+    fs::remove_all(base);
+}
+
+void testInstalledCorpus(const char* directory) {
+    size_t scenes = 0, objects = 0, nested = 0, text = 0, groups = 0, scalar_scales = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+        const auto pkg = entry.path() / "scene.pkg";
+        if (!std::filesystem::is_regular_file(pkg)) continue;
+        const std::string label = entry.path().filename().string();
+        test::expect(label.c_str(), vfs::mount(pkg.c_str()), "package mounts");
+        if (!vfs::exists("pkg:/scene.json")) { vfs::unmount(); continue; }
+        test::expect(label.c_str(), vfs::sourceDirectory() == std::filesystem::absolute(entry.path()).string(),
+                     "mounted package retains its sidecar directory");
+        UserProperties properties;
+        test::expect(label.c_str(), properties.loadProject(vfs::sourceDirectory() + "/project.json"),
+                     "project defaults load beside package");
+        SceneDocument document;
+        const bool parsed = parseSceneFile("pkg:/scene.json", document, &properties);
+        test::expect(label.c_str(), parsed, "production scene parser accepts package");
+        if (!parsed) { vfs::unmount(); continue; }
+        std::vector<uint8_t> bytes;
+        vfs::readAll("pkg:/scene.json", bytes);
+        cJSON* raw = cJSON_ParseWithLength(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        const cJSON* authored = cJSON_GetObjectItemCaseSensitive(raw, "objects");
+        test::expect(label.c_str(), document.objects.size() == (size_t)cJSON_GetArraySize(authored),
+                     "every authored object reaches the scene document");
+        std::set<uint32_t> ids;
+        for (size_t i = 0; i < document.objects.size(); ++i) {
+            const auto& object = document.objects[i];
+            const cJSON* source = cJSON_GetArrayItem(authored, (int)i);
+            const cJSON* id = cJSON_GetObjectItemCaseSensitive(source, "id");
+            test::expect(label.c_str(), cJSON_IsNumber(id) && object.node.valid && object.node.id == (uint32_t)id->valuedouble,
+                         "object ID is retained");
+            test::expect(label.c_str(), ids.insert(object.node.id).second, "object IDs are unique");
+            const cJSON* parent = cJSON_GetObjectItemCaseSensitive(source, "parent");
+            if (cJSON_IsNumber(parent)) {
+                ++nested;
+                test::expect(label.c_str(), object.node.parent_id == (uint32_t)parent->valuedouble,
+                             "nested parent link is retained");
+            }
+            const cJSON* scale = cJSON_GetObjectItemCaseSensitive(source, "scale");
+            const cJSON* user = cJSON_GetObjectItemCaseSensitive(scale, "user");
+            const UserPropertyValue* bound = cJSON_IsString(user) ? properties.find(user->valuestring) : nullptr;
+            if (bound && bound->type == UserPropertyValue::Type::Number) {
+                ++scalar_scales;
+                bool matches = true;
+                for (float axis : object.node.scale) matches &= std::fabs(axis - (float)bound->n) < 1e-5f;
+                test::expect(label.c_str(), matches, "real scalar scale binding resolves on every axis");
+            }
+            for (float axis : object.node.scale)
+                test::expect(label.c_str(), std::isfinite(axis), "parsed scale is finite");
+            if (object.kind == SceneObjectKind::Text) ++text;
+            if (object.kind == SceneObjectKind::Unknown) ++groups;
+        }
+        objects += document.objects.size();
+        ++scenes;
+        printf("CORPUS %s objects=%zu\n", label.c_str(), document.objects.size());
+        cJSON_Delete(raw);
+        vfs::unmount();
+    }
+    test::expect("corpus", scenes > 1, "multiple scene wallpapers were checked");
+    printf("CORPUS SUMMARY scenes=%zu objects=%zu nested=%zu text=%zu hierarchy_or_unknown=%zu scalar_scales=%zu\n",
+           scenes, objects, nested, text, groups, scalar_scales);
+}
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--corpus") {
+        testInstalledCorpus(argv[2]);
+        return test::finish("scene corpus checks");
+    }
     testObjects();
     testScriptedValues();
     testEffectScripts();
     testPropertyAnimations();
     testUserBindings();
     testMissingFile();
+    testPackageMetadata();
     return test::finish("scene parser tests");
 }

@@ -9,7 +9,9 @@
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
+#include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
+#include "wallpaper/2d/tree/scene_visibility.h"
 
 namespace Inspector {
 
@@ -24,6 +26,9 @@ void showGeneralInspector(EngineContext& ctx, Layer& layer) {
     bool is_solo = layer.solo;
     if (ImGui::Checkbox("Solo", &is_solo)) {
         layer.setSolo(is_solo);
+    }
+    if (layer.visible && !SceneVisibility(ctx).visible(layer)) {
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "Hidden by a parent");
     }
 
     SceneTreeNode* node = (layer.scene_object_id != 0 && ctx.scene.scene_tree)
@@ -74,6 +79,13 @@ void showEffectsInspector(EngineContext& ctx, Layer& layer) {
 
 void showLayer(EngineContext& ctx, Layer& layer) {
     showGeneralInspector(ctx, layer);
+    if (const auto* text = dynamic_cast<const TextLayer*>(&layer)) {
+        std::string value;
+        text->propertyGetString("text", value);
+        ImGui::TextWrapped("Current text: %s", value.empty() ? "(empty)" : value.c_str());
+        text->propertyGetString("font", value);
+        ImGui::TextWrapped("Font: %s", value.c_str());
+    }
     if (auto* image = dynamic_cast<ImageLayer*>(&layer)) {
         showImageLayerInspector(ctx, *image);
     } else if (auto* particle = dynamic_cast<ParticleLayer*>(&layer)) {

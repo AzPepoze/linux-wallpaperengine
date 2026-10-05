@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include <limits>
 
 #include "imgui.h"
 #include "sandbox_catalog.h"
@@ -58,6 +59,16 @@ void drawInspectorPanel(EngineContext& ctx) {
         ImGui::Text("Selected: %s", layer->name.c_str());
         ImGui::Separator();
         Inspector::showLayer(ctx, *layer);
+    } else if (ctx.scene.scene_tree) {
+        if (SceneTreeNode* node = ctx.scene.scene_tree->find(ctx.debug.selected_node_id)) {
+            ImGui::TextWrapped("Selected: %s", node->name.c_str());
+            ImGui::Separator();
+            ImGui::Checkbox("Visible", &node->visible);
+            ImGui::TextDisabled("Children inherit this visibility.");
+            ImGui::DragFloat3("Position", node->origin.data(), 1.0f);
+            ImGui::DragFloat3("Scale", node->scale.data(), 0.01f);
+            ImGui::DragFloat3("Rotation", node->angles.data(), 1.0f);
+        }
     }
 }
 
@@ -277,8 +288,52 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
         ImGui::PopStyleColor(3);
     }
 
-    if (ctx.debug.selected_object >= 0 && ctx.debug.selected_object < (int)ctx.scene.layers.size()) {
+    // Draw after the UI, above the scene and panels. Groups have no geometry of
+    // their own: outline descendant images/text and their combined bounds.
+    if (ctx.debug.selected_object >= 0 && ctx.debug.selected_object < (int)ctx.scene.layers.size() &&
+        !dynamic_cast<const ImageLayer*>(ctx.scene.layers[ctx.debug.selected_object])) {
         ctx.scene.layers[ctx.debug.selected_object]->drawDebug(ctx);
+    }
+    const uint32_t selected = ctx.debug.selected_node_id;
+    const bool group = selected && ctx.debug.selected_object < 0;
+    ImDrawList* overlay = ImGui::GetForegroundDrawList();
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    const float sx = ctx.renderer.view_width > 0 ? display.x / ctx.renderer.view_width : 1.0f;
+    const float sy = ctx.renderer.view_height > 0 ? display.y / ctx.renderer.view_height : 1.0f;
+    ImVec2 lo(std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
+    ImVec2 hi(-lo.x, -lo.y);
+    bool bounded = false;
+    for (int index = 0; index < (int)ctx.scene.layers.size(); ++index) {
+        const auto* image = dynamic_cast<const ImageLayer*>(ctx.scene.layers[index]);
+        if (!image) continue;
+        bool included = index == ctx.debug.selected_object;
+        if (group && ctx.scene.scene_tree) {
+            const SceneTreeNode* node = ctx.scene.scene_tree->find(image->scene_object_id);
+            for (size_t steps = 0; node && steps < ctx.scene.scene_tree->size(); ++steps) {
+                if (node->id == selected) { included = true; break; }
+                node = ctx.scene.scene_tree->find(node->parent_id);
+            }
+        }
+        if (!included) continue;
+        const auto corners = image->screenCorners(ctx);
+        ImVec2 points[4];
+        for (int i = 0; i < 4; ++i) {
+            points[i] = ImVec2(corners[i * 2] * sx, corners[i * 2 + 1] * sy);
+            lo.x = std::min(lo.x, points[i].x); lo.y = std::min(lo.y, points[i].y);
+            hi.x = std::max(hi.x, points[i].x); hi.y = std::max(hi.y, points[i].y);
+        }
+        bounded = true;
+        overlay->AddPolyline(points, 4, IM_COL32(40, 255, 160, 230), ImDrawFlags_Closed, 2.0f);
+    }
+    if (group && bounded) overlay->AddRect(lo, hi, IM_COL32(255, 210, 50, 255), 0.0f, 0, 2.0f);
+    if (group && ctx.scene.scene_tree) {
+        float origin[3];
+        if (ctx.scene.scene_tree->worldPosition(selected, origin)) {
+            const ImVec2 p((ctx.scene.offset_x + origin[0] * ctx.scene.render_scale) * sx,
+                          (ctx.scene.offset_y + (ctx.scene.scene_h - origin[1]) * ctx.scene.render_scale) * sy);
+            overlay->AddLine(ImVec2(p.x - 7, p.y), ImVec2(p.x + 7, p.y), IM_COL32(255, 210, 50, 255), 2);
+            overlay->AddLine(ImVec2(p.x, p.y - 7), ImVec2(p.x, p.y + 7), IM_COL32(255, 210, 50, 255), 2);
+        }
     }
 }
 

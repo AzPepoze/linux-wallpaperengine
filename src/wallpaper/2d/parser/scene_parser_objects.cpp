@@ -26,7 +26,11 @@ SceneNodeDocument parseNode(const cJSON* object) {
     parseString(cJSON_GetObjectItemCaseSensitive(object, "attachment"), out.attachment);
 
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "origin"), out.origin.data(), 3);
-    parseVec(cJSON_GetObjectItemCaseSensitive(object, "scale"), out.scale.data(), 3);
+    const cJSON* scale = cJSON_GetObjectItemCaseSensitive(object, "scale");
+    if (!parseVec(scale, out.scale.data(), 3)) {
+        float uniform = 1.0f;
+        if (parseFloat(scale, uniform)) out.scale.fill(uniform);
+    }
     parseVec(cJSON_GetObjectItemCaseSensitive(object, "angles"), out.angles.data(), 3);
     readScript(cJSON_GetObjectItemCaseSensitive(object, "origin"), out.origin_script);
     readScript(cJSON_GetObjectItemCaseSensitive(object, "scale"), out.scale_script);

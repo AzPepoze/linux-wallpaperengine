@@ -78,11 +78,15 @@ void SceneTree::decompose(const mat4x4 m, SceneTreeNode& node) {
 }
 
 bool SceneTree::ancestorsVisible(uint32_t id) const {
+    return ancestorsVisible(id, [](const SceneTreeNode& node) { return node.visible; });
+}
+
+bool SceneTree::ancestorsVisible(uint32_t id, const std::function<bool(const SceneTreeNode&)>& visible) const {
     const SceneTreeNode* node = find(id);
     // The step bound keeps a malformed parent cycle from looping.
     for (size_t steps = 0; node && node->parent_id != 0 && steps < nodes_.size(); ++steps) {
         node = find(node->parent_id);
-        if (node && !node->visible) return false;
+        if (node && !visible(*node)) return false;
     }
     return true;
 }
@@ -208,5 +212,21 @@ bool SceneTree::worldPosition(uint32_t id, float out[3]) const {
     out[0] = world[3][0];
     out[1] = world[3][1];
     out[2] = world[3][2];
+    return true;
+}
+
+bool SceneTree::worldPlacement(uint32_t id, ScenePlacement& out) const {
+    mat4x4 world;
+    if (!worldTransform(id, world)) return false;
+
+    out.origin = {world[3][0], world[3][1], world[3][2]};
+    for (int axis = 0; axis < 3; ++axis) {
+        const float* column = world[axis];
+        out.scale[(size_t)axis] = std::sqrt(column[0] * column[0] + column[1] * column[1] + column[2] * column[2]);
+    }
+    out.rotation_deg = std::atan2(world[0][1], world[0][0]) * (180.0f / (float)M_PI);
+    // Rotation follows the X basis. Preserve reflection on Y instead of turning
+    // a mirrored parent into a 180-degree rotation of an unmirrored sprite.
+    if (world[0][0] * world[1][1] - world[0][1] * world[1][0] < 0.0f) out.scale[1] = -out.scale[1];
     return true;
 }

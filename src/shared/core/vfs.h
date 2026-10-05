@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <string>
 #include <vector>
 
 // Read-only view of a Wallpaper Engine .pkg mapped into memory. Package files are addressed as "pkg:/<name>";
@@ -16,6 +17,8 @@ constexpr const char* kRoot = "pkg:";
 bool mount(const char* pkg_path);
 void unmount();
 bool mounted();
+// Files beside the mounted package (notably project.json) remain on disk.
+std::string sourceDirectory();
 
 bool isVirtual(const char* path);
 bool exists(const char* path);
