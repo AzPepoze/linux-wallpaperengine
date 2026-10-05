@@ -30,6 +30,9 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     if (shared_assets_) instance->assets.attachShared(shared_assets_);
     instance->state.wallpaper_path = scene_directory;
     instance->state.is_pkg = ctx.is_pkg;
+    // Scaling is selected by the user before loading. A fresh instance must
+    // inherit it before activation replaces the context's entire SceneState.
+    instance->state.scene.scaling_mode = ctx.scene.scaling_mode;
 
     activateInstance(ctx, *instance, active_view_);
     // The incoming audio starts silent when a frame was already captured for the
@@ -49,6 +52,11 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     }
     instance->wallpaper = std::move(wallpaper);
     active_instance_ = std::move(instance);
+    const char* scaling = ctx.scene.scaling_mode == SCALING_COVER     ? "cover"
+                          : ctx.scene.scaling_mode == SCALING_STRETCH ? "stretch"
+                                                                      : "fit";
+    LOG_TAG_I("OPTIONS", "Loaded wallpaper scaling: %s (scale=%.3f, offsets=%.1f, %.1f)", scaling,
+              ctx.scene.render_scale, ctx.scene.offset_x, ctx.scene.offset_y);
     return true;
 }
 

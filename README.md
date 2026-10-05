@@ -123,7 +123,7 @@ The wallpaper path may come first or last. `-h` / `--help` prints this same refe
 | `--gpu` | `<id>` | auto | Select a GPU by index or name |
 | `--list-gpus` | | off | List the available GPUs and exit |
 | `-f`, `--fps` | `<n>` | display rate | Frame-rate cap; `0` or omitted follows the display (vsync) |
-| `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops to cover, `fit` letterboxes |
+| `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops to cover, `fit` letterboxes, `stretch` fills without preserving aspect ratio; `default` uses cover |
 | `--cover` | | off | Force cover scaling, ignoring the project |
 | `--clamp` | `<mode>` | ignored | Accepted and ignored |
 | `--video-ram` | | off | Load video files into RAM instead of streaming |

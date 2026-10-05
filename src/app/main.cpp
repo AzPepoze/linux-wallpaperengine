@@ -113,8 +113,8 @@ static void applyCliToContext() {
 
     ctx.debug.show_ui = DEBUG_BUILD && !cli.no_ui;
     ctx.debug.selected_object = -1;
-    ctx.scene.scaling_mode = cli.cover || cli.scaling == "fill" ? SCALING_COVER : SCALING_FIT;
-    if (cli.scaling == "stretch") LOG_W("--scaling stretch is not supported yet; using fit");
+    ctx.scene.scaling_mode = (cli.cover || cli.scaling == "default" || cli.scaling == "fill") ? SCALING_COVER : SCALING_FIT;
+    if (!cli.cover && cli.scaling == "stretch") ctx.scene.scaling_mode = SCALING_STRETCH;
     if (layer_active) ctx.debug.show_ui = false;
     ctx.debug.particle_debug_bounds = cli.particle_debug_bounds;
     ctx.debug.particle_debug_velocity = cli.particle_debug_velocity;
@@ -302,6 +302,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         cli_args::printHelp(stdout);
         exit(EXIT_SUCCESS);
     }
+    cli.logResolvedOptions();
     selectRequestedGpu();
 
     if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
@@ -309,6 +310,8 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     wallpaper_source = resolveWallpaperSource(cli);
     strncpy(ctx.wallpaper_path, wallpaper_source.path.c_str(), sizeof(ctx.wallpaper_path) - 1);
     ctx.is_pkg = wallpaper_source.is_pkg;
+    LOG_TAG_I("OPTIONS", "Wallpaper: %s (source: %s)", wallpaper_source.path.c_str(),
+              cli.wallpaper_arg.empty() ? "config/auto-detection" : "CLI");
 
     if (cli.extract_only && !wallpaper_source.path.empty()) exit(runExtractOnly(wallpaper_source, cli));
 

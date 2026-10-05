@@ -55,6 +55,9 @@ struct CliOptions {
     int particle_debug_max_particles = 0;
     std::vector<std::pair<std::string, std::string>> set_properties;
 
+    std::vector<std::string> startup_options;
+    void logResolvedOptions() const;
+
     static CliOptions parse(int argc, char* argv[]);
 };
 

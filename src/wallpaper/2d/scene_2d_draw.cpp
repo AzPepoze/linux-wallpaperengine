@@ -21,10 +21,10 @@
 #include "wallpaper/2d/tree/scene_visibility.h"
 
 namespace {
-void drawFullscreenTarget(EngineContext& ctx, sg_image image, sg_view texture_view, int width, int height) {
+void drawFullscreenTarget(EngineContext& ctx, sg_image image, sg_view texture_view, int, int) {
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    renderer_draw_sprite(ctx, &ctx.renderer, image, texture_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f, white,
-                         false, nullptr);
+    renderer_draw_sprite(ctx, &ctx.renderer, image, texture_view, 0.0f, 0.0f, ctx.renderer.view_width,
+                         ctx.renderer.view_height, 0.0f, white, false, nullptr);
 }
 
 struct Snapshot {
@@ -102,7 +102,7 @@ void Scene2DRuntime::drawOffscreen() {
         return;
     }
 
-    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    updateViewport();
 
     int current = 0;
     sg_pass clear_pass = {};

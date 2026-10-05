@@ -15,7 +15,7 @@
 #include "wallpaper/user_properties.h"
 #include "wallpaper/web/web_options.h"
 
-typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
+typedef enum { SCALING_COVER, SCALING_FIT, SCALING_STRETCH } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;
 enum class RuntimeMode { Wallpaper, Sandbox };
 

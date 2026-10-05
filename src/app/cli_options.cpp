@@ -88,21 +88,34 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
     const std::vector<std::string> args(argv, argv + argc);
+    auto record = [&](const std::string& key, const std::string& value, const char* source) {
+        opts.startup_options.push_back(key + "=" + (value.empty() ? "<unset>" : value) + " (source: " + source + ")");
+    };
     // CLI flags override config.json, which overrides the defaults.
     auto resolve = [&](const std::vector<std::string>& names, const char* key, const std::string& fallback) {
         std::string value;
-        if (cli_args::optionValue(args, names, value)) return value;
+        if (cli_args::optionValue(args, names, value)) {
+            record(key, value, "CLI");
+            return value;
+        }
         const std::string configured = flag_config::string(key);
+        record(key, configured.empty() ? fallback : configured, configured.empty() ? "default" : "config");
         return configured.empty() ? fallback : configured;
     };
     auto resolveInt = [&](const std::vector<std::string>& names, const char* key, int fallback) {
         std::string value;
-        if (cli_args::optionValue(args, names, value)) return atoi(value.c_str());
+        if (cli_args::optionValue(args, names, value)) {
+            record(key, std::to_string(atoi(value.c_str())), "CLI");
+            return atoi(value.c_str());
+        }
         const int configured = flag_config::integer(key);
+        record(key, std::to_string(configured != 0 ? configured : fallback), configured != 0 ? "config" : "default");
         return configured != 0 ? configured : fallback;
     };
     auto resolveReal = [&](const char* key, float fallback) {
         const float configured = flag_config::real(key);
+        record(key, std::to_string(configured != 0.0f ? configured : fallback),
+               configured != 0.0f ? "config" : "default");
         return configured != 0.0f ? configured : fallback;
     };
 
@@ -161,7 +174,10 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.transition.mode = resolve({"--transition-mode"}, "transition_mode", "");
 
     opts.web.devtools_port = resolveInt({"--web-devtools-port"}, "web_devtools_port", 9222);
-    if (opts.web.devtools_port < 1 || opts.web.devtools_port > 65535) opts.web.devtools_port = 9222;
+    if (opts.web.devtools_port < 1 || opts.web.devtools_port > 65535) {
+        opts.web.devtools_port = 9222;
+        record("web_devtools_port_effective", "9222", "invalid port fallback");
+    }
     opts.web.devtools_browser = resolve({"--web-devtools-browser"}, "web_devtools_browser", "");
 
     const std::string transport = resolve({"--web-transport"}, "web_transport", "auto");
@@ -169,6 +185,37 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         LOG_E("Invalid web_transport '%s' (expected: auto, dma-buf, off-screen, snapshot)", transport.c_str());
         exit(EXIT_FAILURE);
     }
+    auto cliValue = [&](const char* key, const std::string& value, const std::vector<std::string>& names) {
+        std::string supplied;
+        record(key, value, cli_args::optionValue(args, names, supplied) ? "CLI" : "default");
+    };
+    cliValue("assets_dir", opts.assets_dir, {"--assets-dir"});
+    cliValue("screen_root", opts.screen_root, {"-r", "--screen-root"});
+    cliValue("layer", opts.layer.empty() ? "background" : opts.layer, {"--layer"});
+    cliValue("clamp", opts.clamp, {"--clamp"});
+    cliValue("fps_limit", std::to_string(opts.fps_limit), {"-f", "--fps"});
+    record("gpu", opts.gpu.empty() ? "auto" : opts.gpu, opts.gpu.empty() ? "default" : "CLI");
+    record("audio", opts.no_audio ? "disabled" : "enabled",
+           hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"})
+               ? "CLI"
+               : (opts.no_ui || opts.diagnostics.enabled ? "diagnostics/no-ui" : "default"));
+    record("cover", opts.cover ? "true" : "false", opts.cover ? "CLI" : "default");
+    record("control", opts.no_control ? "disabled" : "enabled", opts.no_control ? "CLI" : "default");
+    record("video_ram", opts.video_ram ? "true" : "false", opts.video_ram ? "CLI" : "default");
+    record("script_profile", opts.script_profile ? "true" : "false", opts.script_profile ? "CLI" : "default");
+    record("web_devtools", opts.web.devtools ? "enabled" : "disabled", opts.web.devtools ? "default" : "CLI");
+    record("diagnostics", opts.diagnostics.enabled ? "enabled" : "disabled",
+           opts.diagnostics.enabled ? "CLI" : "default");
     sargs_shutdown();
     return opts;
+}
+
+void CliOptions::logResolvedOptions() const {
+    const std::string config_path = flag_config::loadedPath();
+    LOG_TAG_I("OPTIONS", "Config: %s; precedence: CLI > config > default",
+              config_path.empty() ? "<none>" : config_path.c_str());
+    for (const std::string& option : startup_options) LOG_TAG_I("OPTIONS", "%s", option.c_str());
+    const char* effective_scaling =
+        cover || scaling == "default" || scaling == "fill" ? "cover" : (scaling == "stretch" ? "stretch" : "fit");
+    LOG_TAG_I("OPTIONS", "Effective scaling: %s%s", effective_scaling, cover ? " (--cover override)" : "");
 }

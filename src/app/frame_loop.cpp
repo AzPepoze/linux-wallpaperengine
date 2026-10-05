@@ -43,8 +43,11 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     if (runtime) runtime->updateViewport();
 
     if (runtime && ctx.input.mouse_position_valid) {
-        const WorldPoint world = screenToWorld(ctx.input.mouse_x, ctx.input.mouse_y, ctx.scene.offset_x,
-                                               ctx.scene.offset_y, ctx.scene.render_scale, ctx.scene.scene_h);
+        float mouse_x = ctx.input.mouse_x;
+        if (ctx.scene.scaling_mode == SCALING_STRETCH && surface::width() > 0)
+            mouse_x *= ctx.renderer.view_width / (float)surface::width();
+        const WorldPoint world = screenToWorld(mouse_x, ctx.input.mouse_y, ctx.scene.offset_x, ctx.scene.offset_y,
+                                               ctx.scene.render_scale, ctx.scene.scene_h);
         ctx.input.mouse_world_x = world.x;
         ctx.input.mouse_world_y = world.y;
     }

@@ -27,7 +27,7 @@ char* readTextFile(const char* path) {
     return text;
 }
 
-cJSON* loadConfig() {
+cJSON* loadConfig(std::string* loaded_path = nullptr) {
     const char* candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
                                 "../../../../config.json"};
     for (const char* path : candidates) {
@@ -35,12 +35,21 @@ cJSON* loadConfig() {
         if (!text) continue;
         cJSON* json = cJSON_Parse(text);
         free(text);
-        if (json) return json;
+        if (json) {
+            if (loaded_path) *loaded_path = path;
+            return json;
+        }
     }
     return nullptr;
 }
 
 }  // namespace
+
+std::string flag_config::loadedPath() {
+    std::string path;
+    cJSON_Delete(loadConfig(&path));
+    return path;
+}
 
 std::string flag_config::string(const char* key) {
     cJSON* config = loadConfig();

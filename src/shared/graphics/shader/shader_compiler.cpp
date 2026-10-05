@@ -1,6 +1,7 @@
 #include "shader_compiler.h"
 
 #include <algorithm>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -108,6 +109,17 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
     result.vertex_layout = usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
                                                                           : ShaderVertexLayout::Sprite2D;
 
+    // Five consecutive vec4 resolutions share one array entry in Sokol's
+    // limited uniform metadata. Their std140 layout and upload offsets stay identical.
+    for (std::string* source : {&compiled_vert_source, &compiled_frag_source}) {
+        for (int index = 0; index < 5; ++index) {
+            const std::string name = "g_Texture" + std::to_string(index) + "Resolution";
+            *source = std::regex_replace(*source, std::regex("uniform\\s+(?:vec4|float4)\\s+" + name + "\\s*;"), "");
+            *source = std::regex_replace(*source, std::regex("\\b" + name + "\\b"),
+                                         "g_TextureResolution[" + std::to_string(index) + "]");
+        }
+    }
+
     sg_shader_desc shd_desc = {};
     if (result.vertex_layout == ShaderVertexLayout::ParticleSprite) {
         shd_desc.attrs[0].glsl_name = "a_Position";
@@ -129,11 +141,7 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
     shd_desc.uniform_blocks[1].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4);
     shd_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "g_ModelViewProjectionMatrixInverse";
     shd_desc.uniform_blocks[1].glsl_uniforms[0].type = SG_UNIFORMTYPE_MAT4;
-    const char* builtin_names[] = {"g_Texture0Resolution",
-                                   "g_Texture1Resolution",
-                                   "g_Texture2Resolution",
-                                   "g_Texture3Resolution",
-                                   "g_Texture4Resolution",
+    const char* builtin_names[] = {"g_TextureResolution",
                                    "g_ParallaxPosition",
                                    "g_Time",
                                    "g_Frametime",
@@ -146,18 +154,19 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                    "g_PointerState",
                                    "g_LightAmbientColor",
                                    "g_LightSkylightColor"};
-    const sg_uniform_type builtin_types[] = {SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
-                                             SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT2,
-                                             SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2,
-                                             SG_UNIFORMTYPE_FLOAT2,
+    const sg_uniform_type builtin_types[] = {SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_FLOAT,
+                                             SG_UNIFORMTYPE_FLOAT,  SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_MAT4,   SG_UNIFORMTYPE_FLOAT2,
                                              SG_UNIFORMTYPE_FLOAT2, SG_UNIFORMTYPE_FLOAT4, SG_UNIFORMTYPE_FLOAT4,
                                              SG_UNIFORMTYPE_FLOAT4};
     constexpr int kBuiltinMemberCount = sizeof(builtin_names) / sizeof(builtin_names[0]);
+    static_assert(kBuiltinMemberCount + 2 <= SG_MAX_UNIFORMBLOCK_MEMBERS);
     for (int i = 0; i < kBuiltinMemberCount; ++i) {
         shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
         shd_desc.uniform_blocks[1].glsl_uniforms[i + 1].type = builtin_types[i];
     }
+
+    shd_desc.uniform_blocks[1].glsl_uniforms[1].array_count = 5;
 
     shd_desc.uniform_blocks[2].stage = SG_SHADERSTAGE_FRAGMENT;
     shd_desc.uniform_blocks[2].size = sizeof(builtin_uniforms_t) - sizeof(mat4x4) + sizeof(float) * 4;
@@ -167,6 +176,7 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
         shd_desc.uniform_blocks[2].glsl_uniforms[i + 1].glsl_name = builtin_names[i];
         shd_desc.uniform_blocks[2].glsl_uniforms[i + 1].type = builtin_types[i];
     }
+    shd_desc.uniform_blocks[2].glsl_uniforms[1].array_count = 5;
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].glsl_name = "tint";
     shd_desc.uniform_blocks[2].glsl_uniforms[kBuiltinMemberCount + 1].type = SG_UNIFORMTYPE_FLOAT4;
 
