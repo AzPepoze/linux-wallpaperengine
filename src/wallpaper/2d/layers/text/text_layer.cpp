@@ -46,6 +46,73 @@ const LoadedFont* loadFont(const std::string& path) {
     return &font;
 }
 
+// Wallpaper Engine falls back to installed system fonts for characters the authored font lacks (CJK track names in a
+// Latin display font, for example). The fallback is found per 256-codepoint block through fontconfig and cached.
+const LoadedFont* fallbackFont(int codepoint) {
+    static std::map<int, std::string> block_paths;
+    static std::map<std::string, LoadedFont> system_fonts;
+    const int block = codepoint >> 8;
+    auto found = block_paths.find(block);
+    if (found == block_paths.end()) {
+        std::string path;
+        char command[96];
+        snprintf(command, sizeof(command), "fc-match -f '%%{file}' ':charset=%x' 2>/dev/null", (unsigned)codepoint);
+        if (FILE* pipe = popen(command, "r")) {
+            char buffer[1024] = {};
+            if (fgets(buffer, sizeof(buffer), pipe)) path = buffer;
+            pclose(pipe);
+        }
+        found = block_paths.emplace(block, path).first;
+    }
+    if (found->second.empty()) return nullptr;
+
+    LoadedFont& font = system_fonts[found->second];
+    if (font.ready) return &font;
+    if (FILE* file = fopen(found->second.c_str(), "rb")) {
+        uint8_t chunk[65536];
+        size_t count = 0;
+        while ((count = fread(chunk, 1, sizeof(chunk), file)) > 0) font.data.insert(font.data.end(), chunk, chunk + count);
+        fclose(file);
+    }
+    if (font.data.empty()) return nullptr;
+    const int offset = stbtt_GetFontOffsetForIndex(font.data.data(), 0);
+    if (offset < 0 || !stbtt_InitFont(&font.info, font.data.data(), offset)) return nullptr;
+    font.ready = true;
+    return &font;
+}
+
+// The authored font at one em size, with per-character fallback to system fonts.
+struct TextFont {
+    const stbtt_fontinfo* primary = nullptr;
+    float px = 0.0f;
+    float scale = 0.0f;
+
+    struct Pick {
+        const stbtt_fontinfo* info;
+        float scale;
+    };
+
+    Pick pick(int codepoint) const {
+        if (codepoint < 0x20 || stbtt_FindGlyphIndex(primary, codepoint) != 0) return {primary, scale};
+        if (const LoadedFont* fallback = fallbackFont(codepoint))
+            if (stbtt_FindGlyphIndex(&fallback->info, codepoint) != 0)
+                return {&fallback->info, stbtt_ScaleForMappingEmToPixels(&fallback->info, px)};
+        return {primary, scale};
+    }
+};
+
+// Advance of one character in pixels, including the kerning pair with the next character in the same font.
+float advanceOf(const TextFont& font, int codepoint, int next_codepoint) {
+    const TextFont::Pick glyph = font.pick(codepoint);
+    int advance = 0;
+    int bearing = 0;
+    stbtt_GetCodepointHMetrics(glyph.info, codepoint, &advance, &bearing);
+    float width = advance * glyph.scale;
+    if (next_codepoint > 0 && font.pick(next_codepoint).info == glyph.info)
+        width += stbtt_GetCodepointKernAdvance(glyph.info, codepoint, next_codepoint) * glyph.scale;
+    return width;
+}
+
 int nextCodepoint(const std::string& text, size_t& index) {
     const unsigned char c = (unsigned char)text[index];
     if (c < 0x80) {
@@ -72,21 +139,19 @@ int nextCodepoint(const std::string& text, size_t& index) {
     return c;
 }
 
-float measureText(const stbtt_fontinfo& font, float scale, const std::string& text) {
+float measureText(const TextFont& font, const std::string& text) {
     float width = 0.0f;
     size_t index = 0;
     while (index < text.size()) {
         const int cp = nextCodepoint(text, index);
-        int advance = 0;
-        int bearing = 0;
-        stbtt_GetCodepointHMetrics(&font, cp, &advance, &bearing);
-        width += advance * scale;
+        size_t peek = index;
+        const int next = peek < text.size() ? nextCodepoint(text, peek) : 0;
+        width += advanceOf(font, cp, next);
     }
     return width;
 }
 
-std::vector<std::string> wrapWords(const stbtt_fontinfo& font, float scale, const std::string& paragraph,
-                                   float max_width) {
+std::vector<std::string> wrapWords(const TextFont& font, const std::string& paragraph, float max_width) {
     std::vector<std::string> lines;
     std::string line;
     size_t index = 0;
@@ -96,7 +161,7 @@ std::vector<std::string> wrapWords(const stbtt_fontinfo& font, float scale, cons
             paragraph.substr(index, space == std::string::npos ? std::string::npos : space - index);
         if (!word.empty()) {
             const std::string candidate = line.empty() ? word : line + " " + word;
-            if (line.empty() || measureText(font, scale, candidate) <= max_width + 0.5f) {
+            if (line.empty() || measureText(font, candidate) <= max_width + 0.5f) {
                 line = candidate;
             } else {
                 lines.push_back(line);
@@ -110,15 +175,14 @@ std::vector<std::string> wrapWords(const stbtt_fontinfo& font, float scale, cons
     return lines;
 }
 
-std::vector<std::string> layoutLines(const stbtt_fontinfo& font, float scale, const std::string& text,
-                                     float max_width) {
+std::vector<std::string> layoutLines(const TextFont& font, const std::string& text, float max_width) {
     std::vector<std::string> lines;
     size_t start = 0;
     while (start <= text.size()) {
         const size_t end = text.find('\n', start);
         std::string paragraph = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
         if (!paragraph.empty() && paragraph.back() == '\r') paragraph.pop_back();
-        for (auto& line : wrapWords(font, scale, paragraph, max_width)) lines.push_back(std::move(line));
+        for (auto& line : wrapWords(font, paragraph, max_width)) lines.push_back(std::move(line));
         if (end == std::string::npos) break;
         start = end + 1;
     }
@@ -127,25 +191,25 @@ std::vector<std::string> layoutLines(const stbtt_fontinfo& font, float scale, co
 
 // Floating-point pixels retain HDR brightness. The layer tint colors the glyphs; opaque
 // backgrounds blend glyph coverage into their background color.
-void blitLine(std::vector<float>& pixels, int canvas_w, int canvas_h, const stbtt_fontinfo& font, float scale,
-              const std::string& line, float pen_x, float baseline, bool opaque_background, float brightness) {
+void blitLine(std::vector<float>& pixels, int canvas_w, int canvas_h, const TextFont& font, const std::string& line,
+              float pen_x, float baseline, bool opaque_background, float brightness) {
     size_t index = 0;
     while (index < line.size()) {
         const int cp = nextCodepoint(line, index);
-        int advance = 0;
-        int bearing = 0;
-        stbtt_GetCodepointHMetrics(&font, cp, &advance, &bearing);
+        size_t peek = index;
+        const int next = peek < line.size() ? nextCodepoint(line, peek) : 0;
+        const TextFont::Pick glyph = font.pick(cp);
 
         int x0 = 0;
         int y0 = 0;
         int x1 = 0;
         int y1 = 0;
-        stbtt_GetCodepointBitmapBox(&font, cp, scale, scale, &x0, &y0, &x1, &y1);
+        stbtt_GetCodepointBitmapBox(glyph.info, cp, glyph.scale, glyph.scale, &x0, &y0, &x1, &y1);
         const int gw = x1 - x0;
         const int gh = y1 - y0;
         if (gw > 0 && gh > 0) {
             std::vector<uint8_t> bitmap((size_t)gw * (size_t)gh);
-            stbtt_MakeCodepointBitmap(&font, bitmap.data(), gw, gh, gw, scale, scale, cp);
+            stbtt_MakeCodepointBitmap(glyph.info, bitmap.data(), gw, gh, gw, glyph.scale, glyph.scale, cp);
             const int gx = (int)lroundf(pen_x) + x0;
             const int gy = (int)lroundf(baseline) + y0;
             for (int y = 0; y < gh; ++y) {
@@ -166,7 +230,7 @@ void blitLine(std::vector<float>& pixels, int canvas_w, int canvas_h, const stbt
                 }
             }
         }
-        pen_x += advance * scale;
+        pen_x += advanceOf(font, cp, next);
     }
 }
 
@@ -371,6 +435,7 @@ bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, f
 
     const float font_px = std::max(1.0f, config_.pointsize * kDesignUnitsPerPoint * pixel_scale);
     const float scale = stbtt_ScaleForMappingEmToPixels(&font, font_px);
+    const TextFont text_font{&font, font_px, scale};
     int ascent = 0;
     int descent = 0;
     int line_gap = 0;
@@ -382,14 +447,14 @@ bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, f
     const bool width_limited = config_.limit_width && config_.maxwidth > 0.0f;
     const float layout_width = width_limited ? config_.maxwidth * pixel_scale : 1.0e9f;
 
-    std::vector<std::string> lines = layoutLines(font, scale, config_.text, layout_width);
+    std::vector<std::string> lines = layoutLines(text_font, config_.text, layout_width);
     if (lines.empty()) return false;
     if (config_.limit_rows && config_.max_rows > 0 && lines.size() > (size_t)config_.max_rows)
         lines.resize((size_t)config_.max_rows);
 
     const float block_height = (float)lines.size() * line_advance;
     float natural_width = 0.0f;
-    for (const auto& line : lines) natural_width = std::max(natural_width, measureText(font, scale, line));
+    for (const auto& line : lines) natural_width = std::max(natural_width, measureText(text_font, line));
 
     // Padding is empty border around the text, so effects have room to draw outside the glyphs.
     const float pad = std::max(0.0f, config_.padding) * pixel_scale;
@@ -415,7 +480,7 @@ bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, f
     pixels.resize((size_t)width * height * 4);
     for (size_t i = 0; i < pixels.size(); i += 4) std::copy(background, background + 4, pixels.begin() + i);
     for (size_t i = 0; i < lines.size(); ++i) {
-        const float line_width = measureText(font, scale, lines[i]);
+        const float line_width = measureText(text_font, lines[i]);
         float pen_x = pad + ((float)width - 2.0f * pad - line_width) * 0.5f;
         if (config_.horizontal_align == "left")
             pen_x = pad;
@@ -423,7 +488,7 @@ bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, f
             pen_x = (float)width - pad - line_width;
 
         const float baseline = start_y + (float)i * line_advance + ascent_px;
-        blitLine(pixels, width, height, font, scale, lines[i], pen_x, baseline, config_.opaque_background,
+        blitLine(pixels, width, height, text_font, lines[i], pen_x, baseline, config_.opaque_background,
                  config_.brightness);
     }
     return true;

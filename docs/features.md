@@ -122,6 +122,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Works
     - Font loading (TrueType and supported OpenType fonts through stb_truetype), default font `NotoSans-Regular.ttf` for `systemfont`
     - `pointsize`, `color`, `alpha` (including the alpha animation curve), `size`, `maxwidth`, row and width limits
+    - Characters the authored font lacks (CJK track names in a Latin display font) fall back to an installed system font found through fontconfig; `kern`-table kerning is applied
     - Horizontal and vertical alignment
     - `opaquebackground`, `backgroundcolor` and `padding` are parsed and rasterized
     - Text scripts use the shared `init`, per-frame `update` and user-property lifecycle (clocks and typing animations)
@@ -330,6 +331,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 - [-] Media session (MPRIS)
   - Works
     - A source module (`src/shared/media/`) reads track title, artist, album, playback state and timeline from MPRIS players over sd-bus, and decodes album art from `file://` URLs
+    - Track and playback changes are received through `PropertiesChanged` signals, including from players behind a D-Bus proxy (such as sandboxed browsers) whose signals carry a unique bus name
     - Median-cut color extraction (primary, secondary, tertiary, text, high-contrast)
     - Built only when libsystemd is available (`mpris` option); otherwise it is a no-op
     - Events reach scripts (`media*Changed`), and materials can sample `$mediaThumbnail` and `$mediaPreviousThumbnail` as 256x256 textures; artwork changes retain the preceding image for transitions

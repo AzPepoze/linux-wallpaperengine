@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -53,10 +54,13 @@ constexpr const char* kNameOwnerMatch =
     "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',"
     "member='NameOwnerChanged',arg0namespace='org.mpris.MediaPlayer2'";
 constexpr const char* kPropertiesMatch =
-    "type='signal',interface='org.mpris.MediaPlayer2.Player',member='PropertiesChanged'";
+    "type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',"
+    "path='/org/mpris/MediaPlayer2',arg0='org.mpris.MediaPlayer2.Player'";
 
 struct Player {
     std::string service;
+    // Unique bus name that owns `service`; signals carry this as their sender, not the well-known name.
+    std::string owner;
     PlaybackState state = PlaybackState::Stopped;
     MediaProperties props;
     std::string art_url;
@@ -325,6 +329,7 @@ bool MprisMediaSource::applyPlayerProperties(Player& player) {
         return false;
     }
 
+    if (const char* owner = sd_bus_message_get_sender(reply)) player.owner = owner;
     if (sd_bus_message_enter_container(reply, 'a', "{sv}") > 0) {
         readPropertiesDict(reply, player);
         sd_bus_message_exit_container(reply);
@@ -516,7 +521,12 @@ int MprisMediaSource::onPropertiesChanged(sd_bus_message* message, void* userdat
     if (!interface || std::strcmp(interface, kPlayerInterface) != 0) return 0;
 
     const char* sender = sd_bus_message_get_sender(message);
-    auto player = self->players_.find(sender ? sender : "");
+    const std::string sender_name = sender ? sender : "";
+    auto player = self->players_.find(sender_name);
+    if (player == self->players_.end()) {
+        player = std::find_if(self->players_.begin(), self->players_.end(),
+                              [&](const auto& entry) { return entry.second.owner == sender_name; });
+    }
     if (player == self->players_.end()) return 0;
 
     if (sd_bus_message_enter_container(message, 'a', "{sv}") > 0) {
