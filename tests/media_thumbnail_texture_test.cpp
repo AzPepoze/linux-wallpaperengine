@@ -35,7 +35,8 @@ int main() {
     a.rgba = {255, 0, 0, 255};
     texture.setThumbnail(a);
     texture.flush();
-    CHECK(uploads[current.id][0] == 255 && uploads[previous.id][3] == 0);
+    // With no earlier artwork the previous image mirrors the first one, so the blend's alpha stays opaque.
+    CHECK(uploads[current.id][0] == 255 && uploads[previous.id][0] == 255 && uploads[previous.id][3] == 255);
     ThumbnailColors b = a;
     b.rgba = {0, 255, 0, 255};
     texture.setThumbnail(b);
