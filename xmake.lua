@@ -225,6 +225,8 @@ add_test("web_devtools_tests", {"tests/web_devtools_test.cpp", "src/shared/core/
 add_test("web_renderer_tests", {"tests/web_renderer_shared_test.cpp", "src/wallpaper/web/web_renderer_shared.cpp",
                                 "src/wallpaper/web/web_dmabuf_ipc.cpp"})
 
+add_test("flag_config_tests", {"tests/flag_config_test.cpp", "src/app/flag_config.cpp"}, {"cjson"})
+
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
 add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/2d/input/pointer_input.cpp"})

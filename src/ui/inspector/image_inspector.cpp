@@ -135,10 +135,10 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
     if (!il.path.empty()) ImGui::TextWrapped("Path: %s", il.path.c_str());
 
     // Web wallpapers run out-of-process; expose the helper's DevTools.
-    if (ctx.scene_type == SCENE_TYPE_WEB && ctx.web_devtools) {
-        if (ImGui::Button("Open DevTools")) web_devtools::open(ctx.web_devtools_port, ctx.web_devtools_browser);
+    if (ctx.scene_type == SCENE_TYPE_WEB && ctx.web.devtools) {
+        if (ImGui::Button("Open DevTools")) web_devtools::open(ctx.web.devtools_port, ctx.web.devtools_browser);
         ImGui::SameLine();
-        ImGui::TextDisabled("http://localhost:%d", ctx.web_devtools_port);
+        ImGui::TextDisabled("http://localhost:%d", ctx.web.devtools_port);
     }
 
     if (il.img.id != SG_INVALID_ID) {

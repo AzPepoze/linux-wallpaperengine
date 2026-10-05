@@ -63,6 +63,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Works
     - HTML, CSS, JavaScript and local web assets, in a separate renderer process (Qt WebEngine) that talks to the app over a Unix socket
     - Frames stream to the engine with automatic fallback: a zero-copy DMA-BUF the engine samples directly, else an offscreen render-control target with asynchronous readback, else an in-process widget grab
+    - `--web-transport auto|dma-buf|off-screen|snapshot` (or the `web_transport` key in `config.json`) selects the transport; the CLI flag overrides the config
     - Sends the `project.json` user properties (defaults) to the page as JSON
   - Missing
     - Not built by default; without the flag a web wallpaper fails to load
@@ -288,7 +289,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 
 - [x] Audio playback (WAV, MP3, OGG, FLAC through miniaudio), loop playback
 - [x] Sound layers (see [Scene layers](#scene-layers)) and video audio
-- [x] Silent mode: `--no-audio`, `-s`/`--silent`, `--mute` or `LWE_NO_AUDIO=1`; diagnostic runs are always silent
+- [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute`; diagnostic runs are always silent
 - [-] System audio capture and spectrum
   - Works
     - Captures the PulseAudio monitor of the default sink at 48 kHz stereo

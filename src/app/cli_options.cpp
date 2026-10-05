@@ -7,8 +7,9 @@
 #include <vector>
 
 #include "app/cli_args.h"
+#include "app/flag_config.h"
 #include "shared/core/build_config.h"
-#include "shared/core/utils.h"
+#include "shared/core/logger.h"
 #include "sokol_args.h"
 
 namespace {
@@ -63,10 +64,6 @@ std::string valueAnySpelling(const char* name) {
 }
 #endif
 
-bool envEnabled(const char* name) {
-    const char* value = getenv(name);
-    return value && value[0] && strcmp(value, "0") != 0;
-}
 }  // namespace
 
 CliOptions CliOptions::parse(int argc, char* argv[]) {
@@ -84,16 +81,17 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.no_ui = hasDashedFlag("no-ui");
     opts.diagnostics.enabled = hasDashedFlag("diagnose") || hasDashedFlag("diagnostics");
     opts.diagnostics.disable_effects = valueAnySpelling("disable-effects");
-    opts.diagnostics.disable_particles = hasAnySpelling("disable-particles");
+    opts.diagnostics.disable_particles = hasDashedFlag("disable-particles");
     opts.diagnostics.disable_bloom = hasAnySpelling("disable-bloom");
     opts.diagnostics.final_only = hasDashedFlag("diagnose-final-only");
     opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
     opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
     const std::vector<std::string> args(argv, argv + argc);
-    opts.no_audio = hasDashedFlag("no-audio") || envEnabled("LWE_NO_AUDIO") || opts.no_ui || opts.diagnostics.enabled ||
+    opts.help = cli_args::hasFlag(args, {"-h", "--help"});
+    opts.no_audio = hasDashedFlag("no-audio") || opts.no_ui || opts.diagnostics.enabled ||
                     cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
-    opts.video_ram = cli_args::hasFlag(args, {"--video-ram"}) || envEnabled("LWE_VIDEO_RAM");
+    opts.video_ram = cli_args::hasFlag(args, {"--video-ram"});
     opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});
 #if DEBUG_BUILD
     std::string capture_frame;
@@ -106,11 +104,6 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
-    cli_args::optionValue(args, {"--transition"}, opts.transition);
-    std::string transition_duration;
-    if (cli_args::optionValue(args, {"--transition-duration"}, transition_duration))
-        opts.transition_duration_ms = atoi(transition_duration.c_str());
-    cli_args::optionValue(args, {"--transition-mode"}, opts.transition_mode);
     opts.no_control = hasDashedFlag("no-control");
     for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
         const size_t equals = entry.find('=');
@@ -124,13 +117,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     std::string fps;
     if (cli_args::optionValue(args, {"-f", "--fps"}, fps)) opts.fps_limit = atoi(fps.c_str());
     // On by default (localhost only); --no-web-devtools opts out.
-    opts.web_devtools = !hasDashedFlag("no-web-devtools");
-    std::string devtools_port;
-    if (cli_args::optionValue(args, {"--web-devtools-port"}, devtools_port)) {
-        const int port = atoi(devtools_port.c_str());
-        if (port > 0 && port < 65536) opts.web_devtools_port = port;
-    }
-    cli_args::optionValue(args, {"--web-devtools-browser"}, opts.web_devtools_browser);
+    opts.web.devtools = !hasDashedFlag("no-web-devtools");
     opts.cover = hasFlag("cover");
     opts.particle_debug_bounds = hasFlag("particle-debug-bounds") || hasFlag("particle-debug");
     opts.particle_debug_velocity = hasFlag("particle-debug-velocity") || hasFlag("particle-debug");
@@ -149,16 +136,33 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     } else if (!opts.sandbox) {
         opts.wallpaper_arg = cli_args::positional(args);
     }
-    // config.json fills in transition settings only when the flags are absent.
-    char config_effect[64] = {};
-    int config_duration = 0;
-    if (read_config_transition(config_effect, sizeof(config_effect), &config_duration)) {
-        if (opts.transition.empty() && config_effect[0] != '\0') opts.transition = config_effect;
-        if (opts.transition_duration_ms <= 0 && config_duration > 0) opts.transition_duration_ms = config_duration;
+    // CLI flags override config.json, which overrides the defaults.
+    auto resolve = [&](const std::vector<std::string>& names, const char* key, const std::string& fallback) {
+        std::string value;
+        if (cli_args::optionValue(args, names, value)) return value;
+        const std::string configured = flag_config::string(key);
+        return configured.empty() ? fallback : configured;
+    };
+    auto resolveInt = [&](const std::vector<std::string>& names, const char* key, int fallback) {
+        std::string value;
+        if (cli_args::optionValue(args, names, value)) return atoi(value.c_str());
+        const int configured = flag_config::integer(key);
+        return configured != 0 ? configured : fallback;
+    };
+
+    opts.transition.effect = resolve({"--transition"}, "transition", "");
+    opts.transition.duration_ms = resolveInt({"--transition-duration"}, "transition_duration_ms", 0);
+    opts.transition.mode = resolve({"--transition-mode"}, "transition_mode", "");
+
+    opts.web.devtools_port = resolveInt({"--web-devtools-port"}, "web_devtools_port", 9222);
+    if (opts.web.devtools_port < 1 || opts.web.devtools_port > 65535) opts.web.devtools_port = 9222;
+    opts.web.devtools_browser = resolve({"--web-devtools-browser"}, "web_devtools_browser", "");
+
+    const std::string transport = resolve({"--web-transport"}, "web_transport", "auto");
+    if (!parseWebTransport(transport, opts.web.transport)) {
+        LOG_E("Invalid web_transport '%s' (expected: auto, dma-buf, off-screen, snapshot)", transport.c_str());
+        exit(EXIT_FAILURE);
     }
-    char config_mode[64] = {};
-    if (opts.transition_mode.empty() && read_config_transition_mode(config_mode, sizeof(config_mode)))
-        opts.transition_mode = config_mode;
     sargs_shutdown();
     return opts;
 }

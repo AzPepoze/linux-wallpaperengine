@@ -1,6 +1,7 @@
 #include "wallpaper/web/web_ipc.h"
 #include "wallpaper/web/web_dmabuf_ipc.h"
 #include "wallpaper/web/web_renderer_shared.h"
+#include "wallpaper/web/web_transport.h"
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -95,6 +96,17 @@ int main() {
     close(sent_fd);
     close(sockets[0]);
     close(sockets[1]);
+
+    // Transport names round-trip; anything else is rejected.
+    WebTransport transport = WebTransport::Auto;
+    CHECK(parseWebTransport("auto", transport) && transport == WebTransport::Auto);
+    CHECK(parseWebTransport("dma-buf", transport) && transport == WebTransport::DmaBuf);
+    CHECK(parseWebTransport("off-screen", transport) && transport == WebTransport::OffScreen);
+    CHECK(parseWebTransport("snapshot", transport) && transport == WebTransport::Snapshot);
+    CHECK(!parseWebTransport("widget", transport));
+    CHECK(!parseWebTransport("bogus", transport));
+    CHECK(strcmp(webTransportName(WebTransport::DmaBuf), "dma-buf") == 0);
+    CHECK(strcmp(webTransportName(WebTransport::Auto), "auto") == 0);
 
     return test::finish("web renderer shared checks");
 }

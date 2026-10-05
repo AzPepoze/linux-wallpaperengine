@@ -15,6 +15,7 @@
 
 #include "wallpaper/web/web_ipc.h"
 #include "wallpaper/web/web_render_control.h"
+#include "wallpaper/web/web_transport.h"
 #include "wallpaper/web/web_vulkan_backend.h"
 #include "wallpaper/web/web_widget_backend.h"
 
@@ -80,34 +81,61 @@ int main(int argc, char** argv) {
     QtWebEngineQuick::initialize();
     QApplication app(argc, argv);
 
-    const bool widget_only = getenv("LWE_WEB_WIDGET_ONLY") != nullptr;
+    const char* transport_arg = argValue(argc, argv, "--transport", "auto");
+    WebTransport transport;
+    if (!parseWebTransport(transport_arg, transport)) {
+        fprintf(stderr, "web renderer: invalid transport '%s'\n", transport_arg);
+        return 5;
+    }
+
     std::unique_ptr<web_renderer::FrameRenderer> renderer;
-    if (has_display && !widget_only) {
+    auto try_dmabuf = [&]() {
+        if (!has_display) return;
         auto candidate = std::make_unique<web_renderer::VulkanBackend>(frame, width, height, fps);
         if (candidate->start(html, properties, ctrl_fd)) {
             fprintf(stderr, "web renderer: using DMA-BUF backend\n");
             renderer = std::move(candidate);
-        } else {
+        } else if (transport == WebTransport::Auto) {
             fprintf(stderr, "web renderer: DMA-BUF backend unavailable, falling back\n");
         }
-    }
-    if (!renderer && has_display && !widget_only) {
+    };
+    auto try_offscreen = [&]() {
+        if (!has_display) return;
         auto candidate = std::make_unique<web_renderer::RenderControlBackend>(frame, width, height, fps);
         if (candidate->start(html, properties, ctrl_fd)) {
             fprintf(stderr, "web renderer: using offscreen render-control backend\n");
             renderer = std::move(candidate);
-        } else {
+        } else if (transport == WebTransport::Auto) {
             fprintf(stderr, "web renderer: render-control backend unavailable, falling back\n");
         }
+    };
+    auto try_snapshot = [&]() {
+        auto candidate = std::make_unique<web_renderer::WidgetBackend>(frame, width, height, fps);
+        if (candidate->start(html, properties, ctrl_fd)) {
+            fprintf(stderr, "web renderer: using widget backend\n");
+            renderer = std::move(candidate);
+        }
+    };
+
+    switch (transport) {
+        case WebTransport::DmaBuf:
+            try_dmabuf();
+            break;
+        case WebTransport::OffScreen:
+            try_offscreen();
+            break;
+        case WebTransport::Snapshot:
+            try_snapshot();
+            break;
+        case WebTransport::Auto:
+            try_dmabuf();
+            if (!renderer) try_offscreen();
+            if (!renderer) try_snapshot();
+            break;
     }
     if (!renderer) {
-        auto candidate = std::make_unique<web_renderer::WidgetBackend>(frame, width, height, fps);
-        if (!candidate->start(html, properties, ctrl_fd)) {
-            fprintf(stderr, "web renderer: widget backend failed\n");
-            return 4;
-        }
-        fprintf(stderr, "web renderer: using widget backend\n");
-        renderer = std::move(candidate);
+        fprintf(stderr, "web renderer: transport '%s' unavailable\n", transport_arg);
+        return 4;
     }
     return app.exec();
 }

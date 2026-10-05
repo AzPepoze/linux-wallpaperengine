@@ -1,42 +1,161 @@
 #include "app/cli_args.h"
 
+#include <string.h>
+
 #include <algorithm>
+#include <string>
+
+#include "shared/core/build_config.h"
 
 namespace cli_args {
-
 namespace {
-const char* const kValueOptions[] = {"--gpu",
-                                     "-gpu",
-                                     "--pkg",
-                                     "-pkg",
-                                     "--extract-dir",
-                                     "-extract-dir",
-                                     "--assets-dir",
-                                     "-f",
-                                     "--fps",
-                                     "--scaling",
-                                     "--clamp",
-                                     "-r",
-                                     "--screen-root",
-                                     "--layer",
-                                     "--layer-size",
-                                     "--layer-anchor",
-                                     "--volume",
-                                     "--disable-effects",
-                                     "--diagnose-frame",
-                                     "--particle-debug-velocity-scale",
-                                     "--particle-debug-max-particles",
-                                     "--transition",
-                                     "--transition-duration",
-                                     "--transition-mode",
-                                     "--web-devtools-port",
-                                     "--web-devtools-browser",
-                                     "--set-property"};
+
+constexpr CliOption kSentinel = {{nullptr}, nullptr};
+
+// One array per group, each terminated by kSentinel (names[0] == nullptr).
+// Adding an option is one row here; the help and takesValue pick it up.
+constexpr CliOption kWallpaper[] = {
+    {{"<wallpaper>", nullptr}, nullptr, CliBuild::All, "Wallpaper project directory, .pkg file or video file"},
+    {{"--pkg", "-pkg", nullptr}, "<path>", CliBuild::All, "Treat the given path as a package"},
+    {{"--extract-only", "-extract-only", nullptr}, nullptr, CliBuild::All, "Extract the package and exit"},
+    {{"--extract-dir", "-extract-dir", nullptr}, "<path>", CliBuild::All, "Target directory for extraction"},
+    {{"--assets-dir", nullptr}, "<path>", CliBuild::All, "Wallpaper Engine install root or its assets/ directory"},
+    {{"--set-property", nullptr}, "<name=value>", CliBuild::All, "Override a project property (repeatable)"},
+    kSentinel,
+};
+
+constexpr CliOption kGraphics[] = {
+    {{"--gpu", "-gpu", nullptr}, "<id>", CliBuild::All, "Select a GPU by index or name"},
+    {{"--list-gpus", "-list-gpus", nullptr}, nullptr, CliBuild::All, "List available GPUs and exit"},
+    {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Cap the frame rate (default 60; 0 = display rate)"},
+    {{"--scaling", nullptr}, "<default|fit|fill|stretch>", CliBuild::All, "fill crops to cover, fit letterboxes"},
+    {{"--clamp", nullptr}, "<mode>", CliBuild::All, "Accepted and ignored"},
+    {{"--cover", nullptr}, nullptr, CliBuild::All, "Force cover scaling, ignoring the project's fit"},
+    {{"--video-ram", nullptr}, nullptr, CliBuild::All, "Load video files fully into RAM instead of streaming"},
+    {{"--script-profile", nullptr}, nullptr, CliBuild::All, "Log the most expensive scripts every ~10 s"},
+    kSentinel,
+};
+
+constexpr CliOption kDisplay[] = {
+    {{"-r", "--screen-root", nullptr}, "<output>", CliBuild::All, "Draw as a wlr-layer-shell surface on the named output"},
+    {{"--layer", nullptr}, "<background|bottom|top|overlay>", CliBuild::All, "Layer-shell layer (default background)"},
+    {{"--layer-size", nullptr}, "<WxH>", CliBuild::Debug, "Use a small anchored rectangle (for example 320x180)"},
+    {{"--layer-anchor", nullptr}, "<edges>", CliBuild::Debug, "Anchor edges for --layer-size (for example top-left)"},
+    kSentinel,
+};
+
+constexpr CliOption kTransition[] = {
+    {{"--transition", nullptr}, "<name|none|random>", CliBuild::All, "Transition shader (default fade; 0-26 accepted)"},
+    {{"--transition-duration", nullptr}, "<ms>", CliBuild::All, "Transition length in milliseconds (default 1000)"},
+    {{"--transition-mode", nullptr}, "<freeze|continue>", CliBuild::All, "Outgoing wallpaper behavior at transition end"},
+    kSentinel,
+};
+
+constexpr CliOption kControl[] = {
+    {{"--no-control", nullptr}, nullptr, CliBuild::All, "Do not hand off to or own a control socket"},
+    kSentinel,
+};
+
+constexpr CliOption kAudio[] = {
+    {{"--no-audio", nullptr}, nullptr, CliBuild::All, "Disable audio"},
+    {{"-s", "--silent", "--mute", nullptr}, nullptr, CliBuild::All, "Disable audio (alias of --no-audio)"},
+    {{"--volume", nullptr}, "<n>", CliBuild::All, "Accepted for launcher compatibility; ignored"},
+    kSentinel,
+};
+
+constexpr CliOption kWeb[] = {
+    {{"--no-web-devtools", nullptr}, nullptr, CliBuild::All, "Disable the localhost remote-debug server (on by default)"},
+    {{"--web-devtools-port", nullptr}, "<port>", CliBuild::All, "DevTools port (default 9222)"},
+    {{"--web-devtools-browser", nullptr}, "<cmd>", CliBuild::All, "Browser command to open DevTools (default xdg-open)"},
+    {{"--web-transport", nullptr}, "<auto|dma-buf|off-screen|snapshot>", CliBuild::All, "Web frame transport (default auto)"},
+    kSentinel,
+};
+
+constexpr CliOption kDiagnostics[] = {
+    {{"--sandbox", nullptr}, nullptr, CliBuild::Debug, "Run the debug effect sandbox"},
+    {{"--no-ui", nullptr}, nullptr, CliBuild::Debug, "Start without the ImGui UI"},
+    {{"--diagnose", "--diagnostics", nullptr}, nullptr, CliBuild::Debug, "Enable render diagnostics"},
+    {{"--diagnose-frame", nullptr}, "<n>", CliBuild::Debug, "Frame to capture (default 100)"},
+    {{"--diagnose-final-only", nullptr}, nullptr, CliBuild::Debug, "Capture only the final output"},
+    {{"--diagnose-deterministic", nullptr}, nullptr, CliBuild::Debug, "Fixed 1/60 s step and seeded RNG"},
+    {{"--exit-after-diagnose", nullptr}, nullptr, CliBuild::Debug, "Quit once the capture completes"},
+    {{"--disable-effects", nullptr}, "<pattern>", CliBuild::Debug, "Disable effects matching substring (*/all = all)"},
+    {{"--disable-particles", nullptr}, nullptr, CliBuild::Debug, "Disable particles in diagnostics"},
+    {{"--disable-bloom", nullptr}, nullptr, CliBuild::Debug, "Disable bloom in diagnostics"},
+    kSentinel,
+};
+
+constexpr CliOption kParticles[] = {
+    {{"--particle-debug", "--particle-debug-bounds", nullptr}, nullptr, CliBuild::All, "Draw particle bounds"},
+    {{"--particle-debug-velocity", nullptr}, nullptr, CliBuild::All, "Draw particle velocity vectors"},
+    {{"--particle-debug-velocity-scale", nullptr}, "<f>", CliBuild::All, "Velocity vector scale"},
+    {{"--particle-debug-max-particles", nullptr}, "<n>", CliBuild::All, "Cap the number of particles drawn"},
+    kSentinel,
+};
+
+constexpr CliGroupDef kGroups[] = {
+    {CliGroup::Wallpaper, "Wallpaper", kWallpaper},
+    {CliGroup::Graphics, "Graphics", kGraphics},
+    {CliGroup::Display, "Display", kDisplay},
+    {CliGroup::Transition, "Transition", kTransition},
+    {CliGroup::Control, "Control", kControl},
+    {CliGroup::Audio, "Audio", kAudio},
+    {CliGroup::Web, "Web", kWeb},
+    {CliGroup::Diagnostics, "Diagnostics", kDiagnostics},
+    {CliGroup::Particles, "Particles", kParticles},
+};
+static_assert(sizeof(kGroups) / sizeof(kGroups[0]) == static_cast<size_t>(CliGroup::Count),
+              "cli group table out of sync with CliGroup");
+
+bool visible(const CliOption& option) {
+    return option.build != CliBuild::Debug || DEBUG_BUILD;
+}
+
+size_t rowWidth(const CliOption& option) {
+    size_t width = strlen(option.names[0]);
+    for (int i = 1; option.names[i]; ++i) width += 2 + strlen(option.names[i]);
+    if (option.value) width += 1 + strlen(option.value);
+    return width;
+}
+
+void printRow(FILE* out, const CliOption& option, size_t width) {
+    std::string names = option.names[0];
+    for (int i = 1; option.names[i]; ++i) names += std::string(", ") + option.names[i];
+    if (option.value) names += std::string(" ") + option.value;
+    fprintf(out, "  %-*s  %s\n", static_cast<int>(width), names.c_str(), option.description);
+}
+
 }  // namespace
 
+const CliGroupDef* cliGroups() { return kGroups; }
+
 bool takesValue(const std::string& arg) {
-    return std::any_of(std::begin(kValueOptions), std::end(kValueOptions),
-                       [&](const char* option) { return arg == option; });
+    for (const CliGroupDef& def : kGroups)
+        for (const CliOption* option = def.options; option->names[0]; ++option)
+            for (int i = 0; option->names[i]; ++i)
+                if (arg == option->names[i]) return option->value != nullptr;
+    return false;
+}
+
+void printHelp(FILE* out) {
+    size_t width = 0;
+    for (const CliGroupDef& def : kGroups)
+        for (const CliOption* option = def.options; option->names[0]; ++option)
+            if (visible(*option)) width = std::max(width, rowWidth(*option));
+
+    fprintf(out, "Usage: linux-wallpaperengine [options] <wallpaper>\n");
+    for (const CliGroupDef& def : kGroups) {
+        bool any_visible = false;
+        for (const CliOption* option = def.options; option->names[0]; ++option) {
+            if (!visible(*option)) continue;
+            any_visible = true;
+            break;
+        }
+        if (!any_visible) continue;
+        fprintf(out, "\n%s:\n", def.title);
+        for (const CliOption* option = def.options; option->names[0]; ++option)
+            if (visible(*option)) printRow(out, *option, width);
+    }
 }
 
 bool optionValue(const std::vector<std::string>& args, const std::vector<std::string>& names, std::string& out) {

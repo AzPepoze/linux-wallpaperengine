@@ -1,10 +1,8 @@
 {
     "engine_path": "",
     "default_wallpaper": "",
-    "parallax_smoothing": 0.1,
-    "parallax_scale": 50.0,
-    "scaling_mode": "fit",
     "transition": "fade",
     "transition_duration_ms": 1000,
-    "transition_mode": "freeze"
+    "transition_mode": "freeze",
+    "web_transport": "auto"
 }

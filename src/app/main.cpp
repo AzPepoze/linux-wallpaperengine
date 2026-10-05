@@ -6,6 +6,7 @@
 #include <sys/prctl.h>
 
 #include "app/cli_options.h"
+#include "app/cli_args.h"
 #include "app/control/control_client.h"
 #include "app/control/control_endpoint.h"
 #include "app/control/control_server.h"
@@ -122,25 +123,23 @@ static void applyCliToContext() {
     if (cli.particle_debug_max_particles > 0) ctx.debug.particle_debug_max_particles = cli.particle_debug_max_particles;
 
     int transition = 0;
-    int transition_duration = cli.transition_duration_ms;
+    int transition_duration = cli.transition.duration_ms;
     std::string transition_error;
-    if (!lwe::transition::resolveTransitionSetting(cli.transition, transition, transition_duration, transition_error))
+    if (!lwe::transition::resolveTransitionSetting(cli.transition.effect, transition, transition_duration, transition_error))
         LOG_W("[CONTROL] %s; using fade", transition_error.c_str());
     TransitionConfig transition_config;
     transition_config.selection = transition;
     transition_config.duration_ms = transition_duration;
     bool continue_previous = false;
     std::string transition_mode_error;
-    if (!lwe::transition::resolveTransitionModeSetting(cli.transition_mode, continue_previous, transition_mode_error))
+    if (!lwe::transition::resolveTransitionModeSetting(cli.transition.mode, continue_previous, transition_mode_error))
         LOG_W("[CONTROL] %s; using freeze", transition_mode_error.c_str());
     transition_config.continue_previous = continue_previous;
     wallpaper_mgr.setTransitionConfig(transition_config);
 
     const frame_rate::Policy web_policy = frame_rate::policyFor(cli.fps_limit);
-    ctx.web_render_fps = web_policy.software_limit > 0 ? web_policy.software_limit : 60;
-    ctx.web_devtools = cli.web_devtools;
-    ctx.web_devtools_port = cli.web_devtools_port;
-    ctx.web_devtools_browser = cli.web_devtools_browser;
+    ctx.web = cli.web;
+    ctx.web.render_fps = web_policy.software_limit > 0 ? web_policy.software_limit : 60;
 }
 
 static void loadInitialWallpaper() {
@@ -295,6 +294,10 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     mallopt(M_ARENA_MAX, 2);
     logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
+    if (cli.help) {
+        cli_args::printHelp(stdout);
+        exit(EXIT_SUCCESS);
+    }
     selectRequestedGpu();
 
     if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
@@ -311,9 +314,9 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         const std::string key = controlKey(cli.screen_root, cli.layer);
         if (!wallpaper_source.path.empty()) {
             int transition = 0;
-            int duration = cli.transition_duration_ms;
+            int duration = cli.transition.duration_ms;
             std::string resolve_error;
-            lwe::transition::resolveTransitionSetting(cli.transition, transition, duration, resolve_error);
+            lwe::transition::resolveTransitionSetting(cli.transition.effect, transition, duration, resolve_error);
 
             SwitchRequest request;
             request.path = wallpaper_source.path;
@@ -324,7 +327,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
             bool continue_previous = false;
             std::string mode_error;
-            if (!lwe::transition::resolveTransitionModeSetting(cli.transition_mode, continue_previous, mode_error))
+            if (!lwe::transition::resolveTransitionModeSetting(cli.transition.mode, continue_previous, mode_error))
                 LOG_W("[CONTROL] %s; using freeze", mode_error.c_str());
             request.continue_previous = continue_previous;
 

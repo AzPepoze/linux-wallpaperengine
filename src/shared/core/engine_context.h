@@ -12,6 +12,7 @@
 #include "sokol_gfx.h"
 #include "wallpaper/2d/parser/scene_document.h"
 #include "wallpaper/user_properties.h"
+#include "wallpaper/web/web_options.h"
 
 typedef enum { SCALING_COVER, SCALING_FIT } scaling_mode_t;
 typedef enum { SCENE_TYPE_2D, SCENE_TYPE_3D, SCENE_TYPE_VIDEO, SCENE_TYPE_WEB } scene_type_t;
@@ -116,10 +117,7 @@ struct EngineContext {
     char asset_root[512] = {};
     UserProperties user_properties;
     std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
-    int web_render_fps = 60;
-    bool web_devtools = false;
-    int web_devtools_port = 9222;
-    std::string web_devtools_browser;
+    WebOptions web;
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;

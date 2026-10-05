@@ -6,6 +6,14 @@
 #include <vector>
 
 #include "shared/graphics/diagnostics/diagnostic_config.h"
+#include "wallpaper/web/web_options.h"
+
+// Transition settings, resolved from the CLI and config.json.
+struct TransitionOptions {
+    std::string effect;      // --transition
+    std::string mode;        // --transition-mode
+    int duration_ms = 0;     // --transition-duration
+};
 
 struct CliOptions {
     std::string wallpaper_arg;
@@ -24,19 +32,16 @@ struct CliOptions {
     bool cover = false;
     std::string assets_dir;
     int fps_limit = 0;  // 0 = unset: rely on vsync, no software cap
-    bool web_devtools = true;  // remote debugging on localhost, for the inspector's DevTools button
-    int web_devtools_port = 9222;
-    std::string web_devtools_browser;  // empty -> xdg-open; else command, URL appended
+    WebOptions web;
     std::string scaling;
     std::string clamp;
     std::string screen_root;
     std::string layer;
     std::string layer_size;
     std::string layer_anchor;
-    std::string transition;
-    int transition_duration_ms = 0;
-    std::string transition_mode;
+    TransitionOptions transition;
     bool no_control = false;
+    bool help = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.0f;
