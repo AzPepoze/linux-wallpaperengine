@@ -222,7 +222,8 @@ add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.c
 
 add_test("web_devtools_tests", {"tests/web_devtools_test.cpp", "src/shared/core/web_devtools.cpp"})
 
-add_test("web_renderer_tests", {"tests/web_renderer_shared_test.cpp", "src/wallpaper/web/web_renderer_shared.cpp"})
+add_test("web_renderer_tests", {"tests/web_renderer_shared_test.cpp", "src/wallpaper/web/web_renderer_shared.cpp",
+                                "src/wallpaper/web/web_dmabuf_ipc.cpp"})
 
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 

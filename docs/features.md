@@ -62,6 +62,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [-] Web wallpapers (experimental; enabled automatically when Qt6 WebEngine is installed, disable with `xmake f --web=n`)
   - Works
     - HTML, CSS, JavaScript and local web assets, in a separate renderer process (Qt WebEngine) that talks to the app over a Unix socket
+    - Frames stream to the engine with automatic fallback: a zero-copy DMA-BUF the engine samples directly, else an offscreen render-control target with asynchronous readback, else an in-process widget grab
     - Sends the `project.json` user properties (defaults) to the page as JSON
   - Missing
     - Not built by default; without the flag a web wallpaper fails to load

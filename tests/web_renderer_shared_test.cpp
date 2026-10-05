@@ -1,5 +1,10 @@
 #include "wallpaper/web/web_ipc.h"
+#include "wallpaper/web/web_dmabuf_ipc.h"
 #include "wallpaper/web/web_renderer_shared.h"
+
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <cstring>
 #include <string>
@@ -76,6 +81,20 @@ int main() {
     CHECK(web_renderer::acquireDmaBuf(ring) == 0);
 
     pthread_mutex_destroy(&ring->mutex);
+
+    // The DMA-BUF offer carries fds across the control socket.
+    int sockets[2];
+    CHECK(socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sockets) == 0);
+    const int sent_fd = memfd_create("lwe-test", 0);
+    CHECK(sent_fd >= 0);
+    CHECK(web_renderer::sendDmaBufOffer(sockets[0], &sent_fd, 1));
+    int received[4] = {-1, -1, -1, -1};
+    CHECK(web_renderer::receiveDmaBufOffer(sockets[1], received, 4) == 1);
+    CHECK(received[0] >= 0);
+    close(received[0]);
+    close(sent_fd);
+    close(sockets[0]);
+    close(sockets[1]);
 
     return test::finish("web renderer shared checks");
 }
