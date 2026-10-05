@@ -10,10 +10,9 @@
 
 #include <atomic>
 
-// A frame the helper exported as a DMA-BUF (tier B / zero-copy). The fd is
-// owned by the helper process; the engine duplicates it before importing.
+// A frame the helper exported as a DMA-BUF (tier B / zero-copy). The fds are
+// transferred separately with SCM_RIGHTS; this is only the image metadata.
 struct WebDmaBufBuffer {
-    int32_t fd;         // exported DMA-BUF fd
     uint32_t fourcc;    // DRM_FORMAT_* of the image
     uint64_t modifier;  // DRM format modifier (0 = linear)
     uint32_t stride;
@@ -24,6 +23,13 @@ struct WebDmaBufBuffer {
 
 // Number of DMA-BUF buffers the helper cycles through.
 constexpr uint32_t kWebDmaBufBuffers = 3;
+
+// Sent helper -> engine over the control socket, with the fds attached as
+// SCM_RIGHTS ancillary data (one per ring slot, in order).
+struct WebDmaBufOffer {
+    uint32_t type;   // WEB_MSG_DMABUF_OFFER
+    uint32_t count;  // number of attached fds
+};
 
 // Header at the start of a memfd-backed region; the BGRA pixel payload of
 // width * height * 4 bytes follows immediately after.
@@ -55,6 +61,10 @@ enum WebInputType : uint32_t {
     WEB_INPUT_KEY_DOWN = 5,
     WEB_INPUT_KEY_UP = 6,
     WEB_INPUT_SHUTDOWN = 7,
+};
+
+enum WebMessageType : uint32_t {
+    WEB_MSG_DMABUF_OFFER = 100,
 };
 
 // sapp mouse buttons and key codes are forwarded verbatim; the renderer maps

@@ -15,6 +15,7 @@
 
 #include "wallpaper/web/web_ipc.h"
 #include "wallpaper/web/web_render_control.h"
+#include "wallpaper/web/web_vulkan_backend.h"
 #include "wallpaper/web/web_widget_backend.h"
 
 namespace {
@@ -82,6 +83,15 @@ int main(int argc, char** argv) {
     const bool widget_only = getenv("LWE_WEB_WIDGET_ONLY") != nullptr;
     std::unique_ptr<web_renderer::FrameRenderer> renderer;
     if (has_display && !widget_only) {
+        auto candidate = std::make_unique<web_renderer::VulkanBackend>(frame, width, height, fps);
+        if (candidate->start(html, properties, ctrl_fd)) {
+            fprintf(stderr, "web renderer: using DMA-BUF backend\n");
+            renderer = std::move(candidate);
+        } else {
+            fprintf(stderr, "web renderer: DMA-BUF backend unavailable, falling back\n");
+        }
+    }
+    if (!renderer && has_display && !widget_only) {
         auto candidate = std::make_unique<web_renderer::RenderControlBackend>(frame, width, height, fps);
         if (candidate->start(html, properties, ctrl_fd)) {
             fprintf(stderr, "web renderer: using offscreen render-control backend\n");

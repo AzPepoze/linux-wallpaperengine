@@ -142,7 +142,7 @@ target("linux-wallpaperengine")
     end
 
     local web_helper_sources =
-        "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_render_control.cpp|wallpaper/web/web_renderer_shared.cpp"
+        "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_render_control.cpp|wallpaper/web/web_vulkan_backend.cpp|wallpaper/web/web_quick_view.cpp|wallpaper/web/web_renderer_shared.cpp"
     if is_mode("debug", "asan", "ubsan") then
         add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
         -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.
@@ -166,10 +166,12 @@ if has_config("web") then
         set_targetdir("bin/$(mode)")
         set_rundir("$(projectdir)")
         add_files("src/wallpaper/web/web_renderer_main.cpp", "src/wallpaper/web/web_widget_backend.cpp",
-                  "src/wallpaper/web/web_render_control.cpp", "src/wallpaper/web/web_renderer_shared.cpp")
+                  "src/wallpaper/web/web_render_control.cpp", "src/wallpaper/web/web_vulkan_backend.cpp",
+                  "src/wallpaper/web/web_quick_view.cpp", "src/wallpaper/web/web_dmabuf_ipc.cpp",
+                  "src/wallpaper/web/web_renderer_shared.cpp")
         add_includedirs("src")
-        add_packages("pkgconfig::Qt6WebEngineWidgets", "pkgconfig::Qt6WebEngineQuick")
-        add_syslinks("pthread", "dl")
+        add_packages("pkgconfig::Qt6WebEngineWidgets", "pkgconfig::Qt6WebEngineQuick", "vulkan-headers")
+        add_syslinks("pthread", "dl", "vulkan")
         -- Recent GCC emits copy relocations against Qt's protected
         -- staticMetaObject symbols; a PIC object avoids them.
         add_cxflags("-fPIC")

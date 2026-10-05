@@ -7,31 +7,21 @@
 #include <unistd.h>
 
 #include <QApplication>
-#include <QImage>
-#include <QMouseEvent>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLExtraFunctions>
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFramebufferObjectFormat>
-#include <QQmlComponent>
-#include <QQmlEngine>
 #include <QQuickGraphicsDevice>
-#include <QQuickItem>
 #include <QQuickRenderControl>
 #include <QQuickRenderTarget>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QSurfaceFormat>
 #include <QTimer>
-#include <QUrl>
-#include <QWebEngineProfile>
-#include <QWebEngineScript>
-#include <QWebEngineScriptCollection>
-#include <QWheelEvent>
 #include <memory>
 
-#include "wallpaper/web/web_input_qt.h"
+#include "wallpaper/web/web_quick_view.h"
 #include "wallpaper/web/web_renderer_shared.h"
 
 namespace web_renderer {
@@ -39,48 +29,50 @@ namespace web_renderer {
 struct RenderControlBackend::Impl {
     static constexpr int kReadbackRing = 3;
 
-    WebFrameBuffer* frame = nullptr;
-    uint32_t width = 0;
-    uint32_t height = 0;
-    uint32_t fps = 60;
-
     QQuickRenderControl control;
-    std::unique_ptr<QQuickWindow> window;
+    QuickWebView view;
     std::unique_ptr<QOpenGLContext> context;
     std::unique_ptr<QOffscreenSurface> surface;
     std::unique_ptr<QOpenGLFramebufferObject> fbo;
-    std::unique_ptr<QQmlEngine> engine;
-    std::unique_ptr<QQmlComponent> component;
-    QObject* root = nullptr;
+    std::unique_ptr<QQuickWindow> window;
     std::unique_ptr<QTimer> timer;
-    int ctrl_fd = -1;
 
     // Asynchronous readback: each frame is copied into a pixel-buffer object and
-    // picked up a couple of frames later, so the CPU never waits on the GPU.
+    // picked up two frames later, so the CPU never waits on the GPU.
     QOpenGLExtraFunctions* gl = nullptr;
     GLuint pbo[kReadbackRing] = {};
     GLsync fences[kReadbackRing] = {};
     size_t readback_size = 0;
     int frame_index = 0;
 
+    int ctrl_fd = -1;
+    WebFrameBuffer* frame = nullptr;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t fps = 60;
+
     Impl(WebFrameBuffer* buffer, uint32_t w, uint32_t h, uint32_t rate)
         : frame(buffer), width(w), height(h), fps(rate) {}
 
     ~Impl() {
-        if (!gl) return;
-        if (context && surface && context->makeCurrent(surface.get())) {
+        timer.reset();
+        window.reset();
+        if (gl && context && surface && context->makeCurrent(surface.get())) {
             for (int i = 0; i < kReadbackRing; ++i) {
                 if (fences[i]) gl->glDeleteSync(fences[i]);
             }
             if (pbo[0]) gl->glDeleteBuffers(kReadbackRing, pbo);
             context->doneCurrent();
         }
+        fbo.reset();
+        surface.reset();
+        context.reset();
+        view = {};
     }
 
     void tick();
     void quit();
     void pollInput();
-    void handleInput(const WebInputMessage& msg);
 };
 
 void RenderControlBackend::Impl::quit() {
@@ -102,43 +94,13 @@ void RenderControlBackend::Impl::pollInput() {
             quit();
             return;
         }
-        if (n == static_cast<ssize_t>(sizeof(msg))) handleInput(msg);
-    }
-}
+        if (n != static_cast<ssize_t>(sizeof(msg))) continue;
 
-void RenderControlBackend::Impl::handleInput(const WebInputMessage& msg) {
-    const RenderEvent event = decodeInput(msg);
-    if (event.kind == EventKind::Shutdown) {
-        quit();
-        return;
-    }
-
-    const QPointF pos(event.x * static_cast<float>(width), event.y * static_cast<float>(height));
-    const Qt::KeyboardModifiers mods = toQtModifiers(event.modifiers);
-    switch (event.kind) {
-        case EventKind::MouseMove: {
-            QMouseEvent qevent(QEvent::MouseMove, pos, pos, Qt::NoButton, Qt::MouseButtons(), mods);
-            QCoreApplication::sendEvent(window.get(), &qevent);
-            break;
+        if (decodeInput(msg).kind == EventKind::Shutdown) {
+            quit();
+            return;
         }
-        case EventKind::MouseDown:
-        case EventKind::MouseUp: {
-            const Qt::MouseButton button = toQtButton(event.button);
-            const QEvent::Type type =
-                event.kind == EventKind::MouseDown ? QEvent::MouseButtonPress : QEvent::MouseButtonRelease;
-            const Qt::MouseButtons held = type == QEvent::MouseButtonPress ? button : Qt::MouseButtons();
-            QMouseEvent qevent(type, pos, pos, button, held, mods);
-            QCoreApplication::sendEvent(window.get(), &qevent);
-            break;
-        }
-        case EventKind::Scroll: {
-            const QPoint angle(static_cast<int>(event.scroll_x * 120.0f), static_cast<int>(event.scroll_y * 120.0f));
-            QWheelEvent qevent(pos, pos, QPoint(), angle, Qt::NoButton, mods, Qt::NoScrollPhase, false);
-            QCoreApplication::sendEvent(window.get(), &qevent);
-            break;
-        }
-        default:
-            break;
+        sendQuickInput(*window, msg, width, height);
     }
 }
 
@@ -147,11 +109,7 @@ void RenderControlBackend::Impl::tick() {
     if (!window || !context || !surface || !fbo || !gl) return;
 
     context->makeCurrent(surface.get());
-    control.polishItems();
-    control.beginFrame();
-    control.sync();
-    control.render();
-    control.endFrame();
+    renderQuickFrame(control);
 
     // Collect the frame issued two ticks ago; its GPU copy has finished by now.
     const int read_index = (frame_index + kReadbackRing - 2) % kReadbackRing;
@@ -192,8 +150,6 @@ RenderControlBackend::~RenderControlBackend() {
 bool RenderControlBackend::start(const std::string& html_path, const std::string& user_properties_json, int ctrl_fd) {
     Impl& d = *impl_;
 
-    // Must be set before the QQuickWindow is created, or the software adaptation
-    // is chosen and initialize() fails.
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     d.window = std::make_unique<QQuickWindow>(&d.control);
 
@@ -228,38 +184,8 @@ bool RenderControlBackend::start(const std::string& html_path, const std::string
     }
     d.gl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
-    // The shim must be installed before the view loads.
-    QWebEngineScript shim;
-    shim.setName(QStringLiteral("lwe-shim"));
-    shim.setSourceCode(QString::fromStdString(buildShimScript(user_properties_json, static_cast<int>(d.fps))));
-    shim.setInjectionPoint(QWebEngineScript::DocumentCreation);
-    shim.setWorldId(QWebEngineScript::MainWorld);
-    shim.setRunsOnSubFrames(true);
-    QWebEngineProfile::defaultProfile()->scripts()->insert(shim);
-
-    d.engine = std::make_unique<QQmlEngine>();
-    d.component = std::make_unique<QQmlComponent>(d.engine.get());
-    const QString url = QUrl::fromLocalFile(QString::fromStdString(html_path)).toString();
-    d.component->setData(QStringLiteral("import QtQuick\nimport QtWebEngine\n"
-                                        "WebEngineView { width: %1; height: %2; url: \"%3\"\n"
-                                        "  settings.localContentCanAccessFileUrls: true\n"
-                                        "  settings.localContentCanAccessRemoteUrls: true\n"
-                                        "}\n")
-                             .arg(d.width)
-                             .arg(d.height)
-                             .arg(url)
-                             .toUtf8(),
-                         QUrl());
-    if (d.component->isError()) return false;
-
-    d.root = d.component->create();
-    if (!d.root) return false;
-    auto* item = qobject_cast<QQuickItem*>(d.root);
-    if (!item) return false;
-    item->setParentItem(d.window->contentItem());
-    item->setWidth(static_cast<qreal>(d.width));
-    item->setHeight(static_cast<qreal>(d.height));
-    item->setFocus(true);
+    d.view = createQuickWebView(*d.window, html_path, user_properties_json, static_cast<int>(d.fps));
+    if (!d.view.item) return false;
 
     d.timer = std::make_unique<QTimer>();
     d.timer->setInterval(static_cast<int>(1000 / (d.fps > 0 ? d.fps : 60)));
