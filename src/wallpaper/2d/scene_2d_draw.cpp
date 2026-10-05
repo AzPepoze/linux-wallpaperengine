@@ -5,6 +5,7 @@
 #include "scene_2d.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/graphics/backend/gpu_timing.h"
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
@@ -151,6 +152,7 @@ void Scene2DRuntime::drawOffscreen() {
             const int next = 1 - current;
 
             sg_pass composite_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR);
+            const int gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("composite/" + layer->name) : -1;
             sg_begin_pass(&composite_pass);
             drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
             particle->setSceneColorView(scene_targets[current].texture_view);
@@ -158,6 +160,7 @@ void Scene2DRuntime::drawOffscreen() {
                 particle->draw(ctx);
             }
             sg_end_pass();
+            if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 
             current = next;
             capture_layer_result(layer, false);
@@ -175,10 +178,12 @@ void Scene2DRuntime::drawOffscreen() {
             const int next = 1 - current;
 
             sg_pass composite_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR, 1.0f);
+            const int gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("composite/" + layer->name) : -1;
             sg_begin_pass(&composite_pass);
             drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
             image->drawComposite(ctx, scene_targets[current].texture_view);
             sg_end_pass();
+            if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 
             current = next;
             capture_layer_result(layer, false);
@@ -188,9 +193,11 @@ void Scene2DRuntime::drawOffscreen() {
         capture_layer_result(layer, true);
 
         sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+        const int gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("draw/" + layer->name) : -1;
         sg_begin_pass(&layer_pass);
         layer->draw(ctx);
         sg_end_pass();
+        if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 
         capture_layer_result(layer, false);
     };

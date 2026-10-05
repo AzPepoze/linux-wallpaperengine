@@ -163,6 +163,18 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     sources.processed_fs = ShaderSourceProcessor::processShaderSource(sources.raw_fs, abs_frag, *ctx.asset_mgr, false);
 
     display_resolution_safe = effect_resolution::verifiedShake(sources.processed_vs, sources.processed_fs);
+    {
+        static const char* const kFrameVaryingBuiltins[] = {"g_Time",          "g_Frametime",   "g_ParallaxPosition",
+                                                           "g_PointerPosition", "g_PointerState", "g_AudioSpectrum"};
+        frame_varying = false;
+        for (const char* token : kFrameVaryingBuiltins) {
+            if (sources.processed_vs.find(token) != std::string::npos ||
+                sources.processed_fs.find(token) != std::string::npos) {
+                frame_varying = true;
+                break;
+            }
+        }
+    }
 
     // Shared includes can declare material uniforms, so inspect the expanded sources.
     std::vector<ShaderUniformConfig>& shader_uniforms = prepared->shader_uniforms;

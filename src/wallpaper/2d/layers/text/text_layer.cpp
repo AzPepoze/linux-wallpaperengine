@@ -400,12 +400,13 @@ ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
 }
 
 void TextLayer::update(float, EngineContext& ctx) {
-    if (config_.text != current_text_ || needs_rebuild_) {
+    // A hidden layer keeps its pending change and rasterizes it on the frame it becomes visible.
+    if (render_active && (config_.text != current_text_ || needs_rebuild_)) {
         needs_rebuild_ = false;
         rebuild(ctx);
     }
     tint[3] = std::clamp(config_.alpha, 0.0f, 1.0f) * evaluateImageAlpha(alpha_document, ctx.time);
-    if (!is_fullscreen) renderEffectChain(ctx);
+    if (!is_fullscreen && render_active) renderEffectChain(ctx);
 }
 
 bool TextLayer::resolveFontPath(EngineContext& ctx) {

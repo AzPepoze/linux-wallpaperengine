@@ -272,6 +272,15 @@ class ImageLayer : public Layer {
     sg_image effect_output_image = {SG_INVALID_ID};
     sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, NamedRenderTarget> named_effect_targets;
+    // Fingerprint of everything the last effect chain run depended on; 0 when the chain cannot be reused.
+    uint64_t effect_chain_signature = 0;
+
+    // Whether the effect source image can change without its handle changing (animation, video, puppet mesh).
+    bool effectSourceIsDynamic() const {
+        return has_puppet_mesh || bound_video_decoder || current_texture_frame || animated_frame.image.id != SG_INVALID_ID;
+    }
+    // Fingerprint of the chain inputs, or 0 when a pass varies per frame and the chain must run.
+    uint64_t effectChainSignature(EngineContext& ctx, sg_image base_image, sg_view base_view);
 
    protected:
     struct ScreenRect {

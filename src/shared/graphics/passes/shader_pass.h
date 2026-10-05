@@ -47,6 +47,9 @@ class ShaderPass {
     std::map<int, std::string> texture_labels;
     unsigned int white_default_slots = 0;
     bool display_resolution_safe = false;
+    // The shader reads a built-in that changes without any uniform changing (time, pointer, parallax, audio), so its
+    // output can differ every frame. Until the sources are known it is assumed to vary.
+    bool frame_varying = true;
     bool enabled = true;
     bool show_files = false;
     bool is_fullscreen_quad = false;

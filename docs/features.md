@@ -214,6 +214,9 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Pointer uniforms `g_PointerPosition`, `g_PointerPositionLast` and `g_PointerState` (normalized to the output surface), which Cursor Ripple needs; its projection back into layer space assumes the layer fills the screen
     - Built-in uniforms: time, texture resolutions, `g_ParallaxPosition`, effect texture projection matrices, pointer position, ambient and skylight colors, screen size, texel size, model-view-projection, audio spectrum (16/32/64 bands)
     - Texture bindings `g_Texture0..N`; an unbound slot uses the shader's declared `"default":"util/white"` (for example an opacity mask) instead of black
+    - An effect chain is skipped on frames where nothing it reads changed: same source image, same uniform values (keyframed constants are evaluated first) and no pass that reads time, pointer, parallax or audio built-ins; the previous output is reused
+    - Layers hidden by their own flag or by an ancestor group keep running scripts and animation but skip effect chains, puppet rendering and text rasterization until they become visible
+    - `--performance-profile` also reports a GPU time per layer draw and composite (`draw/<layer>`, `composite/<layer>`) next to the per-pass spans
     - Vertex inputs are bound by the pipeline layout order, so shaders may declare attributes in any order (the native rope particle shader does)
   - Missing
     - Full vertex attribute support (2D `a_Position` / `a_TexCoord` and the particle layout only)

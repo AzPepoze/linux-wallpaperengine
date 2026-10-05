@@ -80,6 +80,7 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
             }
         }
     }
+    if (!render_active) return;
     renderEffectChain(ctx);
     puppet_resolved = has_puppet_mesh && renderPuppet(ctx);
 }

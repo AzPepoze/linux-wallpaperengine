@@ -48,7 +48,8 @@ void Scene2DRuntime::update(float dt) {
     }
     const SceneVisibility visibility(ctx);
     for (auto layer : ctx.scene.layers) {
-        if (dynamic_cast<ParticleLayer*>(layer) && !visibility.visible(*layer)) continue;
+        layer->render_active = layer->solo || visibility.visible(*layer);
+        if (dynamic_cast<ParticleLayer*>(layer) && !layer->render_active) continue;
         layer->update(dt, ctx);
     }
 }

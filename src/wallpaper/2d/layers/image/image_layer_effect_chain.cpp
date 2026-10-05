@@ -205,7 +205,48 @@ void ImageLayer::tracePass(IRenderObserver& diag, EngineContext& ctx, const Effe
     diag.recordPass(trace, output_image);
 }
 
+uint64_t ImageLayer::effectChainSignature(EngineContext& ctx, sg_image base_image, sg_view base_view) {
+    uint64_t hash = UINT64_C(14695981039346656037);
+    auto mix = [&hash](const void* data, size_t size) {
+        const unsigned char* bytes = static_cast<const unsigned char*>(data);
+        for (size_t i = 0; i < size; ++i) hash = (hash ^ bytes[i]) * UINT64_C(1099511628211);
+    };
+    auto mixValue = [&mix](auto value) { mix(&value, sizeof(value)); };
+
+    mixValue(base_image.id);
+    mixValue(base_view.id);
+    mixValue(effect_target_width);
+    mixValue(effect_target_height);
+    mixValue(effect_targets[0].image.id);
+    mixValue(effect_targets[1].image.id);
+    for (Effect* effect : effects) {
+        if (!effect) continue;
+        mixValue(effect->visible);
+        for (ShaderPass* pass : effect->passes) {
+            if (!pass) continue;
+            mixValue(pass->enabled);
+            if (!pass->enabled) continue;
+            if (pass->frame_varying) return 0;
+            // Keyframed uniforms are evaluated first, so their current values are what gets fingerprinted.
+            pass->getRenderPass(ctx.profiler.frame_index, ctx.scene.elapsed_time);
+            for (const auto& [slot, binding] : pass->render_texture_bindings) {
+                if (isCompositeRenderTarget(binding)) return 0;
+            }
+            mixValue(pass->compiled.pipeline.id);
+            mixValue(pass->pass_textures.texture0.id);
+            for (const GfxView& view : pass->pass_textures.cached_views) mixValue(view.id);
+            for (const auto& [uniform_name, values] : pass->uniforms) {
+                mix(uniform_name.data(), uniform_name.size());
+                mix(values.data(), values.size() * sizeof(float));
+            }
+        }
+    }
+    return hash | 1;
+}
+
 void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
+    const sg_image previous_output_image = effect_output_image;
+    const sg_view previous_output_view = effect_output_view;
     effect_output_image = {SG_INVALID_ID};
     effect_output_view = {SG_INVALID_ID};
     sg_image base_img = src_img.id != SG_INVALID_ID
@@ -230,6 +271,21 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     if (base_view.id == SG_INVALID_ID || !ensureEffectTargets(ctx, base_img)) return;
 
     IRenderObserver& diag = renderObserver();
+
+    // Skip the whole chain when nothing it reads has changed since it last ran: same source image, same uniform
+    // values, and no pass that reads time, pointer, parallax or audio. The previous output targets are still intact.
+    uint64_t signature = 0;
+    if (src_img.id == SG_INVALID_ID && !effectSourceIsDynamic() && !diag.isCapturingFrame() &&
+        !diag.isTracingPasses()) {
+        signature = effectChainSignature(ctx, base_img, base_view);
+    }
+    if (signature != 0 && signature == effect_chain_signature && previous_output_image.id != SG_INVALID_ID &&
+        previous_output_view.id != SG_INVALID_ID) {
+        effect_output_image = previous_output_image;
+        effect_output_view = previous_output_view;
+        return;
+    }
+    effect_chain_signature = 0;
 
     const bool any_effect_solo =
         std::any_of(effects.begin(), effects.end(), [](const Effect* effect) { return effect && effect->solo; });
@@ -335,5 +391,6 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         effect_output_view = {SG_INVALID_ID};
     } else {
         diag.onLayerFinalImage(0, effect_output_image, effect_target_width, effect_target_height);
+        effect_chain_signature = signature;
     }
 }
