@@ -120,6 +120,7 @@ struct EngineContext {
     float intro_duration = 4.0f;
     bool native_effect_resolution = false;
     bool performance_profile = false;
+    int fps_limit = 0;  // runtime frame-rate cap; 0 = vsync, no software cap
     sg_pass_action pass_action = {};
     char wallpaper_path[512] = {};
     char engine_path[512] = {};

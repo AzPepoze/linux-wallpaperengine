@@ -13,6 +13,7 @@
 #include "app/frame_limiter.h"
 #include "app/frame_loop.h"
 #include "app/frame_rate.h"
+#include "app/identity.h"
 #if LWE_LAYER_SHELL
 #include "app/platform/wayland_layer/layer_app.h"
 #endif
@@ -88,9 +89,10 @@ static void initAudio() {
     if (cli.no_audio) {
         LOG_TAG_I("AUDIO", "audio disabled");
         AudioEngine::instance().setAudioDisabled(true);
-    } else {
-        AudioEngine::instance().init();
+        return;
     }
+    AudioEngine::instance().init();
+    if (cli.has_volume) AudioEngine::instance().setMasterVolume(cli.volume / 100.0f);
 }
 
 static void initGraphics() {
@@ -130,6 +132,7 @@ static void applyCliToContext() {
     ctx.native_effect_resolution = cli.native_effect_resolution;
     ctx.parallax_smoothing = cli.parallax.smoothing;
     ctx.parallax_scale = cli.parallax.scale;
+    ctx.fps_limit = cli.fps_limit;
 
     int transition = 0;
     int transition_duration = cli.transition.duration_ms;
@@ -235,7 +238,7 @@ static void init(void) {
 
 static void frame(void) {
     runFrame(ctx, wallpaper_mgr);
-    const frame_rate::Policy policy = frame_rate::policyFor(cli.fps_limit);
+    const frame_rate::Policy policy = frame_rate::policyFor(ctx.fps_limit);
     if (policy.software_limit > 0) limitFrameRate(policy.software_limit);
 }
 
@@ -306,11 +309,22 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     mallopt(M_ARENA_MAX, 2);
     logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
+    // Identity probe: exactly one JSON line on stdout and no logs, so the GUI
+    // can parse it. Must stay before GPU work and before any logging.
+    if (cli.whoareyou) {
+        lwe::identity::printEngineIdentity(stdout);
+        exit(EXIT_SUCCESS);
+    }
     if (cli.help) {
         cli_args::printHelp(stdout);
         exit(EXIT_SUCCESS);
     }
     cli.logResolvedOptions();
+    {
+        const std::vector<std::string> args(argv, argv + argc);
+        for (const std::string& option : cli_args::unknownOptions(args))
+            LOG_TAG_W("OPTIONS", "ignoring unsupported option '%s'", option.c_str());
+    }
     selectRequestedGpu();
 
     if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
@@ -339,6 +353,13 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
             request.properties = cli.set_properties;
             request.transition = transition;
             request.transition_time_ms = duration;
+            request.scaling = cli.cover ? "fill" : cli.scaling;
+            request.volume = cli.volume;
+            request.has_volume = cli.has_volume;
+            request.muted = cli.no_audio;
+            request.has_muted = true;
+            request.fps = cli.fps_limit;
+            request.has_fps = cli.fps_limit > 0;
 
             bool continue_previous = false;
             std::string mode_error;

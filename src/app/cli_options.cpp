@@ -139,8 +139,20 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         fprintf(stderr, "Unknown effect resolution '%s'; using auto\n", effect_resolution.c_str());
 
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
+    opts.whoareyou = cli_args::hasFlag(args, {"--whoareyou"});
     opts.no_audio = hasDashedFlag("no-audio") || opts.no_ui || opts.diagnostics.enabled ||
                     cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    std::string volume_arg;
+    if (cli_args::optionValue(args, {"--volume"}, volume_arg)) {
+        char* end = nullptr;
+        const float value = strtof(volume_arg.c_str(), &end);
+        if (end == volume_arg.c_str() || *end || !std::isfinite(value) || value < 0.0f || value > 100.0f) {
+            fprintf(stderr, "Invalid --volume '%s'; ignoring\n", volume_arg.c_str());
+        } else {
+            opts.volume = value;
+            opts.has_volume = true;
+        }
+    }
     opts.performance_profile = cli_args::hasFlag(args, {"--performance-profile"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"});
     opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});
@@ -214,6 +226,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cliValue("layer", opts.layer.empty() ? "background" : opts.layer, {"--layer"});
     cliValue("clamp", opts.clamp, {"--clamp"});
     cliValue("fps_limit", std::to_string(opts.fps_limit), {"-f", "--fps"});
+    record("volume", opts.has_volume ? std::to_string((int)opts.volume) : "100", opts.has_volume ? "CLI" : "default");
     record("gpu", opts.gpu.empty() ? "auto" : opts.gpu, opts.gpu.empty() ? "default" : "CLI");
     record("audio", opts.no_audio ? "disabled" : "enabled",
            hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"})

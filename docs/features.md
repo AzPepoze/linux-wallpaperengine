@@ -81,6 +81,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - `freeze` holds the outgoing wallpaper's last frame for the fade; `continue` steps and renders the outgoing wallpaper through the fade (scene, video and web), then destroys it
   - Both modes crossfade the outgoing audio into the incoming audio
 - [x] The outgoing frame is captured and held while the new wallpaper loads, so a slow load does not show a black gap; a failed load keeps the frozen frame
+- [x] Live settings on switch: the control request also carries scaling (`default|fill|fit|stretch`), master volume (0-100), mute and the frame cap, applied without restarting the process
 - [x] Type-agnostic: scene, video and web wallpapers all switch through the same compositor, and 3D inherits it when 3D rendering lands
 - [-] Single-instance control
   - Works: launching with a wallpaper for a display that already runs an instance hands the switch over a Unix socket in `$XDG_RUNTIME_DIR/linux-wallpaperengine/` and exits; `--no-control` opts out
@@ -313,6 +314,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 - [x] Audio playback (WAV, MP3, FLAC through miniaudio; Ogg Vorbis is decoded with stb_vorbis into memory when the sound loads), loop playback
 - [x] Sound layers (see [Scene layers](#scene-layers)) and video audio
 - [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute`; diagnostic runs are always silent
+- [x] Master volume: `--volume <n>` (0-100) at launch, and live volume/mute carried by a control-socket wallpaper switch
 - [-] System audio capture and spectrum
   - Works
     - Captures the PulseAudio monitor of the default sink at 48 kHz stereo
@@ -448,7 +450,9 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 
 ## Platform, command line and tooling
 
-- [x] Vulkan renderer (sokol) with GPU selection (`--list-gpus`, `--gpu`), frame cap (`-f`/`--fps`) and scaling (`--scaling default|fit|fill`)
+- [x] Vulkan renderer (sokol) with GPU selection (`--list-gpus`, `--gpu`), frame cap (`-f`/`--fps`) and scaling (`--scaling default|fit|fill|stretch`)
+- [x] `--whoareyou` prints a one-line JSON identity (name, implementation, version, control socket and feature list) for GUI detection; no GPU work or logs run on that path
+- [x] Compatibility with upstream launcher flags: unsupported options (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
 - [-] Wayland wlr-layer-shell backend (`-r`/`--screen-root`, `--layer`; debug builds also `--layer-size`, `--layer-anchor`)
   - Works: background, bottom, top and overlay layers, anchoring, output selection, pointer motion and buttons, parallax
   - Missing: `--scaling stretch` and `--clamp` are accepted but ignored

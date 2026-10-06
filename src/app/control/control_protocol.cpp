@@ -35,6 +35,12 @@ std::string encodeSwitchRequest(const SwitchRequest& request) {
     cJSON_AddNumberToObject(root, "transition_time_ms", request.transition_time_ms);
     cJSON_AddStringToObject(root, "transition_mode", request.continue_previous ? "continue" : "freeze");
 
+    // Only emit optional fields when set; absent means "keep current".
+    if (!request.scaling.empty()) cJSON_AddStringToObject(root, "scaling", request.scaling.c_str());
+    if (request.has_volume) cJSON_AddNumberToObject(root, "volume", request.volume);
+    if (request.has_muted) cJSON_AddBoolToObject(root, "muted", request.muted);
+    if (request.has_fps) cJSON_AddNumberToObject(root, "fps", request.fps);
+
     std::string result = printAndFree(root);
     cJSON_Delete(root);
     return result;
@@ -91,6 +97,22 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
             return false;
         }
         parsed.continue_previous = parsed_mode == lwe::transition::Mode::Continue;
+    }
+
+    if (const cJSON* scaling = cJSON_GetObjectItemCaseSensitive(root, "scaling"); cJSON_IsString(scaling)) {
+        parsed.scaling = scaling->valuestring ? scaling->valuestring : "";
+    }
+    if (const cJSON* volume = cJSON_GetObjectItemCaseSensitive(root, "volume"); cJSON_IsNumber(volume)) {
+        parsed.volume = static_cast<float>(volume->valuedouble);
+        parsed.has_volume = true;
+    }
+    if (const cJSON* muted = cJSON_GetObjectItemCaseSensitive(root, "muted"); cJSON_IsBool(muted)) {
+        parsed.muted = cJSON_IsTrue(muted);
+        parsed.has_muted = true;
+    }
+    if (const cJSON* fps = cJSON_GetObjectItemCaseSensitive(root, "fps"); cJSON_IsNumber(fps)) {
+        parsed.fps = static_cast<int>(fps->valuedouble);
+        parsed.has_fps = true;
     }
 
     cJSON_Delete(root);

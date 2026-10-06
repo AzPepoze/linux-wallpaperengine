@@ -66,7 +66,7 @@ constexpr CliOption kControl[] = {
 constexpr CliOption kAudio[] = {
     {{"--no-audio", nullptr}, nullptr, CliBuild::All, "Disable audio"},
     {{"-s", "--silent", "--mute", nullptr}, nullptr, CliBuild::All, "Disable audio (alias of --no-audio)"},
-    {{"--volume", nullptr}, "<n>", CliBuild::All, "Accepted for launcher compatibility; ignored"},
+    {{"--volume", nullptr}, "<n>", CliBuild::All, "Master volume percent (0-100)"},
     kSentinel,
 };
 
@@ -100,6 +100,36 @@ constexpr CliOption kParticles[] = {
     kSentinel,
 };
 
+constexpr CliOption kInfo[] = {
+    {{"--whoareyou", nullptr}, nullptr, CliBuild::All, "Print engine identity as JSON and exit"},
+    kSentinel,
+};
+
+// Upstream-only launcher flags. They are recognized (and their values consumed)
+// so they never fall through to the positional wallpaper, then logged as ignored.
+constexpr CliOption kCompatibility[] = {
+    {{"--noautomute", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--no-audio-processing", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--disable-mouse", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--disable-parallax", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--no-fullscreen-pause", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--fullscreen-pause-only-active", nullptr},
+     nullptr,
+     CliBuild::All,
+     "Accepted for launcher compatibility; ignored",
+     true},
+    {{"--fullscreen-pause-ignore-appid", nullptr},
+     "<id>",
+     CliBuild::All,
+     "Accepted for launcher compatibility; ignored",
+     true},
+    {{"--screenshot", nullptr}, "<path>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--screenshot-delay", nullptr}, "<n>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--screen-span", nullptr}, "<names>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    {{"--dump-structure", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
+    kSentinel,
+};
+
 constexpr CliGroupDef kGroups[] = {
     {CliGroup::Wallpaper, "Wallpaper", kWallpaper},
     {CliGroup::Graphics, "Graphics", kGraphics},
@@ -110,6 +140,8 @@ constexpr CliGroupDef kGroups[] = {
     {CliGroup::Web, "Web", kWeb},
     {CliGroup::Diagnostics, "Diagnostics", kDiagnostics},
     {CliGroup::Particles, "Particles", kParticles},
+    {CliGroup::Info, "Info", kInfo},
+    {CliGroup::Compatibility, "Compatibility", kCompatibility},
 };
 static_assert(sizeof(kGroups) / sizeof(kGroups[0]) == static_cast<size_t>(CliGroup::Count),
               "cli group table out of sync with CliGroup");
@@ -130,6 +162,17 @@ void printRow(FILE* out, const CliOption& option, size_t width) {
     for (int i = 1; option.names[i]; ++i) names += std::string(", ") + option.names[i];
     if (option.value) names += std::string(" ") + option.value;
     fprintf(out, "  %-*s  %s\n", static_cast<int>(width), names.c_str(), option.description);
+}
+
+// Finds the option for `arg`, accepting `--name` and `--name=value` spellings.
+const CliOption* findOption(const std::string& arg) {
+    for (const CliGroupDef& def : kGroups)
+        for (const CliOption* option = def.options; option->names[0]; ++option)
+            for (int i = 0; option->names[i]; ++i) {
+                if (arg == option->names[i]) return option;
+                if (arg.rfind(std::string(option->names[i]) + "=", 0) == 0) return option;
+            }
+    return nullptr;
 }
 
 }  // namespace
@@ -219,6 +262,25 @@ std::string positional(const std::vector<std::string>& args) {
         return arg;
     }
     return "";
+}
+
+std::vector<std::string> unknownOptions(const std::vector<std::string>& args) {
+    std::vector<std::string> unknown;
+    for (size_t i = 1; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        const CliOption* option = findOption(arg);
+        const bool has_inline_value = arg.find('=') != std::string::npos;
+        // Implemented options are known; their value (if any) is not reported.
+        if (option && !option->ignored) {
+            if (option->value && !has_inline_value && i + 1 < args.size()) ++i;
+            continue;
+        }
+        if (!arg.empty() && arg[0] == '-') unknown.push_back(arg);
+        // Still consume the value of an ignored value-taking option so it is not
+        // mistaken for a positional wallpaper.
+        if (option && option->value && !has_inline_value && i + 1 < args.size()) ++i;
+    }
+    return unknown;
 }
 
 }  // namespace cli_args

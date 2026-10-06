@@ -15,6 +15,16 @@ struct SwitchRequest {
     int transition = lwe::transition::kSelectionNone;
     int transition_time_ms = 1000;
     bool continue_previous = false;  // false == freeze (default)
+
+    // Optional live settings. Absent fields keep the running instance's state,
+    // so payloads from older senders still decode to the defaults below.
+    std::string scaling;  // "default"|"fill"|"fit"|"stretch"
+    float volume = 0.0f;  // master volume, 0-100 (CLI units)
+    bool has_volume = false;
+    bool muted = false;
+    bool has_muted = false;
+    int fps = 0;  // frame-rate cap
+    bool has_fps = false;
 };
 
 // Newline-free JSON. decode leaves `out` untouched on failure and fills `error`.

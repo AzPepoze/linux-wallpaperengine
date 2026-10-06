@@ -10,7 +10,20 @@
 namespace cli_args {
 
 // Help sections, in the order they are printed.
-enum class CliGroup { Wallpaper, Graphics, Display, Transition, Control, Audio, Web, Diagnostics, Particles, Count };
+enum class CliGroup {
+    Wallpaper,
+    Graphics,
+    Display,
+    Transition,
+    Control,
+    Audio,
+    Web,
+    Diagnostics,
+    Particles,
+    Info,
+    Compatibility,
+    Count
+};
 
 // Options in a Debug group row are only listed by debug builds.
 enum class CliBuild { All, Debug };
@@ -21,6 +34,7 @@ struct CliOption {
     const char* value;     // nullptr => flag; else placeholder, e.g. "<n>"
     CliBuild build = CliBuild::All;
     const char* description = "";
+    bool ignored = false;  // recognized for compatibility but reported as unsupported
 };
 
 // A help section and the options it owns; options are sentinel-terminated.
@@ -49,6 +63,11 @@ bool hasFlag(const std::vector<std::string>& args, const std::vector<std::string
 
 // First argument that is neither an option, an option value nor a key=value pair.
 std::string positional(const std::vector<std::string>& args);
+
+// Option-shaped arguments the engine does not implement: unknown flags plus the
+// compatibility flags registered above. Values of known value-taking options
+// (and of ignored ones) are not returned.
+std::vector<std::string> unknownOptions(const std::vector<std::string>& args);
 
 }  // namespace cli_args
 

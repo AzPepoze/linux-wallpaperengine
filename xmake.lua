@@ -124,6 +124,29 @@ end
 
 local layer_exclude = has_config("layer_shell") and "" or "|app/platform/wayland_layer/**.cpp"
 
+-- Version reported by --whoareyou, taken from the git tag and falling back to
+-- "unknown" when git or the repository is unavailable (source tarball, no .git).
+-- A rule keeps its own on_load sandbox (where os.iorunv exists) without
+-- clobbering the target's on_load used for Wayland protocol generation.
+rule("lwe.version")
+    on_load(function (target)
+        local version = "unknown"
+        try {
+            function ()
+                local detected = os.iorunv("git", {"describe", "--tags", "--always"}):trim()
+                if detected ~= "" then
+                    version = detected
+                end
+            end,
+            catch {
+                function (errors)
+                end
+            }
+        }
+        target:add("defines", "LWE_VERSION=\"" .. version .. "\"")
+    end)
+rule_end()
+
 -- ---------------------------------------------------------------------------
 -- Main engine target
 -- ---------------------------------------------------------------------------
@@ -139,6 +162,7 @@ target("linux-wallpaperengine")
     add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
     add_defines("LWE_LAYER_SHELL=" .. (has_config("layer_shell") and "1" or "0"))
     add_defines("LWE_MPRIS=" .. (has_config("mpris") and "1" or "0"))
+    add_rules("lwe.version")
 
     if has_config("mpris") then
         add_syslinks("systemd")
@@ -238,6 +262,11 @@ add_test("alpha_tests", {"tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_c
                          "src/wallpaper/2d/animation_curve.cpp"})
 
 add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
+
+add_test("identity_tests", {"tests/identity_test.cpp", "src/app/identity.cpp"})
+target("identity_tests")
+    add_rules("lwe.version")
+target_end()
 
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
 add_test("effect_resolution_tests", {"tests/effect_resolution_test.cpp"})

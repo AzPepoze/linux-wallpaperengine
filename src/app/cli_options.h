@@ -53,6 +53,9 @@ struct CliOptions {
     ParallaxOptions parallax;
     bool no_control = false;
     bool help = false;
+    bool whoareyou = false;
+    float volume = 100.0f;  // --volume master percent
+    bool has_volume = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
     float particle_debug_velocity_scale = 0.0f;

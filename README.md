@@ -156,13 +156,19 @@ Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the
 | --- | --- | --- | --- |
 | `--no-control` | | off | Don't hand off to or own a control socket |
 
+### Info
+
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--whoareyou` | | — | Print the engine identity as one JSON line and exit |
+
 ### Audio
 
 | Option | Value | Default | Description |
 | --- | --- | --- | --- |
 | `--no-audio` | | off | Disable audio |
 | `-s`, `--silent`, `--mute` | | off | Disable audio (aliases of `--no-audio`) |
-| `--volume` | `<n>` | ignored | Accepted for launcher compatibility; ignored |
+| `--volume` | `<n>` | 100 | Master volume percent (0-100) |
 
 ### Web
 
@@ -199,7 +205,9 @@ Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the
 | `--particle-debug-velocity-scale` | `<f>` | 0.05 | Velocity vector scale |
 | `--particle-debug-max-particles` | `<n>` | 128 | Cap the number of particles drawn |
 
-Launching with a wallpaper for a display that already has a running instance hands the switch to that instance over a Unix control socket and exits, instead of starting a second process. The running instance crossfades from its current frame to the new wallpaper using Wallpaper Engine's own transition shaders (loaded from the install). Pass `--no-control` to opt out. The effect, duration and mode can also be set per switch on the second launch. Audio crossfades too: the outgoing wallpaper's sound and the incoming wallpaper's sound ramp against the transition progress (`--transition-mode freeze|continue`, default `freeze`).
+Launcher options that this build does not implement (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are recognized and their values consumed, so they never fall through to the wallpaper path; each one is logged as `[OPTIONS] ignoring unsupported option '<arg>'`.
+
+Launching with a wallpaper for a display that already has a running instance hands the switch to that instance over a Unix control socket and exits, instead of starting a second process. The running instance crossfades from its current frame to the new wallpaper using Wallpaper Engine's own transition shaders (loaded from the install). Pass `--no-control` to opt out. The effect, duration and mode can also be set per switch on the second launch, together with scaling, master volume, mute and the frame cap, so those settings change live. Audio crossfades too: the outgoing wallpaper's sound and the incoming wallpaper's sound ramp against the transition progress (`--transition-mode freeze|continue`, default `freeze`).
 
 ## Build and run
 

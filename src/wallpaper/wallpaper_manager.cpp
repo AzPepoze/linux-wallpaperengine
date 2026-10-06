@@ -179,6 +179,28 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     config.continue_previous = request.continue_previous;
 
     AudioEngine& audio = AudioEngine::instance();
+
+    // Live settings carried by the request. Scaling is applied before the load
+    // so the new instance inherits it; volume/muted/fps apply immediately.
+    if (!request.scaling.empty()) {
+        if (request.scaling == "fit") {
+            ctx.scene.scaling_mode = SCALING_FIT;
+        } else if (request.scaling == "stretch") {
+            ctx.scene.scaling_mode = SCALING_STRETCH;
+        } else if (request.scaling == "default" || request.scaling == "fill") {
+            ctx.scene.scaling_mode = SCALING_COVER;
+        } else {
+            LOG_TAG_W("WALLPAPER_MGR", "unknown scaling '%s'; keeping current", request.scaling.c_str());
+        }
+    }
+    if (request.has_volume || request.has_muted) {
+        float target = audio.masterVolume();
+        if (request.has_volume) target = request.volume / 100.0f;
+        if (request.has_muted && request.muted) target = 0.0f;
+        audio.setMasterVolume(target);
+    }
+    if (request.has_fps) ctx.fps_limit = request.fps;
+
     // A new switch supersedes an in-flight fade: drop its outgoing instance/group.
     if (outgoing_instance_) {
         destroyInstance(ctx, outgoing_instance_);
@@ -233,6 +255,9 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         audio_crossfade_ = false;
     }
     LOG_TAG_I("WALLPAPER_MGR", "Switched to %s", request.path.c_str());
+    // A changed scaling is baked into the new instance at load; re-apply the
+    // layout so the switch takes effect without a restart.
+    onResize((float)surface::width(), (float)surface::height());
     return true;
 }
 
