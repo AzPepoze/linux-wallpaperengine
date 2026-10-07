@@ -76,8 +76,10 @@ void ImageLayer::loadMaterial(const char* mat_rel_path, EngineContext& ctx) {
     const auto* v = ctx.asset_mgr->findVideoTexture(img);
     if (!v && !path.empty()) v = ctx.asset_mgr->findVideoTexture(path);
     if (v && v->decoder) bound_video_decoder = v->decoder.get();
-    if (!path.empty() && path[0] != '$' && !bound_video_decoder)
+    if (!path.empty() && path[0] != '$' && !bound_video_decoder) {
         source_content = ctx.asset_mgr->textureContentBounds(path.c_str());
+        source_opaque = ctx.asset_mgr->textureIsOpaque(path.c_str());
+    }
 }
 
 void ImageLayer::loadModel(const char* mdl_rel_path, EngineContext& ctx) {

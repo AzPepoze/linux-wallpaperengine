@@ -119,6 +119,12 @@ content_bounds::Rect AssetManager::textureContentBounds(const char* abs_path) co
     return decoded && !decoded->is_video ? content_bounds::fromImage(*decoded) : content_bounds::Rect{};
 }
 
+bool AssetManager::textureIsOpaque(const char* abs_path) const {
+    if (!abs_path || abs_path[0] == '\0') return false;
+    const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, 0);
+    return decoded && !decoded->is_video && content_bounds::isOpaque(*decoded);
+}
+
 void AssetManager::setVideoPlayback(float rate, float volume) {
     video_rate_ = clampPlaybackRate(rate);
     video_volume_ = std::clamp(volume, 0.0f, 1.0f);

@@ -64,6 +64,35 @@ int main() {
     CHECK(rect.valid);
     CHECK(rect.u0 == 0.5f && rect.v0 == 0.5f && rect.u1 == 1.0f && rect.v1 == 1.0f);
 
+    // R8 masks are measured on their only channel.
+    DecodedImage r8 = makeImage(PixelFormat::R8, 4, 4, 16);
+    r8.pixels[1 * 4 + 2] = 128;
+    rect = content_bounds::fromImage(r8);
+    CHECK(rect.valid);
+    CHECK(rect.u0 == 0.5f && rect.v0 == 0.25f && rect.u1 == 0.75f && rect.v1 == 0.5f);
+
+    // Opacity: alpha-less formats are opaque, any partly transparent texel or block is not.
+    CHECK(content_bounds::isOpaque(r8));
+    DecodedImage solid = makeImage(PixelFormat::RGBA8, 2, 2, 16);
+    for (size_t i = 3; i < solid.pixels.size(); i += 4) solid.pixels[i] = 255;
+    CHECK(content_bounds::isOpaque(solid));
+    solid.pixels[7] = 254;
+    CHECK(!content_bounds::isOpaque(solid));
+    DecodedImage bc1 = makeImage(PixelFormat::BC1, 4, 4, 8);
+    bc1.pixels[0] = 0x10;  // c0 > c1: four-colour mode, always opaque
+    CHECK(content_bounds::isOpaque(bc1));
+    bc1.pixels[0] = 0x00;  // c0 <= c1: index 3 is transparent
+    bc1.pixels[4] = 0x03;
+    CHECK(!content_bounds::isOpaque(bc1));
+    bc1.pixels[4] = 0x02;
+    CHECK(content_bounds::isOpaque(bc1));
+    DecodedImage bc3_opaque = makeImage(PixelFormat::BC3, 4, 4, 16);
+    setBc3Block(bc3_opaque, 1, 0, 0, 255, 255, 0);
+    CHECK(content_bounds::isOpaque(bc3_opaque));
+    setBc3Block(bc3_opaque, 1, 0, 0, 255, 255, 6);
+    CHECK(!content_bounds::isOpaque(bc3_opaque));
+    CHECK(!content_bounds::isOpaque(DecodedImage{}));
+
     // Truncated block data is rejected instead of read past the end.
     CHECK(!content_bounds::fromImage(makeImage(PixelFormat::BC3, 8, 8, 16)).valid);
 

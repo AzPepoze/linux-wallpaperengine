@@ -48,6 +48,8 @@ class AssetManager : public IAssetResolver {
     GfxImage resolveMaterialTexture(const char* mat_rel_path, std::string* out_path = nullptr) const override;
     // Region of a decoded .tex that holds visible texels (invalid for videos and formats it cannot measure).
     content_bounds::Rect textureContentBounds(const char* abs_path) const;
+    // True when every texel of the decoded texture is fully opaque.
+    bool textureIsOpaque(const char* abs_path) const;
 
     struct ActiveVideoTexture {
         std::string path;

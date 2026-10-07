@@ -45,7 +45,7 @@ struct Extent {
 
 // BC3 stores alpha as two endpoints plus sixteen 3-bit indices. The block is empty when no index reaches a visible
 // alpha, which also covers encoders that mark transparency with the six-value mode (index 6 = 0).
-inline bool bc3BlockVisible(const uint8_t* block) {
+inline void bc3Alphas(const uint8_t* block, int out[16]) {
     const int a0 = block[0], a1 = block[1];
     int table[8] = {a0, a1};
     if (a0 > a1) {
@@ -57,10 +57,44 @@ inline bool bc3BlockVisible(const uint8_t* block) {
     }
     uint64_t bits = 0;
     for (int i = 0; i < 6; ++i) bits |= (uint64_t)block[2 + i] << (8 * i);
-    for (int i = 0; i < 16; ++i) {
-        if (table[(bits >> (3 * i)) & 7] > kAlphaThreshold) return true;
+    for (int i = 0; i < 16; ++i) out[i] = table[(bits >> (3 * i)) & 7];
+}
+
+inline bool bc3BlockVisible(const uint8_t* block) {
+    int alphas[16];
+    bc3Alphas(block, alphas);
+    for (int alpha : alphas) {
+        if (alpha > kAlphaThreshold) return true;
     }
     return false;
+}
+
+inline bool bc3BlockOpaque(const uint8_t* block) {
+    int alphas[16];
+    bc3Alphas(block, alphas);
+    for (int alpha : alphas) {
+        if (alpha != 255) return false;
+    }
+    return true;
+}
+
+inline bool bc2BlockOpaque(const uint8_t* block) {
+    for (int i = 0; i < 8; ++i) {
+        if (block[i] != 0xFF) return false;
+    }
+    return true;
+}
+
+// BC1 is opaque unless the block uses the 3-colour mode (c0 <= c1) and selects index 3, which means transparent.
+inline bool bc1BlockOpaque(const uint8_t* block) {
+    const unsigned c0 = block[0] | (block[1] << 8), c1 = block[2] | (block[3] << 8);
+    if (c0 > c1) return true;
+    for (int i = 0; i < 4; ++i) {
+        for (int shift = 0; shift < 8; shift += 2) {
+            if (((block[4 + i] >> shift) & 3) == 3) return false;
+        }
+    }
+    return true;
 }
 
 // BC2 stores sixteen explicit 4-bit alpha values in the first eight bytes.
@@ -89,6 +123,16 @@ inline Rect fromImage(const wallpaper_engine::DecodedImage& image) {
                 if (row[x * 4 + 3] > detail::kAlphaThreshold) extent.add(x, y);
             }
         }
+    } else if (image.format == PixelFormat::R8 || image.format == PixelFormat::RG8) {
+        // Mask-style textures: the first channel is the value the shaders read.
+        const size_t stride = image.format == PixelFormat::R8 ? 1 : 2;
+        if (image.pixels.size() < (size_t)width * height * stride) return {};
+        for (uint32_t y = 0; y < height; ++y) {
+            const uint8_t* row = &image.pixels[(size_t)y * width * stride];
+            for (uint32_t x = 0; x < width; ++x) {
+                if (row[x * stride] > detail::kAlphaThreshold) extent.add(x, y);
+            }
+        }
     } else if (image.format == PixelFormat::BC2 || image.format == PixelFormat::BC3) {
         cell = 4;
         cols = (width + 3) / 4;
@@ -114,6 +158,42 @@ inline Rect fromImage(const wallpaper_engine::DecodedImage& image) {
     rect.v1 = std::min(1.0f, (float)((extent.y1 + 1) * cell) / (float)height);
     rect.valid = true;
     return rect;
+}
+
+// Whether every texel is fully opaque (formats without alpha count as opaque). Unknown formats are not.
+inline bool isOpaque(const wallpaper_engine::DecodedImage& image) {
+    using wallpaper_engine::PixelFormat;
+    if (!image.valid()) return false;
+    const uint32_t width = image.width, height = image.height;
+    switch (image.format) {
+        case PixelFormat::R8:
+        case PixelFormat::RG8:
+            return true;
+        case PixelFormat::RGBA8: {
+            if (image.pixels.size() < (size_t)width * height * 4) return false;
+            for (size_t i = 3; i < (size_t)width * height * 4; i += 4) {
+                if (image.pixels[i] != 255) return false;
+            }
+            return true;
+        }
+        case PixelFormat::BC1:
+        case PixelFormat::BC2:
+        case PixelFormat::BC3: {
+            const size_t block_size = image.format == PixelFormat::BC1 ? 8 : 16;
+            const size_t blocks = (size_t)((width + 3) / 4) * ((height + 3) / 4);
+            if (image.pixels.size() < blocks * block_size) return false;
+            for (size_t i = 0; i < blocks; ++i) {
+                const uint8_t* block = &image.pixels[i * block_size];
+                const bool opaque = image.format == PixelFormat::BC1   ? detail::bc1BlockOpaque(block)
+                                    : image.format == PixelFormat::BC2 ? detail::bc2BlockOpaque(block)
+                                                                       : detail::bc3BlockOpaque(block);
+                if (!opaque) return false;
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
 }
 
 inline Rect expand(Rect rect, float margin) {

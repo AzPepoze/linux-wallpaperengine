@@ -285,6 +285,11 @@ class ImageLayer : public Layer {
     }
     // Visible region of the layer's own texture; effect passes that only resample it can skip the empty remainder.
     content_bounds::Rect source_content;
+    // Every texel of the layer's own texture is fully opaque.
+    bool source_opaque = false;
+    // Where a masked pass can change its input (UV rect), cached per pass; invalid when it may change any of it.
+    std::map<const ShaderPass*, content_bounds::Rect> pass_active_regions;
+    const content_bounds::Rect& passActiveRegion(EngineContext& ctx, const ShaderPass& pass);
     // Part of the layer quad the cropped effect output can cover; the final draw uses a quad of just this region.
     content_bounds::Rect output_region;
     GfxBuffer output_quad;

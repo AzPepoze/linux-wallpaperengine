@@ -32,14 +32,15 @@ bool isCompositeRenderTarget(const std::string& name) {
     return name.find("FrameBuffer") != std::string::npos;
 }
 
+// `exact` replaces the target texel for texel instead of alpha-blending onto transparent black.
 void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_view, sg_view target, int width,
-                       int height) {
+                       int height, bool exact = false) {
     sg_pass copy_pass = colorPass(target, SG_LOADACTION_CLEAR);
     sg_begin_pass(&copy_pass);
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f,
-                         white, false, nullptr);
+                         white, false, nullptr, exact);
     sg_end_pass();
 }
 
@@ -207,6 +208,30 @@ void ImageLayer::tracePass(IRenderObserver& diag, EngineContext& ctx, const Effe
     diag.recordPass(trace, output_image);
 }
 
+const content_bounds::Rect& ImageLayer::passActiveRegion(EngineContext& ctx, const ShaderPass& pass) {
+    const auto cached = pass_active_regions.find(&pass);
+    if (cached != pass_active_regions.end()) return cached->second;
+
+    // waterwaves displaces by strength * mask, so with its opacity mask bound it leaves the input untouched wherever
+    // the mask is zero. The mask shares the layer's UVs only when it has the layer's aspect (no padded canvas).
+    content_bounds::Rect region;
+    // The opacity mask is g_Texture1, which the pass stores as texture 0 of its extra textures.
+    const PassTextures& textures = pass.pass_textures;
+    const bool masked_waves = pass.shader_name.size() >= 10 &&
+                              pass.shader_name.compare(pass.shader_name.size() - 10, 10, "waterwaves") == 0 &&
+                              !textures.texture_paths.empty() && !textures.texture_paths[0].empty() &&
+                              !textures.textures.empty() && textures.textures[0].id != SG_INVALID_ID;
+    if (masked_waves && effect_target_width > 0 && effect_target_height > 0) {
+        const sg_image_desc mask_desc = sg_query_image_desc(textures.textures[0]);
+        const double mask_aspect = (double)mask_desc.width / std::max(1, mask_desc.height);
+        const double layer_aspect = (double)effect_target_width / effect_target_height;
+        if (mask_desc.width > 0 && std::abs(mask_aspect / layer_aspect - 1.0) < 0.01) {
+            region = ctx.asset_mgr->textureContentBounds(textures.texture_paths[0].c_str());
+        }
+    }
+    return pass_active_regions.emplace(&pass, region).first->second;
+}
+
 bool ImageLayer::effectChainCanCrop() const {
     if (!source_content.valid) return false;
     for (const Effect* effect : effects) {
@@ -289,8 +314,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
     // Skip the whole chain when nothing it reads has changed since it last ran: same source image, same uniform
     // values, and no pass that reads time, pointer, parallax or audio. The previous output targets are still intact.
-    const bool static_source =
-        src_img.id == SG_INVALID_ID && !effectSourceIsDynamic() && !diag.isCapturingFrame() && !diag.isTracingPasses();
+    const bool plain_source = src_img.id == SG_INVALID_ID && !effectSourceIsDynamic();
+    const bool static_source = plain_source && !diag.isCapturingFrame() && !diag.isTracingPasses();
     const uint64_t signature = static_source ? effectChainSignature(ctx, base_img, base_view) : 0;
     if (signature != 0 && signature == effect_chain_signature && previous_output_image.id != SG_INVALID_ID &&
         previous_output_view.id != SG_INVALID_ID) {
@@ -395,9 +420,26 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                                       ? gpu_timing_begin_pass(name + "/" + std::to_string(eff_idx) + "/" +
                                                               std::to_string(pass_idx) + "/" + pass->shader_name)
                                       : -1;
-            sg_pass offscreen_pass = colorPass(output_attachment, SG_LOADACTION_CLEAR);
+            // A masked pass over an opaque layer changes only the mask's region: copy the input through exactly and
+            // run the pass just there.
+            const content_bounds::Rect* active_region = nullptr;
+            if (!crop && plain_source && source_opaque && !named_target && !state.rendered_any) {
+                const content_bounds::Rect& region = passActiveRegion(ctx, *pass);
+                if (region.valid) active_region = &region;
+            }
+            if (active_region) {
+                copyInputToTarget(ctx, inputs.image, inputs.view, output_attachment, target_width, target_height, true);
+            }
+            sg_pass offscreen_pass =
+                colorPass(output_attachment, active_region ? SG_LOADACTION_LOAD : SG_LOADACTION_CLEAR);
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+            if (active_region) {
+                const content_bounds::PixelRect area =
+                    content_bounds::toPixels(*active_region, target_width, target_height);
+                if (area.width > 0 && area.height > 0)
+                    sg_apply_scissor_rect(area.x, area.y, area.width, area.height, true);
+            }
             if (crop) {
                 const content_bounds::PixelRect area = content_bounds::toPixels(reach, target_width, target_height);
                 if (area.width > 0 && area.height > 0)
