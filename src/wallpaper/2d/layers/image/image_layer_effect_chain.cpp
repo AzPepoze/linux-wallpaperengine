@@ -205,6 +205,19 @@ void ImageLayer::tracePass(IRenderObserver& diag, EngineContext& ctx, const Effe
     diag.recordPass(trace, output_image);
 }
 
+bool ImageLayer::effectChainCanCrop() const {
+    if (!source_content.valid) return false;
+    for (const Effect* effect : effects) {
+        if (!effect || !effect->visible) continue;
+        for (const ShaderPass* pass : effect->passes) {
+            if (!pass || !pass->enabled) continue;
+            if (!pass->render_target.empty() || !content_bounds::passDisplacement(pass->shader_name, pass->uniforms))
+                return false;
+        }
+    }
+    return true;
+}
+
 uint64_t ImageLayer::effectChainSignature(EngineContext& ctx, sg_image base_image, sg_view base_view) {
     uint64_t hash = UINT64_C(14695981039346656037);
     auto mix = [&hash](const void* data, size_t size) {
@@ -274,11 +287,9 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
     // Skip the whole chain when nothing it reads has changed since it last ran: same source image, same uniform
     // values, and no pass that reads time, pointer, parallax or audio. The previous output targets are still intact.
-    uint64_t signature = 0;
-    if (src_img.id == SG_INVALID_ID && !effectSourceIsDynamic() && !diag.isCapturingFrame() &&
-        !diag.isTracingPasses()) {
-        signature = effectChainSignature(ctx, base_img, base_view);
-    }
+    const bool static_source =
+        src_img.id == SG_INVALID_ID && !effectSourceIsDynamic() && !diag.isCapturingFrame() && !diag.isTracingPasses();
+    const uint64_t signature = static_source ? effectChainSignature(ctx, base_img, base_view) : 0;
     if (signature != 0 && signature == effect_chain_signature && previous_output_image.id != SG_INVALID_ID &&
         previous_output_view.id != SG_INVALID_ID) {
         effect_output_image = previous_output_image;
@@ -289,6 +300,11 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
     const bool any_effect_solo =
         std::any_of(effects.begin(), effects.end(), [](const Effect* effect) { return effect && effect->solo; });
+
+    // Mostly-empty layers only need their passes over the visible region: crop-safe passes keep transparent texels
+    // transparent, so the region just grows by how far each pass can move content.
+    bool crop = static_source && effectChainCanCrop();
+    content_bounds::Rect reach = source_content;
 
     ChainState state;
     state.layer_source_image = state.input_image = state.chain_image = base_img;
@@ -363,6 +379,15 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 continue;
             }
 
+            if (crop) {
+                const std::optional<float> displacement =
+                    content_bounds::passDisplacement(pass->shader_name, pass->uniforms);
+                if (displacement)
+                    reach = content_bounds::expand(reach, *displacement);
+                else
+                    crop = false;
+            }
+
             const int gpu_token = ctx.performance_profile
                                       ? gpu_timing_begin_pass(name + "/" + std::to_string(eff_idx) + "/" +
                                                               std::to_string(pass_idx) + "/" + pass->shader_name)
@@ -370,6 +395,11 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             sg_pass offscreen_pass = colorPass(output_attachment, SG_LOADACTION_CLEAR);
             sg_begin_pass(&offscreen_pass);
             renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+            if (crop) {
+                const content_bounds::PixelRect area = content_bounds::toPixels(reach, target_width, target_height);
+                if (area.width > 0 && area.height > 0)
+                    sg_apply_scissor_rect(area.x, area.y, area.width, area.height, true);
+            }
             render_pass.is_fullscreen_quad = pass->is_fullscreen_quad;
             render_pass.logical_scale = effect_logical_scale;
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};

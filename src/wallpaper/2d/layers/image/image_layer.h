@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "shared/assets/content_bounds.h"
 #include "shared/assets/tex_decoder.h"
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/layers/layer.h"
@@ -282,6 +283,10 @@ class ImageLayer : public Layer {
         return has_puppet_mesh || bound_video_decoder || current_texture_frame ||
                animated_frame.image.id != SG_INVALID_ID;
     }
+    // Visible region of the layer's own texture; effect passes that only resample it can skip the empty remainder.
+    content_bounds::Rect source_content;
+    // Whether every active pass is known to keep transparent texels transparent (see content_bounds::passDisplacement).
+    bool effectChainCanCrop() const;
     // Fingerprint of the chain inputs, or 0 when a pass varies per frame and the chain must run.
     uint64_t effectChainSignature(EngineContext& ctx, sg_image base_image, sg_view base_view);
 

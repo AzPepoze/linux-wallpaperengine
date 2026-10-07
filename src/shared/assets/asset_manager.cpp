@@ -113,6 +113,12 @@ std::shared_ptr<const wallpaper_engine::DecodedImage> AssetManager::decodeShared
     return decodeCacheFor(abs_path).decode(abs_path, image_index);
 }
 
+content_bounds::Rect AssetManager::textureContentBounds(const char* abs_path) const {
+    if (!abs_path || abs_path[0] == '\0') return {};
+    const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, 0);
+    return decoded && !decoded->is_video ? content_bounds::fromImage(*decoded) : content_bounds::Rect{};
+}
+
 void AssetManager::setVideoPlayback(float rate, float volume) {
     video_rate_ = clampPlaybackRate(rate);
     video_volume_ = std::clamp(volume, 0.0f, 1.0f);

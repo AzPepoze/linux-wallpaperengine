@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "providers/asset_provider.h"
+#include "shared/assets/content_bounds.h"
 #include "shared/assets/decoded_image.h"
 #include "shared/assets/media/video_audio.h"
 #include "shared/assets/media/video_texture.h"
@@ -45,6 +46,8 @@ class AssetManager : public IAssetResolver {
 
     GfxImage resolveTexture(const char* name, std::string* out_path = nullptr, int image_index = 0) const override;
     GfxImage resolveMaterialTexture(const char* mat_rel_path, std::string* out_path = nullptr) const override;
+    // Region of a decoded .tex that holds visible texels (invalid for videos and formats it cannot measure).
+    content_bounds::Rect textureContentBounds(const char* abs_path) const;
 
     struct ActiveVideoTexture {
         std::string path;
