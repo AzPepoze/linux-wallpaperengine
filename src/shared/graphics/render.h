@@ -112,7 +112,7 @@ static_assert(sizeof(particle_builtin_uniforms_t) % 16 == 0,
 #ifdef __cplusplus
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass,
-                          bool replace = false);
+                          bool replace = false, sg_buffer quad_buffer = {});
 void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
                                   int index_count, sg_image main_image, sg_view main_view,
                                   const render_effect_pass_t* pass, const builtin_uniforms_t& builtins,

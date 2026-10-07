@@ -66,8 +66,41 @@ void ImageLayer::draw(EngineContext& ctx) {
         draw_image = effect_output_image;
         draw_view = effect_output_view;
     }
+    const bool draw_region = has_effect_output && !puppet_resolved && output_region.valid;
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
-                         rect.rotation, tint, false, nullptr);
+                         rect.rotation, tint, false, nullptr, false,
+                         draw_region ? sg_buffer(output_quad) : sg_buffer{SG_INVALID_ID});
+}
+
+void ImageLayer::updateOutputQuad(EngineContext& ctx) {
+    if (!output_region.valid) return;
+    if (output_quad.id == SG_INVALID_ID) {
+        sg_buffer_desc desc = {};
+        desc.size = sizeof(vertex_t) * 4;
+        desc.usage.vertex_buffer = true;
+        desc.usage.stream_update = true;
+        output_quad = GfxBuffer(sg_make_buffer(&desc));
+        output_quad_region = {};
+        if (output_quad.id == SG_INVALID_ID) {
+            output_region = {};
+            return;
+        }
+    }
+    const content_bounds::Rect& r = output_region;
+    const content_bounds::Rect& held = output_quad_region;
+    if (held.valid && held.u0 == r.u0 && held.v0 == r.v0 && held.u1 == r.u1 && held.v1 == r.v1) return;
+
+    const uint64_t frame = (uint64_t)ctx.profiler.frame_index;
+    if (output_quad_frame == frame) {
+        output_region = {};
+        return;
+    }
+    const vertex_t vertices[4] = {
+        {r.u0, r.v0, r.u0, r.v0}, {r.u1, r.v0, r.u1, r.v0}, {r.u1, r.v1, r.u1, r.v1}, {r.u0, r.v1, r.u0, r.v1}};
+    const sg_range range = SG_RANGE(vertices);
+    sg_update_buffer(output_quad, &range);
+    output_quad_region = r;
+    output_quad_frame = frame;
 }
 
 void ImageLayer::drawComposite(EngineContext& ctx, sg_view scene_view) {

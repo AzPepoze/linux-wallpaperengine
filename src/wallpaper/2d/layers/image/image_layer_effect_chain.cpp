@@ -23,6 +23,8 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
+// Effect-target pixels added around the cropped region when drawing it, so bilinear edge taps stay inside.
+constexpr float kOutputRegionPadding = 2.0f;
 bool isCompositeRenderTarget(const std::string& name) {
     if (name.rfind("_rt_", 0) != 0) return false;
     if (name == "_rt_FullFrameBuffer") return true;
@@ -297,6 +299,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
         return;
     }
     effect_chain_signature = 0;
+    output_region = {};
 
     const bool any_effect_solo =
         std::any_of(effects.begin(), effects.end(), [](const Effect* effect) { return effect && effect->solo; });
@@ -425,5 +428,10 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     } else {
         diag.onLayerFinalImage(0, effect_output_image, effect_target_width, effect_target_height);
         effect_chain_signature = signature;
+        if (crop) {
+            output_region = content_bounds::expand(
+                reach, kOutputRegionPadding / (float)std::max(1, std::min(effect_target_width, effect_target_height)));
+            updateOutputQuad(ctx);
+        }
     }
 }

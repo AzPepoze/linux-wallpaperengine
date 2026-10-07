@@ -20,7 +20,7 @@ using render_internal::kLastWallpaperBlendMode;
 
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass,
-                          bool replace) {
+                          bool replace, sg_buffer quad_buffer) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -169,6 +169,8 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         for (int i = 1; i < 12; i++) {
             r->bind.views[i] = r->black_view;
         }
+        // A caller-owned quad (pos == uv, inside the unit square) draws only part of the sprite.
+        if (quad_buffer.id != SG_INVALID_ID) r->bind.vertex_buffers[0] = quad_buffer;
         sg_apply_pipeline(target_pipeline);
 
         sg_range mvp_range = SG_RANGE(mvp);

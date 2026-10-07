@@ -285,6 +285,13 @@ class ImageLayer : public Layer {
     }
     // Visible region of the layer's own texture; effect passes that only resample it can skip the empty remainder.
     content_bounds::Rect source_content;
+    // Part of the layer quad the cropped effect output can cover; the final draw uses a quad of just this region.
+    content_bounds::Rect output_region;
+    GfxBuffer output_quad;
+    content_bounds::Rect output_quad_region;  // what output_quad holds right now
+    uint64_t output_quad_frame = UINT64_MAX;  // frame of the last upload; a buffer takes one update per frame
+    // Uploads output_region into output_quad; clears the region when that is not possible this frame.
+    void updateOutputQuad(EngineContext& ctx);
     // Whether every active pass is known to keep transparent texels transparent (see content_bounds::passDisplacement).
     bool effectChainCanCrop() const;
     // Fingerprint of the chain inputs, or 0 when a pass varies per frame and the chain must run.
