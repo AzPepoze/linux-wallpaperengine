@@ -22,7 +22,8 @@ SoundLayer::SoundLayer(const char* name, const wallpaper_engine::SoundObjectDocu
     : Layer(name), doc(doc), rng(std::random_device{}()) {}
 
 SoundLayer::~SoundLayer() {
-    stop();
+    // Qualified: a destructor never dispatches to a derived override.
+    SoundLayer::stop();
 }
 
 SoundLayer* SoundLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx) {
