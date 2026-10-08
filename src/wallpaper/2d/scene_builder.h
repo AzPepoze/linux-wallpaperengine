@@ -11,6 +11,7 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 class ImageLayer;
+class TextTextureCache;
 
 struct ParsedScene {
     std::vector<Layer*> layers;
@@ -52,6 +53,9 @@ class SceneBuildJob {
     wallpaper_engine::SceneDocument document_;
     EngineContext& ctx_;
     ParsedScene result_;
+    // Text textures are shared by the layers of this one scene load.
+    std::shared_ptr<TextTextureCache> text_cache_;
+    size_t text_index_ = 0;  // next layer to check in the TextTextures phase
     class EffectLoadBatch* effect_batch_ = nullptr;
     size_t tree_index_ = 0;
     size_t layer_index_ = 0;
@@ -92,7 +96,8 @@ class SceneBuilder {
 
     static SceneTreeNode treeNode(const wallpaper_engine::SceneObjectDocument& object);
     // Null for objects that have no layer (groups).
-    static Layer* buildLayer(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx);
+    static Layer* buildLayer(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx,
+                             std::shared_ptr<TextTextureCache> text_cache = {});
 };
 
 #endif  // SCENE_BUILDER_H

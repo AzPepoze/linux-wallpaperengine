@@ -4,25 +4,14 @@
 
 #include <algorithm>
 #include <chrono>
-#include <condition_variable>
 #include <future>
-#include <map>
-#include <mutex>
 #include <thread>
 
 #include "shared/core/engine_context.h"
 #include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
-#include "shared/core/task_pool.h"
 #include "wallpaper/2d/alpha_curve.h"
 #include "wallpaper/2d/layers/text/text_raster.h"
-
-TextLayer::TextLayer(const char* name) : ImageLayer(name, (sg_image){SG_INVALID_ID}) {}
-
-struct RasterOutput {
-    bool ok = false;
-    TextRasterResult result;
-};
 
 // One raster on its way from a worker; the layer keeps it until the texture is uploaded.
 struct PendingRaster {
@@ -31,67 +20,13 @@ struct PendingRaster {
     std::chrono::steady_clock::time_point started;
 };
 
-namespace {
+TextLayer::TextLayer(const char* name) : ImageLayer(name, (sg_image){SG_INVALID_ID}) {}
 
-// Allows two rasterizations at once, so text does not take over the worker pool.
-class RasterGate {
-   public:
-    void enter() {
-        std::unique_lock<std::mutex> lock(mutex_);
-        slot_.wait(lock, [this] { return active_ < kMaxConcurrent; });
-        ++active_;
-    }
-
-    void leave() {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            --active_;
-        }
-        slot_.notify_one();
-    }
-
-   private:
-    static constexpr int kMaxConcurrent = 2;
-    std::mutex mutex_;
-    std::condition_variable slot_;
-    int active_ = 0;
-};
-
-RasterGate& rasterGate() {
-    static RasterGate gate;
-    return gate;
-}
-
-RasterOutput rasterInBackground(TextRasterRequest request, bool crop) {
-    RasterOutput output;
-    rasterGate().enter();
-    output.ok = rasterizeText(request, output.result);
-    if (output.ok && crop) cropToContent(output.result);
-    rasterGate().leave();
-    return output;
-}
-
-// Rasters still wanted by some layer, so a second layer with the same text waits on the first one.
-// Only the render thread touches this map.
-std::map<std::string, std::shared_future<RasterOutput>>& inFlightRasters() {
-    static std::map<std::string, std::shared_future<RasterOutput>> flights;
-    return flights;
-}
-
-void purgeFinishedRasters(std::map<std::string, std::shared_future<RasterOutput>>& flights) {
-    for (auto flight = flights.begin(); flight != flights.end();) {
-        if (flight->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
-            flight = flights.erase(flight);
-        else
-            ++flight;
-    }
-}
-
-}  // namespace
-
-TextLayer* TextLayer::createPending(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+TextLayer* TextLayer::createPending(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx,
+                                    std::shared_ptr<TextTextureCache> cache) {
     TextObjectConfig config = TextParser::parse(doc);
     TextLayer* layer = new TextLayer(config.name.c_str());
+    layer->cache_ = cache ? cache : std::make_shared<TextTextureCache>();
     layer->initFromDocument(doc, ctx);
     layer->alpha_document = doc.image;
     layer->config_ = config;
@@ -107,8 +42,9 @@ TextLayer* TextLayer::createPending(const wallpaper_engine::SceneObjectDocument&
     return layer;
 }
 
-TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
-    TextLayer* layer = createPending(doc, ctx);
+TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx,
+                                         std::shared_ptr<TextTextureCache> cache) {
+    TextLayer* layer = createPending(doc, ctx, std::move(cache));
     while (!layer->pollPreparation()) std::this_thread::yield();
     return layer;
 }
@@ -260,9 +196,10 @@ void TextLayer::update(float, EngineContext& ctx) {
     pollPreparation();
     refreshForEffects(ctx);
     // A hidden layer keeps its pending change and rasterizes it on the frame it becomes visible.
+    // The previous texture stays on screen until the new raster is uploaded.
     if (render_active && (config_.text != current_text_ || needs_rebuild_)) {
         needs_rebuild_ = false;
-        rebuild(ctx);
+        beginPreparation(ctx);
     }
     tint[3] = std::clamp(config_.alpha, 0.0f, 1.0f) * evaluateImageAlpha(alpha_document, ctx.time);
     if (!is_fullscreen && render_active) renderEffectChain(ctx);
@@ -291,22 +228,7 @@ TextRasterRequest TextLayer::rasterRequest() const {
     return request;
 }
 
-// One uploaded text texture, shared by every layer whose text and raster settings match.
-struct TextTexture {
-    GfxImage image;
-    GfxView view;
-    GfxBuffer quad;  // draws only the cropped part of the layer, when cropped
-    bool cropped = false;
-    float size[2] = {0.0f, 0.0f};
-};
-
 namespace {
-
-// Entries are weak, so a texture is freed when the last layer using it is destroyed.
-std::map<std::string, std::weak_ptr<TextTexture>>& textureCache() {
-    static std::map<std::string, std::weak_ptr<TextTexture>> cache;
-    return cache;
-}
 
 void appendNumber(std::string& key, float value) {
     char number[32];
@@ -336,16 +258,19 @@ std::string textureKey(const TextObjectConfig& config, const std::string& font_p
     return key;
 }
 
-std::shared_ptr<TextTexture> findTexture(const std::string& key) {
-    auto found = textureCache().find(key);
-    return found == textureCache().end() ? nullptr : found->second.lock();
-}
-
-void rememberTexture(const std::string& key, const std::shared_ptr<TextTexture>& texture) {
-    auto& cache = textureCache();
-    for (auto entry = cache.begin(); entry != cache.end();)
-        entry = entry->second.expired() ? cache.erase(entry) : std::next(entry);
-    cache[key] = texture;
+// Places the cropped texture where its pixels sit inside the full layer quad.
+GfxBuffer makeCropQuad(const TextRasterResult& raster) {
+    const float left = raster.content_x / (float)raster.full_width;
+    const float top = raster.content_y / (float)raster.full_height;
+    const float right = (raster.content_x + raster.width) / (float)raster.full_width;
+    const float bottom = (raster.content_y + raster.height) / (float)raster.full_height;
+    const vertex_t vertices[4] = {{left, top, 0.0f, 0.0f}, {right, top, 1.0f, 0.0f}, {right, bottom, 1.0f, 1.0f},
+                                  {left, bottom, 0.0f, 1.0f}};
+    sg_buffer_desc desc = {};
+    desc.size = sizeof(vertices);
+    desc.usage.vertex_buffer = true;
+    desc.data = SG_RANGE(vertices);
+    return GfxBuffer(sg_make_buffer(&desc));
 }
 
 }  // namespace
@@ -355,9 +280,9 @@ bool TextLayer::canCropTexture() const {
     return effects.empty() && !requiresSceneColor();
 }
 
-// Effects or scene-colour blending need the full texture, so re-upload it when they appear.
+// Effects or scene-colour blending need the full texture, so re-raster it when they appear.
 void TextLayer::refreshForEffects(EngineContext& ctx) {
-    if (texture_ && texture_->cropped && !canCropTexture()) rebuild(ctx);
+    if (texture_ && texture_->cropped && !canCropTexture()) beginPreparation(ctx);
 }
 
 void TextLayer::useTexture(const std::shared_ptr<TextTexture>& texture) {
@@ -376,7 +301,7 @@ bool TextLayer::beginPreparation(EngineContext& ctx) {
     if (!resolveFontPath(ctx)) return false;
     const bool crop = canCropTexture();
     const std::string key = textureKey(config_, font_path_, tint, crop);
-    if (std::shared_ptr<TextTexture> cached = findTexture(key)) {
+    if (std::shared_ptr<TextTexture> cached = cache_->find(key)) {
         useTexture(cached);
         return true;
     }
@@ -384,15 +309,7 @@ bool TextLayer::beginPreparation(EngineContext& ctx) {
     auto pending = std::make_shared<PendingRaster>();
     pending->key = key;
     pending->started = std::chrono::steady_clock::now();
-    auto& flights = inFlightRasters();
-    purgeFinishedRasters(flights);
-    auto flight = flights.find(key);
-    if (flight != flights.end()) {
-        pending->future = flight->second;
-    } else {
-        pending->future = TaskPool::instance().enqueue(rasterInBackground, rasterRequest(), crop).share();
-        flights[key] = pending->future;
-    }
+    pending->future = cache_->rasterFor(key, rasterRequest(), crop);
     pending_ = pending;
     return true;
 }
@@ -410,12 +327,12 @@ bool TextLayer::pollPreparation() {
 
     const char* source = "cache";
     double upload_ms = 0.0;
-    if (std::shared_ptr<TextTexture> cached = findTexture(key)) {
+    if (std::shared_ptr<TextTexture> cached = cache_->find(key)) {
         useTexture(cached);
     } else if (output.ok) {
         source = "upload";
         const auto upload_start = std::chrono::steady_clock::now();
-        if (std::shared_ptr<TextTexture> texture = uploadTexture(key, output.result)) useTexture(texture);
+        if (std::shared_ptr<TextTexture> texture = uploadTexture(key, output)) useTexture(texture);
         upload_ms = load_trace::milliseconds(std::chrono::steady_clock::now() - upload_start);
     }
     if (load_trace::enabled())
@@ -425,26 +342,8 @@ bool TextLayer::pollPreparation() {
     return true;
 }
 
-namespace {
-
-// Places the cropped texture where its pixels sit inside the full layer quad.
-GfxBuffer makeCropQuad(const TextRasterResult& raster) {
-    const float left = raster.content_x / (float)raster.full_width;
-    const float top = raster.content_y / (float)raster.full_height;
-    const float right = (raster.content_x + raster.width) / (float)raster.full_width;
-    const float bottom = (raster.content_y + raster.height) / (float)raster.full_height;
-    const vertex_t vertices[4] = {{left, top, 0.0f, 0.0f}, {right, top, 1.0f, 0.0f}, {right, bottom, 1.0f, 1.0f},
-                                  {left, bottom, 0.0f, 1.0f}};
-    sg_buffer_desc desc = {};
-    desc.size = sizeof(vertices);
-    desc.usage.vertex_buffer = true;
-    desc.data = SG_RANGE(vertices);
-    return GfxBuffer(sg_make_buffer(&desc));
-}
-
-}  // namespace
-
-std::shared_ptr<TextTexture> TextLayer::uploadTexture(const std::string& key, const TextRasterResult& raster) {
+std::shared_ptr<TextTexture> TextLayer::uploadTexture(const std::string& key, const RasterOutput& output) {
+    const TextRasterResult& raster = output.result;
     auto texture = std::make_shared<TextTexture>();
     texture->size[0] = raster.size[0];
     texture->size[1] = raster.size[1];
@@ -457,35 +356,14 @@ std::shared_ptr<TextTexture> TextLayer::uploadTexture(const std::string& key, co
     sg_image_desc desc = {};
     desc.width = raster.width;
     desc.height = raster.height;
-    desc.pixel_format = SG_PIXELFORMAT_RGBA32F;
-    desc.data.mip_levels[0] = {raster.pixels.data(), raster.pixels.size() * sizeof(float)};
+    desc.pixel_format = SG_PIXELFORMAT_RGBA16F;
+    desc.data.mip_levels[0] = {output.texels.data(), output.texels.size() * sizeof(uint16_t)};
     texture->image = GfxImage(sg_make_image(&desc));
     if (texture->image.id == SG_INVALID_ID) return nullptr;
 
     sg_view_desc view_desc = {};
     view_desc.texture.image = texture->image;
     texture->view = GfxView(sg_make_view(&view_desc));
-    rememberTexture(key, texture);
+    cache_->remember(key, texture);
     return texture;
-}
-
-// Synchronous rebuild for live text edits; the layer keeps its previous texture until this succeeds.
-bool TextLayer::rebuild(EngineContext& ctx) {
-    current_text_ = config_.text;
-    pending_.reset();
-    if (!resolveFontPath(ctx)) return false;
-    const bool crop = canCropTexture();
-    const std::string key = textureKey(config_, font_path_, tint, crop);
-    if (std::shared_ptr<TextTexture> cached = findTexture(key)) {
-        useTexture(cached);
-        return true;
-    }
-
-    TextRasterResult raster;
-    if (!rasterizeText(rasterRequest(), raster) || raster.pixels.empty()) return false;
-    if (crop) cropToContent(raster);
-    std::shared_ptr<TextTexture> texture = uploadTexture(key, raster);
-    if (!texture) return false;
-    useTexture(texture);
-    return true;
 }

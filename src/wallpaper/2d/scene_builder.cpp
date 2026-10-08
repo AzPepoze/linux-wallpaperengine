@@ -46,7 +46,7 @@ std::string sceneTreeDisplayName(const wallpaper_engine::SceneObjectDocument& ob
 }  // namespace
 
 SceneBuildJob::SceneBuildJob(wallpaper_engine::SceneDocument document, EngineContext& ctx)
-    : document_(std::move(document)), ctx_(ctx) {
+    : document_(std::move(document)), ctx_(ctx), text_cache_(std::make_shared<TextTextureCache>()) {
     result_.camera = document_.camera;
     result_.general = document_.general;
     result_.design_width = document_.design_width;
@@ -145,7 +145,7 @@ bool SceneBuildJob::step(std::chrono::milliseconds budget) {
                 } else {
                     effect_batch_->activate();
                     Layer* layer = object.kind == wallpaper_engine::SceneObjectKind::Text
-                                       ? TextLayer::createPending(object, ctx_)
+                                       ? TextLayer::createPending(object, ctx_, text_cache_)
                                        : SceneBuilder::buildLayer(object, ctx_);
                     effect_batch_->deactivate();
                     ++layer_index_;
@@ -154,11 +154,14 @@ bool SceneBuildJob::step(std::chrono::milliseconds budget) {
                 break;
             }
             case Phase::TextTextures: {
-                for (Layer* layer : result_.layers) {
-                    TextLayer* text = dynamic_cast<TextLayer*>(layer);
-                    if (text && !text->pollPreparation()) return false;
+                // One layer per operation, so each render-thread upload is followed by a budget check.
+                if (text_index_ == result_.layers.size()) {
+                    phase_ = Phase::Scripts;
+                    break;
                 }
-                phase_ = Phase::Scripts;
+                TextLayer* text = dynamic_cast<TextLayer*>(result_.layers[text_index_]);
+                if (text && !text->pollPreparation()) return false;
+                ++text_index_;
                 break;
             }
             case Phase::Texture: {
@@ -305,14 +308,15 @@ SceneTreeNode SceneBuilder::treeNode(const wallpaper_engine::SceneObjectDocument
     return node;
 }
 
-Layer* SceneBuilder::buildLayer(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx) {
+Layer* SceneBuilder::buildLayer(const wallpaper_engine::SceneObjectDocument& object, EngineContext& ctx,
+                                std::shared_ptr<TextTextureCache> text_cache) {
     switch (object.kind) {
         case wallpaper_engine::SceneObjectKind::Particle:
             return ParticleLayer::createFromDocument(object, ctx);
         case wallpaper_engine::SceneObjectKind::Image:
             return ImageLayer::createFromDocument(object, ctx);
         case wallpaper_engine::SceneObjectKind::Text:
-            return TextLayer::createFromDocument(object, ctx);
+            return TextLayer::createFromDocument(object, ctx, std::move(text_cache));
         case wallpaper_engine::SceneObjectKind::Sound:
             return SoundLayer::createFromDocument(object, ctx);
         default:
@@ -369,8 +373,9 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     }
     out.scene_tree->rebuildHierarchy();
 
+    const auto text_cache = std::make_shared<TextTextureCache>();
     for (const auto& object : document.objects) {
-        if (Layer* layer = buildLayer(object, ctx)) out.layers.push_back(layer);
+        if (Layer* layer = buildLayer(object, ctx, text_cache)) out.layers.push_back(layer);
     }
 
     for (const auto& object : document.objects) out.scripts->addObject(object);
