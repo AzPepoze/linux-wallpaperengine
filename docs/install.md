@@ -143,7 +143,18 @@ xmake and Slang need the same manual install as on Debian.
 
 **Why:** Wallpapers can react to the mouse, even when the mouse is over another window. Linux blocks programs from reading the mouse this way by default. This step gives your user permission to read **mice only**, not keyboards.
 
-Only do this if you want `--pointer evdev` or `--pointer auto` to follow the mouse everywhere. Without it, the mouse only works over the wallpaper itself.
+**Do you need this step?**
+
+| Your desktop | Needed? |
+| --- | --- |
+| X11 | **No** |
+| Hyprland | **No** |
+| KDE Plasma (Wayland) | **Yes**, if you want the mouse followed everywhere |
+| GNOME (Wayland) | **Yes**, if you want the mouse followed everywhere |
+
+On X11 and Hyprland the program reads the mouse position directly from the desktop. On KDE and GNOME, the mouse is followed only with this step. Without it, the mouse only works over the wallpaper itself.
+
+GNOME does not support the desktop background mode (it has no layer-shell support), so use a normal window or the X11 desktop window there.
 
 Run these two commands:
 
