@@ -308,7 +308,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Overrides from the desktop GUI's saved values and from repeatable `--set-property key=value`
     - Scene user bindings and conditional visibility resolve before parsing, including script-property overrides
     - Initial `engine.userProperties` and `applyUserProperties` delivery after script initialization
-    - Live changes from a second launch with the same wallpaper and `--set-property`: keys that no scene binding reads update in place (scripts get `applyUserProperties`); keys a binding reads reload the scene with every current value
+    - Live changes from a second launch with the same wallpaper and `--set-property`: keys that no scene binding reads update in place (scripts get `applyUserProperties`); bindings that only change object visibility toggle the layers in place; any other binding change reloads the scene with every current value
   - Missing
     - Editor display conditions and groups
     - Material constants bound to a user property (`"user"` in material JSON) are not applied; only scene.json bindings are

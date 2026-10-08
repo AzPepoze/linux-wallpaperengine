@@ -91,6 +91,8 @@ struct SceneState {
     ScriptBindings* scripts = nullptr;  // property scripts of the scene; deleted before the layers
     // User properties that scene bindings read; a change to one needs the scene rebuilt.
     std::vector<std::string> bound_user_keys;
+    // Objects as the last resolve saw them, so a changed binding can be diffed against them.
+    std::vector<wallpaper_engine::SceneObjectDocument> bound_objects;
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;

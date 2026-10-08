@@ -1,5 +1,7 @@
 #include "wallpaper/wallpaper_manager.h"
 
+#include <cjson/cJSON.h>
+
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -17,6 +19,7 @@
 #include "wallpaper/2d/script/scene_scripts.h"
 #include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/prepared_load.h"
+#include "wallpaper/project_info.h"
 #include "wallpaper/transition/transition_audio.h"
 #include "wallpaper/user_properties.h"
 #include "wallpaper/video/video_wallpaper.h"
@@ -47,14 +50,66 @@ bool isSameWallpaper(const WallpaperInstance& active, const SwitchRequest& reque
            std::filesystem::path(request.path).lexically_normal();
 }
 
-// Updates the live scene without reloading it; false when a scene binding reads one of the keys.
+Layer* findLayer(const EngineContext& ctx, uint32_t object_id) {
+    for (Layer* layer : ctx.scene.layers) {
+        if (layer->scene_object_id == object_id) return layer;
+    }
+    return nullptr;
+}
+
+// The object JSON without its top-level "visible", so a visibility change can be told apart from others.
+std::string jsonWithoutVisible(const std::string& json) {
+    cJSON* root = cJSON_Parse(json.c_str());
+    if (!root) return json;
+    cJSON_DeleteItemFromObjectCaseSensitive(root, "visible");
+    char* printed = cJSON_PrintUnformatted(root);
+    std::string result = printed ? printed : json;
+    cJSON_free(printed);
+    cJSON_Delete(root);
+    return result;
+}
+
+// Collects the layers whose visibility changes. False when anything else changed, or a layer cannot take it.
+bool planVisibilityChanges(const EngineContext& ctx, const std::vector<wallpaper_engine::SceneObjectDocument>& fresh,
+                           std::vector<std::pair<Layer*, bool>>& toggles) {
+    if (fresh.size() != ctx.scene.bound_objects.size()) return false;
+    for (size_t i = 0; i < fresh.size(); ++i) {
+        const wallpaper_engine::SceneObjectDocument& old_object = ctx.scene.bound_objects[i];
+        const wallpaper_engine::SceneObjectDocument& new_object = fresh[i];
+        if (old_object.node.id != new_object.node.id ||
+            jsonWithoutVisible(old_object.raw_json) != jsonWithoutVisible(new_object.raw_json))
+            return false;
+        if (old_object.visible == new_object.visible) continue;
+        Layer* layer = findLayer(ctx, new_object.node.id);
+        // A visibility script owns the flag every frame, so a stored value would not stick.
+        if (!layer || !new_object.visible_script.empty()) return false;
+        toggles.emplace_back(layer, new_object.visible);
+    }
+    return true;
+}
+
+// Re-resolves the scene's bindings for `properties` and toggles layer visibility; false when a rebuild is needed.
+bool applyBindingsInPlace(EngineContext& ctx, const UserProperties& properties) {
+    const ProjectInfo info = ProjectInfo::detect(ctx.asset_root);
+    wallpaper_engine::SceneDocument fresh;
+    if (!wallpaper_engine::parseSceneFile(info.entry.c_str(), fresh, &properties)) return false;
+    std::vector<std::pair<Layer*, bool>> toggles;
+    if (!planVisibilityChanges(ctx, fresh.objects, toggles)) return false;
+    for (const auto& [layer, visible] : toggles) layer->setVisible(visible);
+    ctx.scene.bound_objects = std::move(fresh.objects);
+    return true;
+}
+
+// Updates the live scene without reloading it; false when the change needs the scene rebuilt.
 bool applyPropertiesInPlace(EngineContext& ctx, const std::vector<std::pair<std::string, std::string>>& changes) {
     if (!ctx.scene.scripts) return false;
-    if (touchesBoundKey(ctx.scene.bound_user_keys, changes)) {
-        LOG_TAG_I("WALLPAPER_MGR", "Property change touches a scene binding; reloading the scene");
+    UserProperties next = ctx.user_properties;
+    for (const auto& [key, value] : changes) next.setFromString(key, value);
+    if (touchesBoundKey(ctx.scene.bound_user_keys, changes) && !applyBindingsInPlace(ctx, next)) {
+        LOG_TAG_I("WALLPAPER_MGR", "Property change needs the scene rebuilt; reloading");
         return false;
     }
-    for (const auto& [key, value] : changes) ctx.user_properties.setFromString(key, value);
+    ctx.user_properties = std::move(next);
     // Scripts see the new values through engine.userProperties and applyUserProperties on the next update.
     ctx.scene.scripts->setUserProperties(ctx.user_properties);
     LOG_TAG_I("WALLPAPER_MGR", "Applied %zu property change(s) in place", changes.size());

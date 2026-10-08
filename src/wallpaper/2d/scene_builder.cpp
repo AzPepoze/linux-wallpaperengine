@@ -66,6 +66,7 @@ SceneBuildJob::SceneBuildJob(wallpaper_engine::SceneDocument document, EngineCon
     ctx_.scene.scene_w = document_.design_width;
     ctx_.scene.scene_h = document_.design_height;
     ctx_.scene.bound_user_keys = document_.user_keys;
+    if (!document_.user_keys.empty()) ctx_.scene.bound_objects = document_.objects;
     ctx_.scene.perspective_override_fov = document_.general.perspective_override_fov;
     result_.scene_tree = new SceneTree();
     result_.scripts = new ScriptBindings(ctx_);
@@ -363,6 +364,7 @@ ParsedScene SceneBuilder::buildFromDocument(const wallpaper_engine::SceneDocumen
     ctx.scene.scene_w = out.design_width;
     ctx.scene.scene_h = out.design_height;
     ctx.scene.bound_user_keys = document.user_keys;
+    if (!document.user_keys.empty()) ctx.scene.bound_objects = document.objects;
     ctx.scene.perspective_override_fov = document.general.perspective_override_fov;
 
     out.scene_tree = new SceneTree();
