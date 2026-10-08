@@ -15,6 +15,16 @@
 
 namespace {
 
+// Five consecutive vec4 resolutions share one array entry in Sokol's limited uniform metadata.
+// Their std140 layout and upload offsets stay identical. Each pattern is one scan over the source:
+// the five indices never overlap, so removing every declaration first matches the per-index order.
+void rewriteTextureResolutions(std::string& source) {
+    static const std::regex declaration(R"(uniform\s+(?:vec4|float4)\s+g_Texture[0-4]Resolution\s*;)");
+    static const std::regex usage(R"(\bg_Texture([0-4])Resolution\b)");
+    source = std::regex_replace(source, declaration, "");
+    source = std::regex_replace(source, usage, "g_TextureResolution[$1]");
+}
+
 bool usesParticleSpriteLayout(const std::string& source) {
     return source.find("a_TexCoordVec4") != std::string::npos && source.find("a_TexCoordVec4C1") != std::string::npos &&
            source.find("a_TexCoordC2") != std::string::npos && source.find("a_Color") != std::string::npos;
@@ -123,15 +133,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                            : usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
                                                                             : ShaderVertexLayout::Sprite2D;
 
-    // Five consecutive vec4 resolutions share one array entry in Sokol's
-    // limited uniform metadata. Their std140 layout and upload offsets stay identical.
     for (std::string* source : {&compiled_vert_source, &compiled_frag_source}) {
-        for (int index = 0; index < 5; ++index) {
-            const std::string name = "g_Texture" + std::to_string(index) + "Resolution";
-            *source = std::regex_replace(*source, std::regex("uniform\\s+(?:vec4|float4)\\s+" + name + "\\s*;"), "");
-            *source = std::regex_replace(*source, std::regex("\\b" + name + "\\b"),
-                                         "g_TextureResolution[" + std::to_string(index) + "]");
-        }
+        if (source->find("Resolution") != std::string::npos) rewriteTextureResolutions(*source);
     }
 
     sg_shader_desc shd_desc = {};
