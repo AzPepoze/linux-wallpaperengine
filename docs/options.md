@@ -72,11 +72,15 @@ On Wayland, `-r` uses the layer-shell feature. On X11, it uses the X11 desktop f
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
-| `--pointer` | `auto\|surface\|evdev` | auto | Where the mouse position comes from |
+| `--pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Where the mouse position comes from |
 
-- `auto`: uses `evdev` when a mouse can be read, otherwise `surface`.
-- `evdev`: follows mouse motion across the whole desktop.
-- `surface`: only sees the mouse while it is over the wallpaper.
+- `auto` (default): tries these in order and uses the first that works: `x11`, `hyprland`, `surface`, `evdev`.
+- `x11`: the real cursor position on an X11 session.
+- `hyprland`: the real cursor position on Hyprland.
+- `surface`: the real position while the mouse is over the wallpaper.
+- `evdev`: mouse movement from `/dev/input`. An estimate, and it can drift.
+
+If the source you pick does not work, the program moves down the same list and logs a warning.
 
 ### Transition
 

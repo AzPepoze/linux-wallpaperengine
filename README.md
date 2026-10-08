@@ -65,15 +65,20 @@ There are two build modes, release and debug. See [Build](docs/build.md).
 
 ## Mouse position
 
-Some wallpapers react to the mouse. The `--pointer` option sets where the program reads the mouse position from:
+Some wallpapers react to the mouse. The `--pointer` option sets where the program reads the mouse position from.
 
-| Value | What it does |
-| --- | --- |
-| `auto` (default) | Reads the mouse from the system. If that is not allowed, it uses the wallpaper window only |
-| `evdev` | Reads the mouse from the system, even when it is over other windows |
-| `surface` | Only knows the mouse when it is over the wallpaper |
+`auto` (the default) tries these sources in order. It uses the first one that works:
 
-To let the program read the mouse, follow the step in [Install](docs/install.md#mouse-access).
+| Order | Source | Accuracy | When it is used |
+| --- | --- | --- | --- |
+| 1 | X11 (`x11`) | Exact | On an X11 session. Reads the real cursor, anywhere on the desktop |
+| 2 | Hyprland (`hyprland`) | Exact | On Hyprland. Reads the real cursor, anywhere on the desktop |
+| 3 | Wallpaper surface (`surface`) | Exact | Only when the cursor is over the wallpaper, and no source above works |
+| 4 | Mouse motion (`evdev`) | Estimate | Last resort. Follows mouse movement from `/dev/input`, and can drift |
+
+You can also pick one source with `--pointer x11`, `--pointer hyprland`, `--pointer surface` or `--pointer evdev`. If that source does not work, the program moves down the list and logs a warning.
+
+To let the program read the mouse movement (sources 4 and the `auto` fallback), follow the step in [Install](docs/install.md#mouse-access).
 
 ## Optional features
 
