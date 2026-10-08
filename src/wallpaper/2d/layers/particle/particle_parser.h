@@ -22,8 +22,7 @@ struct ParticleObjectConfig {
     bool has_override_color = false;
     bool override_color_is_legacy = false;
 
-    // Child particle system configuration (see the WE "Children" component):
-    // type is static | eventfollow | eventspawn | eventdeath.
+    // Child system type: static | eventfollow | eventspawn | eventdeath.
     std::string type = "static";
     vec3 origin = {0.0f, 0.0f, 0.0f};
     vec3 angles = {0.0f, 0.0f, 0.0f};
@@ -69,8 +68,7 @@ struct ParticleOperatorConfig {
     std::string type;
     vec3 gravity = {0, 0, 0};
     float drag = 0.0f;
-    // Alpha fade, as fractions of the particle's lifetime: fade-in completes at fade_in_time, fade-out starts at
-    // fade_out_time. Both default to 0.5 when the operator omits them.
+    // Alpha fades in lifetime fractions; both default to 0.5 when omitted.
     float fade_in_time = 0.5f;
     float fade_out_time = 0.5f;
     float frequency_min = 0.0f;
@@ -79,8 +77,7 @@ struct ParticleOperatorConfig {
     float scale_max = 0.0f;
     float speed_min = 0.0f;
     float speed_max = 0.0f;
-    // sizechange / alphachange / colorchange: the value ramps between start and end over these lifetime fractions
-    // (scalar for size and alpha, per channel for color).
+    // Ramps over lifetime fractions: scalar for size and alpha, per channel for color.
     float change_start_time = 0.0f;
     float change_end_time = 1.0f;
     float change_start_value = 1.0f;

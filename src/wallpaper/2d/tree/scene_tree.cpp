@@ -225,8 +225,7 @@ bool SceneTree::worldPlacement(uint32_t id, ScenePlacement& out) const {
         out.scale[(size_t)axis] = std::sqrt(column[0] * column[0] + column[1] * column[1] + column[2] * column[2]);
     }
     out.rotation_deg = std::atan2(world[0][1], world[0][0]) * (180.0f / (float)M_PI);
-    // Rotation follows the X basis. Preserve reflection on Y instead of turning
-    // a mirrored parent into a 180-degree rotation of an unmirrored sprite.
+    // Rotation follows the X basis and keeps Y reflection, so mirrored parents don't become 180-degree sprites.
     if (world[0][0] * world[1][1] - world[0][1] * world[1][0] < 0.0f) out.scale[1] = -out.scale[1];
     return true;
 }

@@ -2,8 +2,7 @@
 
 #include "test_util.h"
 
-// A stand-in for EngineContext with only the per-wallpaper fields, so the state
-// swap can be tested without the graphics stack EngineContext pulls in.
+// A stand-in EngineContext with only the per-wallpaper fields, avoiding the sokol graphics stack.
 struct FakeContext {
     char asset_root[512] = {};
     char wallpaper_path[512] = {};

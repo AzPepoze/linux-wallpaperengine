@@ -1,6 +1,8 @@
 #ifndef FRAME_RATE_H
 #define FRAME_RATE_H
 
+#include "shared/core/host_api.h"
+
 namespace frame_rate {
 
 // Software cap + vsync choice for --fps; <=0 means unset (vsync, no cap).
@@ -9,9 +11,8 @@ struct Policy {
     bool vsync;
 };
 
-Policy policyFor(int fps_limit);
+LWE_HOST_API Policy policyFor(int fps_limit);
 
-// Real presented frame rate over a short rolling window.
 class Meter {
    public:
     void tick(double dt_seconds);

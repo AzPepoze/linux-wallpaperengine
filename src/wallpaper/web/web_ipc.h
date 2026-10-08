@@ -1,9 +1,7 @@
 #ifndef WEB_IPC_H
 #define WEB_IPC_H
 
-// Shared-memory and control protocol between the engine process and the
-// optional QtWebEngine renderer child. Deliberately free of Qt and Vulkan so
-// the host translation unit has no Qt dependency.
+// Shared-memory and control protocol with the optional Qt renderer; kept free of Qt and Vulkan.
 
 #include <pthread.h>
 #include <stdint.h>
@@ -67,8 +65,7 @@ enum WebMessageType : uint32_t {
     WEB_MSG_DMABUF_OFFER = 100,
 };
 
-// sapp mouse buttons and key codes are forwarded verbatim; the renderer maps
-// them to the Qt equivalents.
+// Input is forwarded verbatim; the renderer maps sapp codes to Qt.
 struct WebInputMessage {
     uint32_t type;
     float x;  // Normalized [0, 1] within the rendered frame.

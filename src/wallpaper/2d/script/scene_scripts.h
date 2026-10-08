@@ -136,8 +136,7 @@ enum class BoundProperty {
     Text
 };
 
-// The scene's script-driven properties: each frame the script gets the property's current value and its result is
-// written back. Owns the scene backend and keeps it registered with the script engine.
+// Script-driven properties: each frame the script's result is written back to the property.
 class ScriptBindings {
    public:
     explicit ScriptBindings(EngineContext& ctx);

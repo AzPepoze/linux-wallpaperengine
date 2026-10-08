@@ -2,7 +2,7 @@
 
 #include <math.h>
 
-void Layer::initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+void Layer::initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx, bool load_effects) {
     if (doc.node.valid && doc.node.id > 0) {
         scene_object_id = doc.node.id;
     }
@@ -18,8 +18,10 @@ void Layer::initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, E
     parallax[0] = doc.node.parallax_depth[0];
     parallax[1] = doc.node.parallax_depth[1];
 
-    for (const auto& eff_doc : doc.effects) {
-        Effect* effect = Effect::loadFromDocument(eff_doc, ctx);
-        if (effect) effects.push_back(effect);
+    if (load_effects) {
+        for (const auto& eff_doc : doc.effects) {
+            Effect* effect = Effect::loadFromDocument(eff_doc, ctx);
+            if (effect) effects.push_back(effect);
+        }
     }
 }

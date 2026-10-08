@@ -9,8 +9,7 @@
 struct ShaderDump;
 struct PassUniformProvenance;
 
-// Hooks the renderer calls to expose its internals to diagnostics. Release
-// builds get the all-no-op defaults; see renderObserver().
+// Release builds get the no-op defaults; see renderObserver().
 class IRenderObserver {
    public:
     virtual ~IRenderObserver() = default;

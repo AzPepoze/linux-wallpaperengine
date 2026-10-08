@@ -126,6 +126,24 @@ void testTypeParsing(const fs::path& dir) {
            "unknown key is stored as text");
 }
 
+void testToStringsRoundTrip(const fs::path& dir) {
+    UserProperties props = loadInto(dir);
+    UserProperties copy = loadInto(dir);
+    for (const auto& [key, value] : props.toStrings()) copy.setFromString(key, value);
+    expect("strings", near(copy.find("speed")->n, 0.5), "slider survives the text round trip");
+    expect("strings", near(copy.find("tint")->color[2], 1.0f), "color survives the text round trip");
+    expect("strings", copy.find("enabled")->b, "bool survives the text round trip");
+    expect("strings", copy.find("title")->text == "hello", "text survives the text round trip");
+}
+
+void testBoundKeys() {
+    const std::vector<std::string> bound = {"speed", "tint"};
+    expect("bound", touchesBoundKey(bound, {{"speed", "0.1"}}), "a bound key needs a rebuild");
+    expect("bound", touchesBoundKey(bound, {{"title", "x"}, {"tint", "1 0 0"}}), "any bound key needs a rebuild");
+    expect("bound", !touchesBoundKey(bound, {{"title", "x"}}), "unbound keys update in place");
+    expect("bound", !touchesBoundKey({}, {{"speed", "0.1"}}), "no bindings means no rebuild");
+}
+
 }  // namespace
 
 int main() {
@@ -142,7 +160,9 @@ int main() {
         testSavedOverrides(base);
         testCliWins(base);
         testTypeParsing(base);
+        testToStringsRoundTrip(base);
     }
+    testBoundKeys();
 
     UserProperties missing;
     expect("missing", !missing.loadProject((base / "nope.json").string()), "missing project.json fails to load");

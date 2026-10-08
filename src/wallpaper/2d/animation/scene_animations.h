@@ -12,8 +12,7 @@
 #include "shared/core/engine_context.h"
 #include "wallpaper/2d/animation/animation_timelines.h"
 
-// Applies the animated values to the scene tree nodes (origin, scale, angles) and layers (color, alpha), before
-// property scripts run.
+// Applies animated values to scene nodes and layers before property scripts run.
 class SceneAnimations {
    public:
     explicit SceneAnimations(EngineContext& ctx) : ctx_(ctx) {}

@@ -37,8 +37,7 @@ struct RenderControlBackend::Impl {
     std::unique_ptr<QQuickWindow> window;
     std::unique_ptr<QTimer> timer;
 
-    // Asynchronous readback: each frame is copied into a pixel-buffer object and
-    // picked up two frames later, so the CPU never waits on the GPU.
+    // Readbacks are picked up two frames later, so the CPU never waits on the GPU.
     QOpenGLExtraFunctions* gl = nullptr;
     GLuint pbo[kReadbackRing] = {};
     GLsync fences[kReadbackRing] = {};

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "shared/core/build_config.h"
+#include "shared/core/plugin.h"
 #include "shared/media/media_session.h"
 #include "shared/media/mpris_metadata.h"
 #include "shared/media/thumbnail_colors.h"
@@ -32,14 +33,6 @@ namespace {
 std::mutex g_thumbnail_fallback_mutex;
 std::string g_thumbnail_fallback_path;
 }  // namespace
-
-// The artwork shown by `$mediaThumbnail` when the current track has no usable
-// cover (WE ships materials/util/webthumbnailfallback.png for this). Set once by
-// the app from the resolved asset path before the media source starts.
-void setMediaThumbnailFallbackImage(const std::string& path) {
-    std::lock_guard<std::mutex> lock(g_thumbnail_fallback_mutex);
-    g_thumbnail_fallback_path = path;
-}
 
 #if LWE_MPRIS
 
@@ -189,8 +182,7 @@ std::string percentDecode(const std::string& text) {
     return out;
 }
 
-// Loads the configured `$mediaThumbnail` fallback (WE's webthumbnailfallback.png)
-// on demand. Empty when no path was configured or the image cannot be decoded.
+// Loads the configured fallback artwork on demand; empty when unset or undecodable.
 ThumbnailColors loadFallbackThumbnail() {
     std::string path;
     {
@@ -367,8 +359,7 @@ void MprisMediaSource::removePlayer(const std::string& service) {
     reselect();
 }
 
-// Fills in properties for players discovered via signals or ListNames. Kept out
-// of the signal handlers so no synchronous bus call runs while dispatching.
+// Fills properties for newly seen players outside the signal handlers, so no bus call runs mid-dispatch.
 void MprisMediaSource::processPendingRefreshes() {
     if (pending_refresh_.empty()) return;
     for (const std::string& service : pending_refresh_) {
@@ -470,8 +461,7 @@ void MprisMediaSource::emitThumbnail(Player& player) {
         }
     }
 
-    // No usable artwork: fall back to WE's default media texture so the album
-    // art layer shows a placeholder instead of its blank solid base.
+    // No artwork: fall back to WE's placeholder media texture instead of a blank solid.
     if (!loaded) event.thumbnail = fallbackThumbnail();
 
     if (loaded) {
@@ -538,29 +528,24 @@ int MprisMediaSource::onPropertiesChanged(sd_bus_message* message, void* userdat
     return 0;
 }
 
-#else
-
-namespace {
-
-class NoopMediaSource : public MediaSource {
-   public:
-    void start() override {}
-    void stop() override {}
-    std::vector<MediaEvent> poll() override {
-        return {};
-    }
-};
-
-}  // namespace
-
 #endif
-
-std::unique_ptr<MediaSource> createMprisMediaSource() {
-#if LWE_MPRIS
-    return std::make_unique<MprisMediaSource>();
-#else
-    return std::make_unique<NoopMediaSource>();
-#endif
-}
 
 }  // namespace wallpaper_engine
+
+#if LWE_MPRIS
+// Plugin entry points, resolved by mpris_loader.cpp in the host binary.
+extern "C" {
+int lwe_plugin_abi() {
+    return kPluginAbi;
+}
+
+wallpaper_engine::MediaSource* lwe_create_mpris_source() {
+    return new wallpaper_engine::MprisMediaSource();
+}
+
+void lwe_mpris_set_thumbnail_fallback(const char* path) {
+    std::lock_guard<std::mutex> lock(wallpaper_engine::g_thumbnail_fallback_mutex);
+    wallpaper_engine::g_thumbnail_fallback_path = path ? path : "";
+}
+}
+#endif

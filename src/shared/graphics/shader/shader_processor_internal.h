@@ -34,9 +34,7 @@ inline bool isVectorTypeWord(const std::string& word) {
     return std::any_of(std::begin(kTypes), std::end(kTypes), [&](const char* type) { return word == type; });
 }
 
-// Calls `visit(type, name, name_position)` for every `type name` that is followed by one of `terminators`, scanning
-// like the regex `\b(type)\s+(identifier)\s*[terminators]`: a type is a whole word and matches do not overlap.
-// Stops as soon as `visit` returns true.
+// Calls `visit` for each `type name` followed by a terminator; stops once visit returns true.
 template <class IsType, class Visit>
 void forEachDeclaration(const std::string& source, const char* terminators, IsType&& isType, Visit&& visit) {
     const size_t size = source.size();

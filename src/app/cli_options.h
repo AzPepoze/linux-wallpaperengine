@@ -8,7 +8,6 @@
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 #include "wallpaper/web/web_options.h"
 
-// Transition settings, resolved from the CLI and config.json.
 struct TransitionOptions {
     std::string effect;   // --transition
     std::string mode;     // --transition-mode
@@ -44,6 +43,7 @@ struct CliOptions {
     int fps_limit = 0;  // 0 = unset: rely on vsync, no software cap
     WebOptions web;
     std::string scaling;
+    std::string pointer;  // auto|surface|hyprland|evdev
     std::string clamp;
     std::string screen_root;
     std::string layer;
@@ -52,6 +52,7 @@ struct CliOptions {
     TransitionOptions transition;
     ParallaxOptions parallax;
     bool no_control = false;
+    bool toggle_debug_ui = false;
     bool help = false;
     bool whoareyou = false;
     float volume = 100.0f;  // --volume master percent

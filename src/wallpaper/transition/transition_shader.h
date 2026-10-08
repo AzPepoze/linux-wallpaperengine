@@ -14,20 +14,17 @@ struct TransitionConfig {
     bool continue_previous = false;
 };
 
-// Loads and draws Wallpaper Engine's own playlist transition shader
-// (assets/shaders/HLSL/dx11playlisttransition.*) for one FADEEFFECT combo.
+// Loads and draws WE's playlist transition shader for one FADEEFFECT combo.
 class TransitionShader {
    public:
-    // effect_index is a 0..26 FADEEFFECT value. Returns false (built-in fade
-    // stays in charge) when the install has no shader or it fails to compile.
+    // effect_index is a 0..26 FADEEFFECT value; false keeps the built-in fade.
     bool init(EngineContext& ctx, int effect_index);
     void shutdown();
     bool ready() const {
         return shader_.id != SG_INVALID_ID && pipeline_.id != SG_INVALID_ID;
     }
 
-    // Draws the outgoing frame over the currently bound target with
-    // premultiplied alpha. progress runs 0 (outgoing visible) .. 1 (gone).
+    // Draws the outgoing frame with premultiplied alpha; progress 0 is visible, 1 is gone.
     void drawOldOverNew(EngineContext& ctx, sg_view old_frame, float progress, int width, int height,
                         uint32_t hash_seed);
 

@@ -7,7 +7,6 @@
 
 namespace web_renderer {
 
-// Maps a sapp mouse button id to the Qt equivalent.
 inline Qt::MouseButton toQtButton(uint32_t button) {
     switch (button) {
         case 0:
@@ -21,7 +20,6 @@ inline Qt::MouseButton toQtButton(uint32_t button) {
     }
 }
 
-// Maps the sapp modifier bits to Qt keyboard modifiers.
 inline Qt::KeyboardModifiers toQtModifiers(uint32_t modifiers) {
     Qt::KeyboardModifiers out;
     if (modifiers & (1u << 0)) out |= Qt::ShiftModifier;

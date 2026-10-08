@@ -189,9 +189,7 @@ void generateShatterMesh(std::vector<ShatterVertex>& out) {
     }
 }
 
-// Wallpaper Engine ships these only as DX11 fallback HLSL. Give Slang the same
-// explicit Vulkan bindings the GLSL path would have generated. `fragment`
-// gates the parts only the fragment shader declares.
+// DX11 fallback HLSL gets the explicit Vulkan bindings the GLSL path would generate; `fragment` selects fragment-only parts.
 std::string annotateHlsl(std::string source, int effect_index, bool fragment) {
     if (fragment) {
         replaceAll(source, "Texture2D g_Texture0MipMapped:register(t0);", "");
@@ -214,9 +212,7 @@ std::string annotateHlsl(std::string source, int effect_index, bool fragment) {
                    "[[vk::binding(33,1)]] SamplerState g_Texture0SamplerStateWrap:register(s1);");
         replaceAll(source, "cbuffer g_bufDynamic:register(b0)", "[[vk::binding(0,0)]] cbuffer g_bufDynamic");
     } else {
-        // Glass shatter's vertex stage reads g_Progress and the view-projection,
-        // so give the vertex block its own set-0 binding to avoid colliding
-        // with the fragment block.
+        // The vertex block needs its own set-0 binding to avoid colliding with the fragment block.
         replaceAll(source, "cbuffer g_bufDynamic:register(b0)", "[[vk::binding(1,0)]] cbuffer g_bufDynamic");
         if (effect_index == (int)lwe::transition::Effect::GlassShatter) {
             // fxc truncates float3 -> float2 implicitly; Slang rejects it.
@@ -304,8 +300,7 @@ bool TransitionShader::init(EngineContext& ctx, int effect_index) {
         pipeline_desc.layout.attrs[1].offset = sizeof(float) * 2;
     }
     pipeline_desc.index_type = SG_INDEXTYPE_UINT16;
-    // The shader premultiplies rgb by its mask alpha, so the usual (ONE,
-    // ONE_MINUS_SRC_ALPHA) premultiplied blend reveals the new wallpaper.
+    // rgb is premultiplied by the mask alpha, so the premultiplied blend reveals the new wallpaper.
     pipeline_desc.colors[0].blend.enabled = true;
     pipeline_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_ONE;
     pipeline_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
@@ -412,8 +407,7 @@ void TransitionShader::drawOldOverNew(EngineContext& ctx, sg_view old_frame, flo
 
     DynamicUniforms uniforms = {};
     uniforms.progress = progress;
-    // Per-switch randomness: the WE shaders use g_Hash/g_Hash2 for direction,
-    // impact position and noise offsets, so each switch should look different.
+    // Per-switch randomness: the WE shaders read g_Hash/g_Hash2, so each switch differs.
     uniforms.hash = (float)(hash_seed & 0xffffu) / 65535.0f;
     uniforms.hash2 = (float)((hash_seed >> 16) & 0xffffu) / 65535.0f;
     uniforms.random = (float)(hash_seed % 97u) / 97.0f;

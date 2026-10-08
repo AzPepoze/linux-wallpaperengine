@@ -121,8 +121,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
                     vertex.texcoord[0] = u;
                     vertex.texcoord[1] = v;
                     vertex.texcoord[2] = particle.rotation;
-                    // Sprite quads take the half-extent (size * 0.5); trails keep the full size so their aspect ratio
-                    // is preserved.
+                    // Sprite quads take the half-extent; trails keep the full size to keep their aspect.
                     vertex.texcoord[3] = is_trail ? particle.size : particle.size * 0.5f;
                     vertex.color[0] = particle.color[0];
                     vertex.color[1] = particle.color[1];
@@ -130,8 +129,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
                     vertex.color[3] = particle.alpha;
                     float velocity_x = particle.velocity[0];
                     float velocity_y = particle.velocity[1];
-                    // ComputeParticleTrailTangents normalizes the cross product.
-                    // Avoid feeding it a zero vector for incomplete/static presets.
+                    // Trail tangents normalize the cross product, so never pass a zero vector.
                     if (is_trail && velocity_x * velocity_x + velocity_y * velocity_y < 1e-8f) velocity_y = 0.001f;
                     vertex.texcoord_c1[0] = velocity_x;
                     vertex.texcoord_c1[1] = velocity_y;
@@ -169,8 +167,7 @@ void ParticleSystem::draw(EngineContext& ctx) {
             mat4x4_identity(model);
             float camera_distance = 1000.0f;
             if (use_perspective) {
-                // Particle coordinates are Wallpaper Engine world coordinates (Y-up).
-                // The focal length makes the z=0 reference plane match the scene extent.
+                // Particles use Y-up world coordinates; the focal length fits the z=0 plane to the scene.
                 makePerspectiveCamera(projection, view, scene_w, scene_h, ctx.scene.general.perspective_override_fov,
                                       camera_distance);
                 mat4x4_translate_in_place(model, layer_origin[0] + parallax_x, layer_origin[1] + parallax_y,
@@ -181,11 +178,9 @@ void ParticleSystem::draw(EngineContext& ctx) {
             } else {
                 mat4x4_ortho(projection, 0.0f, ctx.renderer.view_width, ctx.renderer.view_height, 0.0f, -1.0f, 1.0f);
                 mat4x4_identity(view_projection);
-                // Convert Wallpaper Engine's Y-up particle space exactly once at
-                // the particle-to-screen boundary. Image layers remain untouched.
+                // Convert the Y-up particle space once, at the particle-to-screen boundary.
                 if (simulatesInWorld()) {
-                    // Positions are already scene coordinates (the layer transform was applied at spawn), so
-                    // only the camera offset and the view fit remain; sizes are not scaled by the layer.
+                    // Positions are already scene coordinates, so only the camera offset and view fit apply.
                     mat4x4_translate_in_place(
                         model, ctx.scene.offset_x + (camera_offset[0] + parallax_x) * ctx.scene.render_scale,
                         ctx.scene.offset_y + (scene_h - camera_offset[1] - parallax_y) * ctx.scene.render_scale, 0.0f);
@@ -322,8 +317,7 @@ void ParticleSystem::drawDebugBounds(EngineContext& ctx) {
     }
     float point_color[4] = {1, 0, 0, 1};
     float velocity_color[4] = {0, 1, 1, 1};
-    // A rain system can legally contain ten thousand particles. Keep the
-    // diagnostic useful without covering the debugger (or the entire scene).
+    // Keeps the diagnostic readable without covering the debugger or the scene.
     const size_t draw_count = std::min(particles.size(), static_cast<size_t>(ctx.debug.particle_debug_max_particles));
     for (size_t particle_index = 0; particle_index < draw_count; ++particle_index) {
         const Particle& particle = particles[particle_index];

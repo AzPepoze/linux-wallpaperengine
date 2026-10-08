@@ -14,8 +14,7 @@
 #include "sokol_args.h"
 
 namespace {
-// sokol_args strips a single leading dash but keeps "--", so boolean flags
-// accept both spellings explicitly.
+// sokol_args keeps "--" in its keys, so boolean flags accept both spellings.
 bool hasFlag(const char* name) {
     return sargs_exists(name);
 }
@@ -164,12 +163,14 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 #endif
     cli_args::optionValue(args, {"--assets-dir"}, opts.assets_dir);
     opts.scaling = resolve({"--scaling"}, "scaling_mode", "");
+    opts.pointer = resolve({"--pointer"}, "pointer", "auto");
     opts.parallax.smoothing = resolveReal("parallax_smoothing", 0.0f);
     opts.parallax.scale = resolveReal("parallax_scale", 0.0f);
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
     opts.no_control = hasDashedFlag("no-control");
+    opts.toggle_debug_ui = hasDashedFlag("toggle-debug-ui");
     for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
         const size_t equals = entry.find('=');
         if (equals == std::string::npos) continue;

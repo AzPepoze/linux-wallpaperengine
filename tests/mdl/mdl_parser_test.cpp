@@ -50,13 +50,13 @@ void appendVertex(std::vector<uint8_t>& out, float x, float y, float u, float v,
     appendF32(out, x);
     appendF32(out, y);
     appendF32(out, 0.0f);
-    appendF32(out, 0.0f);  // normal
+    appendF32(out, 0.0f);
     appendF32(out, 0.0f);
     appendF32(out, 1.0f);
-    appendF32(out, 1.0f);  // tangent
+    appendF32(out, 1.0f);
     appendF32(out, 0.0f);
     appendF32(out, 0.0f);
-    appendF32(out, 1.0f);  // tangent handedness
+    appendF32(out, 1.0f);
     appendU32(out, b0);
     appendU32(out, b1);
     appendU32(out, 0);
@@ -72,11 +72,11 @@ void appendVertex(std::vector<uint8_t>& out, float x, float y, float u, float v,
 std::vector<uint8_t> makeMdl(bool controllers = false) {
     std::vector<uint8_t> out;
     appendText(out, "MDLV0023");
-    appendU8(out, 0);            // reserved
-    appendU32(out, 0x01800009);  // type word
-    appendU16(out, 1);           // sub-version
-    appendU16(out, 0);           // flags
-    appendU32(out, 0);           // reserved
+    appendU8(out, 0);
+    appendU32(out, 0x01800009);
+    appendU16(out, 1);
+    appendU16(out, 0);
+    appendU32(out, 0);
     appendText(out, "materials/test.json");
     appendU8(out, 0);
     for (int i = 0; i < 28; ++i) appendU8(out, 0);
@@ -99,24 +99,24 @@ std::vector<uint8_t> makeMdl(bool controllers = false) {
     appendText(out, "MDLS0004");
     appendU8(out, 0);
     const size_t skeleton_end_offset_pos = out.size();
-    appendU32(out, 0);  // next offset (patched below)
-    appendU32(out, 1);  // bone count
-    appendU8(out, 0);   // reserved
-    appendU32(out, 0);  // type
+    appendU32(out, 0);
+    appendU32(out, 1);
+    appendU8(out, 0);
+    appendU32(out, 0);
     appendU32(out, 0xFFFFFFFFu);
     appendU32(out, 64);
     for (int i = 0; i < 16; ++i) appendF32(out, i % 5 == 0 ? 1.0f : 0.0f);
     if (controllers) appendText(out, "{\"ik\":true,\"ikd\":1}");
-    appendU8(out, 0);         // info JSON terminator
-    appendText(out, "root");  // bone name
+    appendU8(out, 0);
+    appendText(out, "root");
     appendU8(out, 0);
 
     if (controllers) {
         appendU8(out, 0);
-        appendU32(out, 0);  // controller bone
+        appendU32(out, 0);
         appendU32(out, 0);  // endpoint, rather than pole
         for (int i = 0; i < 16; ++i) appendF32(out, i % 5 == 0 ? 1.0f : 0.0f);
-        appendU8(out, 1);  // assembled reference pose present
+        appendU8(out, 1);
         for (int i = 0; i < 16; ++i) appendF32(out, i == 12 ? 25.0f : (i % 5 == 0 ? 1.0f : 0.0f));
     }
     patchU32(out, skeleton_end_offset_pos, (uint32_t)out.size());
@@ -141,19 +141,19 @@ std::vector<uint8_t> makeMdl(bool controllers = false) {
     // MDLA: one clip, one bone track, keyframes for frame_count=1.
     appendText(out, "MDLA0006");
     appendU8(out, 0);
-    appendU32(out, 0);   // end offset
-    appendU32(out, 1);   // animation count
-    appendU32(out, 77);  // first clip id
+    appendU32(out, 0);
+    appendU32(out, 1);
+    appendU32(out, 77);
     appendU32(out, 0);
     appendText(out, "clip");
     appendU8(out, 0);
     appendText(out, "loop");
     appendU8(out, 0);
     appendF32(out, 30.0f);
-    appendU32(out, 1);  // frame count
+    appendU32(out, 1);
     appendU32(out, 0);
-    appendU32(out, 1);   // track count
-    appendU32(out, 0);   // track reserved
+    appendU32(out, 1);
+    appendU32(out, 0);
     appendU32(out, 72);  // (frame_count + 1) * 36
     for (int frame = 0; frame < 2; ++frame) {
         appendF32(out, (float)frame);
@@ -230,8 +230,7 @@ int main() {
     check(!wallpaper_engine::parseMdl(junk, sizeof(junk), rejected), "short buffer rejected");
     check(!wallpaper_engine::parseMdl(nullptr, 0, rejected), "null buffer rejected");
 
-    // 60 legacy vertices occupy 3120 bytes, also divisible by the 48-byte
-    // unskinned stride. Both interpretations accept all triangle indices.
+    // The 60 legacy vertices also divide by the 48-byte stride; both layouts accept every index.
     auto legacy_bytes = makeMdl();
     memcpy(legacy_bytes.data(), "MDLV0016", 8);
     const size_t mesh = 21 + strlen("materials/test.json") + 1 + 28;

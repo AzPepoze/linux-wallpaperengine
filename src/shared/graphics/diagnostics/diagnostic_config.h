@@ -15,8 +15,7 @@ struct DiagnosticOptions {
     bool exit_after_diagnose = false;
     // Fixed 1/60 s frame step and a seeded random generator, so a capture frame is identical from run to run.
     bool deterministic = false;
-    // Frame to capture; frames only advance as fast as the compositor asks for them, so a hidden window needs a low
-    // one.
+    // Frame to capture; a hidden window needs a low value since frames advance only on compositor request.
     int target_frame = 100;
 };
 
@@ -42,8 +41,7 @@ struct DiagnosticConfig {
 
     bool exit_after_diagnose = false;
 
-    // Bisection controls (CLI-driven): substring matches against effect path.
-    // "*" or "all" disables everything matching that hook.
+    // Bisection filters: substring match on the effect path; "*" or "all" matches everything.
     std::vector<std::string> disable_effect_paths;
     bool disable_particles = false;
     bool disable_bloom = false;

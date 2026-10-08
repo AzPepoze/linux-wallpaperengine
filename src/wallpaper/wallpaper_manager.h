@@ -1,6 +1,7 @@
 #ifndef WALLPAPER_MANAGER_H
 #define WALLPAPER_MANAGER_H
 
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -46,15 +47,13 @@ class WallpaperManager {
     }
     bool takePendingSwitch(SwitchRequest& out);
 
-    // Captures the outgoing frame, loads the requested wallpaper and starts the
-    // transition. Returns true when a pending switch was processed.
+    // Starts or polls preparation and commits at readiness; true when a request was accepted.
     bool beginPendingSwitch(EngineContext& ctx);
     bool isTransitioning() const {
         return transition_.active();
     }
     void updateTransition(float dt);
-    // continue mode: update and offscreen-render the outgoing instance, then
-    // refresh the transition's live source. No-op unless transitioning live.
+    // Continue mode: the outgoing instance renders offscreen to refresh the live source.
     bool stepOutgoingForTransition(EngineContext& ctx, float dt);
     void compositeTransition(EngineContext& ctx) {
         transition_.composite(ctx);
@@ -77,9 +76,14 @@ class WallpaperManager {
     }
 
    private:
-    // Destroys `instance` with its own view active, so Scene2DRuntime::cleanup()
-    // tears down that instance's layers (it reads ctx.scene).
+    // Activates the instance first so its layers tear down through its own view.
     void destroyInstance(EngineContext& ctx, std::unique_ptr<WallpaperInstance>& instance);
+    struct LoadJob;
+    void pollLoad(EngineContext& ctx);
+    void commitLoad(EngineContext& ctx);
+    std::shared_ptr<LoadJob> load_job_;
+    std::vector<std::shared_ptr<LoadJob>> retired_jobs_;
+
     // Pumps the outgoing instance's video/audio without rendering it (freeze).
     void tickOutgoingAudio(EngineContext& ctx, float dt);
 

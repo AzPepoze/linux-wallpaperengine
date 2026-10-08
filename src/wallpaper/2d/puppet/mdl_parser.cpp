@@ -90,9 +90,7 @@ bool parseBones(Reader& r, const uint8_t* data, size_t size, MdlModel& out) {
         out.bones.push_back(std::move(bone));
     }
 
-    // Older skeletons append IK target and effector records. Each record has
-    // a byte delimiter, a bone index, a target flag and a world bind matrix.
-    // Their animation tracks follow the ordinary bone tracks.
+    // Older skeletons append IK records; their animation tracks follow the ordinary bone tracks.
     while (r.pos + 73 <= size && r.pos + 73 <= next_offset && data[r.pos] == 0) {
         Reader controller_reader{data, size, r.pos + 1};
         uint32_t bone = 0, target = 0;
@@ -107,8 +105,7 @@ bool parseBones(Reader& r, const uint8_t* data, size_t size, MdlModel& out) {
         r.pos = controller_reader.pos;
     }
 
-    // A second matrix array is the assembled reference pose. IK bones keep
-    // their sheet coordinates in ordinary tracks; their chain uses this pose.
+    // The second matrix array is the assembled reference pose that IK chains use.
     if (!out.controllers.empty() && next_offset <= size && r.pos + 1 + num_bones * 64 <= next_offset &&
         data[r.pos] == 1) {
         ++r.pos;
@@ -127,8 +124,7 @@ bool parseBones(Reader& r, const uint8_t* data, size_t size, MdlModel& out) {
         }
     }
 
-    // Keep the cursor consistent with the section's declared end so the next
-    // search starts after any undecoded per-bone metadata.
+    // Re-sync to the section's declared end, skipping undecoded per-bone metadata.
     if (next_offset >= r.pos && next_offset <= size) r.pos = next_offset;
     (void)data;
     return true;
@@ -262,11 +258,7 @@ bool parseMdl(const uint8_t* data, size_t size, MdlModel& out) {
     if (!r.cstring(material)) return false;
     out.material = material;
 
-    // The mesh block sits within the first 64 bytes after the material. Four
-    // vertex layouts ship in real files: 80 bytes for the v0017+ skinned
-    // layout, 84 bytes for its variant with one extra word, 52 bytes for the
-    // older skinned layout (v0013) and 48 bytes for an unskinned puppet. Pick the first candidate whose indices are in
-    // range, which disambiguates meshes that divide evenly by several strides.
+    // Four vertex layouts exist; pick the first stride whose indices are all in range.
     struct MeshLayout {
         size_t stride;
         size_t indices_offset;  // kNoBones when the mesh carries no skinning
@@ -281,9 +273,7 @@ bool parseMdl(const uint8_t* data, size_t size, MdlModel& out) {
         {84, 44, 60, 76},
     };
 
-    // Legacy skinned vertices omit normals and tangents. Their byte count
-    // can also divide by 48 with every triangle still in range, so use the
-    // version to prefer the 52-byte skinning layout over an unskinned mesh.
+    // Legacy skinned meshes can also divide by 48; the version prefers the 52-byte layout.
     if (out.version >= "MDLV0013" && out.version <= "MDLV0016") {
         const MeshLayout unskinned = kLayouts[1];
         kLayouts[1] = kLayouts[2];
@@ -359,8 +349,7 @@ bool parseMdl(const uint8_t* data, size_t size, MdlModel& out) {
         out.triangles[t] = {idx[0], idx[1], idx[2]};
     }
 
-    // Skeleton and animation are optional; locate their sections after the
-    // index buffer rather than decoding the mesh trailer between them.
+    // Skeleton and animation sections are located after the index buffer, not decoded from the trailer.
     size_t search_from = indices_offset + index_bytes;
     size_t bones_offset = 0;
     if (findTag(data, size, search_from, "MDLS", bones_offset)) {

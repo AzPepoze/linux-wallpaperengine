@@ -15,8 +15,7 @@ struct ScriptErrors {
     int count = 0;
 };
 
-// One QuickJS runtime shared by every SceneScript, so `shared`, `localStorage` and timers exist once. It is created
-// by the first retain() and freed by the last release().
+// One QuickJS runtime for all scripts: created by the first retain(), freed by the last release().
 class ScriptEngine {
    public:
     static ScriptEngine& instance();
@@ -27,8 +26,7 @@ class ScriptEngine {
         return runtime_.context();
     }
 
-    // The Wallpaper Engine assets folder supplies baseclasses.js and the WEMath/WEColor/WEVector modules; set it
-    // before the first retain().
+    // Assets folder for baseclasses.js and the WEMath/WEColor/WEVector modules; set before the first retain().
     void setAssetsDir(const std::string& assets_dir) {
         assets_dir_ = assets_dir;
     }
@@ -36,9 +34,7 @@ class ScriptEngine {
         return assets_dir_;
     }
     void setWallpaperId(const std::string& id);
-    // Two wallpapers are alive during a transition, so each scene registers a scope: its backend, its `shared` and
-    // its localStorage (named by `wallpaper_id`). Scripts run against the scope they loaded in; events reach the
-    // active scope only. Tests and the corpus runner use the null scope.
+    // Each scene registers a scope (backend, shared, localStorage); events reach only the active scope.
     void registerScope(const void* scope, class ScriptSceneBackend* backend, const std::string& wallpaper_id = "");
     void unregisterScope(const void* scope);
     int scopeKey(const void* scope) const;
@@ -73,8 +69,7 @@ class ScriptEngine {
     size_t scriptCount() const {
         return scripts_.size();
     }
-    // Both return how many scripts handled the event. A sticky broadcast is also delivered once to scripts that
-    // load later.
+    // Both return how many scripts handled the event; a sticky broadcast also reaches later-loaded scripts.
     int broadcast(const char* hook, const ScriptEvent& event, bool sticky = false);
     int dispatchToLayer(uint32_t layer_id, const char* hook, const ScriptEvent& event);
     bool anyScriptExports(const std::vector<const char*>& hooks);

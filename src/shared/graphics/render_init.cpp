@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <future>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "render.h"
@@ -13,6 +14,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/task_pool.h"
+#include "shared/core/vfs.h"
 #include "sokol_glue.h"
 
 namespace {
@@ -28,7 +30,7 @@ struct BlendShaderSources {
 };
 
 // Thread-safe: reads asset files, processes sources and compiles SPIR-V — no GPU calls.
-BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode) {
+BlendShaderSources prepareBlendShaderSources(const IAssetResolver& assets, int blend_mode) {
     BlendShaderSources result;
     result.mode = blend_mode;
 
@@ -92,9 +94,9 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
         "}\n";
 
     std::string processed_vert = ShaderSourceProcessor::processShaderSource(
-        vertex_source, "shaders/linux-wallpaperengine/image_composite.vert", *ctx.asset_mgr, true);
+        vertex_source, "shaders/linux-wallpaperengine/image_composite.vert", assets, true);
     std::string processed_frag = ShaderSourceProcessor::processShaderSource(
-        fragment_source, "shaders/linux-wallpaperengine/image_composite.frag", *ctx.asset_mgr, false);
+        fragment_source, "shaders/linux-wallpaperengine/image_composite.frag", assets, false);
 
     // Do not fall back to an approximate implementation when the authoritative WE header is missing.
     if (processed_frag.find("#include \"common_blending.h\"") != std::string::npos) {
@@ -112,8 +114,7 @@ BlendShaderSources prepareBlendShaderSources(EngineContext& ctx, int blend_mode)
     return result;
 }
 
-// The pipeline borrows the shader's layouts, so the shader must outlive it (sokol frees them a few frames after
-// sg_destroy_shader).
+// The pipeline borrows the shader's layouts, so the shader must outlive it.
 bool finalizeBlendPipeline(const BlendShaderSources& sources, GfxShader& shader_out, GfxPipeline& pipeline_out) {
     CompiledShader shader =
         ShaderCompiler::compile("image-composite-" + std::to_string(sources.mode), sources.vert, sources.frag, {}, 1);
@@ -126,6 +127,13 @@ bool finalizeBlendPipeline(const BlendShaderSources& sources, GfxShader& shader_
     return true;
 }
 }  // namespace
+
+struct BlendPipelinePrecompileJob {
+    std::string engine_path;
+    std::string wallpaper_path;
+    vfs::PackageHandle package;
+    std::vector<std::future<BlendShaderSources>> futures;
+};
 
 namespace {
 const std::string kSpriteVertexSource =
@@ -149,9 +157,7 @@ const std::string kSpriteFragmentSource =
     "  frag_color = texture(tex, uv) * tint;\n"
     "}\n";
 
-// Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
-// Fully transparent texels borrow the colour of nearby opaque ones, otherwise bilinear minification of the
-// straight result mixes their black into every cut-out edge.
+// Un-premultiplies targets; transparent texels borrow nearby colour to avoid dark cut-out edges.
 const std::string kUnpremulFragmentSource =
     "#version 330\n"
     "precision mediump float;\n"
@@ -179,8 +185,6 @@ const std::string kUnpremulFragmentSource =
     "  frag_color = c * tint;\n"
     "}\n";
 
-// Present pass: gentle highlight roll-off so additive HDR effects do not
-// hard-clip to flat white. Identity below the knee, asymptotes to 1 above.
 const std::string kPresentFragmentSource =
     "#version 330\n"
     "precision mediump float;\n"
@@ -247,8 +251,7 @@ sg_shader makeSpriteShader(const std::string& vertex_source, const std::string& 
     return create_backend_shader(&desc, vertex_source, fragment_source, label);
 }
 
-// Straight-alpha blending that keeps the accumulated target opaque: with backend defaults a translucent layer
-// replaced target alpha with its mask alpha, re-multiplying the composited scene at present.
+// Straight-alpha blend that keeps the target opaque; backend defaults would re-multiply the scene.
 void useAlphaBlend(sg_pipeline_desc& desc) {
     desc.colors[0].blend.enabled = true;
     desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
@@ -372,23 +375,65 @@ void renderer_init(renderer_t* r, float w, float h) {
     }
 }
 
-// Precompiles all blend pipelines during init; creating them mid-render caused GPU context loss.
-void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r, const std::vector<int>& modes) {
+BlendPipelinePrecompileJobHandle renderer_begin_blend_pipeline_precompile(const AssetManager& assets,
+                                                                          vfs::PackageHandle package, renderer_t* r,
+                                                                          const std::vector<int>& modes) {
     const int count = kLastWallpaperBlendMode - kFirstWallpaperBlendMode + 1;
-
-    std::vector<std::future<BlendShaderSources>> futures;
-    futures.reserve(count);
+    auto job = std::make_shared<BlendPipelinePrecompileJob>();
+    job->engine_path = assets.getEnginePath();
+    job->wallpaper_path = assets.getWallpaperPath();
+    job->package = std::move(package);
+    job->futures.reserve(count);
     for (int mode = kFirstWallpaperBlendMode; mode <= kLastWallpaperBlendMode; ++mode) {
         if (!modes.empty() && std::find(modes.begin(), modes.end(), mode) == modes.end()) continue;
         if (r->pip_image_composite[mode].id != SG_INVALID_ID) continue;
-        futures.push_back(TaskPool::instance().enqueue(prepareBlendShaderSources, std::ref(ctx), mode));
+        const std::string engine_path = job->engine_path;
+        const std::string wallpaper_path = job->wallpaper_path;
+        const vfs::PackageHandle worker_package = job->package;
+        job->futures.push_back(TaskPool::instance().enqueue([engine_path, wallpaper_path, worker_package, mode] {
+            vfs::ScopedBinding binding(worker_package);
+            AssetManager worker_assets;
+            worker_assets.init(engine_path.c_str(), wallpaper_path.c_str());
+            return prepareBlendShaderSources(worker_assets, mode);
+        }));
     }
+    return job;
+}
 
-    for (auto& f : futures) {
-        BlendShaderSources sources = f.get();
-        if (!sources.valid) continue;
-        if (r->pip_image_composite[sources.mode].id != SG_INVALID_ID) continue;
-        finalizeBlendPipeline(sources, r->shd_image_composite[sources.mode], r->pip_image_composite[sources.mode]);
+bool renderer_poll_blend_pipeline_precompile(const BlendPipelinePrecompileJobHandle& job, renderer_t* r,
+                                             std::chrono::steady_clock::time_point deadline) {
+    if (!job || job->futures.empty()) return true;
+    if (std::chrono::steady_clock::now() >= deadline) return false;
+
+    for (auto it = job->futures.begin(); it != job->futures.end(); ++it) {
+        if (std::chrono::steady_clock::now() >= deadline) return false;
+        if (it->wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
+        BlendShaderSources sources;
+        bool prepared = false;
+        try {
+            sources = it->get();
+            prepared = true;
+        } catch (const std::exception& e) {
+            LOG_TAG_E("RENDER", "Blend shader preparation failed: %s", e.what());
+        } catch (...) {
+            LOG_TAG_E("RENDER", "Blend shader preparation failed with an unknown exception");
+        }
+        job->futures.erase(it);
+        if (prepared && sources.valid && r->pip_image_composite[sources.mode].id == SG_INVALID_ID)
+            finalizeBlendPipeline(sources, r->shd_image_composite[sources.mode], r->pip_image_composite[sources.mode]);
+        return job->futures.empty();
+    }
+    return false;
+}
+
+void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r, const std::vector<int>& modes) {
+    if (!ctx.asset_mgr) return;
+    auto job = renderer_begin_blend_pipeline_precompile(*ctx.asset_mgr, vfs::currentPackage(), r, modes);
+    while (!renderer_poll_blend_pipeline_precompile(job, r, std::chrono::steady_clock::time_point::max())) {
+        if (!job->futures.empty())
+            job->futures.front().wait();
+        else
+            std::this_thread::yield();
     }
 }
 

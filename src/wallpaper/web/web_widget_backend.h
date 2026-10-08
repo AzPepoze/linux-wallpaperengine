@@ -12,8 +12,7 @@ struct WebFrameBuffer;
 
 namespace web_renderer {
 
-// Fallback backend: renders with a QWebEngineView widget under the offscreen
-// QPA plugin and captures it with grab(). Works everywhere Qt does.
+// Fallback backend: a QWebEngineView widget under the offscreen QPA, captured with grab().
 class WidgetBackend : public FrameRenderer {
    public:
     WidgetBackend(WebFrameBuffer* frame, uint32_t width, uint32_t height, uint32_t fps);

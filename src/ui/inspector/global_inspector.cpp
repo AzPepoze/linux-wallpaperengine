@@ -5,11 +5,17 @@
 #include "imgui.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "wallpaper/web/web_transport.h"
 
 namespace Inspector {
 
 void GlobalInspector::show(EngineContext& ctx) {
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "GLOBAL ENGINE SETTINGS");
+    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.5f, 1.0f), "Mouse source: %s", ctx.input.pointer_source.c_str());
+    if (ctx.web_frame_transport != "none") {
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Web frames: %s (requested: %s)",
+                           ctx.web_frame_transport.c_str(), webTransportName(ctx.web.transport));
+    }
     const char* modes[] = {"Cover", "Fit", "Stretch"};
     int current_mode = (int)ctx.scene.scaling_mode;
     if (ImGui::Combo("Scaling Mode", &current_mode, modes, IM_ARRAYSIZE(modes))) {

@@ -37,9 +37,7 @@ class SceneScript {
 
     bool load(const std::string& source, const std::string& script_properties_json);
 
-    // `value` is the hook's argument and is replaced by the result when it has a compatible type (a number
-    // broadcasts into a vector). False, with `value` unchanged, when the hook is missing, threw or returned nothing
-    // usable.
+    // Replaces `value` with the result when types match; false when the hook is missing, threw or returned nothing usable.
     bool initValue(ScriptValue& value);
     bool updateValue(ScriptValue& value);
 

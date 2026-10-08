@@ -12,6 +12,7 @@
 #include "shared/assets/media/video_rate.h"
 #include "shared/assets/media/video_texture.h"
 #include "shared/core/logger.h"
+#include "shared/core/vfs.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/layers/model/model_layer.h"
@@ -26,7 +27,9 @@
 #define TAG "SCRIPT"
 
 ScriptBindings::ScriptBindings(EngineContext& ctx) : ctx_(ctx), animations_(ctx), backend_(ctx, animations_) {
-    ScriptEngine::instance().registerScope(this, &backend_, std::filesystem::path(ctx.asset_root).filename().string());
+    const std::string storage_root =
+        vfs::isVirtual((std::string(ctx.asset_root) + "/").c_str()) ? vfs::sourceDirectory() : ctx.asset_root;
+    ScriptEngine::instance().registerScope(this, &backend_, std::filesystem::path(storage_root).filename().string());
     ScriptEngine::instance().setCreationScope(this);
     backend_.setCreatedHandler([this](const wallpaper_engine::SceneObjectDocument& object) { addObject(object); });
 }

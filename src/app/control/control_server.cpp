@@ -22,7 +22,6 @@ bool sockaddrFromPath(const std::string& path, sockaddr_un& addr) {
     return true;
 }
 
-// True when a process is listening on `path`.
 bool probeLiveOwner(const std::string& path) {
     sockaddr_un addr = {};
     if (!sockaddrFromPath(path, addr)) return false;

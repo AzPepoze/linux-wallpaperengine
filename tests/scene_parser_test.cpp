@@ -330,6 +330,11 @@ void testUserBindings() {
                  "scriptproperties bindings are resolved too");
     test::expect("user", resolved.objects[1].visible, "a condition binding is true while the property equals it");
     test::expect("user", !resolved.objects[2].visible, "an unknown property keeps its default");
+    const std::vector<std::string> expected_keys = {"opacity", "showFish", "tint",      "groupScale",
+                                                    "speed",   "mode",     "unknownKey"};
+    test::expect("user", resolved.user_keys.size() == expected_keys.size() && resolved.user_keys == expected_keys,
+                 "every key a binding reads is collected once, in order");
+    test::expect("user", defaults.user_keys.empty(), "without properties no keys are collected");
 
     test::expect("user", defaults.objects[0].image.alpha == 0.5f && defaults.objects[0].visible,
                  "without properties the defaults are untouched");

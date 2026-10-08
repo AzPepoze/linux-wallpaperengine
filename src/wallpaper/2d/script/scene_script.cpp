@@ -34,8 +34,7 @@ constexpr int kMaxConsecutiveErrors = 3;
 constexpr double kLoadBudgetMs = 500.0;
 constexpr double kCallBudgetMs = 20.0;
 
-// This QuickJS has no public module-namespace accessor, so the module's exports are copied into a table by an
-// epilogue appended to its source.
+// QuickJS exposes no module-namespace accessor, so an epilogue copies exports into a table.
 std::string buildModuleSource(const std::string& source, int id) {
     std::string text = source;
     text += "\n;globalThis.__lweExports[" + std::to_string(id) + "] = {";

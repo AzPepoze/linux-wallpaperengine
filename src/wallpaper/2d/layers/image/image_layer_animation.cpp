@@ -17,8 +17,7 @@ void ImageLayer::updateAnimatedFrame(EngineContext& ctx) {
     sg_view page_view = cached_view;
     if (frame->image_index != 0) {
         if (animation_page.id == SG_INVALID_ID || animation_page_index != frame->image_index) {
-            // Keep only the active extra page; large animated atlases can occupy
-            // hundreds of megabytes if every page is uploaded at once.
+            // Keep only the active page; uploading every page can take hundreds of MB.
             animation_page_view = {};
             animation_page = ctx.asset_mgr->resolveTexture(path.c_str(), nullptr, (int)frame->image_index);
             animation_page_index = frame->image_index;
@@ -48,8 +47,7 @@ void ImageLayer::updateAnimatedFrame(EngineContext& ctx) {
     sg_begin_pass(&pass);
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    // The viewport clips the full atlas down to the authored frame rectangle.
-    // Replace blending preserves straight alpha for effects and the final draw.
+    // The viewport clips the atlas to the authored frame; replace blending keeps straight alpha.
     renderer_draw_sprite(ctx, &ctx.renderer, page, page_view, -frame->x, -frame->y, (float)texture_metadata.width,
                          (float)texture_metadata.height, 0.0f, white, false, nullptr, true);
     sg_end_pass();

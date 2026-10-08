@@ -9,10 +9,19 @@
 #include "shader_processor.h"
 #include "shader_uniform_layout.h"
 #include "shared/core/config.h"
+#include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/render.h"
 
 namespace {
+
+// Declarations are removed before usages are rewritten, so the result matches the per-index order.
+void rewriteTextureResolutions(std::string& source) {
+    static const std::regex declaration(R"(uniform\s+(?:vec4|float4)\s+g_Texture[0-4]Resolution\s*;)");
+    static const std::regex usage(R"(\bg_Texture([0-4])Resolution\b)");
+    source = std::regex_replace(source, declaration, "");
+    source = std::regex_replace(source, usage, "g_TextureResolution[$1]");
+}
 
 bool usesParticleSpriteLayout(const std::string& source) {
     return source.find("a_TexCoordVec4") != std::string::npos && source.find("a_TexCoordVec4C1") != std::string::npos &&
@@ -110,6 +119,7 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                      const std::string& fragSource,
                                      const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
                                      bool create_gpu_objects) {
+    const auto trace_start = std::chrono::steady_clock::now();
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
@@ -121,15 +131,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                            : usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
                                                                             : ShaderVertexLayout::Sprite2D;
 
-    // Five consecutive vec4 resolutions share one array entry in Sokol's
-    // limited uniform metadata. Their std140 layout and upload offsets stay identical.
     for (std::string* source : {&compiled_vert_source, &compiled_frag_source}) {
-        for (int index = 0; index < 5; ++index) {
-            const std::string name = "g_Texture" + std::to_string(index) + "Resolution";
-            *source = std::regex_replace(*source, std::regex("uniform\\s+(?:vec4|float4)\\s+" + name + "\\s*;"), "");
-            *source = std::regex_replace(*source, std::regex("\\b" + name + "\\b"),
-                                         "g_TextureResolution[" + std::to_string(index) + "]");
-        }
+        if (source->find("Resolution") != std::string::npos) rewriteTextureResolutions(*source);
     }
 
     sg_shader_desc shd_desc = {};
@@ -227,8 +230,10 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
         prewarm_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
         return result;
     }
+    const auto trace_cpu = std::chrono::steady_clock::now();
     result.shader = create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
 
+    const auto trace_shader = std::chrono::steady_clock::now();
     if (result.shader.id == SG_INVALID_ID) {
         effect_log.error("Failed to create shader for %s", shader_name.c_str());
         return result;
@@ -236,6 +241,12 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
 
     result.pipeline = makePipeline(result.shader, result.vertex_layout, ShaderBlendMode::Disabled);
 
+    const auto trace_pipeline = std::chrono::steady_clock::now();
+    if (load_trace::enabled())
+        LOG_TAG_I("LOAD_TRACE", "shader=%s cpu_layout_ms=%.3f backend_shader_ms=%.3f gpu_pipeline_ms=%.3f",
+                  shader_name.c_str(), load_trace::milliseconds(trace_cpu - trace_start),
+                  load_trace::milliseconds(trace_shader - trace_cpu),
+                  load_trace::milliseconds(trace_pipeline - trace_shader));
     if (result.pipeline.id == SG_INVALID_ID) {
         effect_log.error("Failed to create pipeline for %s", shader_name.c_str());
     } else {

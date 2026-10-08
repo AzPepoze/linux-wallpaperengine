@@ -12,8 +12,7 @@
 
 #include "decoded_image.h"
 
-// Where a texture actually has visible content. Character layers are often authored on a canvas far larger than the
-// art they hold, so effect passes only need to run over this region (plus whatever the pass can displace).
+// Visible texel bounds; effect passes only need to run over this region.
 namespace content_bounds {
 
 // Normalised rectangle (0..1, top-left origin) holding every non-transparent texel; invalid when unknown.
@@ -43,8 +42,7 @@ struct Extent {
     }
 };
 
-// BC3 stores alpha as two endpoints plus sixteen 3-bit indices. The block is empty when no index reaches a visible
-// alpha, which also covers encoders that mark transparency with the six-value mode (index 6 = 0).
+// Empty when no index reaches a visible alpha, including the six-value mode.
 inline void bc3Alphas(const uint8_t* block, int out[16]) {
     const int a0 = block[0], a1 = block[1];
     int table[8] = {a0, a1};
@@ -213,8 +211,7 @@ inline PixelRect toPixels(const Rect& rect, int width, int height, int padding =
     return {x0, y0, std::max(0, x1 - x0), std::max(0, y1 - y0)};
 }
 
-// How far (in UV) a pass can move content, for the passes that only resample their input and so keep transparent
-// texels transparent. nullopt means the pass may paint outside the content and must not be cropped.
+// How far (UV) a pass can move content; nullopt means it must not be cropped.
 inline std::optional<float> passDisplacement(std::string_view shader_name,
                                              const std::map<std::string, std::vector<float>>& uniforms) {
     auto read = [&uniforms](const char* name) -> std::optional<float> {

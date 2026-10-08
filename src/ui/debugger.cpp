@@ -288,8 +288,7 @@ void Debugger::drawSceneTab(EngineContext& ctx) {
         ImGui::PopStyleColor(3);
     }
 
-    // Draw after the UI, above the scene and panels. Groups have no geometry of
-    // their own: outline descendant images/text and their combined bounds.
+    // Groups have no geometry: outline their descendant images and text instead.
     if (ctx.debug.selected_object >= 0 && ctx.debug.selected_object < (int)ctx.scene.layers.size() &&
         !dynamic_cast<const ImageLayer*>(ctx.scene.layers[ctx.debug.selected_object])) {
         ctx.scene.layers[ctx.debug.selected_object]->drawDebug(ctx);

@@ -12,8 +12,7 @@ namespace {
 
 constexpr CliOption kSentinel = {{nullptr}, nullptr};
 
-// One array per group, each terminated by kSentinel (names[0] == nullptr).
-// Adding an option is one row here; the help and takesValue pick it up.
+// Each group array ends with a sentinel row (names[0] == nullptr).
 constexpr CliOption kWallpaper[] = {
     {{"<wallpaper>", nullptr}, nullptr, CliBuild::All, "Wallpaper project directory, .pkg file or video file"},
     {{"--pkg", "-pkg", nullptr}, "<path>", CliBuild::All, "Treat the given path as a package"},
@@ -36,6 +35,7 @@ constexpr CliOption kGraphics[] = {
     {{"--list-gpus", "-list-gpus", nullptr}, nullptr, CliBuild::All, "List available GPUs and exit"},
     {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Frame-rate cap; 0 or omitted follows the display"},
     {{"--scaling", nullptr}, "<default|fit|fill|stretch>", CliBuild::All, "fill crops to cover, fit letterboxes"},
+    {{"--pointer", nullptr}, "<auto|surface|evdev>", CliBuild::All, "Global pointer source: evdev reads mouse motion"},
     {{"--clamp", nullptr}, "<mode>", CliBuild::All, "Accepted and ignored"},
     {{"--cover", nullptr}, nullptr, CliBuild::All, "Force cover scaling, ignoring the project's fit"},
     {{"--video-ram", nullptr}, nullptr, CliBuild::All, "Load video files fully into RAM instead of streaming"},
@@ -60,6 +60,7 @@ constexpr CliOption kTransition[] = {
 
 constexpr CliOption kControl[] = {
     {{"--no-control", nullptr}, nullptr, CliBuild::All, "Do not hand off to or own a control socket"},
+    {{"--toggle-debug-ui", nullptr}, nullptr, CliBuild::Debug, "Show or hide the debug panel of the running wallpaper on this output"},
     kSentinel,
 };
 
@@ -105,8 +106,7 @@ constexpr CliOption kInfo[] = {
     kSentinel,
 };
 
-// Upstream-only launcher flags. They are recognized (and their values consumed)
-// so they never fall through to the positional wallpaper, then logged as ignored.
+// Launcher flags are consumed so they never become the positional wallpaper.
 constexpr CliOption kCompatibility[] = {
     {{"--noautomute", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--no-audio-processing", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
@@ -164,7 +164,6 @@ void printRow(FILE* out, const CliOption& option, size_t width) {
     fprintf(out, "  %-*s  %s\n", static_cast<int>(width), names.c_str(), option.description);
 }
 
-// Finds the option for `arg`, accepting `--name` and `--name=value` spellings.
 const CliOption* findOption(const std::string& arg) {
     for (const CliGroupDef& def : kGroups)
         for (const CliOption* option = def.options; option->names[0]; ++option)
@@ -270,14 +269,12 @@ std::vector<std::string> unknownOptions(const std::vector<std::string>& args) {
         const std::string& arg = args[i];
         const CliOption* option = findOption(arg);
         const bool has_inline_value = arg.find('=') != std::string::npos;
-        // Implemented options are known; their value (if any) is not reported.
         if (option && !option->ignored) {
             if (option->value && !has_inline_value && i + 1 < args.size()) ++i;
             continue;
         }
         if (!arg.empty() && arg[0] == '-') unknown.push_back(arg);
-        // Still consume the value of an ignored value-taking option so it is not
-        // mistaken for a positional wallpaper.
+        // Consume an ignored option's value so it is not taken as the wallpaper.
         if (option && option->value && !has_inline_value && i + 1 < args.size()) ++i;
     }
     return unknown;

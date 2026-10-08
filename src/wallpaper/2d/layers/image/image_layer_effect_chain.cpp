@@ -212,8 +212,7 @@ const content_bounds::Rect& ImageLayer::passActiveRegion(EngineContext& ctx, con
     const auto cached = pass_active_regions.find(&pass);
     if (cached != pass_active_regions.end()) return cached->second;
 
-    // waterwaves displaces by strength * mask, so with its opacity mask bound it leaves the input untouched wherever
-    // the mask is zero. The mask shares the layer's UVs only when it has the layer's aspect (no padded canvas).
+    // waterwaves leaves the input untouched where the mask is zero; the mask shares UVs only at the layer's aspect.
     content_bounds::Rect region;
     // The opacity mask is g_Texture1, which the pass stores as texture 0 of its extra textures.
     const PassTextures& textures = pass.pass_textures;
@@ -312,8 +311,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
 
     IRenderObserver& diag = renderObserver();
 
-    // Skip the whole chain when nothing it reads has changed since it last ran: same source image, same uniform
-    // values, and no pass that reads time, pointer, parallax or audio. The previous output targets are still intact.
+    // Skip the chain when its inputs are unchanged and no pass reads time, pointer, parallax or audio.
     const bool plain_source = src_img.id == SG_INVALID_ID && !effectSourceIsDynamic();
     const bool static_source = plain_source && !diag.isCapturingFrame() && !diag.isTracingPasses();
     const uint64_t signature = static_source ? effectChainSignature(ctx, base_img, base_view) : 0;
@@ -329,8 +327,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     const bool any_effect_solo =
         std::any_of(effects.begin(), effects.end(), [](const Effect* effect) { return effect && effect->solo; });
 
-    // Mostly-empty layers only need their passes over the visible region: crop-safe passes keep transparent texels
-    // transparent, so the region just grows by how far each pass can move content.
+    // Crop-safe passes keep transparent texels transparent, so the region grows only by each pass's reach.
     bool crop = static_source && effectChainCanCrop();
     content_bounds::Rect reach = source_content;
 
@@ -387,8 +384,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                                                            : effect_targets[state.write_index].attachment_view;
 
             if (pass->compiled.pipeline.id == SG_INVALID_ID) {
-                // A pass that never compiled still forwards its input, so later passes and the final layer draw
-                // do not read uninitialised targets.
+                // A pass that never compiled forwards its input, so no later pass reads uninitialised targets.
                 copyInputToTarget(ctx, state.input_image, state.input_view, output_attachment, target_width,
                                   target_height);
                 advanceChain(state, named_target);
@@ -420,8 +416,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                                       ? gpu_timing_begin_pass(name + "/" + std::to_string(eff_idx) + "/" +
                                                               std::to_string(pass_idx) + "/" + pass->shader_name)
                                       : -1;
-            // A masked pass over an opaque layer changes only the mask's region: copy the input through exactly and
-            // run the pass just there.
+            // A masked pass over an opaque layer only changes the mask region; copy the rest through.
             const content_bounds::Rect* active_region = nullptr;
             if (!crop && plain_source && source_opaque && !named_target && !state.rendered_any) {
                 const content_bounds::Rect& region = passActiveRegion(ctx, *pass);

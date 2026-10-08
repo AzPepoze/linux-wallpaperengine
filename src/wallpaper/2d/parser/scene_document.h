@@ -158,6 +158,8 @@ struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
     SceneNodeDocument node;
     std::string name;
+    // Corner or edge of the object that sits on its origin (for example "bottomleft").
+    std::string alignment = "center";
     bool visible = true;
     ScriptedValue visible_script;
 
@@ -230,6 +232,8 @@ struct SceneDocument {
     SceneGeneralDocument general;
 
     std::vector<SceneObjectDocument> objects;
+    // User properties that scene.json bindings read; changing one needs the scene rebuilt.
+    std::vector<std::string> user_keys;
 };
 
 }  // namespace wallpaper_engine

@@ -7,6 +7,20 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
+namespace {
+// Moves a centred rect so the named corner or edge (for example "bottomleft") sits on its node.
+void applyAlignment(const std::string& alignment, float width, float height, float& x, float& y) {
+    if (alignment.find("left") != std::string::npos)
+        x += width * 0.5f;
+    else if (alignment.find("right") != std::string::npos)
+        x -= width * 0.5f;
+    if (alignment.find("top") != std::string::npos)
+        y += height * 0.5f;
+    else if (alignment.find("bottom") != std::string::npos)
+        y -= height * 0.5f;
+}
+}  // namespace
+
 ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
@@ -21,8 +35,7 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
             layer_origin[0] = placement.origin[0];
             layer_origin[1] = placement.origin[1];
             layer_origin[2] = placement.origin[2];
-            // Scene space is Y-up while sprites are drawn in Y-down screen space,
-            // so the accumulated Z angle is negated here.
+            // Scene space is Y-up and sprites are Y-down, so the Z angle is negated.
             rect.rotation = -placement.rotation_deg;
         }
     }
@@ -41,6 +54,7 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     rect.x = ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - rect.width * 0.5f;
     rect.y = ctx.scene.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
              rect.height * 0.5f;
+    applyAlignment(alignment, rect.width, rect.height, rect.x, rect.y);
     // renderer_draw_sprite pivots on the top-left; keep the image centre on the node.
     const float angle = rect.rotation * (float)M_PI / 180.0f;
     const float half_width = rect.width * 0.5f;
@@ -67,9 +81,15 @@ void ImageLayer::draw(EngineContext& ctx) {
         draw_view = effect_output_view;
     }
     const bool draw_region = has_effect_output && !puppet_resolved && output_region.valid;
+    // A cropped source only matches the whole layer; effect output always uses its own quad.
+    sg_buffer quad = source_quad;
+    if (draw_region) {
+        quad = output_quad;
+    } else if (has_effect_output || puppet_resolved) {
+        quad = {SG_INVALID_ID};
+    }
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
-                         rect.rotation, tint, false, nullptr, false,
-                         draw_region ? sg_buffer(output_quad) : sg_buffer{SG_INVALID_ID});
+                         rect.rotation, tint, false, nullptr, false, quad);
 }
 
 void ImageLayer::updateOutputQuad(EngineContext& ctx) {

@@ -214,9 +214,7 @@ bool effectShaderUsesClipSpaceGeometry(const std::string& vertex_source, const c
     const std::string active = activeShaderCode(vertex_source);
     const std::string compacted = compact(active);
 
-    // Shaders often copy a_Position into a local before assigning gl_Position
-    // (e.g. `vec3 position = a_Position; gl_Position = mul(vec4(position, 1.0), mvp);`).
-    // Track those aliases so the assignment is still recognised as position-based.
+    // Track locals aliasing a_Position so assignments to gl_Position through them still count.
     std::vector<std::string> position_aliases;
     size_t alias_search = 0;
     while ((alias_search = active.find("a_Position", alias_search)) != std::string::npos) {

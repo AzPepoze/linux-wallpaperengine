@@ -4,8 +4,7 @@
 #define SOKOL_NO_ENTRY
 #endif
 
-// Sokol enables VK_LAYER_KHRONOS_validation whenever NDEBUG is absent. Keep
-// the application's debug build independent of that optional system layer.
+// Keeps the app's debug build independent of Sokol's optional validation layer.
 #if DEBUG_BUILD && !defined(NDEBUG)
 #define NDEBUG
 #define LWE_RESTORE_NDEBUG
@@ -31,8 +30,7 @@
 #include "imgui.h"
 // sokol_imgui must live in a C++ file to use the C++ ImGui API
 
-// Dear ImGui 1.92.9 exposes the canonical CmdLists.Size while the Sokol
-// backend still reads the legacy CmdListsCount field.
+// Dear ImGui 1.92.9 renamed CmdListsCount, which this Sokol backend still reads.
 #define CmdListsCount CmdLists.Size
 #include "util/sokol_imgui.h"
 #undef CmdListsCount

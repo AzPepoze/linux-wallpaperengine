@@ -19,6 +19,10 @@ class VideoTexture {
     VideoTexture& operator=(const VideoTexture&) = delete;
 
     static std::unique_ptr<VideoTexture> open(const char* texture_path);
+    // Opens media and prepares decoder state without touching the graphics device.
+    static std::unique_ptr<VideoTexture> openPrepared(const char* texture_path);
+    // Initializes optional GPU import resources. Call on the graphics thread after openPrepared().
+    void initializeGpu();
     static std::unique_ptr<VideoTexture> openFile(const char* video_path);
 
     uint32_t width() const;
@@ -35,7 +39,6 @@ class VideoTexture {
     // Without looping, playback stops at the end of the file (loopCount() still counts it as an end).
     bool looping() const;
     void setLooping(bool enabled);
-    // Back to the first frame, keeping the play state.
     void rewind();
     // Jump to `seconds` into the file, keeping the play state. False when the container cannot seek.
     bool seek(double seconds);

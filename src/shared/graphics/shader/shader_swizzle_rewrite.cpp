@@ -48,9 +48,7 @@ bool isAssignmentTarget(const std::string& source, size_t pos) {
 }  // namespace
 
 namespace shader_processor_internal {
-// Some Wallpaper Engine shaders swizzle components the declared vector width
-// does not have (e.g. `.zw` on a vec2). Remap them onto the available
-// components so Slang accepts the expression.
+// Remaps swizzles of components a vector lacks (e.g. `.zw` on a vec2) onto available ones.
 void rewriteOutOfRangeSwizzles(std::string& source) {
     const std::map<std::string, int> widths = collectVectorWidths(source);
     if (widths.empty()) return;
@@ -103,8 +101,7 @@ void rewriteOutOfRangeSwizzles(std::string& source) {
             running_width = (int)components.size();
             cursor = component_end;
         }
-        // A repeated-component swizzle is never an l-value, so remapping an
-        // assignment target onto one would turn a bad guess into a new error.
+        // A repeated-component swizzle is not an l-value, so it must not become an assignment target.
         if (introduced_repeat && isAssignmentTarget(source, cursor)) changed = false;
         if (!changed) {
             i = cursor;
@@ -147,8 +144,7 @@ bool isCallArgument(const std::string& statement, size_t position) {
 }  // namespace
 
 namespace shader_processor_internal {
-// GLSL drivers accept a vector-valued call assigned to a float by taking the
-// first component; Slang requires it explicitly.
+// Slang needs an explicit first-component swizzle for a vector call assigned to a float.
 void rewriteScalarFromVectorCall(std::string& source) {
     static const std::regex scalar_call(
         R"(\bfloat\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(texSample2D|texSample2DLod|texSample2DGrad|texture2D|texture2DLod|texture|textureLod|textureGrad)\s*\(([^;]*)\)\s*;)");
@@ -210,9 +206,7 @@ std::string narrowStatementVectors(const std::string& statement, const std::map<
     return result;
 }
 
-// GLSL accepts a vec4 operand combined with a vec2/vec3 operand by truncating
-// the wider value; Slang rejects the operator call. Narrow the wider operand,
-// preserving any explicit swizzle by truncating it instead of appending one.
+// Narrows the wider operand so Slang accepts a vec4 combined with a vec2/vec3.
 void rewriteImmediateVectorMismatch(std::string& source) {
     const std::map<std::string, int> widths = collectVectorWidths(source);
     if (widths.empty()) return;

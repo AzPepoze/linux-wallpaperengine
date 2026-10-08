@@ -9,16 +9,15 @@
 #include "shared/assets/asset_manager.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/engine_context.h"
+#include "shared/core/vfs.h"
 #include "wallpaper/user_properties.h"
 #include "wallpaper/wallpaper.h"
 
-// The per-wallpaper slice of EngineContext: everything that differs between two
-// running wallpapers. Swapped in and out of the shared context (see
-// activateInstanceState) so the many `ctx.scene`/`ctx.parallax` call sites keep
-// working unchanged.
+// The per-wallpaper slice of EngineContext, swapped in and out so ctx.scene call sites stay unchanged.
 struct InstanceState {
     std::string asset_root;
     std::string wallpaper_path;
+    std::string source_path;  // the path the wallpaper was requested by, not its package mount
     bool is_pkg = false;
     scene_type_t scene_type = SCENE_TYPE_2D;
     UserProperties user_properties;
@@ -27,8 +26,7 @@ struct InstanceState {
     CameraShakeState shake;
 };
 
-// Templated on the context type so the swap can be unit tested with a light
-// context that has the same per-wallpaper fields (EngineContext drags in sokol).
+// Templated so a light test context with the same fields can exercise the swap.
 template <typename Ctx>
 void activateInstanceState(Ctx& ctx, InstanceState& state) {
     ctx.scene = std::move(state.scene);
@@ -53,18 +51,17 @@ void stashInstanceState(Ctx& ctx, InstanceState& state) {
     state.scene_type = ctx.scene_type;
 }
 
-// One running wallpaper: its own state, asset manager, audio group and object.
 struct WallpaperInstance {
     InstanceState state;
     AssetManager assets;
+    vfs::PackageHandle package;
+    sg_pass_action pass_action = {};
     std::unique_ptr<Wallpaper> wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;
 };
 
-// Moves `instance`'s state into ctx, stashing whatever `current` pointed at back
-// into that instance first. Sets ctx.asset_mgr = &instance.assets.
+// Moves `instance`'s state into ctx, stashing the current instance's state first.
 void activateInstance(EngineContext& ctx, WallpaperInstance& instance, WallpaperInstance*& current);
-// Stashes the current instance's view back and clears ctx.asset_mgr.
 void deactivateInstance(EngineContext& ctx, WallpaperInstance*& current);
 
 #endif  // WALLPAPER_INSTANCE_H

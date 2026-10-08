@@ -166,8 +166,7 @@ ThumbnailColors extractThumbnailColors(const uint8_t* rgba, int width, int heigh
     ThumbnailColors result;
     if (!rgba || width <= 0 || height <= 0) return result;
 
-    // The palette only needs a coarse view, but the image is also uploaded as the
-    // `$mediaThumbnail` texture, so keep a much larger copy for display.
+    // The palette needs a coarse view, but the image is also the $mediaThumbnail texture.
     int palette_width = 0;
     int palette_height = 0;
     std::vector<uint8_t> palette = downsample(rgba, width, height, kPaletteDimension, palette_width, palette_height);

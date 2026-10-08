@@ -83,8 +83,7 @@ void ParticleSystem::createInstance(const Particle& parent_particle, bool follow
 void ParticleSystem::retireInstance(ChildInstance& instance) {
     if (!instance.alive) return;
     instance.alive = false;
-    // Wallpaper Engine clears a follow instance's particles as soon as its parent particle ends (no fade); spawn
-    // and death children keep theirs until they expire.
+    // WE clears a follow child's particles when its parent ends; spawn and death children expire on their own.
     if (spawn_type != ParticleSpawnType::EventFollow) return;
     for (Particle& particle : particles)
         if (particle.source_instance == instance.id) particle.life = 0.0f;
@@ -175,8 +174,7 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
             particle.angular_vel =
                 initializer.minimum[2] + randomFloat() * (initializer.maximum[2] - initializer.minimum[2]);
         } else if (initializer.type == "turbulentvelocityrandom") {
-            // WE seeds this with curl noise; keep the authored forward direction, phase and
-            // speed so the trail has a valid direction before turbulence evolves it.
+            // WE seeds this with curl noise; keep the authored direction so the trail starts valid.
             const float phase = initializer.turbulence_offset + (randomFloat() - 0.5f) * initializer.turbulence_scale;
             const float speed = initializer.turbulence_speed_min +
                                 randomFloat() * (initializer.turbulence_speed_max - initializer.turbulence_speed_min);
@@ -204,8 +202,7 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     particle.size *= child_scale[0];
     particle.initial_size *= child_scale[0];
 
-    // Positions are authored in the system's local space. Worldspace systems leave it here: position and velocity
-    // take the layer's origin, rotation and scale once, and everything after that happens in scene coordinates.
+    // Worldspace systems apply the layer's origin, rotation and scale once, at spawn.
     const bool parent_in_world = instance && parent_system && parent_system->simulatesInWorld();
     float matrix[4];
     placementMatrix(matrix);
@@ -294,8 +291,7 @@ void ParticleSystem::spawnParticle(const ChildInstance* instance) {
     }
     particles.push_back(particle);
 
-    // Event children get one instance per parent particle: spawn children stay where the particle was created,
-    // follow children track it until it dies.
+    // Spawn children stay where the particle was created; follow children track it until it dies.
     for (ParticleSystem* child : children) {
         if (child->spawn_type == ParticleSpawnType::EventSpawn)
             child->createInstance(particle, false);

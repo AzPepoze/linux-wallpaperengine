@@ -10,9 +10,7 @@ enum class ProjectType { None, Scene, Video, Web, Unsupported };
 bool isVideoFile(const char* path);
 bool isPackageFile(const std::string& path);
 
-// What a wallpaper path (video file, scene directory, project.json directory
-// or a directory holding a lone video) resolves to. Pure filesystem and JSON
-// inspection; nothing here touches the GPU.
+// Resolves a wallpaper path by filesystem and JSON inspection only; never touches the GPU.
 struct ProjectInfo {
     ProjectType type = ProjectType::None;
     std::string root;

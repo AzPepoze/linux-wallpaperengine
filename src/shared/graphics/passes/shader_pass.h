@@ -48,8 +48,7 @@ class ShaderPass {
     unsigned int white_default_slots = 0;
     // The shader reads the pixel position (gl_FragCoord or derivatives), so it must run at the authored resolution.
     bool pixel_exact = true;
-    // The shader reads a built-in that changes without any uniform changing (time, pointer, parallax, audio), so its
-    // output can differ every frame. Until the sources are known it is assumed to vary.
+    // Shaders reading time, pointer, parallax or audio vary per frame until their sources are known.
     bool frame_varying = true;
     bool enabled = true;
     bool show_files = false;
@@ -71,13 +70,12 @@ class ShaderPass {
     std::map<std::string, int> inst_combos;
 
     ShaderPass(cJSON* config, cJSON* instance_config, EngineContext& ctx);
-    ~ShaderPass() {
-        if (pending_.valid()) pending_.wait();
-    }
+    ~ShaderPass() = default;
 
     void init(EngineContext& ctx);
     void initAsync(EngineContext& ctx);
     void completeInit(EngineContext& ctx);
+    bool preparationReady() const;
     void rebuildWithDebugMode(int mode, EngineContext& ctx);
     // Auto-resolve depth map (g_Texture1) from the layer's .tex container (index 1)
     bool resolveDepth(const char* source_tex_path, EngineContext& ctx);
@@ -129,8 +127,7 @@ class ShaderPass {
         return r;
     }
 
-    // Material constants by authored (material key) or shader uniform name. A value set by a script replaces the
-    // constant's keyframe animation for good.
+    // A script-set constant replaces its keyframe animation for good.
     bool setMaterialConstant(const std::string& name, const std::vector<float>& values);
     const std::vector<float>* materialConstant(const std::string& name) const;
 
@@ -138,10 +135,14 @@ class ShaderPass {
     int debug_step = 0;  // 0=full shader, 1+ = forced texture output (bypasses main logic)
 
    private:
-    bool prepare(EngineContext& ctx, bool warm_cache);
+    bool prepare(EngineContext& ctx, bool warm_cache, bool apply_observer = true);
+    std::shared_ptr<ShaderPass> makePreparationClone() const;
+    void adoptPreparationResult(ShaderPass& prepared);
     void finish(EngineContext& ctx);
     std::shared_ptr<PreparedShader> prepared_;
-    std::shared_future<bool> pending_;
+    std::shared_future<std::shared_ptr<ShaderPass>> pending_;
+    std::vector<bool> preparation_texture_bound_;
+    ShaderPass() = default;
     void resolveUniforms(const std::vector<ShaderUniformConfig>& shader_uniforms);
     std::string buildComboDefines(const ShaderSourceSet& sources) const;
     void warnAboutMissingTextures() const;

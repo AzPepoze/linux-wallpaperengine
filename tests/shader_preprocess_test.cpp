@@ -1,5 +1,4 @@
-// Unit-style checks for the GLSL -> Slang source compatibility layer.
-// Snippets are synthetic and exercise one pattern class each.
+// Unit checks for the GLSL -> Slang compatibility layer; one pattern class per snippet.
 
 #include <cstdio>
 #include <string>

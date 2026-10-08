@@ -11,9 +11,7 @@
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/web/web_ipc.h"
 
-// Web wallpapers are rendered by an optional out-of-process QtWebEngine helper
-// (see web_renderer_main.cpp) that streams BGRA frames through shared memory.
-// The host side only needs POSIX, so the core build carries no Qt dependency.
+// Web wallpapers run in an optional out-of-process Qt helper; the host needs only POSIX.
 class WebWallpaper : public Scene2DWallpaper {
    public:
     explicit WebWallpaper(EngineContext& ctx);
@@ -30,6 +28,7 @@ class WebWallpaper : public Scene2DWallpaper {
    private:
     void pollChild();
     void pollDmaBuf();
+    const char* activeFrameTransport() const;
     void stopChild();
 
     pid_t child_pid_ = -1;

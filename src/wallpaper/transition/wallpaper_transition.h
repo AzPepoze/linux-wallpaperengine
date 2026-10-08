@@ -7,9 +7,7 @@
 
 struct EngineContext;
 
-// Holds the outgoing wallpaper's last composed frame and fades it over the
-// incoming wallpaper. Phase 2 uses a plain alpha fade; Task 11 swaps in
-// Wallpaper Engine's transition shader behind the same interface.
+// Holds the outgoing wallpaper's last frame and fades it over the incoming one.
 class WallpaperTransition {
    public:
     WallpaperTransition() = default;
@@ -25,16 +23,14 @@ class WallpaperTransition {
     float progress() const {
         return progress_;
     }
-    // Marks the transition as using a per-frame live source (continue mode).
-    // begin() must already have allocated the snapshot for width x height.
+    // Continue mode; begin() must already have sized the snapshot.
     void setLive(bool live) {
         live_ = live;
     }
     bool live() const {
         return live_;
     }
-    // Re-blits the outgoing instance's composed frame this frame into the
-    // overlay snapshot. No-op unless active and live.
+    // Re-blits the outgoing frame into the overlay; no-op unless active and live.
     void updateSource(EngineContext& ctx, sg_view source, sg_image source_image, int width, int height);
     // Freeze the snapshot on screen (used when a switch fails to load).
     void hold() {
@@ -42,10 +38,15 @@ class WallpaperTransition {
         progress_ = 0.0f;
         hold_ = true;
     }
-    // Draws the snapshot over the currently bound target.
+    void startHeld(const TransitionConfig& config) {
+        config_ = config;
+        elapsed_ = 0.0f;
+        progress_ = 0.0f;
+        hold_ = false;
+        live_ = false;
+    }
     void composite(EngineContext& ctx);
-    // Renders the overlay into a fresh offscreen image and registers it as a
-    // diagnostic scene stage. Call before the swapchain pass.
+    // Registers the overlay as a diagnostic scene stage; call before the swapchain pass.
     void captureStage(EngineContext& ctx);
     void cancel();
     void shutdown();

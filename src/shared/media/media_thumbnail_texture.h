@@ -9,8 +9,7 @@
 
 namespace wallpaper_engine {
 
-// The `$mediaThumbnail` system texture: the current track's album art, scaled to a fixed square. Every material that
-// samples it owns one image (the pass destroys it with the material); all of them are refreshed together.
+// The $mediaThumbnail texture: album art at a fixed square size, refreshed for every material.
 class MediaThumbnailTexture {
    public:
     static constexpr int kSize = 256;

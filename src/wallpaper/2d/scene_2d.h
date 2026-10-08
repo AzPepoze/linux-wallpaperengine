@@ -1,6 +1,8 @@
 #ifndef SCENE_2D_RUNTIME_H
 #define SCENE_2D_RUNTIME_H
 
+#include <chrono>
+
 #include "shared/core/engine_context.h"
 #include "shared/graphics/gfx_resource.h"
 
@@ -10,6 +12,8 @@ class Scene2DRuntime {
 
     void init();
     void precompileBlendModes();
+    void beginPrewarm();
+    bool stepPrewarm(std::chrono::milliseconds budget);
     void update(float dt);
     void draw();
     void drawParticleDiagnostics();
@@ -20,9 +24,9 @@ class Scene2DRuntime {
     void resetOutputViewport();
     void clearScene();
     void cleanup();
+    bool stepCleanup();
 
-    // Render through the offscreen scene targets even when the scene would
-    // otherwise draw directly, so composedView() has a valid texture.
+    // Forces offscreen scene targets so composedView() has a valid texture.
     void setForceOffscreen(bool on) {
         force_offscreen_ = on;
     }
@@ -101,6 +105,11 @@ class Scene2DRuntime {
     std::vector<SceneTarget> hdr_bloom_levels;
     int scene_output_index = -1;
     bool float_composition_available_ = true;
+    int cleanup_phase_ = 0;
+    int prewarm_target_index_ = 0;
+    size_t prewarm_image_index_ = 0;
+    size_t prewarm_image_target_cursor_ = 0;
+    bool prewarm_done_ = false;
     class ShaderPass* bloom_pass_extract = nullptr;
     class ShaderPass* bloom_pass_blur_v = nullptr;
     class ShaderPass* bloom_pass_blur_h = nullptr;

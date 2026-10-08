@@ -46,9 +46,7 @@ bool ControlClient::tryHandoff(const std::string& key, const SwitchRequest& requ
         return false;
     }
 
-    // Do not block waiting for the owner's ack: in the same process the owner
-    // only drains the socket from its frame loop. Read the ack only if it is
-    // already available, so a rejection is still surfaced when possible.
+    // Read the ack only if already available; the owner drains its socket from the frame loop.
     const int flags = ::fcntl(fd, F_GETFL, 0);
     if (flags >= 0) ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     char reply[4096];

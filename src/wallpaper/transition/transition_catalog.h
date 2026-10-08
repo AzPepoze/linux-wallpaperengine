@@ -67,8 +67,7 @@ enum class Mode {
 
 bool parseMode(const std::string& text, Mode& out);
 
-// Resolves a raw --transition-mode string. Empty means freeze. Sets out_continue
-// and fills `error` on an unknown value.
+// Resolves --transition-mode; empty means freeze, and an unknown value fills `error`.
 bool resolveTransitionModeSetting(const std::string& raw, bool& out_continue, std::string& error);
 
 // Deterministic pick in 0..26 for a given seed; the same seed always returns the same effect.
@@ -77,8 +76,7 @@ int pickRandomEffect(uint32_t seed);
 // Linear 0..1 progress for elapsed_seconds over duration_ms; 1.0 when the duration is non-positive.
 float transitionProgress(float elapsed_seconds, int duration_ms);
 
-// Resolves a raw `--transition` string. Empty means fade. Sets out_duration_ms to
-// 1000 when it is non-positive, and fills `error` on an unknown value.
+// Resolves --transition; empty means fade, and a non-positive duration becomes 1000 ms.
 bool resolveTransitionSetting(const std::string& raw, int& out_value, int& out_duration_ms, std::string& error);
 
 }  // namespace lwe::transition

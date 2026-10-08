@@ -21,9 +21,7 @@ struct QuickWebView {
     QQuickItem* item = nullptr;
 };
 
-// Instantiates a QML WebEngineView as the window's content, with the Wallpaper
-// Engine shim installed in the default profile first. Returns an empty view on
-// failure.
+// Creates the QML WebEngineView with the Wallpaper Engine shim installed; empty on failure.
 QuickWebView createQuickWebView(QQuickWindow& window, const std::string& html_path,
                                 const std::string& user_properties_json, int fps);
 

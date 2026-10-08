@@ -75,8 +75,7 @@ hide('console', {
     error: function () { __lweLog(1, format(arguments)); }
 });
 
-// Fallbacks for a missing assets folder; baseclasses.js defines the real ones.
-// `shared` is one object per scene so two wallpapers alive in a transition do not see each other's state.
+// Fallbacks for a missing assets folder; `shared` is per scene so transitions don't share state.
 var sharedByScope = {};
 delete g.shared;
 Object.defineProperty(g, 'shared', {
@@ -646,8 +645,7 @@ hide('__lweErrors', {});
 hide('__lweWatch', function (promise, id) {
     promise.then(null, function (reason) { g.__lweErrors[id] = String(reason); });
 });
-// Overrides are applied after the module ran and only touch declared properties, like the real engine's
-// _Internal.updateScriptProperties.
+// Overrides apply after the module runs and touch only declared properties.
 hide('__lweApplyOverrides', function (exported, json) {
     if (!exported || !exported.scriptProperties || !json) return;
     var overrides = JSON.parse(json);

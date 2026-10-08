@@ -122,7 +122,9 @@ local function generate_wayland_protocols(target)
     target:add("includedirs", outdir)
 end
 
-local layer_exclude = has_config("layer_shell") and "" or "|app/platform/wayland_layer/**.cpp"
+-- Sources that build into plugins instead of the main binary (see the mpris target below).
+local plugin_exclude = "|app/platform/wayland_layer/**.cpp|app/platform/layer_options.cpp" ..
+                       "|shared/media/mpris_source.cpp|shared/media/mpris_stb_image.cpp|app/platform/x11_desktop/x11_desktop.cpp"
 
 -- Version reported by --whoareyou, taken from the git tag and falling back to
 -- "unknown" when git or the repository is unavailable (source tarball, no .git).
@@ -161,33 +163,25 @@ target("linux-wallpaperengine")
     add_syslinks("slang-compiler", "slang-rt", "vulkan", "X11", "Xcursor", "Xi", "avformat", "avcodec", "avutil", "swscale", "swresample", "va", "va-drm", "drm", "dl", "m", "pthread")
     add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
     add_defines("LWE_LAYER_SHELL=" .. (has_config("layer_shell") and "1" or "0"))
-    add_defines("LWE_MPRIS=" .. (has_config("mpris") and "1" or "0"))
     add_rules("lwe.version")
-
-    if has_config("mpris") then
-        add_syslinks("systemd")
-    end
-
-    if has_config("layer_shell") then
-        add_syslinks("wayland-client")
-        if has_config("xkbcommon") then
-            add_packages("pkgconfig::xkbcommon")
-            add_syslinks("xkbcommon")
-            add_defines("LWE_HAVE_XKBCOMMON=1")
-        end
-        on_load(generate_wayland_protocols)
-    end
+    -- Plugins call back into the binary, so its host API symbols must be in the dynamic symbol table.
+    add_ldflags("-rdynamic", {force = true})
 
     local web_helper_sources =
         "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_render_control.cpp|wallpaper/web/web_vulkan_backend.cpp|wallpaper/web/web_quick_view.cpp|wallpaper/web/web_renderer_shared.cpp"
     if is_mode("debug", "asan", "ubsan") then
-        add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
+        add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" ..
+                      "|wallpaper/2d/layers/text/text_raster.cpp" .. plugin_exclude)
         -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.
         add_files("src/shared/graphics/diagnostics/**.cpp", {cxxflags = "-O2"})
+        -- Keep expensive CPU asset/shader preparation responsive in debug builds.
+        add_files("src/shared/graphics/shader/**.cpp", "src/shared/assets/tex*.cpp", {cxxflags = "-O2"})
+        -- Glyph rasterisation runs per character on every text rebuild, which is too slow unoptimised.
+        add_files("src/wallpaper/2d/layers/text/text_raster.cpp", {cxxflags = "-O2"})
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
-        add_files("src/**.cpp|ui/**.cpp" .. web_helper_sources .. layer_exclude)
+        add_files("src/**.cpp|ui/**.cpp" .. web_helper_sources .. plugin_exclude)
         add_defines("DEBUG_BUILD=0")
         set_symbols("hidden")
         set_optimize("fastest")
@@ -264,6 +258,58 @@ add_test("alpha_tests", {"tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_c
 add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
 
 add_test("identity_tests", {"tests/identity_test.cpp", "src/app/identity.cpp"})
+-- Wayland layer-shell wallpaper (-r on Wayland): a plugin, so the main binary does not link libwayland or xkbcommon.
+if has_config("layer_shell") then
+    target("wayland")
+        set_kind("shared")
+        set_group("plugins")
+        set_targetdir("bin/$(mode)")
+        set_warnings("all", "extra")
+        add_packages("sokol", "linmath.h", "vulkan-headers", "lz4", "cjson", "stb", "miniaudio", "quickjs")
+        add_includedirs("src", "/usr/include/libdrm", "/usr/include/shader-slang")
+        add_syslinks("wayland-client", "vulkan")
+        add_defines("LWE_LAYER_SHELL=1")
+        -- The layer asks for keyboard focus only in debug builds (DEBUG_BUILD), so the plugin must match the main binary.
+        if is_mode("debug", "asan", "ubsan") then
+            add_defines("DEBUG_BUILD=1")
+        else
+            add_defines("DEBUG_BUILD=0")
+        end
+        if has_config("xkbcommon") then
+            add_packages("pkgconfig::xkbcommon")
+            add_syslinks("xkbcommon")
+            add_defines("LWE_HAVE_XKBCOMMON=1")
+        end
+        add_files("src/app/platform/wayland_layer/**.cpp", "src/app/platform/layer_options.cpp", "src/shared/core/logger.cpp")
+        on_load(generate_wayland_protocols)
+end
+
+-- X11 desktop window (-r on X11): a plugin, so the main binary does not link libXrandr.
+target("x11")
+    set_kind("shared")
+    set_group("plugins")
+    set_targetdir("bin/$(mode)")
+    set_warnings("all", "extra")
+    add_includedirs("src")
+    add_syslinks("X11", "Xrandr")
+    add_files("src/app/platform/x11_desktop/x11_desktop.cpp")
+
+-- MPRIS media session: a plugin, so the main binary does not link libsystemd. Missing plugin = no media session.
+if has_config("mpris") then
+    target("mpris")
+        set_kind("shared")
+        set_group("plugins")
+        set_targetdir("bin/$(mode)")
+        set_warnings("all", "extra")
+        add_packages("stb")
+        add_includedirs("src")
+        add_defines("LWE_MPRIS=1")
+        add_syslinks("systemd", "dl")
+        add_files("src/shared/media/mpris_source.cpp", "src/shared/media/mpris_stb_image.cpp",
+                  "src/shared/media/mpris_metadata.cpp", "src/shared/media/thumbnail_colors.cpp",
+                  "src/shared/core/plugin.cpp", "src/shared/core/logger.cpp")
+end
+
 target("identity_tests")
     add_rules("lwe.version")
 target_end()
@@ -288,6 +334,10 @@ add_test("cli_options_tests", {"tests/cli_options_test.cpp", "src/app/cli_option
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
 add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/2d/input/pointer_input.cpp"})
+add_test("text_raster_tests", {"tests/text_raster_test.cpp", "src/wallpaper/2d/layers/text/text_raster.cpp",
+                               "src/wallpaper/2d/layers/text/font_repository.cpp", "src/shared/core/logger.cpp",
+                               "src/shared/core/vfs.cpp"},
+         {"stb"}, {"pthread"})
 
 add_test("particle_data_tests", {"tests/particle_data_test.cpp", "src/wallpaper/2d/layers/particle/particle_parser.cpp"},
          {"cjson", "linmath.h"})
@@ -342,6 +392,9 @@ add_test("project_tests", {"tests/project_info_test.cpp", "src/wallpaper/project
                            "src/shared/core/logger.cpp"},
          {"cjson"})
 
+add_test("vfs_package_tests", {"tests/vfs_package_test.cpp", "src/shared/core/vfs.cpp",
+                                "src/shared/core/logger.cpp"})
+
 add_test("user_properties_tests", {"tests/user_properties_test.cpp", "src/wallpaper/user_properties.cpp",
                                    "src/wallpaper/project_info.cpp", "src/wallpaper/video/video_properties.cpp",
                                    "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
@@ -380,6 +433,8 @@ add_test("wallpaper_instance_tests", {"tests/wallpaper_instance_test.cpp", "src/
                                       "src/shared/core/logger.cpp"},
          {"cjson", "sokol", "vulkan-headers", "linmath.h"})
 
+add_test("prepared_load_tests", {"tests/prepared_load_test.cpp"})
+
 add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio/audio_engine.cpp",
                                 "src/shared/audio/audio_engine_stream.cpp", "src/shared/audio/audio_engine_spectrum.cpp",
                                 "src/shared/audio/ogg_decoder.cpp", "src/shared/core/vfs.cpp",
@@ -392,6 +447,17 @@ add_test("ogg_decoder_tests", {"tests/ogg_decoder_test.cpp", "src/shared/audio/o
 
 add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp",
                                     "src/wallpaper/transition/transition_catalog.cpp"}, {"cjson"})
+
+add_test("global_pointer_tests", {"tests/global_pointer_test.cpp", "src/app/platform/pointer/global_pointer.cpp",
+                                 "src/app/platform/pointer/exact_pointer.cpp",
+                                 "src/app/platform/pointer/hyprland_pointer.cpp",
+                                 "src/app/platform/pointer/evdev_pointer.cpp",
+                                 "src/app/platform/pointer/pointer_source.cpp",
+                                 "src/app/platform/x11_desktop/x11_desktop_loader.cpp",
+                                 "src/shared/core/plugin.cpp", "src/shared/core/logger.cpp"}, {"cjson"})
+
+add_test("hyprland_pointer_tests", {"tests/hyprland_pointer_test.cpp", "src/app/platform/pointer/hyprland_pointer.cpp",
+                                   "src/shared/core/logger.cpp"}, {"cjson"})
 
 add_test("control_endpoint_tests", {"tests/control_endpoint_test.cpp", "src/app/control/control_endpoint.cpp"})
 
@@ -406,6 +472,8 @@ add_test("transition_cli_tests", {"tests/transition_cli_test.cpp",
 add_test("media_session_tests", {"tests/media_session_test.cpp", "src/shared/media/thumbnail_colors.cpp",
                                  "src/shared/media/mpris_metadata.cpp", "src/shared/core/logger.cpp"}, {"stb"})
 
+add_test("plugin_loader_tests", {"tests/plugin_loader_test.cpp", "src/shared/core/plugin.cpp", "src/shared/core/logger.cpp"})
+
 add_test("media_events_tests", {"tests/media_events_test.cpp", "src/wallpaper/2d/script/scene_script.cpp",
                                 "src/wallpaper/2d/script/script_engine.cpp",
                                 "src/wallpaper/2d/script/script_engine_prelude.cpp",
@@ -413,7 +481,8 @@ add_test("media_events_tests", {"tests/media_events_test.cpp", "src/wallpaper/2d
                                 "src/wallpaper/2d/script/script_runtime.cpp",
                                 "src/wallpaper/2d/script/media_events.cpp",
                                 "src/wallpaper/2d/script/script_value_js.cpp",
-                                "src/shared/media/mpris_source.cpp", "src/shared/core/logger.cpp"},
+                                "src/shared/media/mpris_loader.cpp", "src/shared/core/plugin.cpp",
+                                "src/shared/core/logger.cpp"},
          {"quickjs"})
 
 -- ---------------------------------------------------------------------------

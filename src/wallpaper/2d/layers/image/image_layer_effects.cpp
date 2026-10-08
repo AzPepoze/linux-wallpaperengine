@@ -11,8 +11,7 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
     if (source_desc.width <= 0 || source_desc.height <= 0) return false;
     int width = source_desc.width;
     int height = source_desc.height;
-    // Layers drawn larger than the screen run their effects at the on-screen size. The shaders still see the authored
-    // size in their resolution uniforms (see effect_logical_scale), so only the sampling density changes.
+    // Layers larger than the screen run effects at on-screen size; resolution uniforms keep the authored size.
     bool eligible =
         !ctx.native_effect_resolution && !is_fullscreen && !copy_background && !is_compose_region && !effects.empty();
     for (const Effect* effect : effects) {
@@ -65,6 +64,34 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
     for (int index = 0; index < 2; ++index) {
         if (!effect_targets[index].create(effect_target_width, effect_target_height)) {
             effect_log.error("Failed to create effect ping-pong target for layer %s", name.c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ImageLayer::prewarmEffectTargetsStep(EngineContext& ctx, size_t& cursor, sg_image source_image) {
+    const sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
+    if (effects.empty() || target_source.id == SG_INVALID_ID) return true;
+    if (cursor == 0) {
+        ensureEffectTargets(ctx, target_source);
+        cursor = 1;
+        return false;
+    }
+
+    size_t pass_cursor = 1;
+    for (const Effect* effect : effects) {
+        if (!effect) continue;
+        for (const ShaderPass* pass : effect->passes) {
+            if (pass_cursor++ != cursor) continue;
+            if (!pass->render_target.empty() && effect_target_width > 0 && effect_target_height > 0) {
+                const float scale = pass->render_scale > 0.0f ? pass->render_scale : 1.0f;
+                const int width = std::max(1, (int)std::lround(effect_target_width / scale));
+                const int height = std::max(1, (int)std::lround(effect_target_height / scale));
+                auto& target = named_effect_targets[pass->render_target];
+                target.ensureSize(width, height, pass->render_target);
+            }
+            ++cursor;
             return false;
         }
     }

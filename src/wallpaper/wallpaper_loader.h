@@ -12,7 +12,9 @@ class WallpaperLoader {
     // Logs why a project cannot be loaded and returns false in that case.
     static bool canLoad(const ProjectInfo& info);
 
-    // Initializes the asset context for the project and builds its wallpaper.
+    static UserProperties prepareProperties(const ProjectInfo& info,
+                                            const std::vector<std::pair<std::string, std::string>>& overrides);
+
     // Returns nullptr (after logging) when the wallpaper fails to load.
     static std::unique_ptr<Wallpaper> load(const ProjectInfo& info, EngineContext& ctx);
 };

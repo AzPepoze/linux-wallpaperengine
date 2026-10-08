@@ -5,12 +5,31 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
-// Read-only view of a Wallpaper Engine .pkg mapped into memory. Package files are addressed as "pkg:/<name>";
-// every other path falls through to the real filesystem, so callers need not care which one they hold.
+// Read-only view of a .pkg in memory; other paths fall through to the real filesystem.
 namespace vfs {
+
+struct Package;
+using PackageHandle = std::shared_ptr<const Package>;
+
+// Mounts a package as an immutable mapping; each worker binds it to resolve pkg:/ paths.
+PackageHandle loadPackage(const char* pkg_path);
+PackageHandle currentPackage();
+void bindPackage(PackageHandle package);
+
+class ScopedBinding {
+   public:
+    explicit ScopedBinding(PackageHandle package);
+    ~ScopedBinding();
+    ScopedBinding(const ScopedBinding&) = delete;
+    ScopedBinding& operator=(const ScopedBinding&) = delete;
+
+   private:
+    PackageHandle previous_;
+};
 
 constexpr const char* kRoot = "pkg:";
 

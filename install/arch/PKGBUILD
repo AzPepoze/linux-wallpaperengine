@@ -1,0 +1,85 @@
+# Maintainer: AzPepoze
+# Builds Linux Wallpaper Engine from the git repository (there is no release yet).
+#
+# Use:  cd install/arch && makepkg -si
+
+pkgname=linux-wallpaper-engine
+pkgver=0
+pkgrel=1
+pkgdesc="Plays Wallpaper Engine projects on Linux (beta)"
+arch=('x86_64')
+url="https://github.com/AzPepoze/linux-wallpaperengine"
+license=('GPL-3.0-only')
+
+# Needed to run the program.
+depends=(
+    'vulkan-icd-loader'
+    'shader-slang'
+    'libx11'
+    'libxcursor'
+    'libxi'
+    'ffmpeg'
+    'libva'
+    'libdrm'
+)
+
+# Optional features.
+optdepends=(
+    'wayland: desktop background on Wayland'
+    'libxkbcommon: text input on the Wayland desktop background'
+    'systemd: current song info for wallpapers'
+    'libxrandr: desktop window on X11'
+    'qt6-webengine: web wallpapers'
+    'vulkan-radeon: graphics driver for AMD (install one graphics driver)'
+    'vulkan-intel: graphics driver for Intel (install one graphics driver)'
+    'nvidia-utils: graphics driver for NVIDIA (install one graphics driver)'
+    'libva-mesa-driver: hardware video decoding on AMD and Intel'
+    'libpulse: sound output'
+    'alsa-lib: sound output (used when PulseAudio is not available)'
+)
+
+makedepends=(
+    'xmake'
+    'gcc'
+    'pkgconf'
+    'git'
+    'wayland'
+    'wayland-protocols'
+    'libxkbcommon'
+    'systemd'
+    'libxrandr'
+    'qt6-webengine'
+)
+
+source=("$pkgname::git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$srcdir/$pkgname"
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "$srcdir/$pkgname"
+    git submodule update --init
+}
+
+build() {
+    cd "$srcdir/$pkgname"
+    xmake f -m release -y
+    xmake build linux-wallpaperengine linux-wallpaperengine-webrender mpris wayland x11
+}
+
+package() {
+    cd "$srcdir/$pkgname"
+
+    install -Dm755 bin/release/linux-wallpaperengine "$pkgdir/usr/bin/linux-wallpaperengine"
+    install -Dm755 bin/release/linux-wallpaperengine-webrender "$pkgdir/usr/bin/linux-wallpaperengine-webrender"
+
+    install -dm755 "$pkgdir/usr/lib/linux-wallpaperengine"
+    install -m755 bin/release/libmpris.so "$pkgdir/usr/lib/linux-wallpaperengine/libmpris.so"
+    install -m755 bin/release/libwayland.so "$pkgdir/usr/lib/linux-wallpaperengine/libwayland.so"
+    install -m755 bin/release/libx11.so "$pkgdir/usr/lib/linux-wallpaperengine/libx11.so"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

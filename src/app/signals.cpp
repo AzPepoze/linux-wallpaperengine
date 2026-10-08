@@ -18,7 +18,7 @@ void crashSignalHandler(int sig) {
 }
 
 void terminationSignalHandler(int sig) {
-    LOG_I("[SIGNAL] Caught signal %d (%s), requesting clean quit...", sig, (sig == SIGINT) ? "SIGINT" : "SIGTERM");
+    // The logger takes a mutex, so the handler must not log.
     g_terminating.store(true, std::memory_order_relaxed);
     signal(sig, SIG_DFL);
     surface::requestQuit();

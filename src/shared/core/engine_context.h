@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "app/platform/pointer/pointer_source.h"
 #include "shared/assets/asset_manager.h"
 #include "shared/core/config.h"
 #include "shared/graphics/render.h"
@@ -31,7 +32,7 @@ struct profiler_stats_t {
     double update_ms = 0.0;
     double render_ms = 0.0;
     double ui_ms = 0.0;
-    double measured_fps = 0.0;  // real presented rate over a short rolling window
+    double measured_fps = 0.0;
     uint32_t draw_calls = 0;
     uint64_t frame_index = 0;
 
@@ -53,6 +54,10 @@ struct InputState {
     // bit0 left, bit1 right, bit2 middle.
     uint8_t buttons = 0;
     bool mouse_position_valid = false;
+    // True while the pointer is over the wallpaper surface (its own position is then exact).
+    bool pointer_over_surface = false;
+    // Which source gave the pointer position this frame (shown in the inspector).
+    std::string pointer_source = "none";
 
     bool left_down() const {
         return (buttons & 0x1u) != 0;
@@ -62,8 +67,7 @@ struct InputState {
 struct ParallaxState {
     float pointer_x = 0.5f;
     float pointer_y = 0.5f;
-    // Centered shader-space offset. renderer_draw_sprite converts this to
-    // g_ParallaxPosition by applying *0.5 + 0.5.
+    // Centered shader-space offset; renderer_draw_sprite maps it to g_ParallaxPosition.
     float smooth_x = 0.0f;
     float smooth_y = 0.0f;
     bool enabled = false;
@@ -78,7 +82,6 @@ struct CameraShakeState {
     float amplitude = 0.0f;
     float speed = 0.0f;
     float roughness = 0.0f;
-    // Scene-space camera translation, calculated once per frame.
     float x = 0.0f;
     float y = 0.0f;
 };
@@ -91,6 +94,10 @@ struct SceneState {
     std::vector<Layer*> layers;
     SceneTree* scene_tree = nullptr;
     ScriptBindings* scripts = nullptr;  // property scripts of the scene; deleted before the layers
+    // User properties that scene bindings read; a change to one needs the scene rebuilt.
+    std::vector<std::string> bound_user_keys;
+    // Objects as the last resolve saw them, so a changed binding can be diffed against them.
+    std::vector<wallpaper_engine::SceneObjectDocument> bound_objects;
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;
@@ -127,7 +134,11 @@ struct EngineContext {
     char asset_root[512] = {};
     UserProperties user_properties;
     std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
+    std::string pointer_output;                                       // wl_output the wallpaper is on, e.g. DP-4
+    PointerSource pointer_source = PointerSource::Auto;
     WebOptions web;
+    // How the running web wallpaper sends its frames; "none" when no web wallpaper is active (inspector).
+    std::string web_frame_transport = "none";
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;

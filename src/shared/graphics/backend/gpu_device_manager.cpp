@@ -199,8 +199,7 @@ void GpuDeviceManager::applyEnvironmentVars(bool explicit_selection) {
     const auto& gpu = getSelectedGpu();
     if (gpu.pci_bus_id.empty() && gpu.drm_render_node.empty()) return;
 
-    // MESA_VK_DEVICE_SELECT steers vulkan loader (radv, lavapipe) to the right physical device.
-    // DRI_PRIME steers Mesa OpenGL/VA-API/video decode to the same DRM node.
+    // Mesa env vars steer the Vulkan loader and video decode to the chosen device.
     if (!gpu.pci_bus_id.empty()) {
         setenv("MESA_VK_DEVICE_SELECT", gpu.pci_bus_id.c_str(), explicit_selection ? 1 : 0);
         LOG_TAG_I(TAG, "Set MESA_VK_DEVICE_SELECT=%s", gpu.pci_bus_id.c_str());

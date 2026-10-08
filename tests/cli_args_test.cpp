@@ -83,8 +83,7 @@ int main() {
     CHECK(!cli_args::takesValue("--whoareyou"));
     CHECK(cli_args::positional(identity).empty());
 
-    // Compatibility flags are known (their values are consumed) but reported as
-    // unsupported; implemented options and their values are never reported.
+    // Compatibility flags are consumed and reported as unsupported; implemented options never are.
     const V compat = {"app",      "--disable-mouse", "--noautomute", "--screenshot",
                       "shot.png", "--screen-span",   "DP-1,DP-2",    "/wp"};
     CHECK(cli_args::positional(compat) == "/wp");

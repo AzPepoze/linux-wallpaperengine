@@ -36,8 +36,7 @@ void setComboDefine(std::string& combo_defines, const std::string& name, int val
     combo_defines += "#define " + requested_name + " " + std::to_string(value) + "\n";
 }
 
-// Returns the texture slot (g_TextureN -> N) of the sampler marked with a
-// `"combo":"MASK"` annotation, or -1 when the shader has no such sampler.
+// Texture slot N (g_TextureN) of the sampler annotated `"combo":"MASK"`, or -1.
 int findMaskTextureIndex(const std::string& source) {
     const size_t pos = source.find("\"combo\":\"MASK\"");
     if (pos == std::string::npos) return -1;
@@ -104,6 +103,7 @@ std::string ShaderPass::buildComboDefines(const ShaderSourceSet& sources) const 
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
 
     const auto bound = [&](size_t slot) {
+        if (slot < preparation_texture_bound_.size()) return preparation_texture_bound_[slot];
         return pass_textures.textures.size() > slot && pass_textures.textures[slot].id != SG_INVALID_ID;
     };
     if (shader_name.find("depthparallax") != std::string::npos) {

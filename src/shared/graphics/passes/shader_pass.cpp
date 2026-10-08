@@ -1,6 +1,7 @@
 #include "shader_pass.h"
 
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <sstream>
 
@@ -11,6 +12,7 @@
 #include "shared/core/phase_timer.h"
 #include "shared/core/task_pool.h"
 #include "shared/core/utils.h"
+#include "shared/core/vfs.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/shader/shader_processor.h"
@@ -33,8 +35,7 @@ bool readShaderStage(EngineContext& ctx, const char* relative_path, char* absolu
     return true;
 }
 
-// Highest N among the `uniform sampler2D g_TextureN` declarations. The material may supply fewer textures than the
-// shader reads (a bloom pass gets its second input at draw time), and every sampler the shader uses needs a binding.
+// Highest N among the `uniform sampler2D g_TextureN` declarations; each one needs a binding.
 int highestDeclaredTextureSlot(const std::string& source) {
     static const std::string kSampler = "sampler2D";
     static const std::string kName = "g_Texture";
@@ -117,19 +118,45 @@ void ShaderPass::init(EngineContext& ctx) {
 }
 
 void ShaderPass::initAsync(EngineContext& ctx) {
-    pending_ = TaskPool::instance().enqueue([this, &ctx] { return prepare(ctx, true); }).share();
+    const std::string engine_path = ctx.asset_mgr ? ctx.asset_mgr->getEnginePath() : std::string();
+    const std::string wallpaper_path = ctx.asset_mgr ? ctx.asset_mgr->getWallpaperPath() : std::string();
+    const vfs::PackageHandle package = vfs::currentPackage();
+    std::shared_ptr<ShaderPass> job = makePreparationClone();
+    pending_ = TaskPool::instance()
+                   .enqueue([job = std::move(job), engine_path, wallpaper_path, package]() mutable {
+                       vfs::ScopedBinding binding(package);
+                       AssetManager assets;
+                       assets.init(engine_path.c_str(), wallpaper_path.c_str());
+                       EngineContext worker_ctx;
+                       worker_ctx.asset_mgr = &assets;
+                       if (!job->prepare(worker_ctx, true, false)) return std::shared_ptr<ShaderPass>();
+                       return job;
+                   })
+                   .share();
 }
 
 void ShaderPass::completeInit(EngineContext& ctx) {
     if (!pending_.valid()) return;
-    const bool prepared = pending_.get();
+    if (pending_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    std::shared_ptr<ShaderPass> prepared = pending_.get();
     pending_ = {};
-    if (prepared) finish(ctx);
+    if (prepared) {
+        adoptPreparationResult(*prepared);
+        if (prepared_) {
+            prepared_->sources.full_fs = renderObserver().overrideFragmentSource(
+                shader_name, prepared_->sources.full_fs, debug_view_mode, debug_step);
+            pixel_exact = pixel_exact || prepared_->sources.full_fs != stored_fs_source;
+        }
+        finish(ctx);
+    }
 }
 
-// Everything up to the compile: it reads files and processes text, never touches the GPU, so it can run on a worker.
-// With `warm_cache` the SPIR-V is generated too, so finish() only has to create GPU objects.
-bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
+bool ShaderPass::preparationReady() const {
+    return !pending_.valid() || pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
+
+// Reads and processes text without the GPU, so it can run on a worker; warm_cache also makes SPIR-V.
+bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache, bool apply_observer) {
     if (shader_name.empty()) {
         effect_log.warn("Skipping effect pass with no shader");
         return false;
@@ -191,8 +218,9 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     sources.full_fs = prefix + combo_defines + sources.processed_fs;
     stored_vs_source = sources.full_vs;
     stored_fs_source = sources.full_fs;
-    sources.full_fs =
-        renderObserver().overrideFragmentSource(shader_name, sources.full_fs, debug_view_mode, debug_step);
+    if (apply_observer)
+        sources.full_fs =
+            renderObserver().overrideFragmentSource(shader_name, sources.full_fs, debug_view_mode, debug_step);
     // A debug override replaces the fragment source, so its pixel reads are unknown.
     pixel_exact = pixel_exact || sources.full_fs != stored_fs_source;
 
@@ -212,6 +240,38 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache) {
     }
     prepared_ = std::move(prepared);
     return true;
+}
+
+std::shared_ptr<ShaderPass> ShaderPass::makePreparationClone() const {
+    auto clone = std::shared_ptr<ShaderPass>(new ShaderPass());
+    clone->shader_name = shader_name;
+    clone->uniforms = uniforms;
+    clone->combos = combos;
+    clone->animated_uniforms = animated_uniforms;
+    clone->render_target = render_target;
+    clone->render_texture_bindings = render_texture_bindings;
+    clone->debug_view_mode = debug_view_mode;
+    clone->debug_step = debug_step;
+    clone->pass_textures.textures.resize(pass_textures.textures.size());
+    clone->preparation_texture_bound_.reserve(pass_textures.textures.size());
+    for (const auto& image : pass_textures.textures)
+        clone->preparation_texture_bound_.push_back(image.id != SG_INVALID_ID);
+    return clone;
+}
+
+void ShaderPass::adoptPreparationResult(ShaderPass& prepared) {
+    prepared_ = std::move(prepared.prepared_);
+    uniforms = std::move(prepared.uniforms);
+    texture_labels = std::move(prepared.texture_labels);
+    white_default_slots = prepared.white_default_slots;
+    pixel_exact = prepared.pixel_exact;
+    frame_varying = prepared.frame_varying;
+    is_fullscreen_quad = prepared.is_fullscreen_quad;
+    geometry_classified = false;
+    stored_vs_source = std::move(prepared.stored_vs_source);
+    stored_fs_source = std::move(prepared.stored_fs_source);
+    resolved_animations = std::move(prepared.resolved_animations);
+    shader_uniform_configs_ = std::move(prepared.shader_uniform_configs_);
 }
 
 void ShaderPass::finish(EngineContext& ctx) {

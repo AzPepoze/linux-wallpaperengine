@@ -1,8 +1,7 @@
 #ifndef POINTER_STATE_H
 #define POINTER_STATE_H
 
-// Pointer values for shaders (g_PointerPosition, g_PointerPositionLast, g_PointerState), normalized to the output
-// surface with y down. The frame loop refreshes this once per frame.
+// Pointer uniforms normalized to the output with y down; refreshed once per frame.
 struct ShaderPointerState {
     float x = 0.5f, y = 0.5f;
     float last_x = 0.5f, last_y = 0.5f;

@@ -1,251 +1,114 @@
 # Linux Wallpaper Engine
 
-Linux renderer for Wallpaper Engine projects.
+Shows animated wallpapers from Wallpaper Engine on Linux.
 
-## Requirements
+> **Beta.** There is no release yet. Install it by building from source.
 
-### Build tools
+## What is this?
 
-- GCC or Clang with C++20 support
-- [xmake](https://xmake.io/)
-- `pkg-config`, to detect the optional system libraries
-- `git`, used by xmake to fetch a few dependencies
+Wallpaper Engine is a program that shows animated wallpapers. People share their wallpapers as **projects**. This program plays those projects on Linux, so you do not need Windows.
 
-### Required libraries
+**You need a Wallpaper Engine install for its assets folder.** Assets are the files that the wallpapers use, such as fonts and images. Point the program to that folder with `WALLPAPER_ENGINE_PATH`, or with `engine_path` in `config.json`.
 
-- Vulkan loader and headers, plus a working Vulkan driver for your GPU
-- [Slang](https://github.com/shader-slang/slang) compiler and runtime libraries
-- X11: `libX11`, `libXcursor`, `libXi`
-- FFmpeg: `libavformat`, `libavcodec`, `libavutil`, `libswscale`, `libswresample`
-- VA-API: `libva`, `libva-drm`
-- `libdrm`
+## Showcase
 
-### Optional libraries
+| Scene | Video |
+| --- | --- |
+| ![Scene wallpaper](docs/imgs/scene.jpg) | ![Video wallpaper](docs/imgs/video.jpg) |
+| Web | Transition |
+| ![Web wallpaper](docs/imgs/web.jpg) | ![Transition between wallpapers](docs/imgs/transition.jpg) |
 
-Detected automatically and enabled when present. Turn any of them off with `xmake f --<option>=n` (for example `xmake f --web=n`).
+## Words used in this guide
 
-- Qt6 WebEngine — web wallpapers
-- `libwayland-client`, `wayland-scanner`, `wayland-protocols` — Wayland layer shell
-- `libxkbcommon` — text input on a layer surface
-- `libsystemd` — MPRIS media session
+| Word | Meaning |
+| --- | --- |
+| Wallpaper project | A folder with a `project.json` file, or a `.pkg` file, from Wallpaper Engine |
+| Desktop background | The picture behind your windows |
+| Wayland, X11 | The two main display systems on Linux |
+| Optional feature | A part you can leave out. If you leave it out, only that feature is off |
+| Pointer | Your mouse position |
+| xmake | The tool that turns the source code into a program |
 
-Qt6 WebEngine package names: `qt6-webengine` (Arch), `qt6-webengine-dev` (Debian/Ubuntu), `qt6-qtwebengine-devel` (Fedora), `qt6-webengine-devel` (openSUSE).
-
-### Fetched automatically by xmake
-
-These do not need to be installed by hand:
-
-- Sokol, linmath.h, Vulkan-Headers, LZ4, cJSON, stb, miniaudio, QuickJS
-- Dear ImGui (debug builds only)
-
-### At runtime
-
-- A local Wallpaper Engine installation with its original `assets/` data. Point at it with `WALLPAPER_ENGINE_PATH` or the `engine_path` key in `config.json`.
-- A Vulkan driver for your GPU.
-
-### Arch Linux / CachyOS
-
-Required:
+To check which display system you use, run:
 
 ```bash
-sudo pacman -S --needed \
-    xmake \
-    gcc \
-    pkgconf \
-    git \
-    vulkan-icd-loader \
-    shader-slang \
-    libx11 \
-    libxcursor \
-    libxi \
-    ffmpeg \
-    libva \
-    libdrm
+echo $XDG_SESSION_TYPE
 ```
 
-A Vulkan driver for your GPU is also required, for example `vulkan-radeon`, `vulkan-intel`, or the appropriate NVIDIA driver.
+It prints `wayland` or `x11`.
 
-Optional, by feature:
+## Quick start
+
+| Step | What to do |
+| --- | --- |
+| 1 | Install and build it. Follow the [install guide](docs/install.md) |
+| 2 | Run it on a wallpaper: `xmake run linux-wallpaperengine "/path/to/wallpaper"` |
+
+Replace `/path/to/wallpaper` with the folder of the wallpaper project.
+
+## Show a wallpaper
 
 ```bash
-sudo pacman -S --needed qt6-webengine                            # web wallpapers
-sudo pacman -S --needed wayland wayland-protocols libxkbcommon   # Wayland layer shell
-sudo pacman -S --needed systemd                                  # MPRIS media session
+linux-wallpaperengine /path/to/wallpaper [OPTIONS]
 ```
 
-For development checks (`xmake check`, `xmake format`):
+| I want to... | Command |
+| --- | --- |
+| Show it in a normal window | `linux-wallpaperengine /path/to/wallpaper` |
+| Use it as the desktop background on screen DP-4 | `linux-wallpaperengine /path/to/wallpaper -r DP-4 --layer bottom` |
+| Play it without sound | add `-s` |
+| Change a setting while it runs | add `--set-property light=0` |
+| Switch to another wallpaper | run the new one. It fades in over the old one |
 
-```bash
-sudo pacman -S --needed clang-format cppcheck
-```
+`-r DP-4` picks the screen. Replace `DP-4` with the name of your screen:
 
-## Configuration
+- On X11, run `xrandr` to list the screen names.
+- On Hyprland, run `hyprctl monitors`.
 
-The engine reads `config.json` from the working directory or one of its parents; `config.example.json` is a template. Every key is optional, and command-line flags override the file.
+Stop the wallpaper with Ctrl+C in the terminal.
 
-| Key | Value | Default | Description |
+## Build
+
+There are two build modes, release and debug. See [Build](docs/build.md).
+
+## Mouse position
+
+Some wallpapers react to the mouse. The `--pointer` option sets where the program reads the mouse position from.
+
+`auto` (the default) tries these sources in order. It uses the first one that works:
+
+| Order | Source | Accuracy | When it is used |
 | --- | --- | --- | --- |
-| `engine_path` | `<path>` | auto-detected | Wallpaper Engine install root |
-| `default_wallpaper` | `<path>` | — | Wallpaper to open when none is given (`wallpaper_path` is an accepted alias) |
-| `scaling_mode` | `default\|fit\|fill\|stretch` | fit | Scaling mode; same as `--scaling` |
-| `parallax_smoothing` | `<seconds>` | 0.1 | Parallax response time; overrides the scene's value |
-| `parallax_scale` | `<factor>` | 50.0 | Particle parallax multiplier |
-| `transition` | `<name\|none\|random>` | fade | Transition shader (also `0`-`26`) |
-| `transition_duration_ms` | `<ms>` | 1000 | Transition length |
-| `transition_mode` | `freeze\|continue` | freeze | What the outgoing wallpaper does during the fade |
-| `web_transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Web wallpaper frame transport |
-| `web_devtools_port` | `<port>` | 9222 | DevTools port |
-| `web_devtools_browser` | `<cmd>` | xdg-open | Browser command for DevTools |
+| 1 | X11 (`x11`) | Exact | On an X11 session. Reads the real cursor, anywhere on the desktop |
+| 2 | Hyprland (`hyprland`) | Exact | On Hyprland. Reads the real cursor, anywhere on the desktop |
+| 3 | Wallpaper surface (`surface`) | Exact | Only when the cursor is over the wallpaper, and no source above works |
+| 4 | Mouse motion (`evdev`) | Estimate | Last resort. Follows mouse movement from `/dev/input`, and can drift |
 
-Environment variables:
+You can also pick one source with `--pointer x11`, `--pointer hyprland`, `--pointer surface` or `--pointer evdev`. If that source does not work, the program moves down the list and logs a warning.
 
-- `WALLPAPER_ENGINE_PATH` — Wallpaper Engine install root
-- `DEFAULT_WALLPAPER_PATH` or `WALLPAPER_PATH` — wallpaper to open when none is given
+To let the program read the mouse movement (sources 4 and the `auto` fallback), follow the step in [Install](docs/install.md#mouse-access).
 
-## Command-line options
+## Optional features
 
-The wallpaper path may come first or last. `-h` / `--help` prints this same reference from the binary.
+Each feature below needs its own libraries. Install only the ones you want.
 
-### Wallpaper
+| Feature | What it adds | Libraries it needs |
+| --- | --- | --- |
+| `wayland` | Desktop background on Wayland | libwayland-client, libxkbcommon |
+| `x11` | Desktop window on X11 | libXrandr |
+| `mpris` | Lets wallpapers read the current song (title, artist, album) from music players | libsystemd |
+| Web | Web wallpapers (projects that show a web page) | Qt6 WebEngine |
 
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--assets-dir` | `<path>` | auto-detected | Wallpaper Engine install root or its `assets/` directory |
-| `--pkg` | `<path>` | — | Treat the path as a package |
-| `--extract-only` | | off | Extract the package and exit |
-| `--extract-dir` | `<path>` | — | Extraction target, with `--extract-only` |
-| `--set-property` | `<name=value>` | — | Override a project property; repeatable |
+## Notes
 
-### Graphics
+- Only Arch Linux has been tested.
 
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--gpu` | `<id>` | auto | Select a GPU by index or name |
-| `--list-gpus` | | off | List the available GPUs and exit |
-| `-f`, `--fps` | `<n>` | display rate | Frame-rate cap; `0` or omitted follows the display (vsync) |
-| `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops to cover, `fit` letterboxes, `stretch` fills without preserving aspect ratio; `default` uses cover |
-| `--cover` | | off | Force cover scaling, ignoring the project |
-| `--clamp` | `<mode>` | ignored | Accepted and ignored |
-| `--video-ram` | | off | Load video files into RAM instead of streaming |
-| `--performance-profile` | | off | Log presented FPS, mean/p95 frame intervals, CPU work/acquisition/presentation, and asynchronous GPU frame/image-effect spans after a 5-second warmup. GPU spans can include queue dependencies; window presentation timing may be unavailable. |
-| `--effect-resolution` | `auto\|native` | auto | Size verified shake chains to their displayed size; native preserves source resolution. Also configurable as `effect_resolution` in config.json. |
-| `--script-profile` | | off | Log the slowest scripts every 10 seconds |
+## More
 
-### Display
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `-r`, `--screen-root` | `<output>` | — | Draw as a `wlr-layer-shell` surface on this output |
-| `--layer` | `background\|bottom\|top\|overlay` | background | Layer-shell layer |
-| `--layer-size` | `<WxH>` | — | Debug: small anchored rectangle, e.g. `320x180` |
-| `--layer-anchor` | `<edges>` | — | Debug: anchor edges for `--layer-size`, e.g. `top-left` |
-
-Needs a build with `--layer_shell=y` and `WAYLAND_DISPLAY`; otherwise, or if the output is not found, the app runs in a window.
-
-### Transition
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--transition` | `<name\|none\|random>` | fade | Transition shader |
-| `--transition-duration` | `<ms>` | 1000 | Transition length |
-| `--transition-mode` | `freeze\|continue` | freeze | What the outgoing wallpaper does during the fade |
-
-### Control
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--no-control` | | off | Don't hand off to or own a control socket |
-
-### Info
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--whoareyou` | | — | Print the engine identity as one JSON line and exit |
-
-### Audio
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--no-audio` | | off | Disable audio |
-| `-s`, `--silent`, `--mute` | | off | Disable audio (aliases of `--no-audio`) |
-| `--volume` | `<n>` | 100 | Master volume percent (0-100) |
-
-### Web
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--web-transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Frame transport |
-| `--no-web-devtools` | | off | Disable the localhost remote-debug server |
-| `--web-devtools-port` | `<port>` | 9222 | DevTools port |
-| `--web-devtools-browser` | `<cmd>` | xdg-open | Browser command for DevTools |
-
-`web_transport` in `config.json` sets the transport too; the CLI flag overrides it, and an unknown value is an error.
-
-### Diagnostics (debug builds)
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--diagnose`, `--diagnostics` | | off | Enable render diagnostics |
-| `--diagnose-frame` | `<n>` | 100 | Frame to capture |
-| `--diagnose-final-only` | | off | Capture only the final output |
-| `--diagnose-deterministic` | | off | Fixed 1/60 s step and seeded RNG |
-| `--exit-after-diagnose` | | off | Quit once the capture completes |
-| `--disable-effects` | `<pattern>` | — | Disable effects matching a substring (`*/all` = all) |
-| `--disable-particles` | | off | Disable particles |
-| `--disable-bloom` | | off | Disable bloom |
-| `--sandbox` | | off | Run the debug effect sandbox |
-| `--no-ui` | | off | Start without the ImGui UI |
-
-### Particles
-
-| Option | Value | Default | Description |
-| --- | --- | --- | --- |
-| `--particle-debug`, `--particle-debug-bounds` | | off | Draw particle bounds |
-| `--particle-debug-velocity` | | off | Draw particle velocity vectors |
-| `--particle-debug-velocity-scale` | `<f>` | 0.05 | Velocity vector scale |
-| `--particle-debug-max-particles` | `<n>` | 128 | Cap the number of particles drawn |
-
-Launcher options that this build does not implement (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are recognized and their values consumed, so they never fall through to the wallpaper path; each one is logged as `[OPTIONS] ignoring unsupported option '<arg>'`.
-
-Launching with a wallpaper for a display that already has a running instance hands the switch to that instance over a Unix control socket and exits, instead of starting a second process. The running instance crossfades from its current frame to the new wallpaper using Wallpaper Engine's own transition shaders (loaded from the install). Pass `--no-control` to opt out. The effect, duration and mode can also be set per switch on the second launch, together with scaling, master volume, mute and the frame cap, so those settings change live. Audio crossfades too: the outgoing wallpaper's sound and the incoming wallpaper's sound ramp against the transition progress (`--transition-mode freeze|continue`, default `freeze`).
-
-## Build and run
-
-The Wayland layer-shell protocol XML comes from the `lib/wlr-protocols` git submodule. Clone with `git clone --recurse-submodules`, or run `git submodule update --init` in an existing checkout; without it the `layer_shell` option is disabled.
-
-| Goal                                                 | Command                                                               |
-| ---------------------------------------------------- | --------------------------------------------------------------------- |
-| Build the default configuration                      | `xmake`                                                               |
-| Run a wallpaper project directory or `.pkg` file     | `xmake run linux-wallpaperengine "/path/to/wallpaper"`                |
-| Run a video wallpaper                                | `xmake run linux-wallpaperengine "/path/to/video.mp4"`                |
-| Configure and run a debug build                      | `xmake f -m debug` then `xmake run linux-wallpaperengine`             |
-| Configure and run a release build                    | `xmake f -m release` then `xmake run linux-wallpaperengine`           |
-| List available GPUs                                  | `bin/<mode>/linux-wallpaperengine --list-gpus`                         |
-| Select a GPU                                         | `bin/<mode>/linux-wallpaperengine --gpu <index-or-name> "/path"`      |
-| Extract a package                                    | `bin/<mode>/linux-wallpaperengine --extract-only "/path/to/scene.pkg"` |
-| Keep a video file in RAM instead of streaming it     | `bin/<mode>/linux-wallpaperengine --video-ram "/path/to/video.mp4"`   |
-| Clean build outputs                                  | `xmake clean`                                                         |
-| Run static analysis (cppcheck)                       | `xmake check`                                                         |
-| Build and run all unit checks                        | `xmake test`                                                          |
-| Format source files                                  | `xmake format`                                                        |
-| Build and launch the debug effect sandbox            | `xmake sandbox`                                                       |
-
-Build outputs are written to `bin/<mode>/`.
-
-Release builds read `scene.pkg` in place from a memory map, so nothing is extracted and startup does not wait on disk writes. Debug runtime loads extract to `extracted/<wallpaper-id>/` and preserve the adjacent `project.json`; release loads read that metadata beside the original package. `--extract-only` uses its requested extraction directory. Compiled shaders are cached in `$XDG_CACHE_HOME/linux-wallpaperengine/` (default `~/.cache/linux-wallpaperengine/`) and reused across launches.
-
-### Render Diagnostics (Debug Mode)
-
-Render diagnostics are available in debug builds and are opt-in. Enable them with `--diagnose` or `--diagnostics`:
-
-```bash
-bin/debug/linux-wallpaperengine --diagnose "/path/to/wallpaper"
-```
-
-Diagnostics can capture render-pipeline state including pass images, scene stages, render graphs, shader code, and uniforms. Use `--diagnose-frame <n>` to capture an earlier frame than the default 100 (a window that is not on screen advances frames slowly). Add `--diagnose-deterministic` to use a fixed 1/60 s step and a seeded random generator, so the same frame renders identically on every run (the window size and cursor position still affect the result).
-
-## Feature support
-
-See [docs/features.md](docs/features.md) for what is supported, partially supported and missing, with the details of every partial feature. [docs/wallpaper-engine-assets.md](docs/wallpaper-engine-assets.md) lists the content from a Wallpaper Engine installation that this project loads at runtime.
-
-When you change behaviour, update `docs/features.md` in the same commit.
+| I want to... | Read |
+| --- | --- |
+| Install the libraries and build it | [docs/install.md](docs/install.md) |
+| Build modes (release and debug) | [docs/build.md](docs/build.md) |
+| See every option | [docs/options.md](docs/options.md) |
+| Build, test and debug the program | [docs/development.md](docs/development.md) |
+| See what works and what does not | [docs/features.md](docs/features.md) |

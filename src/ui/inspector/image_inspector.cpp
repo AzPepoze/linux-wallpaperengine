@@ -14,6 +14,7 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
+#include "wallpaper/web/web_transport.h"
 
 namespace {
 
@@ -140,6 +141,10 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
         if (ImGui::Button("Open DevTools")) web_devtools::open(ctx.web.devtools_port, ctx.web.devtools_browser);
         ImGui::SameLine();
         ImGui::TextDisabled("http://localhost:%d", ctx.web.devtools_port);
+    }
+    if (ctx.scene_type == SCENE_TYPE_WEB && ctx.web_frame_transport != "none") {
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Frames: %s (requested: %s)",
+                           ctx.web_frame_transport.c_str(), webTransportName(ctx.web.transport));
     }
 
     if (il.img.id != SG_INVALID_ID) {

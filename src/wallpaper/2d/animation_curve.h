@@ -20,9 +20,7 @@ struct AnimationCurve {
 
 }  // namespace wallpaper_engine
 
-// Evaluates a Wallpaper Engine keyframe curve at `time_seconds`. `mode` follows
-// timeline semantics: "single" plays once and holds the last key, "mirror"
-// ping-pongs, anything else loops.
+// Evaluates a keyframe curve; "single" holds the last key, "mirror" ping-pongs, others loop.
 float evaluateCurve(const std::vector<wallpaper_engine::CurveKeyframe>& keys, float fps, float length,
                     const std::string& mode, float time_seconds);
 

@@ -97,7 +97,6 @@ class RenderDiagnostics : public IRenderObserver {
     void onFrameStart(uint64_t frame_index, EngineContext& ctx);
     void onFrameEnd(uint64_t frame_index, EngineContext& ctx);
 
-    // Provenance and shader registration
     void registerShaderDump(const ShaderDump& dump) override;
     void registerUniformProvenance(const PassUniformProvenance& prov) override;
 
@@ -118,7 +117,6 @@ class RenderDiagnostics : public IRenderObserver {
         return true;
     }
 
-    // Pass isolation helpers
     bool isEffectIsolated(int effect_index, const std::string& effect_path) const override;
     bool isPassDisabled(int pass_index) const override;
     bool shouldStopAfterPass(int pass_index) const override;

@@ -14,10 +14,10 @@
 #include "app/frame_loop.h"
 #include "app/frame_rate.h"
 #include "app/identity.h"
-#if LWE_LAYER_SHELL
-#include "app/platform/wayland_layer/layer_app.h"
-#endif
 #include "app/package_extractor.h"
+#include "app/platform/layer_backend.h"
+#include "app/platform/pointer/pointer_source.h"
+#include "app/platform/x11_desktop/x11_desktop.h"
 #include "app/signals.h"
 #include "shared/assets/media/media_source.h"
 #include "shared/assets/shared_assets.h"
@@ -26,6 +26,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/phase_timer.h"
+#include "shared/core/plugin.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/backend/performance_profile.h"
@@ -58,9 +59,10 @@ ControlServer control_server;
 
 static EngineContext ctx;
 static bool layer_active = false;
+// Set when an X11 desktop window stands in for the layer surface; init() places that window.
+static std::string x11_desktop_output;
+static std::string x11_desktop_title;
 
-// Process-wide shared assets and the active wallpaper's asset manager. The
-// manager becomes per-instance in the next task; for now it is a single owner.
 static AssetManager asset_manager;
 static SharedAssets shared_assets;
 
@@ -173,8 +175,7 @@ static void loadInitialWallpaper() {
 static void init(void) {
     logger_init(DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO);
 #if DEBUG_BUILD
-    // Distinguish this test binary in kernel GPU-fault logs ("comm" field)
-    // from other concurrently running wallpaper engine instances.
+    // Names this debug build's process so its GPU faults are identifiable in kernel logs.
     prctl(PR_SET_NAME, "lwe-debug-repo", 0, 0, 0);
 #endif
     installSignalHandlers();
@@ -233,6 +234,8 @@ static void init(void) {
         PhaseTimer timer("wallpaper load (total)");
         loadInitialWallpaper();
     }
+    if (!x11_desktop_output.empty() && !x11PlaceDesktopWindow(x11_desktop_title, x11_desktop_output))
+        LOG_TAG_W("X11", "could not make the window a desktop window on %s", x11_desktop_output.c_str());
     LOG_I("Linux Wallpaper Engine Initialized");
 }
 
@@ -284,33 +287,34 @@ static bool wantsDesktopLayer() {
     return !cli.screen_root.empty() || !cli.layer.empty();
 }
 
-#if LWE_LAYER_SHELL
+// Without Wayland there is no layer shell, so a desktop-type X11 window on the output stands in for it.
+static bool wantsX11Desktop() {
+    return !cli.screen_root.empty() && !cli.sandbox && std::getenv("WAYLAND_DISPLAY") == nullptr &&
+           std::getenv("DISPLAY") != nullptr;
+}
+
+// The Wayland layer backend is a plugin; without it (or outside Wayland) the wallpaper runs in a window.
 static void runDesktopLayerIfPossible() {
     if (!wantsDesktopLayer() || cli.sandbox) return;
-    std::unique_ptr<LayerApp> app = LayerApp::create(cli);
-    if (!app) {
+    const auto create =
+        reinterpret_cast<CreateLayerBackendFunction>(pluginSymbol("wayland", "lwe_create_layer_backend"));
+    std::unique_ptr<LayerBackend> backend = create ? std::unique_ptr<LayerBackend>(create(cli)) : nullptr;
+    if (!backend) {
         LOG_W("[LAYER] desktop layer unavailable; running in a window");
         return;
     }
     layer_active = true;
-    const int code = app->run({init, frame, event, cleanup});
-    app.reset();
+    const int code = backend->run({init, frame, event, cleanup});
+    backend.reset();
     exit(code);
 }
-#else
-static void runDesktopLayerIfPossible() {
-    if (wantsDesktopLayer()) LOG_W("--screen-root/--layer need a build with --layer_shell=y; running in a window");
-}
-#endif
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
-    // Worker threads each get their own malloc arena by default, and memory freed on one rarely goes back to the OS;
-    // two arenas keep loading parallel without leaving tens of MB resident.
+    // Two malloc arenas keep parallel loading from leaving tens of MB resident.
     mallopt(M_ARENA_MAX, 2);
     logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
-    // Identity probe: exactly one JSON line on stdout and no logs, so the GUI
-    // can parse it. Must stay before GPU work and before any logging.
+    // Identity probe must come before GPU work and logging so stdout stays one JSON line.
     if (cli.whoareyou) {
         lwe::identity::printEngineIdentity(stdout);
         exit(EXIT_SUCCESS);
@@ -329,6 +333,9 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
     if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
     ctx.cli_properties = cli.set_properties;
+    ctx.pointer_output = cli.screen_root;
+    if (!parsePointerSource(cli.pointer, ctx.pointer_source))
+        LOG_TAG_W("OPTIONS", "unknown --pointer '%s'; using auto", cli.pointer.c_str());
     wallpaper_source = resolveWallpaperSource(cli);
     strncpy(ctx.wallpaper_path, wallpaper_source.path.c_str(), sizeof(ctx.wallpaper_path) - 1);
     ctx.is_pkg = wallpaper_source.is_pkg;
@@ -337,8 +344,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
     if (cli.extract_only && !wallpaper_source.path.empty()) exit(runExtractOnly(wallpaper_source, cli));
 
-    // Hand a switch to an existing instance on this display, or become that
-    // instance. Must run before any GPU work so a handoff process stays cheap.
+    // Hands a switch to a live instance on this display; runs before any GPU work.
     if (!cli.no_control && !cli.sandbox) {
         const std::string key = controlKey(cli.screen_root, cli.layer);
         if (!wallpaper_source.path.empty()) {
@@ -360,6 +366,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
             request.has_muted = true;
             request.fps = cli.fps_limit;
             request.has_fps = cli.fps_limit > 0;
+            request.toggle_debug_ui = cli.toggle_debug_ui;
 
             bool continue_previous = false;
             std::string mode_error;
@@ -373,6 +380,10 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
                 exit(0);
             }
             LOG_D("[CONTROL] no live instance on %s (%s)", key.c_str(), handoff_error.c_str());
+            if (cli.toggle_debug_ui) {
+                LOG_W("[CONTROL] no running wallpaper on %s to toggle the debug panel", key.c_str());
+                exit(EXIT_FAILURE);
+            }
         }
 
         if (control_server.bind(key)) {
@@ -382,7 +393,12 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         }
     }
 
-    runDesktopLayerIfPossible();
+    if (wantsX11Desktop()) {
+        x11_desktop_output = cli.screen_root;
+        x11_desktop_title = x11DesktopTitle(x11_desktop_output);
+    } else {
+        runDesktopLayerIfPossible();
+    }
 
     sapp_desc desc = {};
     desc.init_cb = init;
@@ -391,8 +407,12 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     desc.cleanup_cb = cleanup;
     desc.width = 1280;
     desc.height = 720;
-    desc.window_title =
-        ctx.runtime_mode == RuntimeMode::Sandbox ? "Linux Wallpaper Engine Sandbox" : "Linux Wallpaper Engine";
+    if (!x11_desktop_title.empty()) {
+        desc.window_title = x11_desktop_title.c_str();
+    } else {
+        desc.window_title =
+            ctx.runtime_mode == RuntimeMode::Sandbox ? "Linux Wallpaper Engine Sandbox" : "Linux Wallpaper Engine";
+    }
     desc.icon.sokol_default = true;
     desc.logger.func = slog_func;
     desc.enable_clipboard = true;

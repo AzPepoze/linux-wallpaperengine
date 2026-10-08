@@ -81,7 +81,6 @@ bool parseString(const cJSON* raw, std::string& out) {
     return false;
 }
 
-// Reads `script` and `scriptproperties` from a property object; leaves `out` empty for plain values.
 void readScript(const cJSON* property, ScriptedValue& out) {
     if (!cJSON_IsObject(property)) return;
     const cJSON* script = cJSON_GetObjectItemCaseSensitive(property, "script");

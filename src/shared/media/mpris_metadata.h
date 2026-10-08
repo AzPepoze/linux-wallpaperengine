@@ -3,9 +3,7 @@
 
 namespace wallpaper_engine {
 
-// The subset of the `org.mpris.MediaPlayer2.Player` Metadata dictionary keys the
-// engine consumes. Keeping the key -> field mapping pure makes it testable
-// without a live D-Bus connection.
+// The MPRIS Metadata keys the engine uses; a pure mapping, testable without D-Bus.
 enum class MprisMetadataField {
     Ignore,
     Title,
@@ -17,8 +15,7 @@ enum class MprisMetadataField {
     ArtUrl,
 };
 
-// Maps an MPRIS Metadata dictionary key to the field it feeds. Unknown keys
-// (and null) map to Ignore so callers skip them.
+// Maps a Metadata key to its field; unknown and null keys map to Ignore.
 MprisMetadataField classifyMprisMetadataKey(const char* key);
 
 }  // namespace wallpaper_engine

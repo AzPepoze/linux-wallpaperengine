@@ -6,6 +6,8 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <functional>
 #include <future>
 #include <mutex>
 #include <unordered_map>
@@ -13,6 +15,7 @@
 #include "shared/assets/media/video_rate.h"
 #include "shared/assets/shared_assets.h"
 #include "shared/assets/tex_decoder.h"
+#include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
 #include "shared/core/task_pool.h"
 #include "shared/core/utils.h"
@@ -20,6 +23,7 @@
 #include "shared/graphics/backend/gpu_zero_copy.h"
 #include "shared/media/media_thumbnail_texture.h"
 #include "wallpaper/2d/layers/layer.h"
+#include "wallpaper/2d/parser/scene_document.h"
 
 namespace {
 sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
@@ -60,9 +64,161 @@ void AssetManager::initWallpaper(const char* wp) {
     wallpaper_decode_cache_ = std::make_unique<TextureDecodeCache>();
 }
 
+void AssetManager::prepareWallpaper(const char* root) {
+    initWallpaper(root);
+    prefetchPackageTextures();
+    wallpaper_decode_cache_->waitForPrefetches();
+}
+
+bool AssetManager::prepareVideo(const char* path) {
+    if (!path || !path[0]) return false;
+    char resolved_path[1024];
+    std::string key = resolvePath(path, resolved_path, sizeof(resolved_path)) ? resolved_path : path;
+    if (!vfs::exists(key.c_str()) && key.find('.') == std::string::npos) {
+        const std::string with_ext = key + ".tex";
+        if (resolvePath(with_ext.c_str(), resolved_path, sizeof(resolved_path))) key = resolved_path;
+    }
+    PreparedVideo prepared;
+    prepared.decoder = wallpaper_engine::VideoTexture::openPrepared(key.c_str());
+    if (prepared.decoder) prepared.decoder->decodeNextFrame(prepared.first_frame);
+    if (!prepared.decoder || prepared.first_frame.empty()) {
+        failed_prepared_videos_.insert(key);
+        return false;
+    }
+    prepared.audio = VideoAudioStream::open(key.c_str());
+    prepared_video_data_[key] = std::move(prepared);
+    return true;
+}
+
+bool AssetManager::textureReady(const char* path, int image_index) const {
+    if (!path || !path[0]) return false;
+    char abs_path[1024];
+    const char* suffix = strrchr(path, '.');
+    if (suffix && strcasecmp(suffix, ".json") == 0) return true;
+    const bool has_extension = suffix != nullptr;
+    char with_ext[1024];
+    const char* candidate = path;
+    if (!has_extension) {
+        snprintf(with_ext, sizeof(with_ext), "%s.tex", path);
+        candidate = with_ext;
+    }
+    if (vfs::exists(path))
+        snprintf(abs_path, sizeof(abs_path), "%s", path);
+    else if (!resolvePath(candidate, abs_path, sizeof(abs_path)))
+        return true;
+    return decodeCacheFor(abs_path).ready(abs_path, image_index);
+}
+
+bool AssetManager::prepareSceneAssets(const wallpaper_engine::SceneDocument& document) {
+    std::unordered_set<std::string> visited_documents;
+    std::unordered_set<std::string> textures;
+    std::unordered_set<std::string> videos;
+    std::vector<const TextureDecodeCache*> touched_caches;
+
+    const auto is_file = [](const std::string& path) {
+        if (vfs::isVirtual(path.c_str())) return vfs::exists(path.c_str());
+        std::error_code error;
+        return std::filesystem::is_regular_file(path, error);
+    };
+    const auto resolve = [&](const std::string& reference, const std::string& owner) {
+        char absolute[1024];
+        if (is_file(reference)) return reference;
+        if (resolvePath(reference.c_str(), absolute, sizeof(absolute)) && is_file(absolute))
+            return std::string(absolute);
+        if (reference.find_last_of('.') == std::string::npos &&
+            resolvePath((reference + ".tex").c_str(), absolute, sizeof(absolute)))
+            return std::string(absolute);
+        if (!owner.empty()) {
+            const size_t slash = owner.find_last_of('/');
+            if (slash != std::string::npos) {
+                const std::string relative = owner.substr(0, slash + 1) + reference;
+                if (is_file(relative)) return relative;
+                if (resolvePath(relative.c_str(), absolute, sizeof(absolute)) && is_file(absolute))
+                    return std::string(absolute);
+            }
+        }
+        return std::string();
+    };
+
+    std::function<void(const std::string&, const std::string&)> visit_string;
+    std::function<void(cJSON*, const std::string&)> visit_json;
+    visit_json = [&](cJSON* node, const std::string& owner) {
+        for (cJSON* child = node ? node->child : nullptr; child; child = child->next) {
+            if (cJSON_IsString(child) && child->valuestring)
+                visit_string(child->valuestring, owner);
+            else if (child->child)
+                visit_json(child, owner);
+        }
+    };
+    visit_string = [&](const std::string& reference, const std::string& owner) {
+        const size_t dot = reference.find_last_of('.');
+        const std::string extension = dot == std::string::npos ? ".tex" : reference.substr(dot);
+        const bool is_json = strcasecmp(extension.c_str(), ".json") == 0;
+        const bool is_video =
+            strcasecmp(extension.c_str(), ".mp4") == 0 || strcasecmp(extension.c_str(), ".webm") == 0 ||
+            strcasecmp(extension.c_str(), ".mkv") == 0 || strcasecmp(extension.c_str(), ".avi") == 0 ||
+            strcasecmp(extension.c_str(), ".mov") == 0 || strcasecmp(extension.c_str(), ".wmv") == 0;
+        const bool is_texture = dot == std::string::npos || strcasecmp(extension.c_str(), ".tex") == 0 ||
+                                strcasecmp(extension.c_str(), ".png") == 0 ||
+                                strcasecmp(extension.c_str(), ".jpg") == 0 ||
+                                strcasecmp(extension.c_str(), ".jpeg") == 0;
+        if (!is_json && !is_video && !is_texture) return;
+        const std::string path = resolve(reference, owner);
+        if (path.empty()) return;
+        if (is_video) {
+            videos.insert(path);
+            return;
+        }
+        if (is_texture) {
+            if (textures.insert(path).second) {
+                textureReady(path.c_str(), 0);
+                const TextureDecodeCache& cache = decodeCacheFor(path.c_str());
+                touched_caches.push_back(&cache);
+                if (strcasecmp(extension.c_str(), ".tex") == 0) {
+                    textureReady(path.c_str(), 1);
+                }
+            }
+            return;
+        }
+        if (!visited_documents.insert(path).second) return;
+        char* json_text = read_file_to_string(path.c_str());
+        if (!json_text) return;
+        cJSON* json = cJSON_Parse(json_text);
+        free(json_text);
+        if (json) {
+            visit_json(json, path);
+            cJSON_Delete(json);
+        }
+    };
+
+    for (const auto& object : document.objects) {
+        if (!object.raw_json.empty()) {
+            cJSON* raw = cJSON_Parse(object.raw_json.c_str());
+            if (raw) {
+                visit_json(raw, wallpaper_path);
+                cJSON_Delete(raw);
+            }
+        }
+        if (object.kind == wallpaper_engine::SceneObjectKind::Image && !object.image.image.empty())
+            visit_string(object.image.image, wallpaper_path);
+        if (object.kind == wallpaper_engine::SceneObjectKind::Particle && !object.particle.particle.empty())
+            visit_string(object.particle.particle, wallpaper_path);
+        for (const auto& effect : object.effects)
+            if (!effect.file.empty()) visit_string(effect.file, wallpaper_path);
+    }
+
+    for (const TextureDecodeCache* cache : touched_caches) cache->waitForPrefetches();
+    bool ready = true;
+    for (const std::string& path : textures) {
+        const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(path.c_str(), 0);
+        if (decoded && decoded->is_video) videos.insert(path);
+    }
+    for (const std::string& path : videos) ready = prepareVideo(path.c_str()) && ready;
+    return ready;
+}
+
 void AssetManager::init(const char* ep, const char* wp) {
-    // Temporary shim until every caller supplies a process-wide SharedAssets:
-    // owns a private one so behavior is unchanged.
+    // Temporary: owns a private SharedAssets until every caller uses attachShared.
     clearVideoTextures();
     if (!owned_shared_) owned_shared_ = std::make_unique<SharedAssets>();
     owned_shared_->engine_path = ep ? ep : "";
@@ -74,33 +230,50 @@ void AssetManager::init(const char* ep, const char* wp) {
 }
 
 void AssetManager::prefetchPackageTextures() const {
-    constexpr size_t kMaxTextureBytes = 32u << 20;
-    constexpr size_t kMaxTotalBytes = 192u << 20;
-    size_t total_bytes = 0;
-
-    vfs::forEachFile([&](const char* name) {
+    const auto supported = [](const char* name) {
         const size_t length = strlen(name);
-        if (length < 4 || strcasecmp(name + length - 4, ".tex") != 0) return false;
-
-        const std::string path = std::string(vfs::kRoot) + "/" + name;
-        const uint8_t* data = nullptr;
-        size_t size = 0;
-        if (!vfs::find(path.c_str(), data, size) || size > kMaxTextureBytes) return false;
-        if (total_bytes + size > kMaxTotalBytes) return true;
-        total_bytes += size;
-
+        if (length < 4) return false;
+        const char* extension = name + length - 4;
+        return strcasecmp(extension, ".tex") == 0 || strcasecmp(extension, ".png") == 0 ||
+               strcasecmp(extension, ".jpg") == 0 || (length >= 5 && strcasecmp(name + length - 5, ".jpeg") == 0);
+    };
+    const auto enqueue = [&](const std::string& path) {
         wallpaper_decode_cache_->prefetch(path.c_str(), 0);
+        const char* ext = strrchr(path.c_str(), '.');
+        if (ext && strcasecmp(ext, ".tex") == 0) wallpaper_decode_cache_->prefetch(path.c_str(), 1);
+    };
+    vfs::forEachFile([&](const char* name) {
+        if (!supported(name)) return false;
+        const std::string path = std::string(vfs::kRoot) + "/" + name;
+        enqueue(path);
         return false;
     });
+
+    std::error_code ec;
+    if (!wallpaper_path.empty() && std::filesystem::is_directory(wallpaper_path, ec)) {
+        for (std::filesystem::recursive_directory_iterator it(wallpaper_path, ec), end; it != end; it.increment(ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            const bool regular_file = it->is_regular_file(ec);
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!regular_file) continue;
+            const std::string path = it->path().string();
+            if (supported(path.c_str())) enqueue(path);
+        }
+    }
 }
 
 void AssetManager::releaseDecodedTextures() const {
-    wallpaper_decode_cache_->release();
+    wallpaper_decode_cache_->releaseAsync();
 }
 
 const TextureDecodeCache& AssetManager::decodeCacheFor(const char* abs_path) const {
-    // Engine install textures are shared across instances; wallpaper (and
-    // internal) textures live in this instance's cache and are released on switch.
+    // Engine textures are shared across instances; wallpaper textures are released on switch.
     if (shared_ && shared_->decode_cache && !shared_->engine_path.empty() &&
         strncmp(abs_path, shared_->engine_path.c_str(), shared_->engine_path.size()) == 0) {
         return *shared_->decode_cache;
@@ -115,14 +288,26 @@ std::shared_ptr<const wallpaper_engine::DecodedImage> AssetManager::decodeShared
 
 content_bounds::Rect AssetManager::textureContentBounds(const char* abs_path) const {
     if (!abs_path || abs_path[0] == '\0') return {};
+    const std::string key = abs_path;
+    const auto cached = content_bounds_cache_.find(key);
+    if (cached != content_bounds_cache_.end()) return cached->second;
     const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, 0);
-    return decoded && !decoded->is_video ? content_bounds::fromImage(*decoded) : content_bounds::Rect{};
+    if (!decoded) return {};
+    const content_bounds::Rect bounds = decoded->is_video ? content_bounds::Rect{} : content_bounds::fromImage(*decoded);
+    content_bounds_cache_.emplace(key, bounds);
+    return bounds;
 }
 
 bool AssetManager::textureIsOpaque(const char* abs_path) const {
     if (!abs_path || abs_path[0] == '\0') return false;
+    const std::string key = abs_path;
+    const auto cached = opacity_cache_.find(key);
+    if (cached != opacity_cache_.end()) return cached->second;
     const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, 0);
-    return decoded && !decoded->is_video && content_bounds::isOpaque(*decoded);
+    if (!decoded) return false;
+    const bool opaque = !decoded->is_video && content_bounds::isOpaque(*decoded);
+    opacity_cache_.emplace(key, opaque);
+    return opaque;
 }
 
 void AssetManager::setVideoPlayback(float rate, float volume) {
@@ -143,7 +328,10 @@ void AssetManager::setVideoPaused(bool paused) {
 }
 
 // The image starts black so nothing uninitialised shows before the first decoded frame arrives.
-sg_image AssetManager::makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video) const {
+sg_image AssetManager::makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video,
+                                      std::vector<uint8_t> first_frame, std::unique_ptr<VideoAudioStream> audio,
+                                      bool audio_prepared) const {
+    video->initializeGpu();
     sg_image_desc desc = {};
     desc.width = (int)video->width();
     desc.height = (int)video->height();
@@ -151,41 +339,26 @@ sg_image AssetManager::makeVideoImage(const char* path, std::unique_ptr<wallpape
     desc.usage.color_attachment = true;
     desc.usage.stream_update = true;
 
-    std::vector<uint8_t> pixels;
-    bool has_frame = false;
-    if (!video->isZeroCopy()) {
-        has_frame = video->decodeNextFrame(pixels) && !pixels.empty();
-        if (!has_frame) pixels.assign((size_t)desc.width * desc.height * 4, 0);
-        desc.data.mip_levels[0] = {pixels.data(), pixels.size()};
-    }
+    if (first_frame.empty()) video->decodeNextFrame(first_frame);
+    if (first_frame.empty()) first_frame.assign((size_t)desc.width * desc.height * 4, 0);
+    desc.data.mip_levels[0] = {first_frame.data(), first_frame.size()};
     const sg_image image = sg_make_image(&desc);
     if (image.id == SG_INVALID_ID) return image;
-
-    if (video->isZeroCopy()) {
-        ImportedVideoSurface* surface = nullptr;
-        AVFrame* av_frame = nullptr;
-        if (video->decodeNextFrameZeroCopy(surface, av_frame) && surface) {
-            gpu_blit_zero_copy_surface(*surface, image, desc.width, desc.height);
-        } else {
-            pixels.assign((size_t)desc.width * desc.height * 4, 0);
-            sg_image_data black = {};
-            black.mip_levels[0] = {pixels.data(), pixels.size()};
-            sg_update_image(image, &black);
-        }
-    }
-    addVideoTexture(path, image, std::move(video));
+    addVideoTexture(path, image, std::move(video), std::move(audio), audio_prepared);
     return image;
 }
 
 void AssetManager::addVideoTexture(const char* path, sg_image image,
-                                   std::unique_ptr<wallpaper_engine::VideoTexture> video) const {
+                                   std::unique_ptr<wallpaper_engine::VideoTexture> video,
+                                   std::unique_ptr<VideoAudioStream> audio, bool audio_prepared) const {
     video_textures.push_back({});
     ActiveVideoTexture& entry = video_textures.back();
     entry.path = path;
     entry.image = image;
     entry.decoder = std::move(video);
     if (!AudioEngine::instance().isAvailable()) return;
-    entry.audio = VideoAudioStream::open(path);
+    entry.audio = std::move(audio);
+    if (!audio_prepared && !entry.audio) entry.audio = VideoAudioStream::open(path);
     if (entry.audio) entry.audio->setRate(video_rate_);
 }
 
@@ -197,6 +370,8 @@ void AssetManager::clearVideoTextures() {
         }
     }
     video_textures.clear();
+    prepared_video_data_.clear();
+    failed_prepared_videos_.clear();
 }
 
 const AssetManager::ActiveVideoTexture* AssetManager::findVideoTexture(sg_image img) const {
@@ -344,7 +519,9 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
                     strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
         if (!is_video) {
+            const auto trace_decode_start = std::chrono::steady_clock::now();
             const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, image_index);
+            const auto trace_upload_start = std::chrono::steady_clock::now();
             const wallpaper_engine::DecodedImage& image = *decoded;
             if (!image.is_video && image.valid()) {
                 const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
@@ -354,7 +531,13 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                     desc.height = (int)image.height;
                     desc.pixel_format = pixel_format;
                     desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
-                    return sg_make_image(&desc);
+                    const sg_image uploaded = sg_make_image(&desc);
+                    if (load_trace::enabled())
+                        LOG_TAG_I("LOAD_TRACE", "texture_decode_ms=%.3f texture_upload_ms=%.3f bytes=%zu %s",
+                                  load_trace::milliseconds(trace_upload_start - trace_decode_start),
+                                  load_trace::milliseconds(std::chrono::steady_clock::now() - trace_upload_start),
+                                  image.pixels.size(), abs_path);
+                    return uploaded;
                 }
             }
         }
@@ -363,10 +546,23 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             for (const ActiveVideoTexture& video : video_textures) {
                 if (video.path == abs_path) return GfxImage(video.image);
             }
-            auto video = wallpaper_engine::VideoTexture::open(abs_path);
-            if (video) {
-                const sg_image image = makeVideoImage(abs_path, std::move(video));
+            std::unique_ptr<wallpaper_engine::VideoTexture> video;
+            auto prepared = prepared_video_data_.find(abs_path);
+            if (prepared != prepared_video_data_.end()) {
+                std::vector<uint8_t> first_frame = std::move(prepared->second.first_frame);
+                std::unique_ptr<VideoAudioStream> audio = std::move(prepared->second.audio);
+                video = std::move(prepared->second.decoder);
+                prepared_video_data_.erase(prepared);
+                const sg_image image =
+                    makeVideoImage(abs_path, std::move(video), std::move(first_frame), std::move(audio), true);
                 if (image.id != SG_INVALID_ID) return GfxImage(image);
+            } else {
+                if (failed_prepared_videos_.count(abs_path)) return {};
+                video = wallpaper_engine::VideoTexture::open(abs_path);
+                if (video) {
+                    const sg_image image = makeVideoImage(abs_path, std::move(video));
+                    if (image.id != SG_INVALID_ID) return GfxImage(image);
+                }
             }
         }
     }

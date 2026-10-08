@@ -1,10 +1,10 @@
 #ifndef SURFACE_H
 #define SURFACE_H
 
+#include "shared/core/host_api.h"
 #include "sokol_gfx.h"
 
-// Presentation surface seen by the renderer. Defaults to the sokol_app window;
-// a platform backend (e.g. the Wayland layer surface) can install a provider.
+// Presentation surface for the renderer; platform backends can install a provider.
 class SurfaceProvider {
    public:
     virtual ~SurfaceProvider() = default;
@@ -18,7 +18,7 @@ class SurfaceProvider {
 };
 
 namespace surface {
-void setProvider(SurfaceProvider* provider);
+LWE_HOST_API void setProvider(SurfaceProvider* provider);
 bool hasProvider();
 int width();
 int height();
