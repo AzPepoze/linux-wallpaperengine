@@ -59,7 +59,7 @@ linux-wallpaperengine /path/to/wallpaper [OPTIONS]
 | Use it as the desktop background on screen DP-4 | `linux-wallpaperengine /path/to/wallpaper -r DP-4 --layer bottom` |
 | Play it without sound | add `-s` |
 | Change a setting while it runs | add `--set-property light=0` |
-| Switch to another wallpaper | run the new one. It fades in over the old one |
+| Switch to another wallpaper | run the new one. It uses the transition from `--transition` (default `fade`) |
 
 `-r DP-4` picks the screen. Replace `DP-4` with the name of your screen:
 

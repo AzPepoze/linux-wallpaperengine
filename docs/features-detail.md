@@ -80,7 +80,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [x] `none` (hard cut) and `random` (one effect picked per switch), with a configurable duration (`--transition`, `--transition-duration`, default `fade` / 1000 ms)
 - [x] Audio crossfade: the outgoing wallpaper's audio fades out while the incoming wallpaper's fades in, driven by the transition progress. Scene sound layers crossfade; video/web audio is assigned to the same group but still cuts at the swap (fixed when per-instance retention lands in P2)
 - [x] Transition mode (`--transition-mode`, config `transition_mode`, default `freeze`)
-  - `freeze` holds the outgoing wallpaper's last frame for the fade; `continue` steps and renders the outgoing wallpaper through the fade (scene, video and web), then destroys it
+  - `freeze` holds the outgoing wallpaper's last frame for the transition; `continue` steps and renders the outgoing wallpaper through the transition (scene, video and web), then destroys it
   - Both modes crossfade the outgoing audio into the incoming audio
 - [x] The outgoing frame is captured and held while the new wallpaper loads, so a slow load does not show a black gap; a failed load keeps the frozen frame
 - [x] Live settings on switch: the control request also carries scaling (`default|fill|fit|stretch`), master volume (0-100), mute and the frame cap, applied without restarting the process

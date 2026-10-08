@@ -17,7 +17,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `parallax_scale` | `<factor>` | 50.0 | Particle parallax multiplier |
 | `transition` | `<name\|none\|random>` | fade | Transition shader (also `0`-`26`) |
 | `transition_duration_ms` | `<ms>` | 1000 | Transition length |
-| `transition_mode` | `freeze\|continue` | freeze | What the old wallpaper does during the fade |
+| `transition_mode` | `freeze\|continue` | freeze | What the old wallpaper does during the transition |
 | `web_transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Web frame transport |
 | `web_devtools_port` | `<port>` | 9222 | DevTools port |
 | `web_devtools_browser` | `<cmd>` | xdg-open | Browser for DevTools |
@@ -88,7 +88,7 @@ If the source you pick does not work, the program moves down the same list and l
 | --- | --- | --- | --- |
 | `--transition` | `<name\|none\|random>` | fade | Transition shader |
 | `--transition-duration` | `<ms>` | 1000 | Transition length |
-| `--transition-mode` | `freeze\|continue` | freeze | What the old wallpaper does during the fade |
+| `--transition-mode` | `freeze\|continue` | freeze | What the old wallpaper does during the transition |
 
 ### Control
 
@@ -151,7 +151,7 @@ Options from the original launcher that this build does not support (for example
 
 If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits. The running instance then:
 
-1. Crossfades to the new wallpaper, using the original transition shaders from your install.
+1. Switches to the new wallpaper with the transition from `--transition` (default `fade`, a crossfade). `none` cuts straight over, and `random` picks one effect per switch. Effects use the original transition shaders from your install, or the built-in fade if they are missing.
 2. Applies new `--set-property` values live.
 3. Updates volume, mute and frame cap, if given.
 

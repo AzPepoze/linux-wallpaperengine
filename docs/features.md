@@ -69,7 +69,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [ ] Web album art links
 - [x] Transitions between wallpapers
   - [x] 27 transition effects
-  - [x] Crossfade with audio
+  - [x] Audio crossfade for scene sound (video and web audio cut at the swap)
 - [x] Mouse (Partial)
   - [x] Follows the mouse
   - [x] Click and hover on layers
