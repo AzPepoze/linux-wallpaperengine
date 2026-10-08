@@ -20,7 +20,8 @@ A **library** is a set of ready-made code that the program uses. Your package ma
 
 A Vulkan driver for your graphics card is required. For example: `vulkan-radeon` for AMD, `vulkan-intel` for Intel, or the NVIDIA driver.
 
-The program also needs a Wallpaper Engine install for its **assets** folder. Assets are the files that wallpapers use, such as fonts and images. You can point the program to that folder later (see [Options](options.md)).
+> [!IMPORTANT]
+> The program also needs a Wallpaper Engine install for its **assets** folder. Assets are the files that wallpapers use, such as fonts and images. You can point the program to that folder later (see [Options](options.md)).
 
 ### Optional features
 
