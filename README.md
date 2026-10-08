@@ -10,6 +10,14 @@ Wallpaper Engine is a program that shows animated wallpapers. People share their
 
 **You need a Wallpaper Engine install for its assets folder.** Assets are the files that the wallpapers use, such as fonts and images. Point the program to that folder with `WALLPAPER_ENGINE_PATH`, or with `engine_path` in `config.json`.
 
+## Showcase
+
+| Scene | Video |
+| --- | --- |
+| ![Scene wallpaper](docs/imgs/scene.jpg) | ![Video wallpaper](docs/imgs/video.jpg) |
+| Web | Transition |
+| ![Web wallpaper](docs/imgs/web.jpg) | ![Transition between wallpapers](docs/imgs/transition.jpg) |
+
 ## Words used in this guide
 
 | Word | Meaning |
