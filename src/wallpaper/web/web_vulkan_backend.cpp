@@ -206,7 +206,7 @@ bool VulkanBackend::start(const std::string& html_path, const std::string& user_
     for (uint32_t i = 0; i < kWebDmaBufBuffers; ++i) {
         d.frame->buffers[i] = {};
         d.frame->buffers[i].fourcc = kDrmFormatArgb8888;
-        d.frame->buffers[i].modifier = 0;  // linear
+        d.frame->buffers[i].modifier = 0;
         d.frame->buffers[i].stride = d.width * 4;
         d.frame->buffers[i].offset = 0;
         d.frame->buffers[i].width = d.width;

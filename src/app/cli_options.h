@@ -8,7 +8,6 @@
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 #include "wallpaper/web/web_options.h"
 
-// Transition settings, resolved from the CLI and config.json.
 struct TransitionOptions {
     std::string effect;   // --transition
     std::string mode;     // --transition-mode

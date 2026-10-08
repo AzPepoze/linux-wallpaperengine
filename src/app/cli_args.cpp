@@ -164,7 +164,6 @@ void printRow(FILE* out, const CliOption& option, size_t width) {
     fprintf(out, "  %-*s  %s\n", static_cast<int>(width), names.c_str(), option.description);
 }
 
-// Finds the option for `arg`, accepting `--name` and `--name=value` spellings.
 const CliOption* findOption(const std::string& arg) {
     for (const CliGroupDef& def : kGroups)
         for (const CliOption* option = def.options; option->names[0]; ++option)
@@ -270,7 +269,6 @@ std::vector<std::string> unknownOptions(const std::vector<std::string>& args) {
         const std::string& arg = args[i];
         const CliOption* option = findOption(arg);
         const bool has_inline_value = arg.find('=') != std::string::npos;
-        // Implemented options are known; their value (if any) is not reported.
         if (option && !option->ignored) {
             if (option->value && !has_inline_value && i + 1 < args.size()) ++i;
             continue;

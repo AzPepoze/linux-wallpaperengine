@@ -77,7 +77,7 @@ typedef struct {
     mat4x4 mvp;
     mat4x4 mvp_inverse;
     vec4 texture_resolutions[5];  // 0: main image, 1-4: effect textures
-    vec2 parallax_pos;            // 0..1
+    vec2 parallax_pos;
     float time;
     float frametime;
     vec2 screen_res;
@@ -121,14 +121,9 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
                                   int index_count, sg_image main_image, sg_view main_view,
                                   const render_effect_pass_t* pass, const builtin_uniforms_t& builtins,
                                   const particle_builtin_uniforms_t& particle_builtins);
-// Draws a puppet mesh: position (vec3) and uv (vec2) live in separate vertex
-// buffers, tinted by the material texture and mapped into a width x height
-// top-left pixel space.
 void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float width, float height);
 
-// Presents the composed scene to the current target, applying a gentle
-// highlight roll-off so additive effects (lens flares, glows) do not hard-clip
-// to flat white. Values at or below the knee pass through unchanged.
+// Highlight roll-off keeps additive effects from hard-clipping to flat white.
 void renderer_present(renderer_t* r, sg_view source_view, float width, float height);
 
 void renderer_draw_mesh(EngineContext& ctx, renderer_t* r, sg_buffer position_buffer, sg_buffer uv_buffer,

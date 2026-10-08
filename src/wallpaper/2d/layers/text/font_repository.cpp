@@ -7,7 +7,6 @@
 
 namespace {
 
-// Parses font bytes that the caller has already placed in `font.data`.
 bool initFont(LoadedFont& font) {
     if (font.data.empty()) return false;
     const int offset = stbtt_GetFontOffsetForIndex(font.data.data(), 0);
@@ -39,7 +38,6 @@ std::shared_ptr<const LoadedFont> loadSystemFont(const std::string& path) {
     return font;
 }
 
-// fontconfig's best installed font for one codepoint, or an empty string when none is found.
 std::string matchSystemFont(int codepoint) {
     char command[96];
     snprintf(command, sizeof(command), "fc-match -f '%%{file}' ':charset=%x' 2>/dev/null", (unsigned)codepoint);

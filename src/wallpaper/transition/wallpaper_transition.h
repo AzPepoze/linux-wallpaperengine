@@ -8,8 +8,7 @@
 struct EngineContext;
 
 // Holds the outgoing wallpaper's last composed frame and fades it over the
-// incoming wallpaper. Phase 2 uses a plain alpha fade; Task 11 swaps in
-// Wallpaper Engine's transition shader behind the same interface.
+// incoming wallpaper.
 class WallpaperTransition {
    public:
     WallpaperTransition() = default;
@@ -49,7 +48,6 @@ class WallpaperTransition {
         hold_ = false;
         live_ = false;
     }
-    // Draws the snapshot over the currently bound target.
     void composite(EngineContext& ctx);
     // Renders the overlay into a fresh offscreen image and registers it as a
     // diagnostic scene stage. Call before the swapchain pass.

@@ -17,9 +17,7 @@ class TextureDecodeCache {
     TextureDecodeCache(const TextureDecodeCache&) = delete;
     TextureDecodeCache& operator=(const TextureDecodeCache&) = delete;
 
-    // Decodes (or returns the cached) image for `abs_path` and `image_index`.
     std::shared_ptr<const wallpaper_engine::DecodedImage> decode(const char* abs_path, int image_index) const;
-    // Enqueues a decode on the TaskPool and records it under the same key.
     void prefetch(const char* abs_path, int image_index);
     // Waits for queued decodes. Intended for wallpaper preparation workers.
     void waitForPrefetches() const;

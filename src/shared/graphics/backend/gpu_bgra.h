@@ -18,7 +18,6 @@ struct ImportedBgraSurface {
     uint32_t height = 0;
 };
 
-// Initializes the plain-sampler blit pipeline for BGRA DMA-BUF surfaces.
 bool gpu_init_zero_copy_bgra();
 
 // Imports a linear BGRA8 DMA-BUF fd onto the engine device. The caller keeps

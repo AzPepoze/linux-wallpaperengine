@@ -5,7 +5,6 @@
 extern "C" {
 #endif
 
-// Block CPU until all pending GPU command buffers and operations have fully completed.
 void lwe_vk_wait_idle(void);
 
 #ifdef __cplusplus

@@ -13,12 +13,10 @@
 
 namespace UiComponents {
 
-// Section header with clean styling, optional subtitle and separator
 void SectionHeader(const char* title, const char* subtitle = nullptr);
 
 void PropertyRow(const char* label, const char* value_fmt, ...);
 
-// Formatted status badge (e.g. Green for active, Gray/Red for inactive)
 void StatusBadge(const char* label, bool active, const char* active_text, const char* inactive_text = "Disabled");
 
 void MetricCard(const char* label, const char* value, const char* subtext = nullptr,

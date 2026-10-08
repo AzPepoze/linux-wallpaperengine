@@ -11,7 +11,6 @@
 
 namespace lwe::identity {
 
-// Version reported by --whoareyou.
 inline constexpr const char* kVersion = LWE_VERSION;
 
 // Writes the frozen one-line JSON identity to `out`. Callers must keep stdout

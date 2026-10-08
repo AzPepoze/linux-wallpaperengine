@@ -7,14 +7,13 @@
 
 #include "wallpaper/transition/transition_catalog.h"
 
-// One wallpaper-switch command sent from a second launch to the live instance.
 struct SwitchRequest {
     std::string path;
     bool is_pkg = false;
     std::vector<std::pair<std::string, std::string>> properties;
     int transition = lwe::transition::kSelectionNone;
     int transition_time_ms = 1000;
-    bool continue_previous = false;  // false == freeze (default)
+    bool continue_previous = false;
 
     // Optional live settings. Absent fields keep the running instance's state,
     // so payloads from older senders still decode to the defaults below.
@@ -23,7 +22,7 @@ struct SwitchRequest {
     bool has_volume = false;
     bool muted = false;
     bool has_muted = false;
-    int fps = 0;  // frame-rate cap
+    int fps = 0;
     bool has_fps = false;
 };
 

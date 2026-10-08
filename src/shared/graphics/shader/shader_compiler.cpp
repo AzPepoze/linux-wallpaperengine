@@ -15,9 +15,7 @@
 
 namespace {
 
-// Five consecutive vec4 resolutions share one array entry in Sokol's limited uniform metadata.
-// Their std140 layout and upload offsets stay identical. Each pattern is one scan over the source:
-// the five indices never overlap, so removing every declaration first matches the per-index order.
+// Declarations are removed before usages are rewritten, so the result matches the per-index order.
 void rewriteTextureResolutions(std::string& source) {
     static const std::regex declaration(R"(uniform\s+(?:vec4|float4)\s+g_Texture[0-4]Resolution\s*;)");
     static const std::regex usage(R"(\bg_Texture([0-4])Resolution\b)");

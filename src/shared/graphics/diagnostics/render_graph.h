@@ -47,7 +47,6 @@ struct PassTraceEntry {
 
     std::vector<TextureBindingTrace> inputs;
 
-    // Output capture info & stats if captured
     std::string captured_image_filename;
     bool has_image_stats = false;
     ImageStats image_stats;

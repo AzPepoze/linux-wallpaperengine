@@ -128,7 +128,6 @@ void WallpaperManager::destroyInstance(EngineContext& ctx, std::unique_ptr<Wallp
 }
 
 void WallpaperManager::update(float dt, EngineContext& ctx) {
-    // A finished (or never-started) fade: drop the outgoing wallpaper and its group.
     if (outgoing_instance_ && !transition_.active()) {
         if (fading_group_ != AudioEngine::kDefaultGroup) AudioEngine::instance().setGroupVolume(fading_group_, 0.0f);
         fading_group_ = AudioEngine::kDefaultGroup;
@@ -145,8 +144,6 @@ void WallpaperManager::update(float dt, EngineContext& ctx) {
 bool WallpaperManager::stepOutgoingForTransition(EngineContext& ctx, float dt) {
     if (!outgoing_instance_ || !transition_.active() || !transition_.live()) return false;
 
-    // Make the outgoing instance the active view, step and offscreen-render it,
-    // then hand its composed frame to the transition as this frame's source.
     activateInstance(ctx, *outgoing_instance_, active_view_);
     auto* scene = dynamic_cast<Scene2DWallpaper*>(outgoing_instance_->wallpaper.get());
     Scene2DRuntime* runtime = scene ? scene->getRuntime() : nullptr;
@@ -162,7 +159,6 @@ bool WallpaperManager::stepOutgoingForTransition(EngineContext& ctx, float dt) {
         runtime->setForceOffscreen(false);
         ok = true;
     }
-    // Restore the incoming instance as the active view for this frame's work.
     activateInstance(ctx, *active_instance_, active_view_);
     return ok;
 }
@@ -391,7 +387,6 @@ void WallpaperManager::pollLoad(EngineContext& ctx) {
             scene->beginLoadDocument(std::move(job.document), ctx);
             job.instance->wallpaper = std::move(scene);
         } else {
-            // Non-scene backends retain their existing construction interface.
             if (job.info.type == ProjectType::Video) {
                 job.instance->assets.setVideoPlayback(job.info.video.rate, job.info.video.volume);
                 if (job.info.video.fit == VideoFit::Fill && ctx.scene.scaling_mode == SCALING_FIT)
@@ -454,7 +449,6 @@ void WallpaperManager::commitLoad(EngineContext& ctx) {
     const lwe::transition::AudioSwitchPlan plan =
         lwe::transition::planAudioSwitch(active_instance_ != nullptr, has_old, config.selection);
 
-    // Capture the outgoing frame before the switch replaces the active instance.
     bool captured = load_job_->held_snapshot;
     if (captured) transition_.startHeld(config);
     if (!captured && config.selection != lwe::transition::kSelectionNone) {

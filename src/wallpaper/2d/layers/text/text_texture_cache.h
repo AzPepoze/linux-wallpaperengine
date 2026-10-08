@@ -11,7 +11,6 @@
 #include "shared/graphics/gfx_resource.h"
 #include "wallpaper/2d/layers/text/text_raster.h"
 
-// One uploaded text texture, shared by every layer of a scene whose text and raster settings match.
 struct TextTexture {
     GfxImage image;
     GfxView view;
@@ -20,19 +19,17 @@ struct TextTexture {
     float size[2] = {0.0f, 0.0f};
 };
 
-// Output of one background raster: the (possibly cropped) pixels packed as RGBA16F texels.
 struct RasterOutput {
     bool ok = false;
-    TextRasterResult result;  // pixels are released once packed into texels
+    TextRasterResult result;
     std::vector<uint16_t> texels;
 };
 
-// Textures and in-flight rasters for one loaded scene. Only the render thread may call it.
+// Only the render thread may call it.
 class TextTextureCache {
    public:
     std::shared_ptr<TextTexture> find(const std::string& key);
     void remember(const std::string& key, const std::shared_ptr<TextTexture>& texture);
-    // The raster already in flight for key, or a new one started on the workers.
     std::shared_future<RasterOutput> rasterFor(const std::string& key, const TextRasterRequest& request, bool crop);
 
    private:

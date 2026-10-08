@@ -188,8 +188,6 @@ const std::string kUnpremulFragmentSource =
     "  frag_color = c * tint;\n"
     "}\n";
 
-// Present pass: gentle highlight roll-off so additive HDR effects do not
-// hard-clip to flat white. Identity below the knee, asymptotes to 1 above.
 const std::string kPresentFragmentSource =
     "#version 330\n"
     "precision mediump float;\n"
@@ -381,7 +379,6 @@ void renderer_init(renderer_t* r, float w, float h) {
     }
 }
 
-// Precompiles all blend pipelines during init; creating them mid-render caused GPU context loss.
 BlendPipelinePrecompileJobHandle renderer_begin_blend_pipeline_precompile(const AssetManager& assets,
                                                                           vfs::PackageHandle package, renderer_t* r,
                                                                           const std::vector<int>& modes) {

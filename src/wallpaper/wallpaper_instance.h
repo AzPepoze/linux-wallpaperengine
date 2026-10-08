@@ -54,7 +54,6 @@ void stashInstanceState(Ctx& ctx, InstanceState& state) {
     state.scene_type = ctx.scene_type;
 }
 
-// One running wallpaper: its own state, asset manager, audio group and object.
 struct WallpaperInstance {
     InstanceState state;
     AssetManager assets;
@@ -67,7 +66,6 @@ struct WallpaperInstance {
 // Moves `instance`'s state into ctx, stashing whatever `current` pointed at back
 // into that instance first. Sets ctx.asset_mgr = &instance.assets.
 void activateInstance(EngineContext& ctx, WallpaperInstance& instance, WallpaperInstance*& current);
-// Stashes the current instance's view back and clears ctx.asset_mgr.
 void deactivateInstance(EngineContext& ctx, WallpaperInstance*& current);
 
 #endif  // WALLPAPER_INSTANCE_H

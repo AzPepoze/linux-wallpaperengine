@@ -12,16 +12,14 @@
 struct Particle {
     uint64_t serial = 0;
     std::vector<std::array<float, 3>> history;
-    // Non-zero for particles of an event child system that follow a parent particle (see ChildInstance); then
-    // `base_position` is the offset from that instance rather than an absolute position.
+    // Following event-child particles store base_position as an offset from their instance.
     uint64_t instance_id = 0;
-    // The instance that emitted this particle (0 for particles of root and static systems).
     uint64_t source_instance = 0;
     vec3 position = {0, 0, 0};
     vec3 base_position = {0, 0, 0};
     vec3 velocity = {0, 0, 0};
     vec3 color = {1, 1, 1};
-    vec3 initial_color = {1, 1, 1};  // colorchange scales this every frame
+    vec3 initial_color = {1, 1, 1};
     float life = 0.0f;
     float max_life = 0.0f;
     float alpha = 1.0f;
@@ -36,8 +34,7 @@ struct Particle {
 
     float drag = 0.0f;
     vec3 gravity = {0, 0, 0};
-    // Alpha fade as lifetime fractions: the fade-in completes at fade_in, the fade-out starts at fade_out.
-    // The defaults mean "no alphafade operator": no fade in, fade-out never starts.
+    // Lifetime fractions; the defaults mean no alphafade operator.
     float fade_in = 0.0f;
     float fade_out = 1.0f;
 
@@ -56,30 +53,27 @@ struct Particle {
 class EngineContext;
 class ShaderPass;
 
-// Wallpaper Engine child particle systems are spawned under one of these
-// conditions (WE "Children" component).
 enum class ParticleSpawnType {
-    Static,       // one instance at the particle system origin
-    EventFollow,  // created per parent particle and follows it
-    EventSpawn,   // created when a parent particle spawns
-    EventDeath,   // created where a parent particle dies
+    Static,
+    EventFollow,
+    EventSpawn,
+    EventDeath,
 };
 
-// Authored placement of the particle layer in scene (Y-up) coordinates, without camera parallax.
+// Y-up scene coordinates, without camera parallax.
 struct ParticlePlacement {
     float origin[3] = {0, 0, 0};
     float scale[3] = {1, 1, 1};
     float rotation_deg = 0.0f;
 };
 
-// One emitting instance of an event child system: it is created for a parent particle, follows it (event follow) or
-// stays where the event happened, and emits the child's particles around its position.
+// One emitting instance of an event child system.
 struct ChildInstance {
     uint64_t id = 0;
     uint64_t parent_serial = 0;
-    vec3 position = {0, 0, 0};  // in the parent's simulation space
+    vec3 position = {0, 0, 0};
     bool follow = false;
-    bool alive = true;  // the parent particle still exists
+    bool alive = true;
     float emit_timer = 0.0f;
 };
 
@@ -111,8 +105,6 @@ class ParticleSystem {
     float trailSampleFraction() const;
     float trail_sample_timer = 0.0f;
     bool use_perspective = false;
-    // A child system is emitted from its parent's particles rather than from its
-    // own emitter region; this tracks its accumulated emission time.
     ParticleSpawnType spawn_type = ParticleSpawnType::Static;
     vec3 child_offset = {0, 0, 0};
     vec3 child_angles = {0, 0, 0};
@@ -168,10 +160,8 @@ class ParticleSystem {
                                           const ParticleObjectConfig& overrides = {});
 
     void update(float dt);
-    // Worldspace systems (particle flag bit 1) convert spawn positions and velocities to scene coordinates with
-    // this placement and simulate there afterwards. Also applied to child systems.
+    // Worldspace systems convert spawn values with this placement.
     void setPlacement(const ParticlePlacement& value, float camera_offset_x, float camera_offset_y);
-    // True when particle positions are scene coordinates rather than the layer's local space.
     bool simulatesInWorld() const;
     void draw(EngineContext& ctx);
     void drawDebugBounds(EngineContext& ctx);

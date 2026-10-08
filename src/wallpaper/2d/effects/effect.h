@@ -48,7 +48,6 @@ class EffectLoadBatch {
     EffectLoadBatch& operator=(const EffectLoadBatch&) = delete;
 
     // Completes only shader passes whose CPU preparation has finished. Safe to call each frame.
-    // Returns true when every pass has completed setup.
     bool finish();
     bool finish(std::chrono::steady_clock::time_point deadline);
     size_t pendingCount() const {

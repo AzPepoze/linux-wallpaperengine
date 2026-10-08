@@ -31,7 +31,7 @@ struct profiler_stats_t {
     double update_ms = 0.0;
     double render_ms = 0.0;
     double ui_ms = 0.0;
-    double measured_fps = 0.0;  // real presented rate over a short rolling window
+    double measured_fps = 0.0;
     uint32_t draw_calls = 0;
     uint64_t frame_index = 0;
 
@@ -78,7 +78,6 @@ struct CameraShakeState {
     float amplitude = 0.0f;
     float speed = 0.0f;
     float roughness = 0.0f;
-    // Scene-space camera translation, calculated once per frame.
     float x = 0.0f;
     float y = 0.0f;
 };

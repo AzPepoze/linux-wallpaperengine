@@ -59,8 +59,6 @@ ControlServer control_server;
 static EngineContext ctx;
 static bool layer_active = false;
 
-// Process-wide shared assets and the active wallpaper's asset manager. The
-// manager becomes per-instance in the next task; for now it is a single owner.
 static AssetManager asset_manager;
 static SharedAssets shared_assets;
 

@@ -30,8 +30,7 @@ class ImageLayer : public Layer {
     bool is_fullscreen = false;
     bool is_compose_region = false;
     bool copy_background = false;
-    // Sprite-sheet playback (TEXS frames). It follows the shared scene clock until a script takes control through
-    // getTextureAnimation(); join() hands it back.
+    // Follows the scene clock until a script takes control; join() hands it back.
     struct SpriteClock {
         bool joined = true;
         double time = 0.0;
@@ -46,7 +45,6 @@ class ImageLayer : public Layer {
     bool spriteSet(const std::string& field, double value, double now);
     bool spriteCommand(const std::string& command, double now);
 
-    // Puppet animation layers, addressed by name or index (getAnimationLayer()).
     int puppetLayerIndex(const std::string& name) const;
     bool puppetLayerGet(size_t index, const std::string& field, double& out) const;
     bool puppetLayerGetString(size_t index, const std::string& field, std::string& out) const;
@@ -55,8 +53,6 @@ class ImageLayer : public Layer {
     size_t puppetLayerCount() const {
         return puppet_layers.size();
     }
-    // Animation layers added and removed at run time (IModelLayer). `animation` is a clip name or id; the new layer's
-    // index, or -1.
     int puppetLayerCreate(const std::string& animation, double rate, double blend, bool additive, bool once,
                           bool remove_when_done, const std::string& name);
     bool puppetLayerDestroy(size_t index);
@@ -66,15 +62,13 @@ class ImageLayer : public Layer {
     bool rootMotion() const {
         return puppet_pose.root_motion;
     }
-    // Drops the named off-screen buffers of the effect chain; they start empty when next used.
     void clearEffectTargets(const std::vector<std::string>& names);
     const wallpaper_engine::MdlModel& puppetModel() const {
         return puppet;
     }
     bool perspective = false;  // IModelLayer.perspective: kept for scripts, the 2D renderer does not use it
 
-    // Skeleton access for scripts. Fields: origin, angles (degrees) and scale are the bone's local pose; matrix is its
-    // model-space transform (column-major, read only).
+    // Bone angles are in degrees; the matrix field is read only.
     size_t boneCount() const {
         return puppet.bones.size();
     }
@@ -84,7 +78,6 @@ class ImageLayer : public Layer {
     bool boneGet(size_t bone, const std::string& field, std::vector<double>& out) const;
     bool boneSet(size_t bone, const std::string& field, const std::vector<double>& value);
     void boneReset(size_t bone);
-    // True once after the one-shot clip of that puppet layer ended.
     bool puppetLayerTakeEnded(size_t index);
 
     void setAlpha(float alpha) {
@@ -243,8 +236,6 @@ class ImageLayer : public Layer {
         sg_view layer_source_view = {SG_INVALID_ID};
         sg_image input_image = {SG_INVALID_ID};
         sg_view input_view = {SG_INVALID_ID};
-        // Passes that render into a named target do not advance the layer image that an explicit `previous` binding
-        // reads.
         sg_image chain_image = {SG_INVALID_ID};
         sg_view chain_view = {SG_INVALID_ID};
         int write_index = 0;
@@ -279,37 +270,28 @@ class ImageLayer : public Layer {
     sg_image effect_output_image = {SG_INVALID_ID};
     sg_view effect_output_view = {SG_INVALID_ID};
     std::map<std::string, NamedRenderTarget> named_effect_targets;
-    // Authored effect size divided by the size of the effect targets; shaders see their targets this much larger.
     float effect_logical_scale = 1.0f;
-    // Fingerprint of everything the last effect chain run depended on; 0 when the chain cannot be reused.
     uint64_t effect_chain_signature = 0;
 
-    // Whether the effect source image can change without its handle changing (animation, video, puppet mesh).
     bool effectSourceIsDynamic() const {
         return has_puppet_mesh || bound_video_decoder || current_texture_frame ||
                animated_frame.image.id != SG_INVALID_ID;
     }
-    // Visible region of the layer's own texture; effect passes that only resample it can skip the empty remainder.
+    // Lets effect passes that only resample the texture skip the empty remainder.
     content_bounds::Rect source_content;
-    // Every texel of the layer's own texture is fully opaque.
     bool source_opaque = false;
-    // Where a masked pass can change its input (UV rect), cached per pass; invalid when it may change any of it.
     std::map<const ShaderPass*, content_bounds::Rect> pass_active_regions;
     const content_bounds::Rect& passActiveRegion(EngineContext& ctx, const ShaderPass& pass);
-    // Part of the layer quad the cropped effect output can cover; the final draw uses a quad of just this region.
     content_bounds::Rect output_region;
     GfxBuffer output_quad;
-    // Quad that draws only part of a texture that was cropped on upload; invalid draws the whole texture.
    protected:
     sg_buffer source_quad = {SG_INVALID_ID};
    private:
-    content_bounds::Rect output_quad_region;  // what output_quad holds right now
-    uint64_t output_quad_frame = UINT64_MAX;  // frame of the last upload; a buffer takes one update per frame
-    // Uploads output_region into output_quad; clears the region when that is not possible this frame.
+    content_bounds::Rect output_quad_region;
+    // A buffer takes one update per frame.
+    uint64_t output_quad_frame = UINT64_MAX;
     void updateOutputQuad(EngineContext& ctx);
-    // Whether every active pass is known to keep transparent texels transparent (see content_bounds::passDisplacement).
     bool effectChainCanCrop() const;
-    // Fingerprint of the chain inputs, or 0 when a pass varies per frame and the chain must run.
     uint64_t effectChainSignature(EngineContext& ctx, sg_image base_image, sg_view base_view);
 
    protected:
@@ -320,23 +302,18 @@ class ImageLayer : public Layer {
         float height = 0.0f;
         float rotation = 0.0f;
     };
-    // Sprite placement in screen pixels. Text layers override this to anchor
-    // the sprite to the alignment corner instead of the centre.
+    // Text layers override this to anchor the sprite to the alignment corner.
     virtual ScreenRect screenRect(EngineContext& ctx) const;
 
-    // Makes the layer's picture a mesh drawing: `draw` issues renderer_draw_mesh calls in a width x height pixel
-    // space (top-left origin). Call it after ImageLayer::update, which resets the picture each frame.
+    // Call after ImageLayer::update, which resets the picture each frame.
     bool renderGeometry(EngineContext& ctx, int width, int height, const std::function<void()>& draw);
 
     wallpaper_engine::ImageObjectDocument alpha_document;
-    // Set when the object's alpha is driven by a SceneScript; `alpha_script_value` is its running result.
     std::unique_ptr<SceneScript> alpha_script;
     double alpha_script_value = 1.0;
     bool alpha_script_started = false;  // init() runs on the first update, once the whole scene exists
 
    private:
-    // Puppet mesh: the parsed model, its rest/skinned positions and the
-    // off-screen target the mesh is drawn into before the effect chain runs.
     wallpaper_engine::MdlModel puppet;
     bool has_puppet_mesh = false;
     bool puppet_resolved = false;

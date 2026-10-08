@@ -9,7 +9,6 @@
 // Argument scanning that does not depend on sokol_args, so it can be unit tested.
 namespace cli_args {
 
-// Help sections, in the order they are printed.
 enum class CliGroup {
     Wallpaper,
     Graphics,
@@ -28,7 +27,6 @@ enum class CliGroup {
 // Options in a Debug group row are only listed by debug builds.
 enum class CliBuild { All, Debug };
 
-// One option, declared once and reused by the help and by value detection.
 struct CliOption {
     const char* names[4];  // nullptr-terminated spellings: {"-f", "--fps", nullptr}
     const char* value;     // nullptr => flag; else placeholder, e.g. "<n>"
@@ -53,15 +51,12 @@ void printHelp(FILE* out);
 // Options that consume the following argument unless written as --name=value.
 bool takesValue(const std::string& arg);
 
-// Value of the first matching spelling in `names`, from `--name value` or `--name=value`.
 bool optionValue(const std::vector<std::string>& args, const std::vector<std::string>& names, std::string& out);
 
-// Every value of a repeatable option, in order, from `--name value` or `--name=value`.
 std::vector<std::string> optionValues(const std::vector<std::string>& args, const std::vector<std::string>& names);
 
 bool hasFlag(const std::vector<std::string>& args, const std::vector<std::string>& names);
 
-// First argument that is neither an option, an option value nor a key=value pair.
 std::string positional(const std::vector<std::string>& args);
 
 // Option-shaped arguments the engine does not implement: unknown flags plus the

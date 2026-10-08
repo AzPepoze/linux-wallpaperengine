@@ -11,7 +11,6 @@ struct Policy {
 
 Policy policyFor(int fps_limit);
 
-// Real presented frame rate over a short rolling window.
 class Meter {
    public:
     void tick(double dt_seconds);

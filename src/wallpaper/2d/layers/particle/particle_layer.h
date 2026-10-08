@@ -24,7 +24,6 @@ class ParticleLayer : public Layer {
    private:
     // The layer's world placement from the scene tree (or its own transform), without camera parallax.
     ParticlePlacement authoredPlacement(EngineContext& ctx) const;
-    // Hands the placement and the camera parallax offset to the particle system.
     void applyPlacement(EngineContext& ctx);
 };
 
