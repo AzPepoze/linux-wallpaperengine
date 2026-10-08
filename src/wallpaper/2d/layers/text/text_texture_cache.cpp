@@ -7,6 +7,7 @@
 #include <mutex>
 
 #include "shared/core/task_pool.h"
+#include "shared/core/vfs.h"
 
 namespace {
 
@@ -80,7 +81,14 @@ std::shared_future<RasterOutput> TextTextureCache::rasterFor(const std::string& 
     purgeFinishedRasters();
     auto flight = flights_.find(key);
     if (flight != flights_.end()) return flight->second;
-    std::shared_future<RasterOutput> future = TaskPool::instance().enqueue(rasterInBackground, request, crop).share();
+    // Fonts are read from the wallpaper package, which is mounted per thread, so the worker must bind it too.
+    const vfs::PackageHandle package = vfs::currentPackage();
+    std::shared_future<RasterOutput> future = TaskPool::instance()
+                                                   .enqueue([package, request, crop] {
+                                                       vfs::ScopedBinding binding(package);
+                                                       return rasterInBackground(request, crop);
+                                                   })
+                                                   .share();
     flights_[key] = future;
     return future;
 }
