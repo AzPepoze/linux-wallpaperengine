@@ -17,8 +17,7 @@ class Layer : public ILayer {
     uint32_t scene_object_id = 0;
     std::string name;
     bool visible = true;
-    // Own flag and every ancestor group visible (or soloed); refreshed each frame before update(). Hidden layers keep
-    // their logic running but skip GPU work such as effect chains.
+    // Hidden layers keep updating but skip GPU work such as effect chains.
     bool render_active = true;
     bool solo = false;
     vec3 origin = {0, 0, 0};

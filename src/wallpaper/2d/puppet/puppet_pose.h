@@ -32,8 +32,7 @@ struct PuppetMatrix {
 class PuppetPose {
    public:
     void init(const MdlModel& model);
-    // Moves the clock of every visible, playing layer by dt * rate; a "single" clip stops (and flags `ended`) at its
-    // end.
+    // Advances visible playing layers by dt * rate; a "single" clip stops and flags `ended`.
     void advance(const MdlModel& model, std::vector<PuppetAnimationLayer>& layers, float dt) const;
     void attachmentTransforms(const MdlModel& model, const std::vector<PuppetAnimationLayer>& layers,
                               std::unordered_map<std::string, PuppetMatrix>& out) const;

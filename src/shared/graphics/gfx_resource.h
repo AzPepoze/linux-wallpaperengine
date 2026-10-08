@@ -3,8 +3,7 @@
 
 #include "sokol_gfx.h"
 
-// Move-only RAII wrappers for Sokol GPU resources, implicitly convertible to/from raw
-// Sokol types so existing .id access and sg_* calls keep working.
+// Move-only RAII wrappers for Sokol resources, implicitly convertible to the raw handles.
 
 struct GfxImage {
     uint32_t id = SG_INVALID_ID;

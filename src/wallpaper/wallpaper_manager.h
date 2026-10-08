@@ -47,15 +47,13 @@ class WallpaperManager {
     }
     bool takePendingSwitch(SwitchRequest& out);
 
-    // Starts or polls background preparation, then commits at readiness.
-    // Returns true when a new request was accepted this frame.
+    // Starts or polls preparation and commits at readiness; true when a request was accepted.
     bool beginPendingSwitch(EngineContext& ctx);
     bool isTransitioning() const {
         return transition_.active();
     }
     void updateTransition(float dt);
-    // continue mode: update and offscreen-render the outgoing instance, then
-    // refresh the transition's live source. No-op unless transitioning live.
+    // Continue mode: the outgoing instance renders offscreen to refresh the live source.
     bool stepOutgoingForTransition(EngineContext& ctx, float dt);
     void compositeTransition(EngineContext& ctx) {
         transition_.composite(ctx);
@@ -78,8 +76,7 @@ class WallpaperManager {
     }
 
    private:
-    // Destroys `instance` with its own view active, so Scene2DRuntime::cleanup()
-    // tears down that instance's layers (it reads ctx.scene).
+    // Activates the instance first so its layers tear down through its own view.
     void destroyInstance(EngineContext& ctx, std::unique_ptr<WallpaperInstance>& instance);
     struct LoadJob;
     void pollLoad(EngineContext& ctx);

@@ -47,8 +47,7 @@ std::string swizzleForWidth(int width) {
     return {};
 }
 
-// GLSL drivers silently truncate vectors when assigning a wider value to a
-// narrower variable; Slang requires the swizzle to be explicit.
+// Slang requires an explicit swizzle when a wider vector is assigned to a narrower variable.
 void rewriteNarrowingConversions(std::string& source) {
     const std::map<std::string, int> widths = collectVectorWidths(source);
     if (widths.empty()) return;

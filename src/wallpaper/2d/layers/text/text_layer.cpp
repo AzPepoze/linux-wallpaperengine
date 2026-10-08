@@ -169,10 +169,7 @@ bool TextLayer::propertySetNumber(const std::string& name, double value) {
 
 ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
     ScreenRect rect = ImageLayer::screenRect(ctx);
-    // Wallpaper Engine anchors a text object at the corner selected by the
-    // alignment (e.g. the origin is the top-left of the text for left/top) and
-    // rotates around it. The base centres the sprite on the node, so offset it
-    // to put the alignment corner on the node instead.
+    // The base centres the sprite on the node, so offset it to put the alignment corner there.
     float anchor_x = 0.0f;
     float anchor_y = 0.0f;
     if (config_.horizontal_align == "left")
@@ -195,8 +192,7 @@ ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
 void TextLayer::update(float, EngineContext& ctx) {
     pollPreparation();
     refreshForEffects(ctx);
-    // A hidden layer keeps its pending change and rasterizes it on the frame it becomes visible.
-    // The previous texture stays on screen until the new raster is uploaded.
+    // A hidden layer defers its pending change; the old texture stays on screen until upload.
     if (render_active && (config_.text != current_text_ || needs_rebuild_)) {
         needs_rebuild_ = false;
         beginPreparation(ctx);

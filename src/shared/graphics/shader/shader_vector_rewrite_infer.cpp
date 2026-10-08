@@ -120,8 +120,7 @@ int inferCallWidth(const std::string& expression, const std::map<std::string, in
     return -1;
 }
 
-// Vector width an expression evaluates to, 0 for a scalar, or -1 when the
-// shape cannot be determined safely.
+// Vector width of an expression: 0 for a scalar, -1 when it cannot be determined safely.
 int inferExpressionWidth(const std::string& expression, const std::map<std::string, int>& widths) {
     const std::string text = trimSpaces(expression);
     if (text.empty()) return -1;

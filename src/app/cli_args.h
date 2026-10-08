@@ -59,9 +59,7 @@ bool hasFlag(const std::vector<std::string>& args, const std::vector<std::string
 
 std::string positional(const std::vector<std::string>& args);
 
-// Option-shaped arguments the engine does not implement: unknown flags plus the
-// compatibility flags registered above. Values of known value-taking options
-// (and of ignored ones) are not returned.
+// Unimplemented option-shaped arguments; values of known options are excluded.
 std::vector<std::string> unknownOptions(const std::vector<std::string>& args);
 
 }  // namespace cli_args

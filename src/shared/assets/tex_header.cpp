@@ -38,37 +38,37 @@ bool readTextureHeader(FILE* file, TexHeader& header) {
 
     header.format_id = readU32(file);
     header.flags = readU32(file);
-    readU32(file);  // allocated width
-    readU32(file);  // allocated height
+    readU32(file);
+    readU32(file);
     header.image_width = readU32(file);
     header.image_height = readU32(file);
     if ((header.flags & 0x40) != 0) {
         readU32(file);  // image depth / 3D slice count
     }
-    readU32(file);  // reserved
+    readU32(file);
 
     readFixedString(file, header.container_magic, 8);
     std::fseek(file, 1, SEEK_CUR);
     header.image_count = readU32(file);
 
     if (std::strcmp(header.container_magic, "TEXB0003") == 0) {
-        readU32(file);  // embedded/free-image format
+        readU32(file);
     } else if (std::strcmp(header.container_magic, "TEXB0004") == 0) {
-        readU32(file);  // embedded/free-image format
+        readU32(file);
         readU32(file);  // video marker
     }
     return true;
 }
 
 bool skipMipmap(FILE* file, const char* container_magic, uint32_t flags) {
-    readU32(file);  // mip width
-    readU32(file);  // mip height
+    readU32(file);
+    readU32(file);
     if ((flags & 0x40) != 0) {
-        readU32(file);  // mip depth
+        readU32(file);
     }
     if (std::strcmp(container_magic, "TEXB0001") != 0) {
-        readU32(file);  // LZ4 flag
-        readU32(file);  // decompressed size
+        readU32(file);
+        readU32(file);
     }
     const uint32_t data_size = readU32(file);
     return std::fseek(file, static_cast<long>(data_size), SEEK_CUR) == 0;
@@ -120,8 +120,8 @@ TextureMetadata inspectTextureMetadata(const char* path) {
     const uint32_t frame_count = readU32(file);
     if (frame_count == 0 || frame_count > 1000000) return metadata;
     if (std::strcmp(animation_magic, "TEXS0003") == 0) {
-        readU32(file);  // GIF width
-        readU32(file);  // GIF height
+        readU32(file);
+        readU32(file);
     }
 
     float first_frame_width = 0.0f;
@@ -151,8 +151,8 @@ TextureMetadata inspectTextureMetadata(const char* path) {
             entry.x = readF32(file);
             entry.y = readF32(file);
             const float frame_width = readF32(file);
-            readF32(file);  // width2
-            readF32(file);  // height2
+            readF32(file);
+            readF32(file);
             const float frame_height = readF32(file);
             entry.width = frame_width;
             entry.height = frame_height;
@@ -165,9 +165,7 @@ TextureMetadata inspectTextureMetadata(const char* path) {
             std::isfinite(first_frame_height)) {
             const auto cols = (uint32_t)std::lround(header.image_width / first_frame_width);
             const auto rows = (uint32_t)std::lround(header.image_height / first_frame_height);
-            // Particle shaders consume a uniform grid, independent of the image
-            // animation rectangle table. Some stock leaf atlases have inconsistent
-            // rectangles but still supply the correct grid cell dimensions.
+            // Particle shaders use the uniform grid, since some atlases have inconsistent rectangles.
             if (cols > 0 && rows > 0 && (uint64_t)cols * rows >= frame_count) {
                 metadata.spritesheet_cols = cols;
                 metadata.spritesheet_rows = rows;
@@ -180,8 +178,7 @@ TextureMetadata inspectTextureMetadata(const char* path) {
             entry.height <= 0.0f || entry.x + entry.width > header.image_width + 0.01f ||
             entry.y + entry.height > header.image_height + 0.01f)
             return metadata;
-        // Exported fractional grids can overshoot the edge by a few thousandths
-        // of a pixel (for example six 85.334px cells in a 512px leaf atlas).
+        // Fractional grids can overshoot the edge by a few thousandths of a pixel.
         entry.width = std::min(entry.width, (float)header.image_width - entry.x);
         entry.height = std::min(entry.height, (float)header.image_height - entry.y);
         frames.push_back(entry);
@@ -209,8 +206,7 @@ TextureMetadata inspectTextureMetadata(const char* path) {
 const TextureAnimationFrame* textureFrameAtTime(const TextureMetadata& metadata, float seconds) {
     if (metadata.animation_frames.empty() || metadata.spritesheet_duration <= 0.0f || !std::isfinite(seconds))
         return nullptr;
-    // Accumulate in double precision so short frame durations do not drift at
-    // page boundaries in long animations.
+    // Double precision keeps frame durations from drifting over long animations.
     double duration = 0.0;
     for (const auto& frame : metadata.animation_frames) duration += frame.duration;
     double phase = std::fmod((double)seconds, duration);

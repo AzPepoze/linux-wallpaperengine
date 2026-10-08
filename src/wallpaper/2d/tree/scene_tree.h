@@ -11,8 +11,7 @@
 
 #include "linmath.h"
 
-// A node's accumulated world placement: translation, signed 2D scale, and Z rotation
-// in degrees (Y-up scene space, same convention as SceneTreeNode::angles[2]).
+// Accumulated world placement: translation, signed scale and Z rotation in degrees (Y-up).
 struct ScenePlacement {
     std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};

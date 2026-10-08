@@ -20,8 +20,7 @@ struct AnimatedValue {
     bool relative = false;  // the value is an offset from the property's value before animation
 };
 
-// The animated properties of one object that link through parent/children share a timeline and its clock, so a script
-// can pause or speed up the whole group. Applying the values to the scene is the caller's job.
+// Parent/child-linked properties share one timeline clock, so a script can pause the group.
 class AnimationTimelines {
    public:
     void add(uint32_t object_id, const std::vector<wallpaper_engine::PropertyAnimationDocument>& animations);

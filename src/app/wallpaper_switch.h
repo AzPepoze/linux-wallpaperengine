@@ -8,8 +8,7 @@
 struct EngineContext;
 class WallpaperManager;
 
-// Loads `path` into the running manager the way a fresh launch would:
-// re-initializes the asset context for directory and package wallpapers.
+// Loads `path` into the running manager the way a fresh launch would.
 bool switchWallpaper(WallpaperManager& mgr, EngineContext& ctx, const std::string& path, bool is_pkg,
                      const std::vector<std::pair<std::string, std::string>>& properties);
 

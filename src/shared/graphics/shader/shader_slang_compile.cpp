@@ -16,10 +16,7 @@
 #include "shared/core/logger.h"
 
 namespace {
-// Slang is not safe when threads share one global session: concurrent module loads trip an assertion in its
-// dictionary ("The key already exists"), even with a separate session per thread. A global session per concurrent
-// compile works, so each lease owns its own pair. Every module a session loads stays resident under its own name,
-// so a lease is retired after a few compiles instead of growing without bound.
+// Each lease owns its own Slang session, retired after a few compiles since loaded modules stay resident.
 class SessionPool {
    public:
     struct Lease {

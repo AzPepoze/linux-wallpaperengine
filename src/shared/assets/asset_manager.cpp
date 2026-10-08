@@ -218,8 +218,7 @@ bool AssetManager::prepareSceneAssets(const wallpaper_engine::SceneDocument& doc
 }
 
 void AssetManager::init(const char* ep, const char* wp) {
-    // Temporary shim until every caller supplies a process-wide SharedAssets:
-    // owns a private one so behavior is unchanged.
+    // Temporary: owns a private SharedAssets until every caller uses attachShared.
     clearVideoTextures();
     if (!owned_shared_) owned_shared_ = std::make_unique<SharedAssets>();
     owned_shared_->engine_path = ep ? ep : "";
@@ -274,8 +273,7 @@ void AssetManager::releaseDecodedTextures() const {
 }
 
 const TextureDecodeCache& AssetManager::decodeCacheFor(const char* abs_path) const {
-    // Engine install textures are shared across instances; wallpaper (and
-    // internal) textures live in this instance's cache and are released on switch.
+    // Engine textures are shared across instances; wallpaper textures are released on switch.
     if (shared_ && shared_->decode_cache && !shared_->engine_path.empty() &&
         strncmp(abs_path, shared_->engine_path.c_str(), shared_->engine_path.size()) == 0) {
         return *shared_->decode_cache;

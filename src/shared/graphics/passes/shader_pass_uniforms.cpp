@@ -36,8 +36,7 @@ void setComboDefine(std::string& combo_defines, const std::string& name, int val
     combo_defines += "#define " + requested_name + " " + std::to_string(value) + "\n";
 }
 
-// Returns the texture slot (g_TextureN -> N) of the sampler marked with a
-// `"combo":"MASK"` annotation, or -1 when the shader has no such sampler.
+// Texture slot N (g_TextureN) of the sampler annotated `"combo":"MASK"`, or -1.
 int findMaskTextureIndex(const std::string& source) {
     const size_t pos = source.find("\"combo\":\"MASK\"");
     if (pos == std::string::npos) return -1;

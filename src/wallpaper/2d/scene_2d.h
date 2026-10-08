@@ -26,8 +26,7 @@ class Scene2DRuntime {
     void cleanup();
     bool stepCleanup();
 
-    // Render through the offscreen scene targets even when the scene would
-    // otherwise draw directly, so composedView() has a valid texture.
+    // Forces offscreen scene targets so composedView() has a valid texture.
     void setForceOffscreen(bool on) {
         force_offscreen_ = on;
     }

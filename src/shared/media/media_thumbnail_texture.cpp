@@ -43,8 +43,7 @@ void MediaThumbnailTexture::setThumbnail(const ThumbnailColors& thumbnail) {
         }
     }
     if (next == pixels_) return;
-    // Before the first artwork the previous image is the artwork itself: the blend takes its alpha from the previous
-    // image, so an empty or transparent one would leave the first cover fully transparent.
+    // The blend takes its alpha from the previous image, so the first cover must seed it.
     bool has_artwork = false;
     for (size_t i = 3; i < pixels_.size() && !has_artwork; i += 4) has_artwork = pixels_[i] != 0;
     previous().pixels_ = has_artwork ? pixels_ : next;

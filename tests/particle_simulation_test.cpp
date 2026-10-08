@@ -20,8 +20,7 @@ bool near(float a, float b, float tolerance = 0.01f) {
     return std::fabs(a - b) <= tolerance * std::max(1.0f, std::fabs(b));
 }
 
-// Tests spawn by hand (emitParticles) or through instances, so their emitters must not emit on their own; the
-// struct default is Wallpaper Engine's rate of 5.
+// Emitters must not emit on their own; the struct default is WE's rate of 5.
 ParticleEmitterConfig manualEmitter() {
     ParticleEmitterConfig emitter;
     emitter.rate = 0.0f;
@@ -115,8 +114,7 @@ float alphaAtLifeFraction(const char* json, float fraction) {
     return system.particles.empty() ? -1.0f : system.particles[0].alpha;
 }
 
-// Alpha fade: fade-in completes at `fadeintime` and fade-out starts at `fadeouttime` (fractions of the lifetime,
-// 0.5 each when omitted), per the Wallpaper Engine operator documentation.
+// Fade-in and fade-out are lifetime fractions, 0.5 each when omitted, per WE's operator docs.
 void testAlphaFade() {
     const char* defaults = R"({"operator":[{"name":"alphafade"}]})";
     CHECK(near(alphaAtLifeFraction(defaults, 0.25f), 0.5f));
@@ -137,8 +135,7 @@ void testAlphaFade() {
     CHECK(near(alphaAtLifeFraction(R"({"operator":[]})", 0.95f), 1.0f));
 }
 
-// One particle (lifetime 10 s, size 10, white, at (x, 0)) advanced to a fraction of its life with the given JSON
-// operators. Steps are small so the integration error stays negligible.
+// One particle (10 s life, size 10, at (x, 0)) advanced to a fraction of its life; small steps keep error negligible.
 Particle particleAt(const char* json, float fraction, float x = 0.0f, float step = 0.05f) {
     cJSON* document = cJSON_Parse(json);
     ParticleSystemConfig config = ParticleParser::parse(document);
@@ -262,8 +259,7 @@ void testFollowChild() {
 
     parent.emitParticles(1);
     CHECK(parent.particles.size() == 1);
-    // The instantaneous burst fires with the instance; the local-space child of a worldspace parent is scaled by the
-    // layer (x4) around the parent particle.
+    // A local-space child of a worldspace parent is scaled by the layer (x4) around the parent.
     CHECK(child->particles.size() == 1);
     if (parent.particles.empty() || child->particles.empty()) return;
     CHECK(near(child->particles[0].size, 400.0f));
@@ -302,8 +298,7 @@ void testFollowChildEndsWithParent() {
     parent.particles[0].life = 0.01f;
     parent.update(0.1f);
     CHECK(parent.particles.empty());
-    // A follow instance's particles are cleared the moment their parent ends (reference behaviour), so nothing
-    // hovers where the star died. Only the star itself fades, through its own alpha operator.
+    // A follow instance's particles clear when the parent ends; only the star itself fades.
     CHECK(child->particles.empty());
 }
 

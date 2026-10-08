@@ -1,6 +1,4 @@
-// Optional out-of-process QtWebEngine renderer for web wallpapers. Renders the
-// page with the best available backend and publishes BGRA frames into a
-// shared-memory buffer owned by the engine process.
+// Out-of-process QtWebEngine renderer; publishes BGRA frames into engine-owned shared memory.
 
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <signal.h>
@@ -28,9 +26,7 @@ const char* argValue(int argc, char** argv, const char* name, const char* fallba
     return fallback;
 }
 
-// The offscreen QPA plugin forces Qt Quick's software adaptation, so the
-// render-control backend needs a real session platform. Without a display the
-// widget backend runs under offscreen instead.
+// The offscreen QPA plugin lacks a session platform for render-control, so it runs the widget backend.
 bool hasSessionDisplay() {
     const char* wayland = getenv("WAYLAND_DISPLAY");
     const char* x11 = getenv("DISPLAY");

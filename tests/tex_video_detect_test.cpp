@@ -160,9 +160,7 @@ int main() {
 
     {
         auto bytes = makeAtlasTex(true);
-        // A stock particle sheet can advertise a uniform grid even when one
-        // animation rectangle lies outside it. Preserve grid sampling while
-        // rejecting that rectangle timeline.
+        // A uniform grid can be advertised while one rectangle lies outside it; keep the grid, reject the timeline.
         const size_t frame_start = bytes.size() - 3 * 32;
         for (int i = 0; i < 3; ++i) {
             const float height = 8.0f;
@@ -180,8 +178,7 @@ int main() {
 
     for (float overshoot : {0.004f, 1.0f}) {
         auto bytes = makeAtlasTex(true);
-        // Frame width follows index,
-        // duration, x and y. Model fractional exporter rounding at an edge.
+        // Models fractional exporter rounding at an edge.
         const size_t frame_start = bytes.size() - 3 * 32;
         const float width = 8.0f + overshoot;
         memcpy(bytes.data() + frame_start + 16, &width, sizeof(width));

@@ -102,8 +102,7 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             image.channels = format.channels;
             image.format = format.pixel_format;
 
-            // Wallpaper Engine pads mip dimensions for GPU alignment, so a mip can be
-            // larger than the image; unpad below.
+            // Mip dimensions are GPU-aligned, so a mip can be larger than the image.
             const size_t bpp = format.bytes_per_pixel;
             const size_t block_bytes = getBlockCompressedBlockSize(image.format);
             const size_t mip_expected = expectedPixelDataSize(mip_width, mip_height, image.format);

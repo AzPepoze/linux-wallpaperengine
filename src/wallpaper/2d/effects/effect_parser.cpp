@@ -302,8 +302,7 @@ bool EffectParser::resolveUniformName(const std::string& authored_name,
         return false;
     };
     if (find(preferred_name) || (preferred_name != authored_name && find(authored_name))) return true;
-    // Exact material key first: two uniforms can normalize to the same name
-    // (e.g. differing only by trailing whitespace) but only one matches exactly.
+    // Exact key first: uniforms differing only by whitespace normalize to the same name.
     for (const auto& uniform : shader_uniforms) {
         if (!uniform.material_name.empty() && uniform.material_name == authored_name) {
             resolved_name = uniform.name;

@@ -14,8 +14,7 @@
 #include "sokol_args.h"
 
 namespace {
-// sokol_args strips a single leading dash but keeps "--", so boolean flags
-// accept both spellings explicitly.
+// sokol_args keeps "--" in its keys, so boolean flags accept both spellings.
 bool hasFlag(const char* name) {
     return sargs_exists(name);
 }

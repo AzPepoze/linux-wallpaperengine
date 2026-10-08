@@ -81,8 +81,7 @@ struct AudioEngine::Impl {
         std::atomic<uint32_t> underruns{0};
         std::atomic<uint64_t> dropped_frames{0};
     };
-    // Guards the streams table (not the audio thread): video feeder threads push while the main
-    // thread creates/destroys streams.
+    // Guards the streams table, which video feeder threads push to while the main thread creates streams.
     std::mutex stream_mutex;
     std::vector<std::unique_ptr<Stream>> streams;
     std::vector<StreamHandle> stream_free;

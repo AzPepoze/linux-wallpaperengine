@@ -17,8 +17,7 @@ struct LoadedFont {
     bool ready = false;
 };
 
-// Thread-safe font cache. Fonts are read and parsed outside the lock and are never evicted, so the
-// stbtt_fontinfo pointers taken from a font stay valid for the life of the process.
+// Fonts are parsed outside the lock and never evicted, so stbtt_fontinfo pointers stay valid.
 class FontRepository {
    public:
     // The authored font file at `path`, or nullptr when it cannot be read or parsed.

@@ -7,8 +7,7 @@
 #include "model_data.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 
-// A layer drawn from script-made geometry (IModelData). The mesh is flattened into the layer's picture: each shape
-// is textured with its material's first texture, without depth, lighting or the material's shader.
+// Script geometry drawn flat: each shape uses its material's first texture, with no depth or lighting.
 class ModelLayer : public ImageLayer {
    public:
     ModelLayer(const char* name, std::shared_ptr<ModelData> data);

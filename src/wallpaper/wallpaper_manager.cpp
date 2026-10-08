@@ -34,8 +34,7 @@ std::string prepareReplacementRoot(const SwitchRequest& request) {
 }
 
 TaskPool& preparationPool() {
-    // Loader tasks may await decode work on the general pool. Keeping them on a
-    // separate, serial queue prevents rapid requests from exhausting that pool.
+    // A separate serial queue stops rapid requests from exhausting the general pool.
     static TaskPool pool(1);
     return pool;
 }
@@ -62,8 +61,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     const ProjectInfo info = ProjectInfo::detect(scene_directory);
     if (!WallpaperLoader::canLoad(info)) return false;
 
-    // Retain the current wallpaper as the outgoing one: it stays alive (and keeps
-    // playing) until the transition ends. The initial load has none.
+    // The outgoing wallpaper stays alive and playing until the transition ends.
     if (active_instance_) outgoing_instance_ = std::move(active_instance_);
 
     auto instance = std::make_unique<WallpaperInstance>();
@@ -75,13 +73,11 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     if (shared_assets_) instance->assets.attachShared(shared_assets_);
     instance->state.wallpaper_path = scene_directory;
     instance->state.is_pkg = ctx.is_pkg;
-    // Scaling is selected by the user before loading. A fresh instance must
-    // inherit it before activation replaces the context's entire SceneState.
+    // Copy the user's scaling into the new instance before activation replaces SceneState.
     instance->state.scene.scaling_mode = ctx.scene.scaling_mode;
 
     activateInstance(ctx, *instance, active_view_);
-    // The incoming audio starts silent when a frame was already captured for the
-    // transition; otherwise it plays at full volume immediately.
+    // Incoming audio starts silent when a transition captured a frame; otherwise full volume.
     AudioEngine::instance().setGroupVolume(instance->audio_group, transition_.active() ? 0.0f : 1.0f);
 
     auto wallpaper = WallpaperLoader::load(info, ctx);
@@ -463,8 +459,7 @@ void WallpaperManager::commitLoad(EngineContext& ctx) {
             }
         }
     }
-    // No new transition (hard cut, or nothing to capture): drop any in-flight
-    // or held snapshot so it cannot stick on top of the new wallpaper.
+    // Without a transition, drop any in-flight or held snapshot so it can't stick.
     if (!captured) transition_.cancel();
 
     outgoing_instance_ = std::move(active_instance_);
@@ -498,8 +493,7 @@ void WallpaperManager::commitLoad(EngineContext& ctx) {
               config.duration_ms);
     LOG_TAG_I("WALLPAPER_MGR", "Preparation playback: %u frames, max presented interval %.2fms",
               load_job_->preparation_frames, load_job_->max_frame_ms);
-    // A changed scaling is baked into the new instance at load; re-apply the
-    // layout so the switch takes effect without a restart.
+    // Re-apply the layout so a changed scaling takes effect without a restart.
     onResize((float)surface::width(), (float)surface::height());
     load_job_.reset();
 }

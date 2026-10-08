@@ -7,9 +7,7 @@
 #include "shared/assets/providers/asset_provider.h"
 #include "shared/assets/texture_decode_cache.h"
 
-// Process-wide assets shared by every wallpaper instance: the Wallpaper Engine
-// install provider, the built-in internal provider, and their decode cache.
-// Built once at startup; per-wallpaper content lives in each AssetManager.
+// Process-wide install and internal providers and their decode cache; built once at startup.
 struct SharedAssets {
     std::string engine_path;
     std::unique_ptr<EngineAssetProvider> engine_provider;

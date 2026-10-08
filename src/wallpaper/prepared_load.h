@@ -6,9 +6,7 @@
 #include <future>
 #include <utility>
 
-// Coordinates worker preparation with graphics-thread finalization. All state
-// transitions except cancellation are expected to happen on the coordinator
-// thread; workers may read cancelled while doing preparatory work.
+// State changes happen on the coordinator thread; workers may only read `cancelled`.
 struct PreparedLoad {
     enum class State { Preparing, Graphics, Ready, Failed, Cancelled };
 

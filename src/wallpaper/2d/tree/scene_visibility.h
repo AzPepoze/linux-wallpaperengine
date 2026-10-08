@@ -7,8 +7,7 @@
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
-// Drawable nodes keep their live flag on the layer; groups keep it on the tree.
-// Resolve both without copying inherited visibility into a child's own flag.
+// Drawable nodes keep their live flag on the layer, groups on the tree; neither copies inherited visibility.
 class SceneVisibility {
    public:
     explicit SceneVisibility(const EngineContext& ctx) : tree_(ctx.scene.scene_tree) {

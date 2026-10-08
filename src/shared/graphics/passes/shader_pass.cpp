@@ -35,8 +35,7 @@ bool readShaderStage(EngineContext& ctx, const char* relative_path, char* absolu
     return true;
 }
 
-// Highest N among the `uniform sampler2D g_TextureN` declarations. The material may supply fewer textures than the
-// shader reads (a bloom pass gets its second input at draw time), and every sampler the shader uses needs a binding.
+// Highest N among the `uniform sampler2D g_TextureN` declarations; each one needs a binding.
 int highestDeclaredTextureSlot(const std::string& source) {
     static const std::string kSampler = "sampler2D";
     static const std::string kName = "g_Texture";
@@ -156,8 +155,7 @@ bool ShaderPass::preparationReady() const {
     return !pending_.valid() || pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
 
-// Everything up to the compile: it reads files and processes text, never touches the GPU, so it can run on a worker.
-// With `warm_cache` the SPIR-V is generated too, so finish() only has to create GPU objects.
+// Reads and processes text without the GPU, so it can run on a worker; warm_cache also makes SPIR-V.
 bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache, bool apply_observer) {
     if (shader_name.empty()) {
         effect_log.warn("Skipping effect pass with no shader");

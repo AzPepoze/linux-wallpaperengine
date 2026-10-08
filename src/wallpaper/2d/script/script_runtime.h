@@ -7,9 +7,7 @@
 struct JSContext;
 struct JSRuntime;
 
-// The single QuickJS runtime/context shared by every SceneScript. Creating the runtime, installing the script API
-// (prelude, host functions, module loader) and enforcing the per-call time budget live here; the script registry
-// and event dispatch stay in ScriptEngine.
+// The one QuickJS runtime and context; the script registry and event dispatch stay in ScriptEngine.
 class ScriptRuntime {
    public:
     ScriptRuntime() = default;

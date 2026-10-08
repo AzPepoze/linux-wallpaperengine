@@ -19,8 +19,7 @@ class MediaScriptBridge {
     MediaScriptBridge(const MediaScriptBridge&) = delete;
     MediaScriptBridge& operator=(const MediaScriptBridge&) = delete;
 
-    // `wants_thumbnail` starts the source even when no script listens (a material samples $mediaThumbnail);
-    // `on_thumbnail` receives every thumbnail event.
+    // wants_thumbnail starts the source even without a listener; on_thumbnail gets every event.
     void update(bool wants_thumbnail = false, const std::function<void(const ThumbnailColors&)>& on_thumbnail = {});
 
    private:

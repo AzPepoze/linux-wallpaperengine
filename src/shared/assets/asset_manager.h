@@ -96,8 +96,7 @@ class AssetManager : public IAssetResolver {
 
     std::unique_ptr<WallpaperAssetProvider> wallpaper_provider;
     SharedAssets* shared_ = nullptr;
-    // Temporary: owns a SharedAssets until the app supplies a process-wide one
-    // (removed once every caller uses attachShared).
+    // Temporary: owns a SharedAssets until every caller uses attachShared.
     std::unique_ptr<SharedAssets> owned_shared_;
 
     mutable std::unordered_map<std::string, content_bounds::Rect> content_bounds_cache_;

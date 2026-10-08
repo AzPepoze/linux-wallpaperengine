@@ -171,8 +171,7 @@ static void loadInitialWallpaper() {
 static void init(void) {
     logger_init(DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO);
 #if DEBUG_BUILD
-    // Distinguish this test binary in kernel GPU-fault logs ("comm" field)
-    // from other concurrently running wallpaper engine instances.
+    // Names this debug build's process so its GPU faults are identifiable in kernel logs.
     prctl(PR_SET_NAME, "lwe-debug-repo", 0, 0, 0);
 #endif
     installSignalHandlers();
@@ -302,13 +301,11 @@ static void runDesktopLayerIfPossible() {
 #endif
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
-    // Worker threads each get their own malloc arena by default, and memory freed on one rarely goes back to the OS;
-    // two arenas keep loading parallel without leaving tens of MB resident.
+    // Two malloc arenas keep parallel loading from leaving tens of MB resident.
     mallopt(M_ARENA_MAX, 2);
     logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
-    // Identity probe: exactly one JSON line on stdout and no logs, so the GUI
-    // can parse it. Must stay before GPU work and before any logging.
+    // Identity probe must come before GPU work and logging so stdout stays one JSON line.
     if (cli.whoareyou) {
         lwe::identity::printEngineIdentity(stdout);
         exit(EXIT_SUCCESS);
@@ -335,8 +332,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
     if (cli.extract_only && !wallpaper_source.path.empty()) exit(runExtractOnly(wallpaper_source, cli));
 
-    // Hand a switch to an existing instance on this display, or become that
-    // instance. Must run before any GPU work so a handoff process stays cheap.
+    // Hands a switch to a live instance on this display; runs before any GPU work.
     if (!cli.no_control && !cli.sandbox) {
         const std::string key = controlKey(cli.screen_root, cli.layer);
         if (!wallpaper_source.path.empty()) {

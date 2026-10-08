@@ -62,8 +62,7 @@ struct InputState {
 struct ParallaxState {
     float pointer_x = 0.5f;
     float pointer_y = 0.5f;
-    // Centered shader-space offset. renderer_draw_sprite converts this to
-    // g_ParallaxPosition by applying *0.5 + 0.5.
+    // Centered shader-space offset; renderer_draw_sprite maps it to g_ParallaxPosition.
     float smooth_x = 0.0f;
     float smooth_y = 0.0f;
     bool enabled = false;

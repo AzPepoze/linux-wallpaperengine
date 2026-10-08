@@ -94,8 +94,7 @@ const MdlAnimationClip* findClip(const MdlModel& model, uint32_t id) {
     return nullptr;
 }
 
-// Every layer contributes its motion relative to its own first frame, on top of
-// the first layer's first frame, which already holds the assembled pose.
+// Each layer adds motion relative to its own first frame, on top of the assembled pose.
 void accumulateLayer(const MdlModel& model, const MdlAnimationClip& clip, const PuppetAnimationLayer& layer,
                      bool root_motion, std::vector<MdlKeyframe>& pose) {
     const float frame = wrapFrame(layer.time * clip.fps, clip.frame_count, layer.once ? "single" : clip.loop_mode);

@@ -34,8 +34,7 @@ struct ParsedScene {
     scene_type_t type = SCENE_TYPE_2D;
 };
 
-// Render-thread construction task for an already parsed document. Each step
-// stops between objects once its time budget has elapsed.
+// Render-thread construction task; each step stops between objects when its budget runs out.
 class SceneBuildJob {
    public:
     SceneBuildJob(wallpaper_engine::SceneDocument document, EngineContext& ctx);

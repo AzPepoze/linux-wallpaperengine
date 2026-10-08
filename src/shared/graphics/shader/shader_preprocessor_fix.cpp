@@ -39,9 +39,7 @@ std::set<std::string> collectDefinedMacros(const std::string& source) {
     return defined;
 }
 
-// GLSL evaluates identifiers that were never defined as zero. Slang only warns
-// for those, but it rejects member access on them (e.g. `#if uniform.x < ...`),
-// so rewrite undefined identifiers (and their member chains) to literal zero.
+// Slang rejects member access on undefined identifiers, so rewrite them (and their chains) to zero.
 std::string rewriteConditionExpression(const std::string& expression, const std::set<std::string>& defined) {
     std::string code = expression;
     std::string comment;

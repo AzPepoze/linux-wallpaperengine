@@ -7,9 +7,7 @@ struct WebFrameBuffer;
 
 namespace web_renderer {
 
-// A web renderer backend. Implementations own their Qt objects and publish BGRA
-// frames into the shared WebFrameBuffer. start() returns false when the backend
-// cannot run, so the caller can fall back to another one.
+// A web renderer backend publishing BGRA frames into WebFrameBuffer; start() false means fall back.
 class FrameRenderer {
    public:
     virtual ~FrameRenderer() = default;

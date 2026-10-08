@@ -127,8 +127,7 @@ std::vector<std::string> layoutLines(const TextFont& font, const std::string& te
     return lines;
 }
 
-// Floating-point pixels retain HDR brightness. The layer tint colors the glyphs; opaque
-// backgrounds blend glyph coverage into their background color.
+// Float pixels keep HDR brightness; the tint colors glyphs and opaque backgrounds blend coverage.
 void blitLine(std::vector<float>& pixels, int canvas_w, int canvas_h, const TextFont& font, const std::string& line,
               float pen_x, float baseline, bool opaque_background, float brightness) {
     size_t index = 0;

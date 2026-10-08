@@ -13,8 +13,7 @@
 
 struct PendingRaster;
 
-// Rasterises a text object into a floating-point RGBA texture and reuses ImageLayer's draw,
-// transform and effect handling.
+// Rasterises text into an RGBA float texture and reuses ImageLayer's draw and effects.
 class TextLayer : public ImageLayer {
    public:
     explicit TextLayer(const char* name);

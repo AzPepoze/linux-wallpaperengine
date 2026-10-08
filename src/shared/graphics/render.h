@@ -140,8 +140,7 @@ using BlendPipelinePrecompileJobHandle = std::shared_ptr<BlendPipelinePrecompile
 BlendPipelinePrecompileJobHandle renderer_begin_blend_pipeline_precompile(const AssetManager& assets,
                                                                           vfs::PackageHandle package, renderer_t* r,
                                                                           const std::vector<int>& modes = {});
-// Returns true when all requested modes have been consumed. It never waits for an incomplete worker future and
-// finalizes at most one completed mode per call.
+// True once every requested mode is consumed; finalizes at most one completed mode per call.
 bool renderer_poll_blend_pipeline_precompile(const BlendPipelinePrecompileJobHandle& job, renderer_t* r,
                                              std::chrono::steady_clock::time_point deadline);
 #else

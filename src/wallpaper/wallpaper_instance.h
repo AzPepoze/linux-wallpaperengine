@@ -13,10 +13,7 @@
 #include "wallpaper/user_properties.h"
 #include "wallpaper/wallpaper.h"
 
-// The per-wallpaper slice of EngineContext: everything that differs between two
-// running wallpapers. Swapped in and out of the shared context (see
-// activateInstanceState) so the many `ctx.scene`/`ctx.parallax` call sites keep
-// working unchanged.
+// The per-wallpaper slice of EngineContext, swapped in and out so ctx.scene call sites stay unchanged.
 struct InstanceState {
     std::string asset_root;
     std::string wallpaper_path;
@@ -28,8 +25,7 @@ struct InstanceState {
     CameraShakeState shake;
 };
 
-// Templated on the context type so the swap can be unit tested with a light
-// context that has the same per-wallpaper fields (EngineContext drags in sokol).
+// Templated so a light test context with the same fields can exercise the swap.
 template <typename Ctx>
 void activateInstanceState(Ctx& ctx, InstanceState& state) {
     ctx.scene = std::move(state.scene);
@@ -63,8 +59,7 @@ struct WallpaperInstance {
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;
 };
 
-// Moves `instance`'s state into ctx, stashing whatever `current` pointed at back
-// into that instance first. Sets ctx.asset_mgr = &instance.assets.
+// Moves `instance`'s state into ctx, stashing the current instance's state first.
 void activateInstance(EngineContext& ctx, WallpaperInstance& instance, WallpaperInstance*& current);
 void deactivateInstance(EngineContext& ctx, WallpaperInstance*& current);
 

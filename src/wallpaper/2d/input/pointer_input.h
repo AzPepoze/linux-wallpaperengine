@@ -13,8 +13,7 @@ struct WorldPoint {
     float y = 0.0f;
 };
 
-// A hit in a layer's local space: x/y run from the layer's top-left, y down,
-// matching Wallpaper Engine's CursorEvent.localPosition.
+// Hit in layer-local space: origin at the top-left, y down (CursorEvent.localPosition).
 struct LocalHit {
     uint32_t id = 0;
     float local_x = 0.0f;
@@ -34,8 +33,7 @@ struct HitCandidate {
     bool visible = true;
 };
 
-// Maps a screen pixel to scene-world coordinates. Screen y grows down, scene y
-// grows up; offset is the screen position of the scene's top-left corner.
+// Maps screen pixels to scene coordinates; screen y grows down, scene y grows up.
 WorldPoint screenToWorld(float sx, float sy, float offset_x, float offset_y, float render_scale, float scene_h);
 
 // Topmost (last drawn) visible solid candidate under the cursor, or nullopt.
@@ -55,8 +53,7 @@ struct PointerEvent {
 
 class PointerTracker {
    public:
-    // hit is the current layer under the cursor (if any), buttons is the live
-    // press mask (bit0 left, bit1 right, bit2 middle).
+    // buttons is the press mask: bit0 left, bit1 right, bit2 middle.
     std::vector<PointerEvent> update(const std::optional<LocalHit>& hit, uint8_t buttons,
                                      std::optional<WorldPoint> cursor = std::nullopt,
                                      const std::vector<HitCandidate>& candidates = {});

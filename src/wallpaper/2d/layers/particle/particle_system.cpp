@@ -168,9 +168,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
         particle_system->texture_width = (int)metadata.width;
         particle_system->texture_height = (int)metadata.height;
         particle_system->spritesheet_duration = metadata.spritesheet_duration;
-        // Only the TEXS frame table establishes an atlas. A non-square static
-        // texture may be a beam or trail; splitting it into squares crops its
-        // UVs and cancels the sprite's authored aspect ratio.
+        // Only a TEXS frame table defines an atlas; splitting a non-square texture breaks its aspect.
         particle_system->spritesheet_cols = (int)metadata.spritesheet_cols;
         particle_system->spritesheet_rows = (int)metadata.spritesheet_rows;
         particle_system->spritesheet_frames = (int)metadata.spritesheet_frames;
@@ -181,8 +179,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
                 pass->combos["SPRITESHEETBLEND"] = 1;
         }
 
-        // WE's generic particle shader treats single/dual-channel textures differently from RGBA;
-        // keep that in TEX0FORMAT so ConvertTexture0Format() can turn R8 into an alpha mask.
+        // Keep R8 in TEX0FORMAT so ConvertTexture0Format() can turn it into an alpha mask.
         pass->combos["TEX0FORMAT"] = wallpaperTextureFormatForImage(pass->pass_textures.texture0);
         if (!pass->pass_textures.textures.empty()) {
             // The normal decoder uses Texture1's independently authored format.
@@ -222,8 +219,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
             child_system->parent_system = particle_system;
             if (child_system->spawn_type == ParticleSpawnType::EventFollow ||
                 child_system->spawn_type == ParticleSpawnType::EventSpawn) {
-                // The particle file's max count is the capacity of each instance; the system needs room for all of
-                // its instances (the child entry's max count) at once.
+                // Each instance holds the particle file's max count; the child entry bounds them all.
                 const int instances = std::clamp(child.maxcount, 1, 128);
                 child_system->max_particles =
                     std::max(child_system->max_particles, child_system->config.max_particles * instances);

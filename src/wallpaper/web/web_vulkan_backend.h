@@ -11,9 +11,7 @@ struct WebFrameBuffer;
 
 namespace web_renderer {
 
-// Preferred backend: renders offscreen with Qt's Vulkan RHI into externally
-// allocated BGRA8 images and exports each as a DMA-BUF the engine samples
-// directly (no CPU copies). start() returns false when unavailable.
+// Preferred backend: Qt's Vulkan RHI exports BGRA8 images as DMA-BUFs the engine samples directly.
 class VulkanBackend : public FrameRenderer {
    public:
     VulkanBackend(WebFrameBuffer* frame, uint32_t width, uint32_t height, uint32_t fps);

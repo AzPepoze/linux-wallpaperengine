@@ -6,10 +6,7 @@
 
 #include "shared/assets/decoded_image.h"
 
-// Caches decoded textures keyed by absolute path and image index, deduplicating
-// concurrent decodes with a shared future. One instance per owner (a process-wide
-// engine cache and a per-wallpaper cache) so a wallpaper switch never evicts
-// engine/internal textures.
+// One cache per owner, so a wallpaper switch never evicts engine textures.
 class TextureDecodeCache {
    public:
     TextureDecodeCache();

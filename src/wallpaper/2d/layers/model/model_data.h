@@ -7,8 +7,7 @@
 #include <string>
 #include <vector>
 
-// Custom geometry made by a script (IModelData). Vertex attributes sit in one interleaved float buffer in the order of
-// `format`.
+// Script geometry: vertex attributes form one interleaved float buffer in `format` order.
 enum class VertexAttribute : uint8_t { Position, Normal, Uv, TangentSigned, Color };
 
 inline int vertexAttributeFloats(VertexAttribute attribute) {

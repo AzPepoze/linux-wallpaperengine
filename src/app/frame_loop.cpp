@@ -56,8 +56,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     if (ctx.input.mouse_position_valid && surface::width() > 0 && surface::height() > 0) {
         const float nx = std::clamp(ctx.input.mouse_x / (float)surface::width(), 0.0f, 1.0f);
         const float ny = std::clamp(ctx.input.mouse_y / (float)surface::height(), 0.0f, 1.0f);
-        // On the first frame (or after the pointer re-enters) start "last" at the current spot so the
-        // ripple's pointer-ray does not sweep in from a stale origin.
+        // Start the ripple's pointer ray at the current spot, not a stale origin.
         if (g_shader_pointer.valid) {
             g_shader_pointer.last_x = g_shader_pointer.x;
             g_shader_pointer.last_y = g_shader_pointer.y;
@@ -75,8 +74,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     }
     g_shader_pointer.pressed = ctx.input.left_down() ? 1.0f : 0.0f;
 
-    // Inspector edits are intentionally runtime-only. Rebuild the clear pass
-    // every frame so direct and offscreen composition see the same live state.
+    // Rebuilt every frame: inspector edits are runtime-only.
     ctx.pass_action.colors[0].load_action =
         ctx.scene.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
     ctx.pass_action.colors[0].clear_value = {ctx.scene.general.clear_color[0], ctx.scene.general.clear_color[1],
@@ -160,8 +158,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     if (ctx.performance_profile) performance_profile::beginFrame(presented_dt);
     ctx.profiler.measured_fps = frame_meter.fps();
 
-    // Start/poll replacement work without waiting. Commit only when ready at
-    // this frame boundary; the displayed wallpaper keeps playing meanwhile.
+    // Replacement work starts and polls without blocking; commit happens at a frame boundary.
     mgr.pollControl(ctx);
     mgr.beginPendingSwitch(ctx);
 
@@ -174,8 +171,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     if (ctx.performance_profile) performance_profile::beginRender();
     updateFrame(ctx, mgr, runtime);
     mgr.updateTransition((float)surface::frameDuration());
-    // continue mode: step/render the outgoing instance and feed the live source
-    // before the incoming instance draws.
+    // Continue mode steps the outgoing instance before the incoming one draws.
     if (mgr.isTransitioning()) mgr.stepOutgoingForTransition(ctx, (float)surface::frameDuration());
     if (runtime && mgr.isTransitioning())
         runtime->setForceOffscreen(true);
@@ -192,8 +188,7 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     if (offscreen_composition && runtime) runtime->draw();
 
 #if DEBUG_BUILD
-    // Capture the transition overlay into the diagnostics bundle before the
-    // swapchain pass starts (a pass cannot be nested).
+    // Captured before the swapchain pass, which cannot be nested.
     if (mgr.isTransitioning() && RenderDiagnostics::instance().isCapturingFrame()) mgr.captureTransitionStage(ctx);
 #endif
 

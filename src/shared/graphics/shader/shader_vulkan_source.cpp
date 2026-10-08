@@ -128,9 +128,7 @@ void remove_uniform_declaration(std::string& source, const char* name) {
         if (name_pos == std::string::npos) break;
 
         const size_t name_end = name_pos + name_len;
-        // Names that merely share a prefix (g_PointerPosition vs
-        // g_PointerPositionLast) must not match, otherwise an unrelated
-        // declaration is erased and the uniform becomes undefined.
+        // Match whole names only: g_PointerPosition must not erase g_PointerPositionLast.
         if ((name_pos > 0 && is_token_char(source[name_pos - 1])) ||
             (name_end < source.size() && is_token_char(source[name_end]))) {
             search_pos = name_end;

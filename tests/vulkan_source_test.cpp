@@ -11,8 +11,7 @@ bool contains(const std::string& text, const std::string& needle) {
     return text.find(needle) != std::string::npos;
 }
 
-// The vertex declaration order differs from the pipeline layout (a_Color is declared last), which is how
-// the native rope particle shader is written.
+// Declaration order differs from the pipeline layout (a_Color last), as the native rope shader is written.
 void testVertexInputsFollowPipelineLayout() {
     sg_shader_desc desc = {};
     desc.attrs[0].glsl_name = "a_PositionVec4";

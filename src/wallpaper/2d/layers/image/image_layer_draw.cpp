@@ -21,8 +21,7 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
             layer_origin[0] = placement.origin[0];
             layer_origin[1] = placement.origin[1];
             layer_origin[2] = placement.origin[2];
-            // Scene space is Y-up while sprites are drawn in Y-down screen space,
-            // so the accumulated Z angle is negated here.
+            // Scene space is Y-up and sprites are Y-down, so the Z angle is negated.
             rect.rotation = -placement.rotation_deg;
         }
     }

@@ -156,8 +156,7 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
 }
 
 sg_pixel_format Scene2DRuntime::compositionPixelFormat() const {
-    // Float composition preserves additive HDR energy (lens flares, glows); the
-    // present pass rolls the highlights off instead of clipping them to white.
+    // Float composition keeps additive HDR energy; the present pass rolls highlights off.
     return float_composition_available_ ? SG_PIXELFORMAT_RGBA16F : SG_PIXELFORMAT_RGBA8;
 }
 
@@ -252,8 +251,7 @@ void Scene2DRuntime::updateViewport() {
     float sh = output_height > 0 ? (float)output_height : (float)surface::height();
     ctx.scene.physical_view_width = sw;
     ctx.scene.physical_view_height = sh;
-    // A scene-aspect projection mapped onto the physical viewport stretches both
-    // image and particle geometry together, including rotated layers.
+    // A scene-aspect projection stretches image and particle geometry together, rotated layers included.
     if (ctx.scene.scene_w > 0 && ctx.scene.scene_h > 0 && ctx.scene.scaling_mode == SCALING_STRETCH)
         sw = sh * ctx.scene.scene_w / ctx.scene.scene_h;
     renderer_update_viewport(&ctx.renderer, sw, sh);
@@ -272,8 +270,7 @@ void Scene2DRuntime::updateViewport() {
     ctx.scene.render_scale *= std::max(ctx.scene.general.zoom, 0.001f);
     ctx.scene.render_scale *= introZoom(ctx.intro_zoom, ctx.intro_duration, ctx.scene.elapsed_time);
 
-    // Camera-path entry animation: zoom about the view centre plus a relative origin pan (camera moves opposite to
-    // the content).
+    // Entry animation zooms about the view centre and pans the origin opposite the content.
     const wallpaper_engine::SceneCameraDocument& camera = ctx.scene.camera;
     float pan_x = 0.0f, pan_y = 0.0f;
     if (!camera.zoom_curve.keys.empty()) {

@@ -147,8 +147,7 @@ cJSON* userValueJson(const UserPropertyValue& value) {
     return cJSON_CreateNull();
 }
 
-// A binding is { "user": "key" | { "name": "key", "condition": "x" }, "value": default }. A condition makes the value
-// a boolean: true while the property equals it.
+// A condition turns the value into a boolean: true while the property equals it.
 void resolveUserBindings(cJSON* node, const UserProperties& properties) {
     if (cJSON_IsObject(node)) {
         const cJSON* user = cJSON_GetObjectItemCaseSensitive(node, "user");

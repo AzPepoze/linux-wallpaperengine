@@ -11,8 +11,7 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
     if (source_desc.width <= 0 || source_desc.height <= 0) return false;
     int width = source_desc.width;
     int height = source_desc.height;
-    // Layers drawn larger than the screen run their effects at the on-screen size. The shaders still see the authored
-    // size in their resolution uniforms (see effect_logical_scale), so only the sampling density changes.
+    // Layers larger than the screen run effects at on-screen size; resolution uniforms keep the authored size.
     bool eligible =
         !ctx.native_effect_resolution && !is_fullscreen && !copy_background && !is_compose_region && !effects.empty();
     for (const Effect* effect : effects) {

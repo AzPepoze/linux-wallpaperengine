@@ -144,8 +144,7 @@ void Scene2DRuntime::drawOffscreen() {
         if (!raw_layer) ++layer_index;
     };
 
-    // Consecutive plain layers share one render pass: a pass per layer loads and stores the whole float scene target
-    // each time. The batch ends before anything that needs its own pass (scene-color layers, captures, bloom).
+    // Consecutive plain layers share one render pass; scene-color layers, captures and bloom end the batch.
     bool batch_open = false;
     int batch_gpu_token = -1;
     auto close_batch = [&] {
@@ -228,8 +227,7 @@ void Scene2DRuntime::drawOffscreen() {
     close_batch();
 
     current = renderBloom(current, width, height);
-    // The layer snapshots stop before post-processing; capture one final post-bloom
-    // stage so diagnostics represent what present() sends to the swapchain.
+    // Capture a final post-bloom stage so diagnostics match what present() sends.
     if (IRenderObserver& diagnostics = renderObserver(); diagnostics.isCapturingFrame()) {
         Snapshot snapshot = makeSnapshot(width, height);
         if (snapshot.valid()) {

@@ -7,9 +7,7 @@
 #include <utility>
 
 namespace effect_resolution {
-// Effect targets may be smaller than the authored layer, with `g_TextureNResolution` still reporting the authored
-// size, so texel-offset shaders (blur, shine) produce the same UV offsets. Only shaders that read the pixel position
-// itself would change with the target size.
+// Smaller targets keep the authored g_TextureNResolution, so texel-offset shaders match.
 inline bool readsPixelPosition(std::string_view source) {
     for (std::string_view token : {"gl_FragCoord", "dFdx", "dFdy", "fwidth", "ddx", "ddy"}) {
         if (source.find(token) != std::string_view::npos) return true;

@@ -56,9 +56,7 @@ class MediaSource {
 // Returns a no-op source (never emits) when built without sd-bus support.
 std::unique_ptr<MediaSource> createMprisMediaSource();
 
-// Sets the artwork used when the current track has no cover. `path` should point
-// at a decodable image (WE ships materials/util/webthumbnailfallback.png). Set it
-// before the media source starts so the worker thread sees a stable value.
+// Sets the no-cover artwork; call before the media source starts so the worker sees a stable value.
 void setMediaThumbnailFallbackImage(const std::string& path);
 
 }  // namespace wallpaper_engine

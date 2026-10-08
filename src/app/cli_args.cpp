@@ -12,8 +12,7 @@ namespace {
 
 constexpr CliOption kSentinel = {{nullptr}, nullptr};
 
-// One array per group, each terminated by kSentinel (names[0] == nullptr).
-// Adding an option is one row here; the help and takesValue pick it up.
+// Each group array ends with a sentinel row (names[0] == nullptr).
 constexpr CliOption kWallpaper[] = {
     {{"<wallpaper>", nullptr}, nullptr, CliBuild::All, "Wallpaper project directory, .pkg file or video file"},
     {{"--pkg", "-pkg", nullptr}, "<path>", CliBuild::All, "Treat the given path as a package"},
@@ -105,8 +104,7 @@ constexpr CliOption kInfo[] = {
     kSentinel,
 };
 
-// Upstream-only launcher flags. They are recognized (and their values consumed)
-// so they never fall through to the positional wallpaper, then logged as ignored.
+// Launcher flags are consumed so they never become the positional wallpaper.
 constexpr CliOption kCompatibility[] = {
     {{"--noautomute", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--no-audio-processing", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
@@ -274,8 +272,7 @@ std::vector<std::string> unknownOptions(const std::vector<std::string>& args) {
             continue;
         }
         if (!arg.empty() && arg[0] == '-') unknown.push_back(arg);
-        // Still consume the value of an ignored value-taking option so it is not
-        // mistaken for a positional wallpaper.
+        // Consume an ignored option's value so it is not taken as the wallpaper.
         if (option && option->value && !has_inline_value && i + 1 < args.size()) ++i;
     }
     return unknown;

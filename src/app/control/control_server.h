@@ -6,8 +6,7 @@
 
 #include "app/control/control_protocol.h"
 
-// Owns the AF_UNIX control socket for one display key and turns incoming
-// connections into SwitchRequests. Polling is non-blocking.
+// Owns the control socket for one display key; polling is non-blocking.
 class ControlServer {
    public:
     ControlServer() = default;

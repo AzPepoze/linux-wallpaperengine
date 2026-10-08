@@ -6,8 +6,7 @@
 #include <memory>
 #include <string>
 
-// Process-wide audio backend (miniaudio): file playback, streaming PCM for video,
-// and default-sink capture reduced to an audio spectrum for reactive effects.
+// Process-wide audio backend: file playback, video PCM streams, and spectrum capture.
 class AudioEngine {
    public:
     static AudioEngine& instance();
@@ -20,14 +19,12 @@ class AudioEngine {
     using GroupId = uint32_t;
     static constexpr GroupId kDefaultGroup = 0;
 
-    // Groups multiply every voice/stream in them by a shared gain. kDefaultGroup
-    // always exists at gain 1.0 and is never destroyed.
+    // Groups share a gain; kDefaultGroup always exists and is never destroyed.
     GroupId createGroup();
     void destroyGroup(GroupId group);
     void setGroupVolume(GroupId group, float volume);
     float groupVolume(GroupId group) const;
-    // While fading, stop() detaches the voice (keeps it playing, owned by the
-    // group) instead of destroying it, so it can fade out via the group gain.
+    // A fading stop() detaches the voice so the group gain can fade it out.
     void beginGroupFade(GroupId group);
     bool groupFading(GroupId group) const;
     void cancelGroupFade(GroupId group);

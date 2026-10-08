@@ -1,6 +1,4 @@
-// HLSL -> SPIR-V path for Wallpaper Engine's precompiled DX11 shaders (the
-// `assets/shaders/HLSL/` fallbacks). Unlike the GLSL path these sources carry
-// their own vk::binding annotations already, so no source rewriting is needed.
+// HLSL -> SPIR-V path for Wallpaper Engine's DX11 fallbacks; these need no source rewriting.
 #include <slang-com-ptr.h>
 
 #include <cstring>
@@ -16,8 +14,7 @@ namespace {
 bool compile_hlsl_stage(SlangStage stage, const std::string& source, const char* source_name,
                         std::vector<uint32_t>& output) {
     SlangGlobalSessionDesc global_desc = {};
-    // Slang's HLSL prelude imports its `glsl` module even for HLSL sources;
-    // without GLSL support enabled the import fails with E38201.
+    // Slang's HLSL prelude imports `glsl`, which fails (E38201) without GLSL support.
     global_desc.enableGLSL = true;
     ComPtr<slang::IGlobalSession> global;
     if (slang_createGlobalSession2(&global_desc, global.writeRef()) != SLANG_OK || !global) {

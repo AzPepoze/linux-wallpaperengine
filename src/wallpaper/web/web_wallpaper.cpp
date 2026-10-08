@@ -47,8 +47,7 @@ std::string resolveRendererPath() {
     return std::string(exe) + "/" + kRendererName;
 }
 
-// Default user property values from project.json, shaped as the
-// {name: {value: ...}} object Wallpaper Engine hands to applyUserProperties.
+// Default user properties from project.json, in the {name: {value}} shape applyUserProperties expects.
 std::string buildUserProperties(const std::string& html_path) {
     std::string dir = html_path;
     const size_t slash = dir.find_last_of('/');

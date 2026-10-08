@@ -120,8 +120,7 @@ void runPuppetPoseTests() {
     pose.clearBoneOverride(0);
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 160.0f) < 1e-3f, "clearing the override restores the animation");
-    // A sheet-space chain is assembled by a separate reference pose. Its IK
-    // endpoint and pole are world-space tracks after the ordinary bone tracks.
+    // The IK endpoint and pole are world-space tracks that follow the ordinary bone tracks.
     MdlModel limb;
     limb.bones.resize(3);
     for (auto& bone : limb.bones)

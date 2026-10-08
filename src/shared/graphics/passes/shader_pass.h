@@ -48,8 +48,7 @@ class ShaderPass {
     unsigned int white_default_slots = 0;
     // The shader reads the pixel position (gl_FragCoord or derivatives), so it must run at the authored resolution.
     bool pixel_exact = true;
-    // The shader reads a built-in that changes without any uniform changing (time, pointer, parallax, audio), so its
-    // output can differ every frame. Until the sources are known it is assumed to vary.
+    // Shaders reading time, pointer, parallax or audio vary per frame until their sources are known.
     bool frame_varying = true;
     bool enabled = true;
     bool show_files = false;
@@ -128,8 +127,7 @@ class ShaderPass {
         return r;
     }
 
-    // Material constants by authored (material key) or shader uniform name. A value set by a script replaces the
-    // constant's keyframe animation for good.
+    // A script-set constant replaces its keyframe animation for good.
     bool setMaterialConstant(const std::string& name, const std::vector<float>& values);
     const std::vector<float>* materialConstant(const std::string& name) const;
 

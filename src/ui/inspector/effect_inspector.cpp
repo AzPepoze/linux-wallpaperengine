@@ -82,8 +82,7 @@ void showDebugViewControls(EngineContext& ctx, ::ShaderPass& pass) {
     }
 }
 
-// g_Texture0 may be an authored image, the previous pass, or a fallback, so it is shown
-// alongside the numbered texture array rather than treated as implicit.
+// g_Texture0 can be an image, a previous pass or a fallback, so it is listed apart from the array.
 void showResolvedTextureSlots(::ShaderPass& pass) {
     if (ImGui::TreeNodeEx("Resolved Texture Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto show_resolved_slot = [&](int slot, sg_image image, sg_view view, const std::string& path,

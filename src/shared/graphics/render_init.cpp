@@ -114,8 +114,7 @@ BlendShaderSources prepareBlendShaderSources(const IAssetResolver& assets, int b
     return result;
 }
 
-// The pipeline borrows the shader's layouts, so the shader must outlive it (sokol frees them a few frames after
-// sg_destroy_shader).
+// The pipeline borrows the shader's layouts, so the shader must outlive it.
 bool finalizeBlendPipeline(const BlendShaderSources& sources, GfxShader& shader_out, GfxPipeline& pipeline_out) {
     CompiledShader shader =
         ShaderCompiler::compile("image-composite-" + std::to_string(sources.mode), sources.vert, sources.frag, {}, 1);
@@ -158,9 +157,7 @@ const std::string kSpriteFragmentSource =
     "  frag_color = texture(tex, uv) * tint;\n"
     "}\n";
 
-// Offscreen targets accumulate colour already multiplied by alpha; this turns them back into straight alpha.
-// Fully transparent texels borrow the colour of nearby opaque ones, otherwise bilinear minification of the
-// straight result mixes their black into every cut-out edge.
+// Un-premultiplies targets; transparent texels borrow nearby colour to avoid dark cut-out edges.
 const std::string kUnpremulFragmentSource =
     "#version 330\n"
     "precision mediump float;\n"
@@ -254,8 +251,7 @@ sg_shader makeSpriteShader(const std::string& vertex_source, const std::string& 
     return create_backend_shader(&desc, vertex_source, fragment_source, label);
 }
 
-// Straight-alpha blending that keeps the accumulated target opaque: with backend defaults a translucent layer
-// replaced target alpha with its mask alpha, re-multiplying the composited scene at present.
+// Straight-alpha blend that keeps the target opaque; backend defaults would re-multiply the scene.
 void useAlphaBlend(sg_pipeline_desc& desc) {
     desc.colors[0].blend.enabled = true;
     desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;

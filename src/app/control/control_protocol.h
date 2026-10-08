@@ -15,8 +15,7 @@ struct SwitchRequest {
     int transition_time_ms = 1000;
     bool continue_previous = false;
 
-    // Optional live settings. Absent fields keep the running instance's state,
-    // so payloads from older senders still decode to the defaults below.
+    // Absent fields keep the running instance's state.
     std::string scaling;  // "default"|"fill"|"fit"|"stretch"
     float volume = 0.0f;  // master volume, 0-100 (CLI units)
     bool has_volume = false;

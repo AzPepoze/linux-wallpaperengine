@@ -6,13 +6,10 @@
 class UserProperties;
 
 namespace wallpaper_engine {
-// Parse Wallpaper Engine scene.json into a renderer-independent document; this layer
-// must not create runtime layers or GPU resources. With `user_properties`, every { "user": ..., "value": ... }
-// binding (including those inside `scriptproperties`) takes the property's effective value instead of its default.
+// Parses scene.json without creating layers or GPU resources; user_properties override defaults.
 bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserProperties* user_properties = nullptr);
 
-// Parses one scene object (the JSON of an entry in scene.json `objects`); false when it is not valid JSON or has no
-// scene object id.
+// Parses one scene object; false when the JSON is invalid or has no id.
 bool parseSceneObject(const char* object_json, SceneObjectDocument& out);
 
 }  // namespace wallpaper_engine

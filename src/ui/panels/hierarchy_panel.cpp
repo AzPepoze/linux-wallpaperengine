@@ -71,8 +71,7 @@ void drawRowControls(EngineContext& ctx, const SceneTreeNode& node) {
     ImGui::SameLine();
 }
 
-// "[<id> <Class>[/variant]] <name> [P:x,y]". The parser already tags the name with "[Class]"; the optional id and the
-// variant are folded into that tag so there is a single prefix.
+// Folds the optional id and variant into the parser's [Class] tag as one prefix.
 std::string nodeDisplayName(const EngineContext& ctx, const SceneTreeNode& node) {
     std::string name = node.name.empty() ? "Node " + std::to_string(node.id) : node.name;
     std::string variant;

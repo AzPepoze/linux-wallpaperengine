@@ -71,8 +71,7 @@ bool WallpaperTransition::begin(EngineContext& ctx, sg_view source, sg_image sou
 
     copySource(ctx, source, source_image, width, height);
 
-    // Load the matching Wallpaper Engine transition shader; if the install
-    // lacks it the built-in fade in composite() takes over.
+    // Without the shader in the install, composite() falls back to the built-in fade.
     if (config.selection >= 0) shader_.init(ctx, config.selection);
 
     active_ = true;

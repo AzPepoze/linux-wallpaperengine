@@ -130,8 +130,7 @@ class ParticleSystem {
     int texture_height = 0;
 
     float override_alpha = 1.0f;
-    // Wallpaper Engine instance overrides. `rate` is a time scale for the whole system, `count` scales the
-    // emission rate, and speed, lifetime and size scale each particle as it spawns.
+    // Instance overrides: rate scales the system clock, count the emission, the rest each particle.
     float override_rate = 1.0f;
     float override_size = 1.0f;
     float override_count = 1.0f;
