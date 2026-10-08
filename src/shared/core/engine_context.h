@@ -54,6 +54,10 @@ struct InputState {
     // bit0 left, bit1 right, bit2 middle.
     uint8_t buttons = 0;
     bool mouse_position_valid = false;
+    // True while the pointer is over the wallpaper surface (its own position is then exact).
+    bool pointer_over_surface = false;
+    // Which source gave the pointer position this frame (shown in the inspector).
+    std::string pointer_source = "none";
 
     bool left_down() const {
         return (buttons & 0x1u) != 0;

@@ -134,6 +134,31 @@ bool placeDesktopWindow(const std::string& title, const std::string& output) {
     return true;
 }
 
+// One connection kept open for the whole run, since the pointer is asked for every frame.
+Display* pointerDisplay() {
+    static Display* display = XOpenDisplay(nullptr);
+    return display;
+}
+
+// Reports the real pointer position on `output`, as fractions of it. False when it is not on that output.
+bool queryPointer(const std::string& output, float& x, float& y) {
+    Display* dpy = pointerDisplay();
+    if (!dpy) return false;
+
+    Rect rect;
+    if (!outputRect(dpy, output, rect) || rect.width <= 0 || rect.height <= 0) return false;
+
+    Window root = DefaultRootWindow(dpy);
+    Window root_return = None, child_return = None;
+    int root_x = 0, root_y = 0, win_x = 0, win_y = 0;
+    unsigned int mask = 0;
+    if (!XQueryPointer(dpy, root, &root_return, &child_return, &root_x, &root_y, &win_x, &win_y, &mask)) return false;
+
+    x = (float)(root_x - rect.x) / (float)rect.width;
+    y = (float)(root_y - rect.y) / (float)rect.height;
+    return x >= 0.0f && x < 1.0f && y >= 0.0f && y < 1.0f;
+}
+
 // Plugin entry points, resolved by x11_desktop_loader.cpp in the host binary.
 extern "C" {
 int lwe_plugin_abi() {
@@ -142,5 +167,9 @@ int lwe_plugin_abi() {
 
 bool lwe_x11_place_desktop_window(const char* title, const char* output) {
     return placeDesktopWindow(title ? title : "", output ? output : "");
+}
+
+bool lwe_x11_query_pointer(const char* output, float* x, float* y) {
+    return queryPointer(output ? output : "", *x, *y);
 }
 }

@@ -36,7 +36,7 @@ static void updateGlobalPointer(EngineContext& ctx) {
     static GlobalPointer global_pointer;
     static bool opened = false;
     if (!opened) {
-        global_pointer.open(ctx.pointer_source);
+        global_pointer.open(ctx.pointer_output, ctx.pointer_source);
         opened = true;
     }
     const float width = (float)surface::width();
@@ -49,7 +49,8 @@ static void updateGlobalPointer(EngineContext& ctx) {
         current.y = std::clamp(ctx.input.mouse_y / height, 0.0f, 1.0f);
         current.inside = true;
     }
-    const OutputPointer next = global_pointer.poll(current, width, height);
+    const OutputPointer next = global_pointer.poll(current, ctx.input.pointer_over_surface, width, height);
+    ctx.input.pointer_source = global_pointer.source();
     if (!next.inside) return;
     ctx.input.mouse_x = next.x * width;
     ctx.input.mouse_y = next.y * height;
@@ -255,10 +256,15 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 }
 
 void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& mgr) {
-    if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
+    if (e->type == SAPP_EVENTTYPE_MOUSE_ENTER) {
+        ctx.input.pointer_over_surface = true;
+    } else if (e->type == SAPP_EVENTTYPE_MOUSE_LEAVE) {
+        ctx.input.pointer_over_surface = false;
+    } else if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
         ctx.input.mouse_x = e->mouse_x;
         ctx.input.mouse_y = e->mouse_y;
         ctx.input.mouse_position_valid = true;
+        ctx.input.pointer_over_surface = true;
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN || e->type == SAPP_EVENTTYPE_MOUSE_UP) {
         if (e->mouse_button <= SAPP_MOUSEBUTTON_MIDDLE) {
             const uint8_t bit = static_cast<uint8_t>(1u << e->mouse_button);

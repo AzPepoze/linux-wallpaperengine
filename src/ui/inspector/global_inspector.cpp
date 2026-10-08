@@ -10,6 +10,7 @@ namespace Inspector {
 
 void GlobalInspector::show(EngineContext& ctx) {
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "GLOBAL ENGINE SETTINGS");
+    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.5f, 1.0f), "Mouse source: %s", ctx.input.pointer_source.c_str());
     const char* modes[] = {"Cover", "Fit", "Stretch"};
     int current_mode = (int)ctx.scene.scaling_mode;
     if (ImGui::Combo("Scaling Mode", &current_mode, modes, IM_ARRAYSIZE(modes))) {

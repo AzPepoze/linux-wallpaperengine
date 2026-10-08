@@ -449,8 +449,15 @@ add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/
                                     "src/wallpaper/transition/transition_catalog.cpp"}, {"cjson"})
 
 add_test("global_pointer_tests", {"tests/global_pointer_test.cpp", "src/app/platform/pointer/global_pointer.cpp",
+                                 "src/app/platform/pointer/exact_pointer.cpp",
+                                 "src/app/platform/pointer/hyprland_pointer.cpp",
                                  "src/app/platform/pointer/evdev_pointer.cpp",
-                                 "src/app/platform/pointer/pointer_source.cpp", "src/shared/core/logger.cpp"})
+                                 "src/app/platform/pointer/pointer_source.cpp",
+                                 "src/app/platform/x11_desktop/x11_desktop_loader.cpp",
+                                 "src/shared/core/plugin.cpp", "src/shared/core/logger.cpp"}, {"cjson"})
+
+add_test("hyprland_pointer_tests", {"tests/hyprland_pointer_test.cpp", "src/app/platform/pointer/hyprland_pointer.cpp",
+                                   "src/shared/core/logger.cpp"}, {"cjson"})
 
 add_test("control_endpoint_tests", {"tests/control_endpoint_test.cpp", "src/app/control/control_endpoint.cpp"})
 

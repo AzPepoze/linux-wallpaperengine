@@ -5,6 +5,10 @@ bool parsePointerSource(const std::string& text, PointerSource& out) {
         out = PointerSource::Auto;
     } else if (text == "surface") {
         out = PointerSource::Surface;
+    } else if (text == "x11") {
+        out = PointerSource::X11;
+    } else if (text == "hyprland") {
+        out = PointerSource::Hyprland;
     } else if (text == "evdev") {
         out = PointerSource::Evdev;
     } else {
