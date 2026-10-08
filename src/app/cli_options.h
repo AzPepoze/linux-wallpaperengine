@@ -43,6 +43,7 @@ struct CliOptions {
     int fps_limit = 0;  // 0 = unset: rely on vsync, no software cap
     WebOptions web;
     std::string scaling;
+    std::string pointer;  // auto|surface|hyprland|evdev
     std::string clamp;
     std::string screen_root;
     std::string layer;

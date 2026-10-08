@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "app/frame_rate.h"
+#include "app/platform/pointer/global_pointer.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -30,6 +31,31 @@ static Scene2DRuntime* activeRuntime(WallpaperManager& mgr) {
     return s2d ? s2d->getRuntime() : nullptr;
 }
 
+// Keeps the pointer position up to date while the cursor is off the wallpaper surface.
+static void updateGlobalPointer(EngineContext& ctx) {
+    static GlobalPointer global_pointer;
+    static bool opened = false;
+    if (!opened) {
+        global_pointer.open(ctx.pointer_source);
+        opened = true;
+    }
+    const float width = (float)surface::width();
+    const float height = (float)surface::height();
+    if (width <= 0.0f || height <= 0.0f) return;
+
+    OutputPointer current;
+    if (ctx.input.mouse_position_valid) {
+        current.x = std::clamp(ctx.input.mouse_x / width, 0.0f, 1.0f);
+        current.y = std::clamp(ctx.input.mouse_y / height, 0.0f, 1.0f);
+        current.inside = true;
+    }
+    const OutputPointer next = global_pointer.poll(current, width, height);
+    if (!next.inside) return;
+    ctx.input.mouse_x = next.x * width;
+    ctx.input.mouse_y = next.y * height;
+    ctx.input.mouse_position_valid = true;
+}
+
 static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntime* runtime) {
 #if DEBUG_BUILD
     if (ctx.runtime_mode == RuntimeMode::Sandbox && runtime) {
@@ -42,6 +68,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     }
 #endif
     if (runtime) runtime->updateViewport();
+    updateGlobalPointer(ctx);
 
     if (runtime && ctx.input.mouse_position_valid) {
         float mouse_x = ctx.input.mouse_x;

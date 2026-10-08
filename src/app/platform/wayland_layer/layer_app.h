@@ -4,23 +4,16 @@
 #include <memory>
 
 #include "app/cli_options.h"
-#include "sokol_app.h"
+#include "app/platform/layer_backend.h"
 
-struct LayerAppCallbacks {
-    void (*init)();
-    void (*frame)();
-    void (*event)(const sapp_event*);
-    void (*cleanup)();
-};
-
-class LayerApp {
+// The Wayland layer-shell backend, built into the wayland plugin.
+class LayerApp : public LayerBackend {
    public:
     // Null, with the reason logged, when a layer surface cannot be set up in this session.
     static std::unique_ptr<LayerApp> create(const CliOptions& cli);
-    ~LayerApp();
+    ~LayerApp() override;
 
-    // Runs until the compositor closes the surface or a quit is requested. Returns the exit code.
-    int run(const LayerAppCallbacks& callbacks);
+    int run(const LayerAppCallbacks& callbacks) override;
 
    private:
     struct Impl;

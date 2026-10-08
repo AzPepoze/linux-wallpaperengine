@@ -14,10 +14,10 @@
 #include "app/frame_loop.h"
 #include "app/frame_rate.h"
 #include "app/identity.h"
-#if LWE_LAYER_SHELL
-#include "app/platform/wayland_layer/layer_app.h"
-#endif
 #include "app/package_extractor.h"
+#include "app/platform/layer_backend.h"
+#include "app/platform/pointer/pointer_source.h"
+#include "app/platform/x11_desktop/x11_desktop.h"
 #include "app/signals.h"
 #include "shared/assets/media/media_source.h"
 #include "shared/assets/shared_assets.h"
@@ -26,6 +26,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/phase_timer.h"
+#include "shared/core/plugin.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/backend/performance_profile.h"
@@ -58,6 +59,9 @@ ControlServer control_server;
 
 static EngineContext ctx;
 static bool layer_active = false;
+// Set when an X11 desktop window stands in for the layer surface; init() places that window.
+static std::string x11_desktop_output;
+static std::string x11_desktop_title;
 
 static AssetManager asset_manager;
 static SharedAssets shared_assets;
@@ -230,6 +234,8 @@ static void init(void) {
         PhaseTimer timer("wallpaper load (total)");
         loadInitialWallpaper();
     }
+    if (!x11_desktop_output.empty() && !x11PlaceDesktopWindow(x11_desktop_title, x11_desktop_output))
+        LOG_TAG_W("X11", "could not make the window a desktop window on %s", x11_desktop_output.c_str());
     LOG_I("Linux Wallpaper Engine Initialized");
 }
 
@@ -281,24 +287,27 @@ static bool wantsDesktopLayer() {
     return !cli.screen_root.empty() || !cli.layer.empty();
 }
 
-#if LWE_LAYER_SHELL
+// Without Wayland there is no layer shell, so a desktop-type X11 window on the output stands in for it.
+static bool wantsX11Desktop() {
+    return !cli.screen_root.empty() && !cli.sandbox && std::getenv("WAYLAND_DISPLAY") == nullptr &&
+           std::getenv("DISPLAY") != nullptr;
+}
+
+// The Wayland layer backend is a plugin; without it (or outside Wayland) the wallpaper runs in a window.
 static void runDesktopLayerIfPossible() {
     if (!wantsDesktopLayer() || cli.sandbox) return;
-    std::unique_ptr<LayerApp> app = LayerApp::create(cli);
-    if (!app) {
+    const auto create =
+        reinterpret_cast<CreateLayerBackendFunction>(pluginSymbol("wayland", "lwe_create_layer_backend"));
+    std::unique_ptr<LayerBackend> backend = create ? std::unique_ptr<LayerBackend>(create(cli)) : nullptr;
+    if (!backend) {
         LOG_W("[LAYER] desktop layer unavailable; running in a window");
         return;
     }
     layer_active = true;
-    const int code = app->run({init, frame, event, cleanup});
-    app.reset();
+    const int code = backend->run({init, frame, event, cleanup});
+    backend.reset();
     exit(code);
 }
-#else
-static void runDesktopLayerIfPossible() {
-    if (wantsDesktopLayer()) LOG_W("--screen-root/--layer need a build with --layer_shell=y; running in a window");
-}
-#endif
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     // Two malloc arenas keep parallel loading from leaving tens of MB resident.
@@ -324,6 +333,9 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
     if (cli.sandbox) ctx.runtime_mode = RuntimeMode::Sandbox;
     ctx.cli_properties = cli.set_properties;
+    ctx.pointer_output = cli.screen_root;
+    if (!parsePointerSource(cli.pointer, ctx.pointer_source))
+        LOG_TAG_W("OPTIONS", "unknown --pointer '%s'; using auto", cli.pointer.c_str());
     wallpaper_source = resolveWallpaperSource(cli);
     strncpy(ctx.wallpaper_path, wallpaper_source.path.c_str(), sizeof(ctx.wallpaper_path) - 1);
     ctx.is_pkg = wallpaper_source.is_pkg;
@@ -376,7 +388,12 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         }
     }
 
-    runDesktopLayerIfPossible();
+    if (wantsX11Desktop()) {
+        x11_desktop_output = cli.screen_root;
+        x11_desktop_title = x11DesktopTitle(x11_desktop_output);
+    } else {
+        runDesktopLayerIfPossible();
+    }
 
     sapp_desc desc = {};
     desc.init_cb = init;
@@ -385,8 +402,12 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     desc.cleanup_cb = cleanup;
     desc.width = 1280;
     desc.height = 720;
-    desc.window_title =
-        ctx.runtime_mode == RuntimeMode::Sandbox ? "Linux Wallpaper Engine Sandbox" : "Linux Wallpaper Engine";
+    if (!x11_desktop_title.empty()) {
+        desc.window_title = x11_desktop_title.c_str();
+    } else {
+        desc.window_title =
+            ctx.runtime_mode == RuntimeMode::Sandbox ? "Linux Wallpaper Engine Sandbox" : "Linux Wallpaper Engine";
+    }
     desc.icon.sokol_default = true;
     desc.logger.func = slog_func;
     desc.enable_clipboard = true;

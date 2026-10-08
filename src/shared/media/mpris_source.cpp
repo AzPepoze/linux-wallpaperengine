@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "shared/core/build_config.h"
+#include "shared/core/plugin.h"
 #include "shared/media/media_session.h"
 #include "shared/media/mpris_metadata.h"
 #include "shared/media/thumbnail_colors.h"
@@ -32,12 +33,6 @@ namespace {
 std::mutex g_thumbnail_fallback_mutex;
 std::string g_thumbnail_fallback_path;
 }  // namespace
-
-// Artwork for $mediaThumbnail when the track has no cover; set by the app before the source starts.
-void setMediaThumbnailFallbackImage(const std::string& path) {
-    std::lock_guard<std::mutex> lock(g_thumbnail_fallback_mutex);
-    g_thumbnail_fallback_path = path;
-}
 
 #if LWE_MPRIS
 
@@ -533,29 +528,24 @@ int MprisMediaSource::onPropertiesChanged(sd_bus_message* message, void* userdat
     return 0;
 }
 
-#else
-
-namespace {
-
-class NoopMediaSource : public MediaSource {
-   public:
-    void start() override {}
-    void stop() override {}
-    std::vector<MediaEvent> poll() override {
-        return {};
-    }
-};
-
-}  // namespace
-
 #endif
-
-std::unique_ptr<MediaSource> createMprisMediaSource() {
-#if LWE_MPRIS
-    return std::make_unique<MprisMediaSource>();
-#else
-    return std::make_unique<NoopMediaSource>();
-#endif
-}
 
 }  // namespace wallpaper_engine
+
+#if LWE_MPRIS
+// Plugin entry points, resolved by mpris_loader.cpp in the host binary.
+extern "C" {
+int lwe_plugin_abi() {
+    return kPluginAbi;
+}
+
+wallpaper_engine::MediaSource* lwe_create_mpris_source() {
+    return new wallpaper_engine::MprisMediaSource();
+}
+
+void lwe_mpris_set_thumbnail_fallback(const char* path) {
+    std::lock_guard<std::mutex> lock(wallpaper_engine::g_thumbnail_fallback_mutex);
+    wallpaper_engine::g_thumbnail_fallback_path = path ? path : "";
+}
+}
+#endif

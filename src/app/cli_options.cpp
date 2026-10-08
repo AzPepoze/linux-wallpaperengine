@@ -163,6 +163,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 #endif
     cli_args::optionValue(args, {"--assets-dir"}, opts.assets_dir);
     opts.scaling = resolve({"--scaling"}, "scaling_mode", "");
+    opts.pointer = resolve({"--pointer"}, "pointer", "auto");
     opts.parallax.smoothing = resolveReal("parallax_smoothing", 0.0f);
     opts.parallax.scale = resolveReal("parallax_scale", 0.0f);
     cli_args::optionValue(args, {"--clamp"}, opts.clamp);

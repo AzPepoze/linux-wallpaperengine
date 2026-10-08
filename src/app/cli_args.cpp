@@ -35,6 +35,7 @@ constexpr CliOption kGraphics[] = {
     {{"--list-gpus", "-list-gpus", nullptr}, nullptr, CliBuild::All, "List available GPUs and exit"},
     {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Frame-rate cap; 0 or omitted follows the display"},
     {{"--scaling", nullptr}, "<default|fit|fill|stretch>", CliBuild::All, "fill crops to cover, fit letterboxes"},
+    {{"--pointer", nullptr}, "<auto|surface|evdev>", CliBuild::All, "Global pointer source: evdev reads mouse motion"},
     {{"--clamp", nullptr}, "<mode>", CliBuild::All, "Accepted and ignored"},
     {{"--cover", nullptr}, nullptr, CliBuild::All, "Force cover scaling, ignoring the project's fit"},
     {{"--video-ram", nullptr}, nullptr, CliBuild::All, "Load video files fully into RAM instead of streaming"},

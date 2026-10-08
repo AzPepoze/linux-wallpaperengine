@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "shared/core/host_api.h"
+
 struct GpuDeviceInfo {
     uint32_t index = 0;
     std::array<uint8_t, VK_UUID_SIZE> device_uuid{};
@@ -21,7 +23,7 @@ struct GpuDeviceInfo {
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
 };
 
-class GpuDeviceManager {
+class LWE_HOST_API GpuDeviceManager {
    public:
     static GpuDeviceManager& instance();
 

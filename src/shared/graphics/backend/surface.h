@@ -1,6 +1,7 @@
 #ifndef SURFACE_H
 #define SURFACE_H
 
+#include "shared/core/host_api.h"
 #include "sokol_gfx.h"
 
 // Presentation surface for the renderer; platform backends can install a provider.
@@ -17,7 +18,7 @@ class SurfaceProvider {
 };
 
 namespace surface {
-void setProvider(SurfaceProvider* provider);
+LWE_HOST_API void setProvider(SurfaceProvider* provider);
 bool hasProvider();
 int width();
 int height();

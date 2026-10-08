@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "app/platform/pointer/pointer_source.h"
 #include "shared/assets/asset_manager.h"
 #include "shared/core/config.h"
 #include "shared/graphics/render.h"
@@ -129,6 +130,8 @@ struct EngineContext {
     char asset_root[512] = {};
     UserProperties user_properties;
     std::vector<std::pair<std::string, std::string>> cli_properties;  // --set-property overrides
+    std::string pointer_output;                                       // wl_output the wallpaper is on, e.g. DP-4
+    PointerSource pointer_source = PointerSource::Auto;
     WebOptions web;
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
