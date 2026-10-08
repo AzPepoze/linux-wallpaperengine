@@ -89,6 +89,8 @@ struct SceneState {
     std::vector<Layer*> layers;
     SceneTree* scene_tree = nullptr;
     ScriptBindings* scripts = nullptr;  // property scripts of the scene; deleted before the layers
+    // User properties that scene bindings read; a change to one needs the scene rebuilt.
+    std::vector<std::string> bound_user_keys;
 
     float scene_w = 1920.0f;
     float scene_h = 1080.0f;

@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 #include "scene_parser_internal.h"
 #include "shared/core/config.h"
@@ -117,23 +119,6 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
           out.general.zoom, out.general.bloom.enabled ? "enabled" : "disabled");
 }
 
-std::string userValueText(const UserPropertyValue& value) {
-    char buffer[64];
-    switch (value.type) {
-        case UserPropertyValue::Type::Bool:
-            return value.b ? "1" : "0";
-        case UserPropertyValue::Type::Number:
-            snprintf(buffer, sizeof(buffer), "%g", value.n);
-            return buffer;
-        case UserPropertyValue::Type::Color:
-            snprintf(buffer, sizeof(buffer), "%g %g %g", value.color[0], value.color[1], value.color[2]);
-            return buffer;
-        case UserPropertyValue::Type::Text:
-            return value.text;
-    }
-    return "";
-}
-
 cJSON* userValueJson(const UserPropertyValue& value) {
     switch (value.type) {
         case UserPropertyValue::Type::Bool:
@@ -142,13 +127,18 @@ cJSON* userValueJson(const UserPropertyValue& value) {
             return cJSON_CreateNumber(value.n);
         case UserPropertyValue::Type::Color:
         case UserPropertyValue::Type::Text:
-            return cJSON_CreateString(userValueText(value).c_str());
+            return cJSON_CreateString(value.asText().c_str());
     }
     return cJSON_CreateNull();
 }
 
+void addBoundKey(std::vector<std::string>& keys, const std::string& key) {
+    if (std::find(keys.begin(), keys.end(), key) == keys.end()) keys.push_back(key);
+}
+
 // A condition turns the value into a boolean: true while the property equals it.
-void resolveUserBindings(cJSON* node, const UserProperties& properties) {
+// Every key a binding reads is added to `keys`, so a later change can tell whether the scene must rebuild.
+void resolveUserBindings(cJSON* node, const UserProperties& properties, std::vector<std::string>& keys) {
     if (cJSON_IsObject(node)) {
         const cJSON* user = cJSON_GetObjectItemCaseSensitive(node, "user");
         std::string key, condition;
@@ -169,9 +159,9 @@ void resolveUserBindings(cJSON* node, const UserProperties& properties) {
                 condition = buffer;
             }
         }
+        if (!key.empty()) addBoundKey(keys, key);
         if (const UserPropertyValue* value = key.empty() ? nullptr : properties.find(key)) {
-            cJSON* replacement =
-                has_condition ? cJSON_CreateBool(userValueText(*value) == condition) : userValueJson(*value);
+            cJSON* replacement = has_condition ? cJSON_CreateBool(value->asText() == condition) : userValueJson(*value);
             if (cJSON_HasObjectItem(node, "value"))
                 cJSON_ReplaceItemInObjectCaseSensitive(node, "value", replacement);
             else
@@ -179,7 +169,7 @@ void resolveUserBindings(cJSON* node, const UserProperties& properties) {
         }
     }
     for (cJSON* child = node ? node->child : nullptr; child; child = child->next)
-        resolveUserBindings(child, properties);
+        resolveUserBindings(child, properties, keys);
 }
 
 }  // namespace
@@ -207,7 +197,7 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserP
     }
 
     LOG_I("Scene JSON parsed successfully");
-    if (user_properties) resolveUserBindings(root, *user_properties);
+    if (user_properties) resolveUserBindings(root, *user_properties, out.user_keys);
     detectResolution(root, out);
     parseCamera(cJSON_GetObjectItemCaseSensitive(root, "camera"), out);
     parseGeneral(cJSON_GetObjectItemCaseSensitive(root, "general"), out);

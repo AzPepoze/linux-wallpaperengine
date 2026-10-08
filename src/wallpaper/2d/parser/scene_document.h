@@ -232,6 +232,8 @@ struct SceneDocument {
     SceneGeneralDocument general;
 
     std::vector<SceneObjectDocument> objects;
+    // User properties that scene.json bindings read; changing one needs the scene rebuilt.
+    std::vector<std::string> user_keys;
 };
 
 }  // namespace wallpaper_engine

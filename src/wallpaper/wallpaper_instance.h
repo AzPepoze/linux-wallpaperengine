@@ -17,6 +17,7 @@
 struct InstanceState {
     std::string asset_root;
     std::string wallpaper_path;
+    std::string source_path;  // the path the wallpaper was requested by, not its package mount
     bool is_pkg = false;
     scene_type_t scene_type = SCENE_TYPE_2D;
     UserProperties user_properties;

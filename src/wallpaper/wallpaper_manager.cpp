@@ -14,9 +14,11 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/parser/scene_parser.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/2d/script/scene_scripts.h"
 #include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/prepared_load.h"
 #include "wallpaper/transition/transition_audio.h"
+#include "wallpaper/user_properties.h"
 #include "wallpaper/video/video_wallpaper.h"
 #include "wallpaper/wallpaper_loader.h"
 
@@ -37,6 +39,26 @@ TaskPool& preparationPool() {
     // A separate serial queue stops rapid requests from exhausting the general pool.
     static TaskPool pool(1);
     return pool;
+}
+
+bool isSameWallpaper(const WallpaperInstance& active, const SwitchRequest& request) {
+    if (request.path.empty() || request.is_pkg != active.state.is_pkg) return false;
+    return std::filesystem::path(active.state.source_path).lexically_normal() ==
+           std::filesystem::path(request.path).lexically_normal();
+}
+
+// Updates the live scene without reloading it; false when a scene binding reads one of the keys.
+bool applyPropertiesInPlace(EngineContext& ctx, const std::vector<std::pair<std::string, std::string>>& changes) {
+    if (!ctx.scene.scripts) return false;
+    if (touchesBoundKey(ctx.scene.bound_user_keys, changes)) {
+        LOG_TAG_I("WALLPAPER_MGR", "Property change touches a scene binding; reloading the scene");
+        return false;
+    }
+    for (const auto& [key, value] : changes) ctx.user_properties.setFromString(key, value);
+    // Scripts see the new values through engine.userProperties and applyUserProperties on the next update.
+    ctx.scene.scripts->setUserProperties(ctx.user_properties);
+    LOG_TAG_I("WALLPAPER_MGR", "Applied %zu property change(s) in place", changes.size());
+    return true;
 }
 }  // namespace
 
@@ -72,6 +94,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
               scene_directory.c_str());
     if (shared_assets_) instance->assets.attachShared(shared_assets_);
     instance->state.wallpaper_path = scene_directory;
+    instance->state.source_path = ctx.wallpaper_path;
     instance->state.is_pkg = ctx.is_pkg;
     // Copy the user's scaling into the new instance before activation replaces SceneState.
     instance->state.scene.scaling_mode = ctx.scene.scaling_mode;
@@ -210,12 +233,20 @@ void WallpaperManager::clear(EngineContext& ctx) {
 }
 
 void WallpaperManager::pollControl(EngineContext& ctx) {
-    (void)ctx;
     if (!control_) return;
     std::vector<SwitchRequest> requests;
     control_->poll(requests);
-    // Keep only the newest request: an in-flight switch should not queue up.
-    for (SwitchRequest& request : requests) pending_switch_ = std::move(request);
+    for (SwitchRequest& request : requests) {
+        if (active_instance_ && isSameWallpaper(*active_instance_, request) && !request.properties.empty()) {
+            if (applyPropertiesInPlace(ctx, request.properties)) continue;
+            // A bound key needs a rebuild: reload with every current value so earlier live changes survive it.
+            UserProperties merged = ctx.user_properties;
+            for (const auto& [key, value] : request.properties) merged.setFromString(key, value);
+            request.properties = merged.toStrings();
+        }
+        // Keep only the newest request: an in-flight switch should not queue up.
+        pending_switch_ = std::move(request);
+    }
 }
 
 bool WallpaperManager::takePendingSwitch(SwitchRequest& out) {
@@ -268,6 +299,7 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
             instance.state.scene.scaling_mode = SCALING_COVER;
         instance.state.is_pkg = request.is_pkg;
         instance.state.wallpaper_path = request.path;
+        instance.state.source_path = request.path;
         if (shared_assets_) instance.assets.attachShared(shared_assets_);
         job->preparation = preparationPool().enqueue([job] {
             try {

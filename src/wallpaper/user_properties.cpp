@@ -161,3 +161,35 @@ const UserPropertyValue* UserProperties::find(const std::string& key) const {
     }
     return nullptr;
 }
+
+std::vector<std::pair<std::string, std::string>> UserProperties::toStrings() const {
+    std::vector<std::pair<std::string, std::string>> out;
+    out.reserve(properties_.size());
+    for (const UserPropertyDef& def : properties_) out.emplace_back(def.key, def.value.asText());
+    return out;
+}
+
+bool touchesBoundKey(const std::vector<std::string>& bound_keys,
+                     const std::vector<std::pair<std::string, std::string>>& changes) {
+    for (const auto& change : changes) {
+        if (std::find(bound_keys.begin(), bound_keys.end(), change.first) != bound_keys.end()) return true;
+    }
+    return false;
+}
+
+std::string UserPropertyValue::asText() const {
+    char buffer[64];
+    switch (type) {
+        case Type::Bool:
+            return b ? "1" : "0";
+        case Type::Number:
+            std::snprintf(buffer, sizeof(buffer), "%g", n);
+            return buffer;
+        case Type::Color:
+            std::snprintf(buffer, sizeof(buffer), "%g %g %g", color[0], color[1], color[2]);
+            return buffer;
+        case Type::Text:
+            return text;
+    }
+    return "";
+}
