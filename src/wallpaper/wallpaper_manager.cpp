@@ -496,7 +496,8 @@ void WallpaperManager::pollLoad(EngineContext& ctx) {
     if (job.state == LoadJob::State::Graphics && std::chrono::steady_clock::now() < deadline) {
         activateInstance(ctx, *job.instance, active_view_);
         auto* scene = dynamic_cast<Scene2DWallpaper*>(job.instance->wallpaper.get());
-        const bool done = !scene || scene->stepLoad(std::max(std::chrono::milliseconds(1),
+        // Only scene wallpapers build their layers step by step; video and web are ready once created.
+        const bool done = job.info.type != ProjectType::Scene || !scene || scene->stepLoad(std::max(std::chrono::milliseconds(1),
                                                              std::chrono::duration_cast<std::chrono::milliseconds>(
                                                                  deadline - std::chrono::steady_clock::now())),
                                                     ctx);
