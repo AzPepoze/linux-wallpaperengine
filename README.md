@@ -8,7 +8,8 @@ Shows animated wallpapers from Wallpaper Engine on Linux.
 
 Wallpaper Engine is a program that shows animated wallpapers. People share their wallpapers as **projects**. This program plays those projects on Linux, so you do not need Windows.
 
-**You need a Wallpaper Engine install for its assets folder.** Assets are the files that the wallpapers use, such as fonts and images. Point the program to that folder with `WALLPAPER_ENGINE_PATH`, or with `engine_path` in `config.json`.
+> [!IMPORTANT]
+> You need a Wallpaper Engine install for its assets folder. Assets are the files that the wallpapers use, such as fonts and images. Point the program to that folder with `WALLPAPER_ENGINE_PATH`, or with `engine_path` in `config.json`.
 
 ## Showcase
 
