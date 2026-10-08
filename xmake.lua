@@ -269,6 +269,12 @@ if has_config("layer_shell") then
         add_includedirs("src", "/usr/include/libdrm", "/usr/include/shader-slang")
         add_syslinks("wayland-client", "vulkan")
         add_defines("LWE_LAYER_SHELL=1")
+        -- The layer asks for keyboard focus only in debug builds (DEBUG_BUILD), so the plugin must match the main binary.
+        if is_mode("debug", "asan", "ubsan") then
+            add_defines("DEBUG_BUILD=1")
+        else
+            add_defines("DEBUG_BUILD=0")
+        end
         if has_config("xkbcommon") then
             add_packages("pkgconfig::xkbcommon")
             add_syslinks("xkbcommon")
