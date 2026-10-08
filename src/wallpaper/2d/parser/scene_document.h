@@ -158,6 +158,8 @@ struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
     SceneNodeDocument node;
     std::string name;
+    // Corner or edge of the object that sits on its origin (for example "bottomleft").
+    std::string alignment = "center";
     bool visible = true;
     ScriptedValue visible_script;
 

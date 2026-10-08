@@ -112,6 +112,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [-] Image layers
   - Works
     - `size`, `origin`, `scale`, `angles` (Z rotation), `alpha` (static, keyframed or script-driven), `color` tint, `visible`
+    - `alignment` (the named corner or edge sits on the origin, for example `bottomleft`)
     - `parallaxDepth` per layer
     - `colorBlendMode`, `copybackground`
     - Model/material references and puppet models

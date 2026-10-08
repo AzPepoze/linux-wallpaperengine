@@ -30,6 +30,8 @@ class ImageLayer : public Layer {
     bool is_fullscreen = false;
     bool is_compose_region = false;
     bool copy_background = false;
+    // Scene object alignment: which corner or edge sits on the object's origin.
+    std::string alignment = "center";
     // Follows the scene clock until a script takes control; join() hands it back.
     struct SpriteClock {
         bool joined = true;

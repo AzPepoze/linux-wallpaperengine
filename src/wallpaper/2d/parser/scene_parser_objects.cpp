@@ -208,6 +208,7 @@ SceneObjectDocument parseObject(const cJSON* object) {
     doc.kind = detectObjectKind(object);
     doc.node = parseNode(object);
     readPlainString(object, "name", doc.name);
+    readPlainString(object, "alignment", doc.alignment);
     doc.visible = parseBool(member(object, "visible"), true);
     readScript(member(object, "visible"), doc.visible_script);
 

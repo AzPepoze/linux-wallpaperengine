@@ -7,6 +7,20 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
+namespace {
+// Moves a centred rect so the named corner or edge (for example "bottomleft") sits on its node.
+void applyAlignment(const std::string& alignment, float width, float height, float& x, float& y) {
+    if (alignment.find("left") != std::string::npos)
+        x += width * 0.5f;
+    else if (alignment.find("right") != std::string::npos)
+        x -= width * 0.5f;
+    if (alignment.find("top") != std::string::npos)
+        y += height * 0.5f;
+    else if (alignment.find("bottom") != std::string::npos)
+        y -= height * 0.5f;
+}
+}  // namespace
+
 ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     float layer_scale[3] = {scale[0], scale[1], scale[2]};
     float layer_origin[3] = {origin[0], origin[1], origin[2]};
@@ -40,6 +54,7 @@ ImageLayer::ScreenRect ImageLayer::screenRect(EngineContext& ctx) const {
     rect.x = ctx.scene.offset_x + (layer_origin[0] + camera_offset.x) * ctx.scene.render_scale - rect.width * 0.5f;
     rect.y = ctx.scene.offset_y + (scene_h - (layer_origin[1] + camera_offset.y)) * ctx.scene.render_scale -
              rect.height * 0.5f;
+    applyAlignment(alignment, rect.width, rect.height, rect.x, rect.y);
     // renderer_draw_sprite pivots on the top-left; keep the image centre on the node.
     const float angle = rect.rotation * (float)M_PI / 180.0f;
     const float half_width = rect.width * 0.5f;

@@ -36,6 +36,7 @@ ImageLayer* ImageLayer::createBaseFromDocument(const wallpaper_engine::SceneObje
     layer->tint[1] = config.color[1];
     layer->tint[2] = config.color[2];
     layer->tint[3] = config.alpha;
+    layer->alignment = doc.alignment;
     layer->copy_background = doc.image.copy_background;
     layer->cursor_solid = doc.image.solid;
     layer->color_blend_mode = doc.image.color_blend_mode;
