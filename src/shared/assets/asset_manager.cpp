@@ -15,6 +15,7 @@
 #include "shared/assets/media/video_rate.h"
 #include "shared/assets/shared_assets.h"
 #include "shared/assets/tex_decoder.h"
+#include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
 #include "shared/core/task_pool.h"
 #include "shared/core/utils.h"
@@ -289,14 +290,26 @@ std::shared_ptr<const wallpaper_engine::DecodedImage> AssetManager::decodeShared
 
 content_bounds::Rect AssetManager::textureContentBounds(const char* abs_path) const {
     if (!abs_path || abs_path[0] == '\0') return {};
+    const std::string key = abs_path;
+    const auto cached = content_bounds_cache_.find(key);
+    if (cached != content_bounds_cache_.end()) return cached->second;
     const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, 0);
-    return decoded && !decoded->is_video ? content_bounds::fromImage(*decoded) : content_bounds::Rect{};
+    if (!decoded) return {};
+    const content_bounds::Rect bounds = decoded->is_video ? content_bounds::Rect{} : content_bounds::fromImage(*decoded);
+    content_bounds_cache_.emplace(key, bounds);
+    return bounds;
 }
 
 bool AssetManager::textureIsOpaque(const char* abs_path) const {
     if (!abs_path || abs_path[0] == '\0') return false;
+    const std::string key = abs_path;
+    const auto cached = opacity_cache_.find(key);
+    if (cached != opacity_cache_.end()) return cached->second;
     const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, 0);
-    return decoded && !decoded->is_video && content_bounds::isOpaque(*decoded);
+    if (!decoded) return false;
+    const bool opaque = !decoded->is_video && content_bounds::isOpaque(*decoded);
+    opacity_cache_.emplace(key, opaque);
+    return opaque;
 }
 
 void AssetManager::setVideoPlayback(float rate, float volume) {
@@ -508,7 +521,9 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
                     strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
         if (!is_video) {
+            const auto trace_decode_start = std::chrono::steady_clock::now();
             const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, image_index);
+            const auto trace_upload_start = std::chrono::steady_clock::now();
             const wallpaper_engine::DecodedImage& image = *decoded;
             if (!image.is_video && image.valid()) {
                 const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
@@ -518,7 +533,13 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                     desc.height = (int)image.height;
                     desc.pixel_format = pixel_format;
                     desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
-                    return sg_make_image(&desc);
+                    const sg_image uploaded = sg_make_image(&desc);
+                    if (load_trace::enabled())
+                        LOG_TAG_I("LOAD_TRACE", "texture_decode_ms=%.3f texture_upload_ms=%.3f bytes=%zu %s",
+                                  load_trace::milliseconds(trace_upload_start - trace_decode_start),
+                                  load_trace::milliseconds(std::chrono::steady_clock::now() - trace_upload_start),
+                                  image.pixels.size(), abs_path);
+                    return uploaded;
                 }
             }
         }

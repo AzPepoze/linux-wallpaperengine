@@ -106,6 +106,9 @@ class AssetManager : public IAssetResolver {
     // (removed once every caller uses attachShared).
     std::unique_ptr<SharedAssets> owned_shared_;
 
+    // Analysis of a decoded texture runs once per path, not once per layer that uses it.
+    mutable std::unordered_map<std::string, content_bounds::Rect> content_bounds_cache_;
+    mutable std::unordered_map<std::string, bool> opacity_cache_;
     mutable std::vector<ActiveVideoTexture> video_textures;
     struct PreparedVideo {
         std::unique_ptr<wallpaper_engine::VideoTexture> decoder;
