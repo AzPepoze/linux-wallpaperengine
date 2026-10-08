@@ -60,6 +60,7 @@ constexpr CliOption kTransition[] = {
 
 constexpr CliOption kControl[] = {
     {{"--no-control", nullptr}, nullptr, CliBuild::All, "Do not hand off to or own a control socket"},
+    {{"--toggle-debug-ui", nullptr}, nullptr, CliBuild::Debug, "Show or hide the debug panel of the running wallpaper on this output"},
     kSentinel,
 };
 

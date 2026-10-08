@@ -52,6 +52,7 @@ struct CliOptions {
     TransitionOptions transition;
     ParallaxOptions parallax;
     bool no_control = false;
+    bool toggle_debug_ui = false;
     bool help = false;
     bool whoareyou = false;
     float volume = 100.0f;  // --volume master percent

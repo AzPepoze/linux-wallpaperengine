@@ -40,6 +40,7 @@ std::string encodeSwitchRequest(const SwitchRequest& request) {
     if (request.has_volume) cJSON_AddNumberToObject(root, "volume", request.volume);
     if (request.has_muted) cJSON_AddBoolToObject(root, "muted", request.muted);
     if (request.has_fps) cJSON_AddNumberToObject(root, "fps", request.fps);
+    if (request.toggle_debug_ui) cJSON_AddBoolToObject(root, "toggle_debug_ui", true);
 
     std::string result = printAndFree(root);
     cJSON_Delete(root);
@@ -113,6 +114,9 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
     if (const cJSON* fps = cJSON_GetObjectItemCaseSensitive(root, "fps"); cJSON_IsNumber(fps)) {
         parsed.fps = static_cast<int>(fps->valuedouble);
         parsed.has_fps = true;
+    }
+    if (const cJSON* toggle = cJSON_GetObjectItemCaseSensitive(root, "toggle_debug_ui"); cJSON_IsBool(toggle)) {
+        parsed.toggle_debug_ui = cJSON_IsTrue(toggle);
     }
 
     cJSON_Delete(root);

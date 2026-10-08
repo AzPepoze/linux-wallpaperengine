@@ -366,6 +366,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
             request.has_muted = true;
             request.fps = cli.fps_limit;
             request.has_fps = cli.fps_limit > 0;
+            request.toggle_debug_ui = cli.toggle_debug_ui;
 
             bool continue_previous = false;
             std::string mode_error;
@@ -379,6 +380,10 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
                 exit(0);
             }
             LOG_D("[CONTROL] no live instance on %s (%s)", key.c_str(), handoff_error.c_str());
+            if (cli.toggle_debug_ui) {
+                LOG_W("[CONTROL] no running wallpaper on %s to toggle the debug panel", key.c_str());
+                exit(EXIT_FAILURE);
+            }
         }
 
         if (control_server.bind(key)) {

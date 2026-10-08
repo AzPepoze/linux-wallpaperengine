@@ -23,6 +23,9 @@ struct SwitchRequest {
     bool has_muted = false;
     int fps = 0;
     bool has_fps = false;
+
+    // Flips the debug panel of the running wallpaper; no switch happens.
+    bool toggle_debug_ui = false;
 };
 
 // Newline-free JSON. decode leaves `out` untouched on failure and fills `error`.

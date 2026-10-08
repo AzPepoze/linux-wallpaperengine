@@ -292,6 +292,10 @@ void WallpaperManager::pollControl(EngineContext& ctx) {
     std::vector<SwitchRequest> requests;
     control_->poll(requests);
     for (SwitchRequest& request : requests) {
+        if (request.toggle_debug_ui) {
+            ctx.debug.show_ui = !ctx.debug.show_ui;
+            continue;
+        }
         if (active_instance_ && isSameWallpaper(*active_instance_, request) && !request.properties.empty()) {
             if (applyPropertiesInPlace(ctx, request.properties)) continue;
             // A bound key needs a rebuild: reload with every current value so earlier live changes survive it.

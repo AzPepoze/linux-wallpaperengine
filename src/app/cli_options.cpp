@@ -170,6 +170,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cli_args::optionValue(args, {"-r", "--screen-root"}, opts.screen_root);
     cli_args::optionValue(args, {"--layer"}, opts.layer);
     opts.no_control = hasDashedFlag("no-control");
+    opts.toggle_debug_ui = hasDashedFlag("toggle-debug-ui");
     for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
         const size_t equals = entry.find('=');
         if (equals == std::string::npos) continue;
