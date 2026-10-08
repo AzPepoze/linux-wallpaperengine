@@ -160,7 +160,7 @@ bool Scene2DWallpaper::stepCleanup(std::chrono::milliseconds budget) {
 }
 
 void Scene2DWallpaper::update(float dt, EngineContext& ctx) {
-    (void)ctx;
+    ctx.web_frame_transport = "none";
     if (runtime_) {
         runtime_->update(dt);
     }

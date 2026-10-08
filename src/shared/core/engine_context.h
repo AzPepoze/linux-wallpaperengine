@@ -137,6 +137,8 @@ struct EngineContext {
     std::string pointer_output;                                       // wl_output the wallpaper is on, e.g. DP-4
     PointerSource pointer_source = PointerSource::Auto;
     WebOptions web;
+    // How the running web wallpaper sends its frames; "none" when no web wallpaper is active (inspector).
+    std::string web_frame_transport = "none";
     bool is_pkg = false;
     RuntimeMode runtime_mode = RuntimeMode::Wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;

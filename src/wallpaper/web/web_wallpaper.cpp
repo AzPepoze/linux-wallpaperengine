@@ -324,6 +324,12 @@ void WebWallpaper::pollDmaBuf() {
 void WebWallpaper::update(float dt, EngineContext& ctx) {
     pollChild();
     Scene2DWallpaper::update(dt, ctx);
+    ctx.web_frame_transport = activeFrameTransport();
+}
+
+const char* WebWallpaper::activeFrameTransport() const {
+    if (!frame_) return "starting";
+    return frame_->transport == 1 ? "dma-buf" : "shared memory";
 }
 
 void WebWallpaper::handleInput(const sapp_event* event, EngineContext& ctx) {

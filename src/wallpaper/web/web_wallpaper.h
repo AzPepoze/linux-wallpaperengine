@@ -28,6 +28,7 @@ class WebWallpaper : public Scene2DWallpaper {
    private:
     void pollChild();
     void pollDmaBuf();
+    const char* activeFrameTransport() const;
     void stopChild();
 
     pid_t child_pid_ = -1;
