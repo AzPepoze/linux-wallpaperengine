@@ -118,7 +118,7 @@ bool SceneBuildJob::step(std::chrono::milliseconds budget) {
                 break;
             case Phase::Layers: {
                 if (layer_index_ == document_.objects.size()) {
-                    phase_ = Phase::Scripts;
+                    phase_ = Phase::TextTextures;
                     break;
                 }
                 const auto& object = document_.objects[layer_index_];
@@ -144,11 +144,21 @@ bool SceneBuildJob::step(std::chrono::milliseconds budget) {
                     }
                 } else {
                     effect_batch_->activate();
-                    Layer* layer = SceneBuilder::buildLayer(object, ctx_);
+                    Layer* layer = object.kind == wallpaper_engine::SceneObjectKind::Text
+                                       ? TextLayer::createPending(object, ctx_)
+                                       : SceneBuilder::buildLayer(object, ctx_);
                     effect_batch_->deactivate();
                     ++layer_index_;
                     if (layer) result_.layers.push_back(layer);
                 }
+                break;
+            }
+            case Phase::TextTextures: {
+                for (Layer* layer : result_.layers) {
+                    TextLayer* text = dynamic_cast<TextLayer*>(layer);
+                    if (text && !text->pollPreparation()) return false;
+                }
+                phase_ = Phase::Scripts;
                 break;
             }
             case Phase::Texture: {

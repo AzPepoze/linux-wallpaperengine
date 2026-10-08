@@ -67,9 +67,15 @@ void ImageLayer::draw(EngineContext& ctx) {
         draw_view = effect_output_view;
     }
     const bool draw_region = has_effect_output && !puppet_resolved && output_region.valid;
+    // A cropped source only matches the whole layer; effect output always uses its own quad.
+    sg_buffer quad = source_quad;
+    if (draw_region) {
+        quad = output_quad;
+    } else if (has_effect_output || puppet_resolved) {
+        quad = {SG_INVALID_ID};
+    }
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
-                         rect.rotation, tint, false, nullptr, false,
-                         draw_region ? sg_buffer(output_quad) : sg_buffer{SG_INVALID_ID});
+                         rect.rotation, tint, false, nullptr, false, quad);
 }
 
 void ImageLayer::updateOutputQuad(EngineContext& ctx) {

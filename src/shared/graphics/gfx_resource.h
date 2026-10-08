@@ -8,21 +8,31 @@
 
 struct GfxImage {
     uint32_t id = SG_INVALID_ID;
+    bool owned = true;  // a borrowed handle refers to an image whose owner destroys it
     GfxImage() = default;
     GfxImage(sg_image h) : id(h.id) {}
     ~GfxImage() {
-        if (id != SG_INVALID_ID) sg_destroy_image({id});
+        release();
     }
-    GfxImage(GfxImage&& o) noexcept : id(o.id) {
+    static GfxImage borrow(sg_image h) {
+        GfxImage borrowed(h);
+        borrowed.owned = false;
+        return borrowed;
+    }
+    GfxImage(GfxImage&& o) noexcept : id(o.id), owned(o.owned) {
         o.id = SG_INVALID_ID;
     }
     GfxImage& operator=(GfxImage&& o) noexcept {
         if (this != &o) {
-            if (id != SG_INVALID_ID) sg_destroy_image({id});
+            release();
             id = o.id;
+            owned = o.owned;
             o.id = SG_INVALID_ID;
         }
         return *this;
+    }
+    void release() {
+        if (owned && id != SG_INVALID_ID) sg_destroy_image({id});
     }
     GfxImage(const GfxImage&) = delete;
     GfxImage& operator=(const GfxImage&) = delete;
@@ -33,21 +43,31 @@ struct GfxImage {
 
 struct GfxView {
     uint32_t id = SG_INVALID_ID;
+    bool owned = true;  // a borrowed handle refers to a view whose owner destroys it
     GfxView() = default;
     GfxView(sg_view h) : id(h.id) {}
     ~GfxView() {
-        if (id != SG_INVALID_ID) sg_destroy_view({id});
+        release();
     }
-    GfxView(GfxView&& o) noexcept : id(o.id) {
+    static GfxView borrow(sg_view h) {
+        GfxView borrowed(h);
+        borrowed.owned = false;
+        return borrowed;
+    }
+    GfxView(GfxView&& o) noexcept : id(o.id), owned(o.owned) {
         o.id = SG_INVALID_ID;
     }
     GfxView& operator=(GfxView&& o) noexcept {
         if (this != &o) {
-            if (id != SG_INVALID_ID) sg_destroy_view({id});
+            release();
             id = o.id;
+            owned = o.owned;
             o.id = SG_INVALID_ID;
         }
         return *this;
+    }
+    void release() {
+        if (owned && id != SG_INVALID_ID) sg_destroy_view({id});
     }
     GfxView(const GfxView&) = delete;
     GfxView& operator=(const GfxView&) = delete;

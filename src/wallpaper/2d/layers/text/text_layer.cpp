@@ -1,246 +1,95 @@
 #include "text_layer.h"
 
-#define STB_TRUETYPE_IMPLEMENTATION
 #include <math.h>
-#include <stb/stb_truetype.h>
-#include <stdio.h>
-#include <string.h>
 
 #include <algorithm>
-#include <cstdint>
+#include <chrono>
+#include <condition_variable>
+#include <future>
 #include <map>
+#include <mutex>
+#include <thread>
 
 #include "shared/core/engine_context.h"
-#include "shared/core/logger.h"
 #include "shared/core/load_trace.h"
-#include "shared/core/vfs.h"
+#include "shared/core/logger.h"
+#include "shared/core/task_pool.h"
 #include "wallpaper/2d/alpha_curve.h"
+#include "wallpaper/2d/layers/text/text_raster.h"
+
+TextLayer::TextLayer(const char* name) : ImageLayer(name, (sg_image){SG_INVALID_ID}) {}
+
+struct RasterOutput {
+    bool ok = false;
+    TextRasterResult result;
+};
+
+// One raster on its way from a worker; the layer keeps it until the texture is uploaded.
+struct PendingRaster {
+    std::string key;
+    std::shared_future<RasterOutput> future;
+    std::chrono::steady_clock::time_point started;
+};
 
 namespace {
 
-// Wallpaper Engine point sizes are authored in design units at a fixed ratio.
-constexpr float kDesignUnitsPerPoint = 4.0f;
-// Supersampling factor of the generated glyph texture for crisp text.
-constexpr float kMaxTexturePixelScale = 2.0f;
-constexpr int kMaxTextureSize = 4096;
+// Allows two rasterizations at once, so text does not take over the worker pool.
+class RasterGate {
+   public:
+    void enter() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        slot_.wait(lock, [this] { return active_ < kMaxConcurrent; });
+        ++active_;
+    }
 
-struct LoadedFont {
-    std::vector<uint8_t> data;
-    stbtt_fontinfo info = {};
-    bool ready = false;
+    void leave() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            --active_;
+        }
+        slot_.notify_one();
+    }
+
+   private:
+    static constexpr int kMaxConcurrent = 2;
+    std::mutex mutex_;
+    std::condition_variable slot_;
+    int active_ = 0;
 };
 
-std::map<std::string, LoadedFont>& fontCache() {
-    static std::map<std::string, LoadedFont> cache;
-    return cache;
+RasterGate& rasterGate() {
+    static RasterGate gate;
+    return gate;
 }
 
-const LoadedFont* loadFont(const std::string& path) {
-    LoadedFont& font = fontCache()[path];
-    if (font.ready) return &font;
-
-    if (!vfs::readAll(path.c_str(), font.data) || font.data.empty()) return nullptr;
-
-    const int offset = stbtt_GetFontOffsetForIndex(font.data.data(), 0);
-    if (offset < 0 || !stbtt_InitFont(&font.info, font.data.data(), offset)) return nullptr;
-    font.ready = true;
-    return &font;
+RasterOutput rasterInBackground(TextRasterRequest request, bool crop) {
+    RasterOutput output;
+    rasterGate().enter();
+    output.ok = rasterizeText(request, output.result);
+    if (output.ok && crop) cropToContent(output.result);
+    rasterGate().leave();
+    return output;
 }
 
-// Wallpaper Engine falls back to installed system fonts for characters the authored font lacks (CJK track names in a
-// Latin display font, for example). The fallback is found per 256-codepoint block through fontconfig and cached.
-const LoadedFont* fallbackFont(int codepoint) {
-    static std::map<int, std::string> block_paths;
-    static std::map<std::string, LoadedFont> system_fonts;
-    const int block = codepoint >> 8;
-    auto found = block_paths.find(block);
-    if (found == block_paths.end()) {
-        std::string path;
-        char command[96];
-        snprintf(command, sizeof(command), "fc-match -f '%%{file}' ':charset=%x' 2>/dev/null", (unsigned)codepoint);
-        if (FILE* pipe = popen(command, "r")) {
-            char buffer[1024] = {};
-            if (fgets(buffer, sizeof(buffer), pipe)) path = buffer;
-            pclose(pipe);
-        }
-        found = block_paths.emplace(block, path).first;
-    }
-    if (found->second.empty()) return nullptr;
-
-    LoadedFont& font = system_fonts[found->second];
-    if (font.ready) return &font;
-    if (FILE* file = fopen(found->second.c_str(), "rb")) {
-        uint8_t chunk[65536];
-        size_t count = 0;
-        while ((count = fread(chunk, 1, sizeof(chunk), file)) > 0)
-            font.data.insert(font.data.end(), chunk, chunk + count);
-        fclose(file);
-    }
-    if (font.data.empty()) return nullptr;
-    const int offset = stbtt_GetFontOffsetForIndex(font.data.data(), 0);
-    if (offset < 0 || !stbtt_InitFont(&font.info, font.data.data(), offset)) return nullptr;
-    font.ready = true;
-    return &font;
+// Rasters still wanted by some layer, so a second layer with the same text waits on the first one.
+// Only the render thread touches this map.
+std::map<std::string, std::shared_future<RasterOutput>>& inFlightRasters() {
+    static std::map<std::string, std::shared_future<RasterOutput>> flights;
+    return flights;
 }
 
-// The authored font at one em size, with per-character fallback to system fonts.
-struct TextFont {
-    const stbtt_fontinfo* primary = nullptr;
-    float px = 0.0f;
-    float scale = 0.0f;
-
-    struct Pick {
-        const stbtt_fontinfo* info;
-        float scale;
-    };
-
-    Pick pick(int codepoint) const {
-        if (codepoint < 0x20 || stbtt_FindGlyphIndex(primary, codepoint) != 0) return {primary, scale};
-        if (const LoadedFont* fallback = fallbackFont(codepoint))
-            if (stbtt_FindGlyphIndex(&fallback->info, codepoint) != 0)
-                return {&fallback->info, stbtt_ScaleForMappingEmToPixels(&fallback->info, px)};
-        return {primary, scale};
-    }
-};
-
-// Advance of one character in pixels, including the kerning pair with the next character in the same font.
-float advanceOf(const TextFont& font, int codepoint, int next_codepoint) {
-    const TextFont::Pick glyph = font.pick(codepoint);
-    int advance = 0;
-    int bearing = 0;
-    stbtt_GetCodepointHMetrics(glyph.info, codepoint, &advance, &bearing);
-    float width = advance * glyph.scale;
-    if (next_codepoint > 0 && font.pick(next_codepoint).info == glyph.info)
-        width += stbtt_GetCodepointKernAdvance(glyph.info, codepoint, next_codepoint) * glyph.scale;
-    return width;
-}
-
-int nextCodepoint(const std::string& text, size_t& index) {
-    const unsigned char c = (unsigned char)text[index];
-    if (c < 0x80) {
-        index += 1;
-        return c;
-    }
-    if ((c >> 5) == 0x6 && index + 1 < text.size()) {
-        const int cp = ((c & 0x1F) << 6) | (text[index + 1] & 0x3F);
-        index += 2;
-        return cp;
-    }
-    if ((c >> 4) == 0xE && index + 2 < text.size()) {
-        const int cp = ((c & 0x0F) << 12) | ((text[index + 1] & 0x3F) << 6) | (text[index + 2] & 0x3F);
-        index += 3;
-        return cp;
-    }
-    if ((c >> 3) == 0x1E && index + 3 < text.size()) {
-        const int cp = ((c & 0x07) << 18) | ((text[index + 1] & 0x3F) << 12) | ((text[index + 2] & 0x3F) << 6) |
-                       (text[index + 3] & 0x3F);
-        index += 4;
-        return cp;
-    }
-    index += 1;
-    return c;
-}
-
-float measureText(const TextFont& font, const std::string& text) {
-    float width = 0.0f;
-    size_t index = 0;
-    while (index < text.size()) {
-        const int cp = nextCodepoint(text, index);
-        size_t peek = index;
-        const int next = peek < text.size() ? nextCodepoint(text, peek) : 0;
-        width += advanceOf(font, cp, next);
-    }
-    return width;
-}
-
-std::vector<std::string> wrapWords(const TextFont& font, const std::string& paragraph, float max_width) {
-    std::vector<std::string> lines;
-    std::string line;
-    size_t index = 0;
-    while (index <= paragraph.size()) {
-        const size_t space = paragraph.find(' ', index);
-        const std::string word =
-            paragraph.substr(index, space == std::string::npos ? std::string::npos : space - index);
-        if (!word.empty()) {
-            const std::string candidate = line.empty() ? word : line + " " + word;
-            if (line.empty() || measureText(font, candidate) <= max_width + 0.5f) {
-                line = candidate;
-            } else {
-                lines.push_back(line);
-                line = word;
-            }
-        }
-        if (space == std::string::npos) break;
-        index = space + 1;
-    }
-    if (!line.empty() || lines.empty()) lines.push_back(line);
-    return lines;
-}
-
-std::vector<std::string> layoutLines(const TextFont& font, const std::string& text, float max_width) {
-    std::vector<std::string> lines;
-    size_t start = 0;
-    while (start <= text.size()) {
-        const size_t end = text.find('\n', start);
-        std::string paragraph = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-        if (!paragraph.empty() && paragraph.back() == '\r') paragraph.pop_back();
-        for (auto& line : wrapWords(font, paragraph, max_width)) lines.push_back(std::move(line));
-        if (end == std::string::npos) break;
-        start = end + 1;
-    }
-    return lines;
-}
-
-// Floating-point pixels retain HDR brightness. The layer tint colors the glyphs; opaque
-// backgrounds blend glyph coverage into their background color.
-void blitLine(std::vector<float>& pixels, int canvas_w, int canvas_h, const TextFont& font, const std::string& line,
-              float pen_x, float baseline, bool opaque_background, float brightness) {
-    size_t index = 0;
-    while (index < line.size()) {
-        const int cp = nextCodepoint(line, index);
-        size_t peek = index;
-        const int next = peek < line.size() ? nextCodepoint(line, peek) : 0;
-        const TextFont::Pick glyph = font.pick(cp);
-
-        int x0 = 0;
-        int y0 = 0;
-        int x1 = 0;
-        int y1 = 0;
-        stbtt_GetCodepointBitmapBox(glyph.info, cp, glyph.scale, glyph.scale, &x0, &y0, &x1, &y1);
-        const int gw = x1 - x0;
-        const int gh = y1 - y0;
-        if (gw > 0 && gh > 0) {
-            std::vector<uint8_t> bitmap((size_t)gw * (size_t)gh);
-            stbtt_MakeCodepointBitmap(glyph.info, bitmap.data(), gw, gh, gw, glyph.scale, glyph.scale, cp);
-            const int gx = (int)lroundf(pen_x) + x0;
-            const int gy = (int)lroundf(baseline) + y0;
-            for (int y = 0; y < gh; ++y) {
-                const int py = gy + y;
-                if (py < 0 || py >= canvas_h) continue;
-                for (int x = 0; x < gw; ++x) {
-                    const int px = gx + x;
-                    if (px < 0 || px >= canvas_w) continue;
-                    const float coverage = bitmap[(size_t)y * (size_t)gw + x] / 255.0f;
-                    float* dst = &pixels[((size_t)py * canvas_w + px) * 4];
-                    if (opaque_background) {
-                        for (int channel = 0; channel < 3; ++channel)
-                            dst[channel] += (brightness - dst[channel]) * coverage;
-                    } else if (coverage > dst[3]) {
-                        dst[0] = dst[1] = dst[2] = brightness;
-                        dst[3] = coverage;
-                    }
-                }
-            }
-        }
-        pen_x += advanceOf(font, cp, next);
+void purgeFinishedRasters(std::map<std::string, std::shared_future<RasterOutput>>& flights) {
+    for (auto flight = flights.begin(); flight != flights.end();) {
+        if (flight->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            flight = flights.erase(flight);
+        else
+            ++flight;
     }
 }
 
 }  // namespace
 
-TextLayer::TextLayer(const char* name) : ImageLayer(name, (sg_image){SG_INVALID_ID}) {}
-
-TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+TextLayer* TextLayer::createPending(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
     TextObjectConfig config = TextParser::parse(doc);
     TextLayer* layer = new TextLayer(config.name.c_str());
     layer->initFromDocument(doc, ctx);
@@ -252,9 +101,15 @@ TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocu
     layer->tint[1] = config.color[1];
     layer->tint[2] = config.color[2];
     layer->tint[3] = std::clamp(config.alpha, 0.0f, 1.0f);
-    layer->rebuild(ctx);
+    layer->beginPreparation(ctx);
     LOG_I("Created text layer '%s' (font='%s', pointsize=%.1f)", config.name.c_str(), config.font.c_str(),
           config.pointsize);
+    return layer;
+}
+
+TextLayer* TextLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+    TextLayer* layer = createPending(doc, ctx);
+    while (!layer->pollPreparation()) std::this_thread::yield();
     return layer;
 }
 
@@ -402,6 +257,8 @@ ImageLayer::ScreenRect TextLayer::screenRect(EngineContext& ctx) const {
 }
 
 void TextLayer::update(float, EngineContext& ctx) {
+    pollPreparation();
+    refreshForEffects(ctx);
     // A hidden layer keeps its pending change and rasterizes it on the frame it becomes visible.
     if (render_active && (config_.text != current_text_ || needs_rebuild_)) {
         needs_rebuild_ = false;
@@ -426,110 +283,209 @@ bool TextLayer::resolveFontPath(EngineContext& ctx) {
     return false;
 }
 
-bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, float& pixel_scale) const {
-    const LoadedFont* loaded = loadFont(font_path_);
-    if (!loaded) return false;
-    const stbtt_fontinfo& font = loaded->info;
+TextRasterRequest TextLayer::rasterRequest() const {
+    TextRasterRequest request;
+    request.config = config_;
+    request.font_path = font_path_;
+    std::copy(tint, tint + 3, request.tint);
+    return request;
+}
 
-    // Keep large boxes under the texture size cap without changing their layout.
-    pixel_scale = kMaxTexturePixelScale;
-    const float largest_side = std::max(config_.size[0], config_.size[1]);
-    if (largest_side > 0.0f) pixel_scale = std::min(pixel_scale, (float)kMaxTextureSize / largest_side);
+// One uploaded text texture, shared by every layer whose text and raster settings match.
+struct TextTexture {
+    GfxImage image;
+    GfxView view;
+    GfxBuffer quad;  // draws only the cropped part of the layer, when cropped
+    bool cropped = false;
+    float size[2] = {0.0f, 0.0f};
+};
 
-    const float font_px = std::max(1.0f, config_.pointsize * kDesignUnitsPerPoint * pixel_scale);
-    const float scale = stbtt_ScaleForMappingEmToPixels(&font, font_px);
-    const TextFont text_font{&font, font_px, scale};
-    int ascent = 0;
-    int descent = 0;
-    int line_gap = 0;
-    stbtt_GetFontVMetrics(&font, &ascent, &descent, &line_gap);
-    const float ascent_px = ascent * scale;
-    const float line_advance = (ascent - descent + line_gap) * scale;
+namespace {
 
-    // Without a width limit Wallpaper Engine only breaks lines at explicit newlines.
-    const bool width_limited = config_.limit_width && config_.maxwidth > 0.0f;
-    const float layout_width = width_limited ? config_.maxwidth * pixel_scale : 1.0e9f;
+// Entries are weak, so a texture is freed when the last layer using it is destroyed.
+std::map<std::string, std::weak_ptr<TextTexture>>& textureCache() {
+    static std::map<std::string, std::weak_ptr<TextTexture>> cache;
+    return cache;
+}
 
-    std::vector<std::string> lines = layoutLines(text_font, config_.text, layout_width);
-    if (lines.empty()) return false;
-    if (config_.limit_rows && config_.max_rows > 0 && lines.size() > (size_t)config_.max_rows)
-        lines.resize((size_t)config_.max_rows);
+void appendNumber(std::string& key, float value) {
+    char number[32];
+    snprintf(number, sizeof(number), "%a|", value);
+    key += number;
+}
 
-    const float block_height = (float)lines.size() * line_advance;
-    float natural_width = 0.0f;
-    for (const auto& line : lines) natural_width = std::max(natural_width, measureText(text_font, line));
+// Every setting that changes the rasterized pixels. Alpha is applied at draw time, so it is left out.
+std::string textureKey(const TextObjectConfig& config, const std::string& font_path, const float tint[3],
+                       bool crop) {
+    std::string key = font_path + "\n" + config.text + (crop ? "\ncrop\n" : "\nfull\n");
+    appendNumber(key, config.pointsize);
+    appendNumber(key, config.size[0]);
+    appendNumber(key, config.size[1]);
+    appendNumber(key, config.maxwidth);
+    appendNumber(key, config.padding);
+    appendNumber(key, config.brightness);
+    appendNumber(key, config.background_brightness);
+    appendNumber(key, (float)config.max_rows);
+    key += std::to_string(config.limit_width) + std::to_string(config.limit_rows) +
+           std::to_string(config.opaque_background) + "|" + config.horizontal_align + "|" + config.vertical_align +
+           "|";
+    for (float value : config.background_color) appendNumber(key, value);
+    // Tint only reaches the pixels through the opaque background.
+    if (config.opaque_background)
+        for (int channel = 0; channel < 3; ++channel) appendNumber(key, tint[channel]);
+    return key;
+}
 
-    // Padding is empty border around the text, so effects have room to draw outside the glyphs.
-    const float pad = std::max(0.0f, config_.padding) * pixel_scale;
-    width =
-        std::clamp((int)ceilf(std::max(config_.size[0] * pixel_scale, natural_width + 2.0f * pad)), 1, kMaxTextureSize);
-    height =
-        std::clamp((int)ceilf(std::max(config_.size[1] * pixel_scale, block_height + 2.0f * pad)), 1, kMaxTextureSize);
+std::shared_ptr<TextTexture> findTexture(const std::string& key) {
+    auto found = textureCache().find(key);
+    return found == textureCache().end() ? nullptr : found->second.lock();
+}
 
-    float start_y = pad + ((float)height - 2.0f * pad - block_height) * 0.5f;
-    if (config_.vertical_align == "top")
-        start_y = pad;
-    else if (config_.vertical_align == "bottom")
-        start_y = (float)height - pad - block_height;
+void rememberTexture(const std::string& key, const std::shared_ptr<TextTexture>& texture) {
+    auto& cache = textureCache();
+    for (auto entry = cache.begin(); entry != cache.end();)
+        entry = entry->second.expired() ? cache.erase(entry) : std::next(entry);
+    cache[key] = texture;
+}
 
-    // Glyph brightness is stored before effects, without clipping HDR values or changing coverage.
-    float background[4] = {};
-    if (config_.opaque_background) {
-        background[3] = 1.0f;
-        for (int channel = 0; channel < 3; ++channel)
-            background[channel] = config_.background_color[(size_t)channel] * config_.background_brightness /
-                                  std::max(tint[channel], 1.0f / 255.0f);
+}  // namespace
+
+// A cropped texture only lines up with the layer quad when nothing else samples the full texture.
+bool TextLayer::canCropTexture() const {
+    return effects.empty() && !requiresSceneColor();
+}
+
+// Effects or scene-colour blending need the full texture, so re-upload it when they appear.
+void TextLayer::refreshForEffects(EngineContext& ctx) {
+    if (texture_ && texture_->cropped && !canCropTexture()) rebuild(ctx);
+}
+
+void TextLayer::useTexture(const std::shared_ptr<TextTexture>& texture) {
+    texture_ = texture;
+    img = GfxImage::borrow(texture->image);
+    cached_view = GfxView::borrow(texture->view);
+    source_quad = {SG_INVALID_ID};
+    if (texture->cropped) source_quad = texture->quad;
+    size[0] = texture->size[0];
+    size[1] = texture->size[1];
+}
+
+bool TextLayer::beginPreparation(EngineContext& ctx) {
+    current_text_ = config_.text;
+    pending_.reset();
+    if (!resolveFontPath(ctx)) return false;
+    const bool crop = canCropTexture();
+    const std::string key = textureKey(config_, font_path_, tint, crop);
+    if (std::shared_ptr<TextTexture> cached = findTexture(key)) {
+        useTexture(cached);
+        return true;
     }
-    pixels.resize((size_t)width * height * 4);
-    for (size_t i = 0; i < pixels.size(); i += 4) std::copy(background, background + 4, pixels.begin() + i);
-    for (size_t i = 0; i < lines.size(); ++i) {
-        const float line_width = measureText(text_font, lines[i]);
-        float pen_x = pad + ((float)width - 2.0f * pad - line_width) * 0.5f;
-        if (config_.horizontal_align == "left")
-            pen_x = pad;
-        else if (config_.horizontal_align == "right")
-            pen_x = (float)width - pad - line_width;
 
-        const float baseline = start_y + (float)i * line_advance + ascent_px;
-        blitLine(pixels, width, height, text_font, lines[i], pen_x, baseline, config_.opaque_background,
-                 config_.brightness);
+    auto pending = std::make_shared<PendingRaster>();
+    pending->key = key;
+    pending->started = std::chrono::steady_clock::now();
+    auto& flights = inFlightRasters();
+    purgeFinishedRasters(flights);
+    auto flight = flights.find(key);
+    if (flight != flights.end()) {
+        pending->future = flight->second;
+    } else {
+        pending->future = TaskPool::instance().enqueue(rasterInBackground, rasterRequest(), crop).share();
+        flights[key] = pending->future;
     }
+    pending_ = pending;
     return true;
 }
 
-bool TextLayer::rebuild(EngineContext& ctx) {
-    const auto trace_start = std::chrono::steady_clock::now();
-    current_text_ = config_.text;
-    if (!resolveFontPath(ctx)) return false;
-    const auto trace_font = std::chrono::steady_clock::now();
+bool TextLayer::pollPreparation() {
+    if (!pending_) return true;
+    if (pending_->future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return false;
 
-    std::vector<float> pixels;
-    int width = 0;
-    int height = 0;
-    float pixel_scale = 1.0f;
-    if (!rasterize(pixels, width, height, pixel_scale) || pixels.empty()) return false;
+    // Hold the future before dropping the pending state, so the output stays alive while it is read.
+    std::shared_future<RasterOutput> finished = pending_->future;
+    const std::string key = pending_->key;
+    const auto started = pending_->started;
+    pending_.reset();
+    const RasterOutput& output = finished.get();
 
-    const auto trace_raster = std::chrono::steady_clock::now();
-    size[0] = (float)width / pixel_scale;
-    size[1] = (float)height / pixel_scale;
+    const char* source = "cache";
+    double upload_ms = 0.0;
+    if (std::shared_ptr<TextTexture> cached = findTexture(key)) {
+        useTexture(cached);
+    } else if (output.ok) {
+        source = "upload";
+        const auto upload_start = std::chrono::steady_clock::now();
+        if (std::shared_ptr<TextTexture> texture = uploadTexture(key, output.result)) useTexture(texture);
+        upload_ms = load_trace::milliseconds(std::chrono::steady_clock::now() - upload_start);
+    }
+    if (load_trace::enabled())
+        LOG_TAG_I("LOAD_TRACE", "text_prepare_ms=%.3f text_source=%s text_upload_ms=%.3f pixels=%dx%d",
+                  load_trace::milliseconds(std::chrono::steady_clock::now() - started), source, upload_ms,
+                  output.result.width, output.result.height);
+    return true;
+}
+
+namespace {
+
+// Places the cropped texture where its pixels sit inside the full layer quad.
+GfxBuffer makeCropQuad(const TextRasterResult& raster) {
+    const float left = raster.content_x / (float)raster.full_width;
+    const float top = raster.content_y / (float)raster.full_height;
+    const float right = (raster.content_x + raster.width) / (float)raster.full_width;
+    const float bottom = (raster.content_y + raster.height) / (float)raster.full_height;
+    const vertex_t vertices[4] = {{left, top, 0.0f, 0.0f}, {right, top, 1.0f, 0.0f}, {right, bottom, 1.0f, 1.0f},
+                                  {left, bottom, 0.0f, 1.0f}};
+    sg_buffer_desc desc = {};
+    desc.size = sizeof(vertices);
+    desc.usage.vertex_buffer = true;
+    desc.data = SG_RANGE(vertices);
+    return GfxBuffer(sg_make_buffer(&desc));
+}
+
+}  // namespace
+
+std::shared_ptr<TextTexture> TextLayer::uploadTexture(const std::string& key, const TextRasterResult& raster) {
+    auto texture = std::make_shared<TextTexture>();
+    texture->size[0] = raster.size[0];
+    texture->size[1] = raster.size[1];
+    texture->cropped = raster.cropped;
+    if (raster.cropped) {
+        texture->quad = makeCropQuad(raster);
+        if (texture->quad.id == SG_INVALID_ID) return nullptr;
+    }
 
     sg_image_desc desc = {};
-    desc.width = width;
-    desc.height = height;
+    desc.width = raster.width;
+    desc.height = raster.height;
     desc.pixel_format = SG_PIXELFORMAT_RGBA32F;
-    desc.data.mip_levels[0] = {pixels.data(), pixels.size() * sizeof(float)};
-    const sg_image image = sg_make_image(&desc);
-    if (image.id == SG_INVALID_ID) return false;
+    desc.data.mip_levels[0] = {raster.pixels.data(), raster.pixels.size() * sizeof(float)};
+    texture->image = GfxImage(sg_make_image(&desc));
+    if (texture->image.id == SG_INVALID_ID) return nullptr;
 
-    cached_view = {};
-    img = image;
     sg_view_desc view_desc = {};
-    view_desc.texture.image = img;
-    cached_view = sg_make_view(&view_desc);
-    if (load_trace::enabled())
-        LOG_TAG_I("LOAD_TRACE", "text_font_ms=%.3f text_raster_ms=%.3f text_upload_ms=%.3f pixels=%dx%d",
-                  load_trace::milliseconds(trace_font - trace_start),
-                  load_trace::milliseconds(trace_raster - trace_font),
-                  load_trace::milliseconds(std::chrono::steady_clock::now() - trace_raster), width, height);
+    view_desc.texture.image = texture->image;
+    texture->view = GfxView(sg_make_view(&view_desc));
+    rememberTexture(key, texture);
+    return texture;
+}
+
+// Synchronous rebuild for live text edits; the layer keeps its previous texture until this succeeds.
+bool TextLayer::rebuild(EngineContext& ctx) {
+    current_text_ = config_.text;
+    pending_.reset();
+    if (!resolveFontPath(ctx)) return false;
+    const bool crop = canCropTexture();
+    const std::string key = textureKey(config_, font_path_, tint, crop);
+    if (std::shared_ptr<TextTexture> cached = findTexture(key)) {
+        useTexture(cached);
+        return true;
+    }
+
+    TextRasterResult raster;
+    if (!rasterizeText(rasterRequest(), raster) || raster.pixels.empty()) return false;
+    if (crop) cropToContent(raster);
+    std::shared_ptr<TextTexture> texture = uploadTexture(key, raster);
+    if (!texture) return false;
+    useTexture(texture);
     return true;
 }

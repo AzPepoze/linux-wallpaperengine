@@ -181,11 +181,14 @@ target("linux-wallpaperengine")
     local web_helper_sources =
         "|wallpaper/web/web_renderer_main.cpp|wallpaper/web/web_widget_backend.cpp|wallpaper/web/web_render_control.cpp|wallpaper/web/web_vulkan_backend.cpp|wallpaper/web/web_quick_view.cpp|wallpaper/web/web_renderer_shared.cpp"
     if is_mode("debug", "asan", "ubsan") then
-        add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
+        add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" ..
+                      "|wallpaper/2d/layers/text/text_raster.cpp" .. layer_exclude)
         -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.
         add_files("src/shared/graphics/diagnostics/**.cpp", {cxxflags = "-O2"})
         -- Keep expensive CPU asset/shader preparation responsive in debug builds.
         add_files("src/shared/graphics/shader/**.cpp", "src/shared/assets/tex*.cpp", {cxxflags = "-O2"})
+        -- Glyph rasterisation runs per character on every text rebuild, which is too slow unoptimised.
+        add_files("src/wallpaper/2d/layers/text/text_raster.cpp", {cxxflags = "-O2"})
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
@@ -290,6 +293,10 @@ add_test("cli_options_tests", {"tests/cli_options_test.cpp", "src/app/cli_option
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
 add_test("pointer_input_tests", {"tests/pointer_input_test.cpp", "src/wallpaper/2d/input/pointer_input.cpp"})
+add_test("text_raster_tests", {"tests/text_raster_test.cpp", "src/wallpaper/2d/layers/text/text_raster.cpp",
+                               "src/wallpaper/2d/layers/text/font_repository.cpp", "src/shared/core/logger.cpp",
+                               "src/shared/core/vfs.cpp"},
+         {"stb"}, {"pthread"})
 
 add_test("particle_data_tests", {"tests/particle_data_test.cpp", "src/wallpaper/2d/layers/particle/particle_parser.cpp"},
          {"cjson", "linmath.h"})

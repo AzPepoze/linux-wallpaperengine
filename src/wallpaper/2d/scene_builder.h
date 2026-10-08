@@ -62,6 +62,7 @@ class SceneBuildJob {
         Layers,
         Texture,
         ImageEffects,
+        TextTextures,
         Scripts,
         ZoomScript,
         Effects,

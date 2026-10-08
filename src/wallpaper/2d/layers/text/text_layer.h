@@ -6,8 +6,12 @@
 #include <vector>
 
 #include "text_parser.h"
+#include "text_raster.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/script/scene_script.h"
+
+struct TextTexture;
+struct PendingRaster;
 
 // Rasterises a text object into a floating-point RGBA texture and reuses ImageLayer's draw,
 // transform and effect handling.
@@ -15,7 +19,12 @@ class TextLayer : public ImageLayer {
    public:
     explicit TextLayer(const char* name);
 
+    // Waits for the first texture, for callers that build synchronously.
     static TextLayer* createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
+    // Starts rasterizing on a worker; poll pollPreparation() until it returns true.
+    static TextLayer* createPending(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
+    // Uploads the finished raster on the calling (render) thread. True when nothing is pending.
+    bool pollPreparation();
 
     void update(float dt, EngineContext& ctx) override;
 
@@ -33,13 +42,20 @@ class TextLayer : public ImageLayer {
 
    private:
     bool rebuild(EngineContext& ctx);
-    bool rasterize(std::vector<float>& pixels, int& width, int& height, float& pixel_scale) const;
+    bool beginPreparation(EngineContext& ctx);
+    bool canCropTexture() const;
+    void refreshForEffects(EngineContext& ctx);
+    TextRasterRequest rasterRequest() const;
+    std::shared_ptr<TextTexture> uploadTexture(const std::string& key, const TextRasterResult& raster);
     bool resolveFontPath(EngineContext& ctx);
+    void useTexture(const std::shared_ptr<TextTexture>& texture);
 
     TextObjectConfig config_;
     std::string current_text_;
     std::string font_path_;
     bool needs_rebuild_ = false;
+    std::shared_ptr<TextTexture> texture_;
+    std::shared_ptr<PendingRaster> pending_;
 };
 
 #endif  // TEXT_LAYER_H

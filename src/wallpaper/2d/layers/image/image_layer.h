@@ -299,6 +299,10 @@ class ImageLayer : public Layer {
     // Part of the layer quad the cropped effect output can cover; the final draw uses a quad of just this region.
     content_bounds::Rect output_region;
     GfxBuffer output_quad;
+    // Quad that draws only part of a texture that was cropped on upload; invalid draws the whole texture.
+   protected:
+    sg_buffer source_quad = {SG_INVALID_ID};
+   private:
     content_bounds::Rect output_quad_region;  // what output_quad holds right now
     uint64_t output_quad_frame = UINT64_MAX;  // frame of the last upload; a buffer takes one update per frame
     // Uploads output_region into output_quad; clears the region when that is not possible this frame.
