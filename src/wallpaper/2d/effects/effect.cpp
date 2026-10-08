@@ -45,8 +45,9 @@ Effect::Effect(cJSON* config, EngineContext& ctx, bool defer_passes) {
     }
     cJSON* passes_node = cJSON_GetObjectItemCaseSensitive(config, "passes");
     if (!defer_passes && cJSON_IsArray(passes_node)) {
-        cJSON* pass_json;
-        cJSON_ArrayForEach(pass_json, passes_node) addPassFromConfig(pass_json, nullptr, ctx);
+        for (cJSON* pass_json = passes_node->child; pass_json; pass_json = pass_json->next) {
+            addPassFromConfig(pass_json, nullptr, ctx);
+        }
     }
 }
 
