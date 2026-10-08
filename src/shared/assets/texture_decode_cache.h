@@ -2,6 +2,7 @@
 #define TEXTURE_DECODE_CACHE_H
 
 #include <memory>
+#include <string>
 
 #include "shared/assets/decoded_image.h"
 
@@ -20,6 +21,11 @@ class TextureDecodeCache {
     std::shared_ptr<const wallpaper_engine::DecodedImage> decode(const char* abs_path, int image_index) const;
     // Enqueues a decode on the TaskPool and records it under the same key.
     void prefetch(const char* abs_path, int image_index);
+    // Waits for queued decodes. Intended for wallpaper preparation workers.
+    void waitForPrefetches() const;
+    bool ready(const char* abs_path, int image_index = 0) const;
+    // Drops cache ownership now and destroys decoded buffers off the calling thread.
+    void releaseAsync();
     // Drops every entry and trims the allocator.
     void release();
 

@@ -42,6 +42,13 @@ class WallpaperTransition {
         progress_ = 0.0f;
         hold_ = true;
     }
+    void startHeld(const TransitionConfig& config) {
+        config_ = config;
+        elapsed_ = 0.0f;
+        progress_ = 0.0f;
+        hold_ = false;
+        live_ = false;
+    }
     // Draws the snapshot over the currently bound target.
     void composite(EngineContext& ctx);
     // Renders the overlay into a fresh offscreen image and registers it as a

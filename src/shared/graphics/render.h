@@ -4,14 +4,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <chrono>
+#include <memory>
 #include <vector>
 
 #include "linmath.h"
+#include "shared/core/vfs.h"
 #include "shared/graphics/gfx_resource.h"
 #include "sokol_gfx.h"
 
 #ifdef __cplusplus
 struct EngineContext;
+class AssetManager;
 extern "C" {
 #else
 typedef struct EngineContext EngineContext;
@@ -135,6 +139,16 @@ void renderer_draw_image_composite(EngineContext& ctx, renderer_t* r, sg_image i
                                    float tint[4], int blend_mode);
 // Precompiles all blend pipelines during init; creating them mid-render caused GPU context loss.
 void renderer_precompile_blend_pipelines(EngineContext& ctx, renderer_t* r, const std::vector<int>& modes = {});
+
+struct BlendPipelinePrecompileJob;
+using BlendPipelinePrecompileJobHandle = std::shared_ptr<BlendPipelinePrecompileJob>;
+BlendPipelinePrecompileJobHandle renderer_begin_blend_pipeline_precompile(const AssetManager& assets,
+                                                                          vfs::PackageHandle package, renderer_t* r,
+                                                                          const std::vector<int>& modes = {});
+// Returns true when all requested modes have been consumed. It never waits for an incomplete worker future and
+// finalizes at most one completed mode per call.
+bool renderer_poll_blend_pipeline_precompile(const BlendPipelinePrecompileJobHandle& job, renderer_t* r,
+                                             std::chrono::steady_clock::time_point deadline);
 #else
 void renderer_draw_sprite(EngineContext* ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass);

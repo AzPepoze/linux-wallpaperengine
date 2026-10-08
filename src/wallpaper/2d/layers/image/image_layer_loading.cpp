@@ -9,6 +9,7 @@
 #include "image_layer.h"
 #include "image_parser.h"
 #include "shared/core/engine_context.h"
+#include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
@@ -18,9 +19,17 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+    ImageLayer* layer = createBaseFromDocument(doc, ctx);
+    if (!layer) return nullptr;
+    for (const auto& effect_doc : doc.effects) layer->addEffectFromDocument(effect_doc, ctx);
+    return layer;
+}
+
+ImageLayer* ImageLayer::createBaseFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx) {
+    const auto trace_start = std::chrono::steady_clock::now();
     const ImageObjectConfig config = ImageParser::parse(doc);
     ImageLayer* layer = new ImageLayer(config.name.c_str(), (sg_image){SG_INVALID_ID});
-    layer->initFromDocument(doc, ctx);
+    layer->initFromDocument(doc, ctx, false);
     layer->size[0] = config.width;
     layer->size[1] = config.height;
     layer->tint[0] = config.color[0];
@@ -42,6 +51,7 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
         }
     }
 
+    const auto trace_properties = std::chrono::steady_clock::now();
     if (!config.asset_path.empty()) {
         if (config.is_model || config.asset_path.find(".json") != std::string::npos)
             layer->loadModel(config.asset_path.c_str(), ctx);
@@ -60,6 +70,7 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
         }
     }
 
+    const auto trace_asset = std::chrono::steady_clock::now();
     if (!layer->path.empty() && !layer->bound_video_decoder) {
         layer->texture_metadata = wallpaper_engine::inspectTextureMetadata(layer->path.c_str());
         if (config.width == 0.0f && !layer->texture_metadata.animation_frames.empty()) {
@@ -67,18 +78,35 @@ ImageLayer* ImageLayer::createFromDocument(const wallpaper_engine::SceneObjectDo
             layer->size[1] = layer->texture_metadata.animation_frames.front().height;
         }
     }
+    if (load_trace::enabled())
+        LOG_TAG_I("LOAD_TRACE", "image=%s properties_ms=%.3f asset_ms=%.3f metadata_ms=%.3f", doc.name.c_str(),
+                  load_trace::milliseconds(trace_properties - trace_start),
+                  load_trace::milliseconds(trace_asset - trace_properties),
+                  load_trace::milliseconds(std::chrono::steady_clock::now() - trace_asset));
     return layer;
 }
 
+void ImageLayer::addEffectFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx) {
+    if (Effect* effect = Effect::loadFromDocument(doc, ctx)) effects.push_back(effect);
+}
+
 void ImageLayer::loadMaterial(const char* mat_rel_path, EngineContext& ctx) {
+    const auto trace_start = std::chrono::steady_clock::now();
     img = ctx.asset_mgr->resolveMaterialTexture(mat_rel_path, &path);
     updateCachedView();
     const auto* v = ctx.asset_mgr->findVideoTexture(img);
     if (!v && !path.empty()) v = ctx.asset_mgr->findVideoTexture(path);
     if (v && v->decoder) bound_video_decoder = v->decoder.get();
     if (!path.empty() && path[0] != '$' && !bound_video_decoder) {
+        const auto trace_texture = std::chrono::steady_clock::now();
         source_content = ctx.asset_mgr->textureContentBounds(path.c_str());
+        const auto trace_bounds = std::chrono::steady_clock::now();
         source_opaque = ctx.asset_mgr->textureIsOpaque(path.c_str());
+        if (load_trace::enabled())
+            LOG_TAG_I("LOAD_TRACE", "material=%s texture_ms=%.3f content_bounds_ms=%.3f opacity_ms=%.3f", mat_rel_path,
+                      load_trace::milliseconds(trace_texture - trace_start),
+                      load_trace::milliseconds(trace_bounds - trace_texture),
+                      load_trace::milliseconds(std::chrono::steady_clock::now() - trace_bounds));
     }
 }
 

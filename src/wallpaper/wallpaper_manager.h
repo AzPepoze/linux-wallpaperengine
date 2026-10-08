@@ -1,6 +1,7 @@
 #ifndef WALLPAPER_MANAGER_H
 #define WALLPAPER_MANAGER_H
 
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -46,8 +47,8 @@ class WallpaperManager {
     }
     bool takePendingSwitch(SwitchRequest& out);
 
-    // Captures the outgoing frame, loads the requested wallpaper and starts the
-    // transition. Returns true when a pending switch was processed.
+    // Starts or polls background preparation, then commits at readiness.
+    // Returns true when a new request was accepted this frame.
     bool beginPendingSwitch(EngineContext& ctx);
     bool isTransitioning() const {
         return transition_.active();
@@ -80,6 +81,12 @@ class WallpaperManager {
     // Destroys `instance` with its own view active, so Scene2DRuntime::cleanup()
     // tears down that instance's layers (it reads ctx.scene).
     void destroyInstance(EngineContext& ctx, std::unique_ptr<WallpaperInstance>& instance);
+    struct LoadJob;
+    void pollLoad(EngineContext& ctx);
+    void commitLoad(EngineContext& ctx);
+    std::shared_ptr<LoadJob> load_job_;
+    std::vector<std::shared_ptr<LoadJob>> retired_jobs_;
+
     // Pumps the outgoing instance's video/audio without rendering it (freeze).
     void tickOutgoingAudio(EngineContext& ctx, float dt);
 

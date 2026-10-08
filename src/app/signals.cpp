@@ -18,7 +18,8 @@ void crashSignalHandler(int sig) {
 }
 
 void terminationSignalHandler(int sig) {
-    LOG_I("[SIGNAL] Caught signal %d (%s), requesting clean quit...", sig, (sig == SIGINT) ? "SIGINT" : "SIGTERM");
+    // Logging takes a mutex and can deadlock if the signal interrupts a log.
+    // Publish the quit request without entering the logger from this handler.
     g_terminating.store(true, std::memory_order_relaxed);
     signal(sig, SIG_DFL);
     surface::requestQuit();

@@ -9,6 +9,7 @@
 #include "shader_processor.h"
 #include "shader_uniform_layout.h"
 #include "shared/core/config.h"
+#include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
 #include "shared/graphics/render.h"
 
@@ -110,6 +111,7 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
                                      const std::string& fragSource,
                                      const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
                                      bool create_gpu_objects) {
+    const auto trace_start = std::chrono::steady_clock::now();
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
@@ -227,8 +229,10 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
         prewarm_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
         return result;
     }
+    const auto trace_cpu = std::chrono::steady_clock::now();
     result.shader = create_backend_shader(&shd_desc, compiled_vert_source, compiled_frag_source, shader_name.c_str());
 
+    const auto trace_shader = std::chrono::steady_clock::now();
     if (result.shader.id == SG_INVALID_ID) {
         effect_log.error("Failed to create shader for %s", shader_name.c_str());
         return result;
@@ -236,6 +240,12 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
 
     result.pipeline = makePipeline(result.shader, result.vertex_layout, ShaderBlendMode::Disabled);
 
+    const auto trace_pipeline = std::chrono::steady_clock::now();
+    if (load_trace::enabled())
+        LOG_TAG_I("LOAD_TRACE", "shader=%s cpu_layout_ms=%.3f backend_shader_ms=%.3f gpu_pipeline_ms=%.3f",
+                  shader_name.c_str(), load_trace::milliseconds(trace_cpu - trace_start),
+                  load_trace::milliseconds(trace_shader - trace_cpu),
+                  load_trace::milliseconds(trace_pipeline - trace_shader));
     if (result.pipeline.id == SG_INVALID_ID) {
         effect_log.error("Failed to create pipeline for %s", shader_name.c_str());
     } else {

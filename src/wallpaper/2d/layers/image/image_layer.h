@@ -99,12 +99,18 @@ class ImageLayer : public Layer {
     virtual ~ImageLayer();
 
     static ImageLayer* createFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
+    static ImageLayer* createBaseFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
+    void addEffectFromDocument(const wallpaper_engine::EffectInstanceDocument& doc, EngineContext& ctx);
+    void addEffect(Effect* effect) {
+        if (effect) effects.push_back(effect);
+    }
 
     void update(float dt, EngineContext& ctx) override;
     void draw(EngineContext& ctx) override;
     void drawDebug(EngineContext& ctx) override;
     std::array<float, 8> screenCorners(EngineContext& ctx) const;
     bool requiresSceneColor() const;
+    bool prewarmEffectTargetsStep(EngineContext& ctx, size_t& cursor, sg_image source_image = {SG_INVALID_ID});
     void drawComposite(EngineContext& ctx, sg_view scene_view);
     void renderRegionEffectChain(EngineContext& ctx, sg_image scene_image, sg_view scene_view);
 

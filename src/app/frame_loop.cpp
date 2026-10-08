@@ -160,8 +160,8 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     if (ctx.performance_profile) performance_profile::beginFrame(presented_dt);
     ctx.profiler.measured_fps = frame_meter.fps();
 
-    // Runtime switch requests are applied before this frame's scene work so the
-    // new wallpaper is the one updated and rendered.
+    // Start/poll replacement work without waiting. Commit only when ready at
+    // this frame boundary; the displayed wallpaper keeps playing meanwhile.
     mgr.pollControl(ctx);
     mgr.beginPendingSwitch(ctx);
 

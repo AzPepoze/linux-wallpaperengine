@@ -12,6 +12,7 @@
 
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/core/load_trace.h"
 #include "shared/core/vfs.h"
 #include "wallpaper/2d/alpha_curve.h"
 
@@ -497,8 +498,10 @@ bool TextLayer::rasterize(std::vector<float>& pixels, int& width, int& height, f
 }
 
 bool TextLayer::rebuild(EngineContext& ctx) {
+    const auto trace_start = std::chrono::steady_clock::now();
     current_text_ = config_.text;
     if (!resolveFontPath(ctx)) return false;
+    const auto trace_font = std::chrono::steady_clock::now();
 
     std::vector<float> pixels;
     int width = 0;
@@ -506,6 +509,7 @@ bool TextLayer::rebuild(EngineContext& ctx) {
     float pixel_scale = 1.0f;
     if (!rasterize(pixels, width, height, pixel_scale) || pixels.empty()) return false;
 
+    const auto trace_raster = std::chrono::steady_clock::now();
     size[0] = (float)width / pixel_scale;
     size[1] = (float)height / pixel_scale;
 
@@ -522,5 +526,10 @@ bool TextLayer::rebuild(EngineContext& ctx) {
     sg_view_desc view_desc = {};
     view_desc.texture.image = img;
     cached_view = sg_make_view(&view_desc);
+    if (load_trace::enabled())
+        LOG_TAG_I("LOAD_TRACE", "text_font_ms=%.3f text_raster_ms=%.3f text_upload_ms=%.3f pixels=%dx%d",
+                  load_trace::milliseconds(trace_font - trace_start),
+                  load_trace::milliseconds(trace_raster - trace_font),
+                  load_trace::milliseconds(std::chrono::steady_clock::now() - trace_raster), width, height);
     return true;
 }

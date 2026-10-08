@@ -2,9 +2,14 @@
 
 void activateInstance(EngineContext& ctx, WallpaperInstance& instance, WallpaperInstance*& current) {
     if (current == &instance) return;
-    if (current) stashInstanceState(ctx, current->state);
+    if (current) {
+        stashInstanceState(ctx, current->state);
+        current->pass_action = ctx.pass_action;
+    }
     activateInstanceState(ctx, instance.state);
     instance.assets.setAudioGroup(instance.audio_group);
+    ctx.pass_action = instance.pass_action;
+    vfs::bindPackage(instance.package);
     ctx.asset_mgr = &instance.assets;
     ctx.audio_group = instance.audio_group;
     current = &instance;

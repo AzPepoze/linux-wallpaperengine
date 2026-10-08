@@ -1,6 +1,7 @@
 #include <string>
 
 #include "shared/graphics/shader/shader_backend_internal.h"
+#include "shared/graphics/shader/shader_preparation_key.h"
 #include "test_util.h"
 
 using namespace shader_backend_internal;
@@ -41,7 +42,36 @@ void testVertexInputsFollowPipelineLayout() {
 }
 }  // namespace
 
+void testPreparationCacheIdentity() {
+    sg_shader_desc a = {};
+    a.attrs[0].glsl_name = "position";
+    a.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;
+    a.uniform_blocks[0].size = 16;
+    a.uniform_blocks[0].glsl_uniforms[0].glsl_name = "color";
+    a.uniform_blocks[0].glsl_uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+    const auto key = shader_preparation::preparedKey(a, "vertex", "fragment");
+    auto b = a;
+    std::string own_name = "position";
+    b.attrs[0].glsl_name = own_name.c_str();
+    b.label = "different diagnostic label";
+    CHECK(key == shader_preparation::preparedKey(b, "vertex", "fragment"));
+    CHECK(key != shader_preparation::preparedKey(b, "vertex2", "fragment"));
+    b.uniform_blocks[0].size = 32;
+    CHECK(key != shader_preparation::preparedKey(b, "vertex", "fragment"));
+    b = a;
+    b.uniform_blocks[0].glsl_uniforms[0].array_count = 2;
+    CHECK(key != shader_preparation::preparedKey(b, "vertex", "fragment"));
+    b = a;
+    b.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
+    b.views[0].texture.image_type = SG_IMAGETYPE_2D;
+    CHECK(key != shader_preparation::preparedKey(b, "vertex", "fragment"));
+    b = a;
+    b.texture_sampler_pairs[0].view_slot = 1;
+    CHECK(key != shader_preparation::preparedKey(b, "vertex", "fragment"));
+}
+
 int main() {
+    testPreparationCacheIdentity();
     testVertexInputsFollowPipelineLayout();
     return test::finish("vulkan source tests");
 }

@@ -70,3 +70,31 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
     }
     return true;
 }
+
+bool ImageLayer::prewarmEffectTargetsStep(EngineContext& ctx, size_t& cursor, sg_image source_image) {
+    const sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
+    if (effects.empty() || target_source.id == SG_INVALID_ID) return true;
+    if (cursor == 0) {
+        ensureEffectTargets(ctx, target_source);
+        cursor = 1;
+        return false;
+    }
+
+    size_t pass_cursor = 1;
+    for (const Effect* effect : effects) {
+        if (!effect) continue;
+        for (const ShaderPass* pass : effect->passes) {
+            if (pass_cursor++ != cursor) continue;
+            if (!pass->render_target.empty() && effect_target_width > 0 && effect_target_height > 0) {
+                const float scale = pass->render_scale > 0.0f ? pass->render_scale : 1.0f;
+                const int width = std::max(1, (int)std::lround(effect_target_width / scale));
+                const int height = std::max(1, (int)std::lround(effect_target_height / scale));
+                auto& target = named_effect_targets[pass->render_target];
+                target.ensureSize(width, height, pass->render_target);
+            }
+            ++cursor;
+            return false;
+        }
+    }
+    return true;
+}

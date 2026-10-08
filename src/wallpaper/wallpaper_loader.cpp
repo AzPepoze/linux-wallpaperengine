@@ -16,18 +16,6 @@
 
 namespace {
 // Effective user properties: project defaults, then the desktop GUI's saved values, then --set-property.
-void loadUserProperties(const ProjectInfo& info, EngineContext& ctx) {
-    const std::string property_root = info.root == vfs::kRoot && vfs::mounted() ? vfs::sourceDirectory() : info.root;
-    ctx.user_properties = UserProperties();
-    ctx.user_properties.loadProject(property_root + "/project.json");
-    if (const char* home = getenv("HOME")) {
-        std::ifstream file(std::string(home) + "/.config/linux-wallpaperengine-gui/config.json");
-        std::stringstream text;
-        text << file.rdbuf();
-        ctx.user_properties.applySaved(text.str(), std::filesystem::path(property_root).filename().string());
-    }
-    for (const auto& [key, value] : ctx.cli_properties) ctx.user_properties.setFromString(key, value);
-}
 
 std::unique_ptr<Wallpaper> createWallpaper(ProjectType type, EngineContext& ctx) {
     switch (type) {
@@ -51,6 +39,21 @@ void applyVideoProperties(const VideoProperties& video, EngineContext& ctx) {
         ctx.scene.scaling_mode = video.fit == VideoFit::Fill ? SCALING_COVER : SCALING_FIT;
 }
 }  // namespace
+
+UserProperties WallpaperLoader::prepareProperties(const ProjectInfo& info,
+                                                  const std::vector<std::pair<std::string, std::string>>& overrides) {
+    const std::string root = info.root == vfs::kRoot && vfs::mounted() ? vfs::sourceDirectory() : info.root;
+    UserProperties properties;
+    properties.loadProject(root + "/project.json");
+    if (const char* home = getenv("HOME")) {
+        std::ifstream file(std::string(home) + "/.config/linux-wallpaperengine-gui/config.json");
+        std::stringstream text;
+        text << file.rdbuf();
+        properties.applySaved(text.str(), std::filesystem::path(root).filename().string());
+    }
+    for (const auto& [key, value] : overrides) properties.setFromString(key, value);
+    return properties;
+}
 
 bool WallpaperLoader::canLoad(const ProjectInfo& info) {
     switch (info.type) {
@@ -77,7 +80,7 @@ std::unique_ptr<Wallpaper> WallpaperLoader::load(const ProjectInfo& info, Engine
     strncpy(ctx.asset_root, info.root.c_str(), sizeof(ctx.asset_root) - 1);
     ctx.asset_root[sizeof(ctx.asset_root) - 1] = '\0';
     ctx.asset_mgr->initWallpaper(ctx.asset_root);
-    loadUserProperties(info, ctx);
+    ctx.user_properties = prepareProperties(info, ctx.cli_properties);
     ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
     ScriptEngine::instance().setWallpaperId(std::filesystem::path(info.root).filename().string());
     ctx.asset_mgr->prefetchPackageTextures();

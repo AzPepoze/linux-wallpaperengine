@@ -19,6 +19,10 @@ class VideoTexture {
     VideoTexture& operator=(const VideoTexture&) = delete;
 
     static std::unique_ptr<VideoTexture> open(const char* texture_path);
+    // Opens media and prepares decoder state without touching the graphics device.
+    static std::unique_ptr<VideoTexture> openPrepared(const char* texture_path);
+    // Initializes optional GPU import resources. Call on the graphics thread after openPrepared().
+    void initializeGpu();
     static std::unique_ptr<VideoTexture> openFile(const char* video_path);
 
     uint32_t width() const;

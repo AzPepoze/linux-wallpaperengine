@@ -3,6 +3,8 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "providers/asset_provider.h"
@@ -18,6 +20,9 @@
 class Layer;
 class TextureDecodeCache;
 struct SharedAssets;
+namespace wallpaper_engine {
+struct SceneDocument;
+}
 
 class AssetManager : public IAssetResolver {
    public:
@@ -31,6 +36,12 @@ class AssetManager : public IAssetResolver {
     void attachShared(SharedAssets* shared);
     // Point at one wallpaper's content (its provider and decode cache).
     void initWallpaper(const char* wallpaper_path);
+    // Worker preparation: initialize wallpaper provider, prefetch package textures, then wait for CPU decodes.
+    void prepareWallpaper(const char* wallpaper_root);
+    bool prepareSceneAssets(const wallpaper_engine::SceneDocument& document);
+    // Worker preparation for media. Decoder setup is CPU-only; graphics import setup happens during resolution.
+    bool prepareVideo(const char* video_path);
+    bool textureReady(const char* path, int image_index = 0) const;
 
     void setAudioGroup(AudioEngine::GroupId group) {
         audio_group_ = group;
@@ -96,13 +107,23 @@ class AssetManager : public IAssetResolver {
     std::unique_ptr<SharedAssets> owned_shared_;
 
     mutable std::vector<ActiveVideoTexture> video_textures;
+    struct PreparedVideo {
+        std::unique_ptr<wallpaper_engine::VideoTexture> decoder;
+        std::vector<uint8_t> first_frame;
+        std::unique_ptr<VideoAudioStream> audio;
+    };
+    mutable std::unordered_map<std::string, PreparedVideo> prepared_video_data_;
+    mutable std::unordered_set<std::string> failed_prepared_videos_;
     float video_rate_ = 1.0f;
     float video_volume_ = 1.0f;
     bool video_paused_ = false;
     AudioEngine::GroupId audio_group_ = AudioEngine::kDefaultGroup;
 
-    sg_image makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
-    void addVideoTexture(const char* path, sg_image image, std::unique_ptr<wallpaper_engine::VideoTexture> video) const;
+    sg_image makeVideoImage(const char* path, std::unique_ptr<wallpaper_engine::VideoTexture> video,
+                            std::vector<uint8_t> first_frame = {}, std::unique_ptr<VideoAudioStream> audio = {},
+                            bool audio_prepared = false) const;
+    void addVideoTexture(const char* path, sg_image image, std::unique_ptr<wallpaper_engine::VideoTexture> video,
+                         std::unique_ptr<VideoAudioStream> audio = {}, bool audio_prepared = false) const;
 
     GfxImage resolveTextureInternal(const char* name, std::string* out_path, int image_index,
                                     bool warn_on_failure) const;

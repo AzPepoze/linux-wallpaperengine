@@ -9,6 +9,7 @@
 #include "shared/assets/asset_manager.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/engine_context.h"
+#include "shared/core/vfs.h"
 #include "wallpaper/user_properties.h"
 #include "wallpaper/wallpaper.h"
 
@@ -57,6 +58,8 @@ void stashInstanceState(Ctx& ctx, InstanceState& state) {
 struct WallpaperInstance {
     InstanceState state;
     AssetManager assets;
+    vfs::PackageHandle package;
+    sg_pass_action pass_action = {};
     std::unique_ptr<Wallpaper> wallpaper;
     AudioEngine::GroupId audio_group = AudioEngine::kDefaultGroup;
 };

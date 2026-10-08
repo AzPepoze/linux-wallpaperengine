@@ -1,9 +1,14 @@
 #include "shader_backend.h"
 
+#include <iterator>
+#include <list>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "shader_backend_internal.h"
+#include "shader_preparation_key.h"
 
 using namespace shader_backend_internal;
 
@@ -12,6 +17,59 @@ struct ShaderSpirv {
     std::vector<uint32_t> vertex;
     std::vector<uint32_t> fragment;
 };
+
+struct PreparedEntry {
+    ShaderSpirv spirv;
+    size_t bytes = 0;
+    std::list<std::string>::iterator lru;
+};
+
+class PreparedCache {
+   public:
+    bool get(const std::string& key, ShaderSpirv& out) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto found = entries_.find(key);
+        if (found == entries_.end()) return false;
+        lru_.splice(lru_.begin(), lru_, found->second.lru);
+        out = found->second.spirv;
+        return true;
+    }
+
+    void put(std::string key, const ShaderSpirv& spirv) {
+        const size_t bytes = key.size() * 2 + (spirv.vertex.size() + spirv.fragment.size()) * sizeof(uint32_t);
+        if (bytes > kMaxBytes) return;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (entries_.find(key) != entries_.end()) return;
+        while (!lru_.empty() && used_bytes_ + bytes > kMaxBytes) {
+            auto last = std::prev(lru_.end());
+            auto found = entries_.find(*last);
+            if (found != entries_.end()) {
+                used_bytes_ -= found->second.bytes;
+                entries_.erase(found);
+            }
+            lru_.erase(last);
+        }
+        lru_.push_front(key);
+        PreparedEntry entry;
+        entry.spirv = spirv;
+        entry.bytes = bytes;
+        entry.lru = lru_.begin();
+        entries_.emplace(std::move(key), std::move(entry));
+        used_bytes_ += bytes;
+    }
+
+   private:
+    static constexpr size_t kMaxBytes = 32u << 20;
+    std::mutex mutex_;
+    std::unordered_map<std::string, PreparedEntry> entries_;
+    std::list<std::string> lru_;
+    size_t used_bytes_ = 0;
+};
+
+PreparedCache& preparedCache() {
+    static PreparedCache cache;
+    return cache;
+}
 
 bool compileStage(SlangStage stage, const std::string& source, const std::string& name, const char* stage_str,
                   std::vector<uint32_t>& out) {
@@ -28,6 +86,9 @@ bool buildSpirv(sg_shader_desc* desc, const std::string& vertex_source, const st
     if (label) desc->label = label;
     if (!prepare_vulkan_bindings(desc)) return false;
 
+    const std::string key = shader_preparation::preparedKey(*desc, vertex_source, fragment_source);
+    if (preparedCache().get(key, out)) return true;
+
     std::string linked_vertex_source = vertex_source;
     std::string linked_fragment_source = fragment_source;
     assign_matching_varying_locations(linked_vertex_source, linked_fragment_source);
@@ -39,7 +100,9 @@ bool buildSpirv(sg_shader_desc* desc, const std::string& vertex_source, const st
 
     const bool vertex_ok = compileStage(SLANG_STAGE_VERTEX, vulkan_vs, vertex_name, "vert", out.vertex);
     const bool fragment_ok = compileStage(SLANG_STAGE_FRAGMENT, vulkan_fs, fragment_name, "frag", out.fragment);
-    return vertex_ok && fragment_ok;
+    if (!vertex_ok || !fragment_ok) return false;
+    preparedCache().put(key, out);
+    return true;
 }
 }  // namespace
 

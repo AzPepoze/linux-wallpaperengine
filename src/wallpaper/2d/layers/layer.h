@@ -77,7 +77,8 @@ class Layer : public ILayer {
 
     bool draw_debug_bounds = false;
 
-    void initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx);
+    void initFromDocument(const wallpaper_engine::SceneObjectDocument& doc, EngineContext& ctx,
+                          bool load_effects = true);
 };
 
 #endif  // LAYER_H

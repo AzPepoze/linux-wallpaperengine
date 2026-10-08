@@ -1,17 +1,60 @@
 #include "wallpaper/wallpaper_manager.h"
 
+#include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <utility>
 
 #include "app/control/control_server.h"
-#include "app/wallpaper_switch.h"
+#include "app/package_extractor.h"
 #include "shared/assets/shared_assets.h"
 #include "shared/core/logger.h"
+#include "shared/core/task_pool.h"
 #include "shared/graphics/backend/surface.h"
 #include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/parser/scene_parser.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
+#include "wallpaper/2d/script/script_engine.h"
+#include "wallpaper/prepared_load.h"
 #include "wallpaper/transition/transition_audio.h"
+#include "wallpaper/video/video_wallpaper.h"
 #include "wallpaper/wallpaper_loader.h"
+
+namespace {
+std::string prepareReplacementRoot(const SwitchRequest& request) {
+    if (isVideoFile(request.path.c_str())) return request.path;
+    const bool package_file = request.is_pkg || isPackageFile(request.path);
+    const std::string package_path = package_file ? request.path : request.path + "/scene.pkg";
+    std::error_code error;
+    if (std::filesystem::is_regular_file(package_path, error) && vfs::mount(package_path.c_str())) {
+        if (vfs::exists("pkg:/scene.json")) return vfs::kRoot;
+        vfs::unmount();
+    }
+    return prepareAssetRoot({request.path, package_file});
+}
+
+TaskPool& preparationPool() {
+    // Loader tasks may await decode work on the general pool. Keeping them on a
+    // separate, serial queue prevents rapid requests from exhausting that pool.
+    static TaskPool pool(1);
+    return pool;
+}
+}  // namespace
+
+struct WallpaperManager::LoadJob : PreparedLoad {
+    LoadJob() : PreparedLoad(std::future<bool>{}) {}
+    SwitchRequest request;
+    TransitionConfig config;
+    ProjectInfo info;
+    wallpaper_engine::SceneDocument document;
+    std::unique_ptr<WallpaperInstance> instance;
+    std::string error;
+    bool held_snapshot = false;
+    unsigned preparation_frames = 0;
+    double max_frame_ms = 0.0;
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point last_frame = started;
+};
 
 bool WallpaperManager::load(const std::string& scene_directory, EngineContext& ctx) {
     if (scene_directory.empty()) return false;
@@ -24,6 +67,8 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     if (active_instance_) outgoing_instance_ = std::move(active_instance_);
 
     auto instance = std::make_unique<WallpaperInstance>();
+    instance->package = vfs::currentPackage();
+    instance->pass_action = ctx.pass_action;
     instance->audio_group = AudioEngine::instance().createGroup();
     LOG_TAG_I("WALLPAPER_MGR", "New instance audio group=%u for %s", (unsigned)instance->audio_group,
               scene_directory.c_str());
@@ -65,17 +110,32 @@ void WallpaperManager::destroyInstance(EngineContext& ctx, std::unique_ptr<Wallp
     // Make it the active view so its runtime cleanup tears down its own layers.
     activateInstance(ctx, *instance, active_view_);
     instance->wallpaper.reset();  // ~Wallpaper -> clear() -> Scene2DRuntime::cleanup()
+    instance->assets.clearVideoTextures();
+    AudioEngine::instance().destroyGroup(instance->audio_group);
+    instance->audio_group = AudioEngine::kDefaultGroup;
     instance.reset();
     active_view_ = nullptr;  // it pointed into the destroyed instance
-    if (active_instance_) activateInstance(ctx, *active_instance_, active_view_);
+    if (active_instance_)
+        activateInstance(ctx, *active_instance_, active_view_);
+    else {
+        ctx.asset_mgr = nullptr;
+        ctx.audio_group = AudioEngine::kDefaultGroup;
+        ctx.scene = {};
+        vfs::bindPackage({});
+        ScriptEngine::instance().setActiveScope(nullptr);
+        ScriptEngine::instance().setCreationScope(nullptr);
+    }
 }
 
 void WallpaperManager::update(float dt, EngineContext& ctx) {
     // A finished (or never-started) fade: drop the outgoing wallpaper and its group.
     if (outgoing_instance_ && !transition_.active()) {
-        AudioEngine::instance().destroyGroup(fading_group_);
+        if (fading_group_ != AudioEngine::kDefaultGroup) AudioEngine::instance().setGroupVolume(fading_group_, 0.0f);
         fading_group_ = AudioEngine::kDefaultGroup;
-        destroyInstance(ctx, outgoing_instance_);
+        auto retired = std::make_shared<LoadJob>();
+        retired->cancel();
+        retired->instance = std::move(outgoing_instance_);
+        retired_jobs_.push_back(std::move(retired));
     }
 
     if (outgoing_instance_ && transition_.active() && !transition_.live()) tickOutgoingAudio(ctx, dt);
@@ -135,15 +195,24 @@ void WallpaperManager::resume() {
 }
 
 void WallpaperManager::clear(EngineContext& ctx) {
-    AudioEngine::instance().destroyGroup(fading_group_);
+    if (load_job_) {
+        load_job_->cancelled = true;
+        retired_jobs_.push_back(std::move(load_job_));
+    }
+    for (auto& job : retired_jobs_) {
+        job->cancelled = true;
+        job->drain();
+        destroyInstance(ctx, job->instance);
+    }
+    retired_jobs_.clear();
+
+    if (fading_group_ != AudioEngine::kDefaultGroup) AudioEngine::instance().setGroupVolume(fading_group_, 0.0f);
     fading_group_ = AudioEngine::kDefaultGroup;
     audio_crossfade_ = false;
     if (outgoing_instance_) destroyInstance(ctx, outgoing_instance_);
     if (active_instance_) {
         LOG_TAG_I("WALLPAPER_MGR", "Clearing active wallpaper instance...");
-        active_instance_->wallpaper.reset();
-        active_instance_.reset();
-        active_view_ = nullptr;
+        destroyInstance(ctx, active_instance_);
         LOG_TAG_I("WALLPAPER_MGR", "Active wallpaper cleared.");
     }
 }
@@ -166,45 +235,216 @@ bool WallpaperManager::takePendingSwitch(SwitchRequest& out) {
 
 bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     SwitchRequest request;
-    if (!takePendingSwitch(request)) return false;
-
-    TransitionConfig config = transition_config_;
-    config.selection = request.transition;
-    config.duration_ms = request.transition_time_ms > 0 ? request.transition_time_ms : 1000;
-    if (config.selection == lwe::transition::kSelectionRandom) {
-        random_seed_ += (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count();
-        random_seed_ = random_seed_ * 1664525u + 1013904223u;
-        config.selection = lwe::transition::pickRandomEffect(random_seed_);
-    }
-    config.continue_previous = request.continue_previous;
-
-    AudioEngine& audio = AudioEngine::instance();
-
-    // Live settings carried by the request. Scaling is applied before the load
-    // so the new instance inherits it; volume/muted/fps apply immediately.
-    if (!request.scaling.empty()) {
-        if (request.scaling == "fit") {
-            ctx.scene.scaling_mode = SCALING_FIT;
-        } else if (request.scaling == "stretch") {
-            ctx.scene.scaling_mode = SCALING_STRETCH;
-        } else if (request.scaling == "default" || request.scaling == "fill") {
-            ctx.scene.scaling_mode = SCALING_COVER;
-        } else {
-            LOG_TAG_W("WALLPAPER_MGR", "unknown scaling '%s'; keeping current", request.scaling.c_str());
+    const bool requested = takePendingSwitch(request);
+    if (requested) {
+        if (load_job_) {
+            if (load_job_->held_snapshot) transition_.cancel();
+            load_job_->cancel();
+            retired_jobs_.push_back(std::move(load_job_));
+        }
+        if (outgoing_instance_) {
+            if (fading_group_ != AudioEngine::kDefaultGroup)
+                AudioEngine::instance().setGroupVolume(fading_group_, 0.0f);
+            fading_group_ = AudioEngine::kDefaultGroup;
+            audio_crossfade_ = false;
+            if (active_instance_) AudioEngine::instance().setGroupVolume(active_instance_->audio_group, 1.0f);
+            auto retired = std::make_shared<LoadJob>();
+            retired->cancel();
+            retired->instance = std::move(outgoing_instance_);
+            retired_jobs_.push_back(std::move(retired));
+        }
+        transition_.cancel();
+        auto job = std::make_shared<LoadJob>();
+        job->request = request;
+        job->config = transition_config_;
+        job->config.selection = request.transition;
+        job->config.duration_ms = request.transition_time_ms > 0 ? request.transition_time_ms : 1000;
+        job->config.continue_previous = request.continue_previous;
+        if (job->config.selection == lwe::transition::kSelectionRandom) {
+            random_seed_ = random_seed_ * 1664525u + 1013904223u;
+            job->config.selection = lwe::transition::pickRandomEffect(random_seed_);
+        }
+        job->instance = std::make_unique<WallpaperInstance>();
+        auto& instance = *job->instance;
+        instance.pass_action = ctx.pass_action;
+        instance.state.scene.scaling_mode = ctx.scene.scaling_mode;
+        if (request.scaling == "fit")
+            instance.state.scene.scaling_mode = SCALING_FIT;
+        else if (request.scaling == "stretch")
+            instance.state.scene.scaling_mode = SCALING_STRETCH;
+        else if (request.scaling == "default" || request.scaling == "fill")
+            instance.state.scene.scaling_mode = SCALING_COVER;
+        instance.state.is_pkg = request.is_pkg;
+        instance.state.wallpaper_path = request.path;
+        if (shared_assets_) instance.assets.attachShared(shared_assets_);
+        job->preparation = preparationPool().enqueue([job] {
+            try {
+                if (job->cancelled) return false;
+                vfs::ScopedBinding binding({});
+                const auto& request = job->request;
+                const std::string root = prepareReplacementRoot(request);
+                if (root.empty() || job->cancelled) return false;
+                job->instance->package = vfs::currentPackage();
+                job->info = ProjectInfo::detect(root);
+                if (!WallpaperLoader::canLoad(job->info)) return false;
+                job->instance->state.asset_root = root;
+                job->instance->state.user_properties =
+                    WallpaperLoader::prepareProperties(job->info, request.properties);
+                if (job->info.type == ProjectType::Scene &&
+                    !wallpaper_engine::parseSceneFile(job->info.entry.c_str(), job->document,
+                                                      &job->instance->state.user_properties))
+                    return false;
+                job->instance->assets.prepareWallpaper(root.c_str());
+                if (job->info.type == ProjectType::Scene && !job->instance->assets.prepareSceneAssets(job->document))
+                    return false;
+                if (job->info.type == ProjectType::Video)
+                    if (!job->instance->assets.prepareVideo(job->info.entry.c_str())) return false;
+                return !job->cancelled;
+            } catch (const std::exception& error) {
+                job->error = error.what();
+                return false;
+            }
+        });
+        if (!request.continue_previous && job->config.selection != lwe::transition::kSelectionNone) {
+            if (auto* scene = dynamic_cast<Scene2DWallpaper*>(getActiveWallpaper())) {
+                if (auto* runtime = scene->getRuntime()) {
+                    runtime->setForceOffscreen(true);
+                    runtime->draw();
+                    job->held_snapshot = transition_.begin(ctx, runtime->composedView(), runtime->composedImage(),
+                                                           surface::width(), surface::height(), job->config);
+                    runtime->setForceOffscreen(false);
+                    if (job->held_snapshot) {
+                        transition_.setLive(false);
+                        transition_.hold();
+                    }
+                }
+            }
+        }
+        load_job_ = std::move(job);
+        if (request.has_fps) ctx.fps_limit = request.fps;
+        if (request.has_volume || request.has_muted) {
+            auto& audio = AudioEngine::instance();
+            float volume = request.has_volume ? request.volume / 100.0f : audio.masterVolume();
+            if (request.has_muted && request.muted) volume = 0.0f;
+            audio.setMasterVolume(volume);
         }
     }
-    if (request.has_volume || request.has_muted) {
-        float target = audio.masterVolume();
-        if (request.has_volume) target = request.volume / 100.0f;
-        if (request.has_muted && request.muted) target = 0.0f;
-        audio.setMasterVolume(target);
-    }
-    if (request.has_fps) ctx.fps_limit = request.fps;
+    pollLoad(ctx);
+    return requested;
+}
 
+void WallpaperManager::pollLoad(EngineContext& ctx) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2);
+    for (auto it = retired_jobs_.begin(); it != retired_jobs_.end();) {
+        auto& job = *it;
+        if (job->preparation.valid() &&
+            job->preparation.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ++it;
+            continue;
+        }
+        if (job->preparation.valid()) job->preparation.get();
+        if (job->instance->audio_group != AudioEngine::kDefaultGroup)
+            AudioEngine::instance().setGroupVolume(job->instance->audio_group, 0.0f);
+        if (job->instance->wallpaper) {
+            activateInstance(ctx, *job->instance, active_view_);
+            auto* scene = dynamic_cast<Scene2DWallpaper*>(job->instance->wallpaper.get());
+            const bool cleaned = !scene || scene->stepCleanup(std::chrono::milliseconds(2));
+            if (active_instance_) activateInstance(ctx, *active_instance_, active_view_);
+            if (!cleaned) {
+                ++it;
+                break;
+            }
+        }
+        destroyInstance(ctx, job->instance);
+        it = retired_jobs_.erase(it);
+        break;
+    }
+    if (active_instance_) {
+        ScriptEngine::instance().setActiveScope(ctx.scene.scripts);
+        ScriptEngine::instance().setCreationScope(ctx.scene.scripts);
+    }
+    if (!load_job_ || std::chrono::steady_clock::now() >= deadline) return;
+    auto& job = *load_job_;
+    ++job.preparation_frames;
+    const auto frame_time = std::chrono::steady_clock::now();
+    job.max_frame_ms =
+        std::max(job.max_frame_ms, std::chrono::duration<double, std::milli>(frame_time - job.last_frame).count());
+    job.last_frame = frame_time;
+    if (job.state == LoadJob::State::Preparing) {
+        if (job.preparation.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+        if (!job.pollPreparation()) {
+            LOG_TAG_E("WALLPAPER_MGR", "Preparation failed for %s: %s", job.request.path.c_str(), job.error.c_str());
+            if (job.held_snapshot) transition_.cancel();
+            job.state = LoadJob::State::Failed;
+            retired_jobs_.push_back(std::move(load_job_));
+            return;
+        }
+        LOG_TAG_I("WALLPAPER_MGR", "CPU preparation ready for %s after %.2fms", job.request.path.c_str(),
+                  std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - job.started).count());
+        job.instance->audio_group = AudioEngine::instance().createGroup();
+        AudioEngine::instance().setGroupVolume(job.instance->audio_group, 0.0f);
+        activateInstance(ctx, *job.instance, active_view_);
+        ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
+        ScriptEngine::instance().setWallpaperId(std::filesystem::path(job.request.path).filename().string());
+        if (job.info.type == ProjectType::Scene) {
+            auto scene = std::make_unique<Scene2DWallpaper>(ctx);
+            scene->beginLoadDocument(std::move(job.document), ctx);
+            job.instance->wallpaper = std::move(scene);
+        } else {
+            // Non-scene backends retain their existing construction interface.
+            if (job.info.type == ProjectType::Video) {
+                job.instance->assets.setVideoPlayback(job.info.video.rate, job.info.video.volume);
+                if (job.info.video.fit == VideoFit::Fill && ctx.scene.scaling_mode == SCALING_FIT)
+                    ctx.scene.scaling_mode = SCALING_COVER;
+                auto video = std::make_unique<VideoWallpaper>(ctx);
+                if (video->load(job.info.entry, ctx)) {
+                    video->beginPrewarmLoaded(ctx);
+                    job.instance->wallpaper = std::move(video);
+                }
+            } else {
+                const auto overrides = ctx.cli_properties;
+                ctx.cli_properties = job.request.properties;
+                job.instance->wallpaper = WallpaperLoader::load(job.info, ctx);
+                ctx.cli_properties = overrides;
+            }
+        }
+        job.state = LoadJob::State::Graphics;
+        if (active_instance_) activateInstance(ctx, *active_instance_, active_view_);
+    }
+    if (job.state == LoadJob::State::Graphics && std::chrono::steady_clock::now() < deadline) {
+        activateInstance(ctx, *job.instance, active_view_);
+        auto* scene = dynamic_cast<Scene2DWallpaper*>(job.instance->wallpaper.get());
+        const bool done = !scene || scene->stepLoad(std::max(std::chrono::milliseconds(1),
+                                                             std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                                 deadline - std::chrono::steady_clock::now())),
+                                                    ctx);
+        const bool failed = !job.instance->wallpaper || (scene && scene->loadingFailed());
+        if (active_instance_) activateInstance(ctx, *active_instance_, active_view_);
+        if (active_instance_) {
+            ScriptEngine::instance().setActiveScope(ctx.scene.scripts);
+            ScriptEngine::instance().setCreationScope(ctx.scene.scripts);
+        }
+        if (failed) {
+            LOG_TAG_E("WALLPAPER_MGR", "Graphics setup failed for %s", job.request.path.c_str());
+            if (job.held_snapshot) transition_.cancel();
+            job.state = LoadJob::State::Failed;
+            retired_jobs_.push_back(std::move(load_job_));
+        } else if (done) {
+            job.instance->assets.releaseDecodedTextures();
+            job.markReady();
+            if (job.canCommit()) commitLoad(ctx);
+        }
+    }
+}
+
+void WallpaperManager::commitLoad(EngineContext& ctx) {
+    const auto request = load_job_->request;
+    const auto config = load_job_->config;
+    AudioEngine& audio = AudioEngine::instance();
     // A new switch supersedes an in-flight fade: drop its outgoing instance/group.
     if (outgoing_instance_) {
         destroyInstance(ctx, outgoing_instance_);
-        audio.destroyGroup(fading_group_);
+        audio.setGroupVolume(fading_group_, 0.0f);
         fading_group_ = AudioEngine::kDefaultGroup;
         audio_crossfade_ = false;
     }
@@ -215,8 +455,9 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         lwe::transition::planAudioSwitch(active_instance_ != nullptr, has_old, config.selection);
 
     // Capture the outgoing frame before the switch replaces the active instance.
-    bool captured = false;
-    if (config.selection != lwe::transition::kSelectionNone) {
+    bool captured = load_job_->held_snapshot;
+    if (captured) transition_.startHeld(config);
+    if (!captured && config.selection != lwe::transition::kSelectionNone) {
         if (auto* scene = dynamic_cast<Scene2DWallpaper*>(getActiveWallpaper())) {
             if (Scene2DRuntime* runtime = scene->getRuntime()) {
                 runtime->setForceOffscreen(true);
@@ -224,6 +465,7 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
                 captured = transition_.begin(ctx, runtime->composedView(), runtime->composedImage(), surface::width(),
                                              surface::height(), config);
                 if (captured) transition_.setLive(config.continue_previous);
+                runtime->setForceOffscreen(false);
             }
         }
     }
@@ -231,20 +473,23 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
     // or held snapshot so it cannot stick on top of the new wallpaper.
     if (!captured) transition_.cancel();
 
-    if (!switchWallpaper(*this, ctx, request.path, request.is_pkg, request.properties)) {
-        LOG_TAG_E("WALLPAPER_MGR", "Switch to %s failed; holding the previous frame", request.path.c_str());
-        if (captured) transition_.hold();
-        return true;
-    }
+    outgoing_instance_ = std::move(active_instance_);
+    active_instance_ = std::move(load_job_->instance);
+    activateInstance(ctx, *active_instance_, active_view_);
+    if (!captured) audio.setGroupVolume(active_instance_->audio_group, 1.0f);
 
-    // switchWallpaper -> load moved the old active to outgoing_instance_ and made
-    // the new instance active (ctx.audio_group is now the new group).
+    // Commit at the frame boundary, after the incoming graphics are ready.
     const AudioEngine::GroupId new_group = ctx.audio_group;
     LOG_TAG_I("WALLPAPER_MGR", "audio switch: old_group=%u new_group=%u fade=%d cut=%d", (unsigned)old_group,
               (unsigned)new_group, plan.fade_old ? 1 : 0, plan.destroy_old_now ? 1 : 0);
     if (plan.destroy_old_now) {
-        audio.destroyGroup(old_group);
-        destroyInstance(ctx, outgoing_instance_);
+        audio.setGroupVolume(old_group, 0.0f);
+        if (outgoing_instance_) {
+            auto retired = std::make_shared<LoadJob>();
+            retired->cancel();
+            retired->instance = std::move(outgoing_instance_);
+            retired_jobs_.push_back(std::move(retired));
+        }
     } else if (plan.fade_old) {
         fading_group_ = old_group;
         active_group_ = new_group;
@@ -254,15 +499,21 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         active_group_ = new_group;
         audio_crossfade_ = false;
     }
-    LOG_TAG_I("WALLPAPER_MGR", "Switched to %s", request.path.c_str());
+    LOG_TAG_I("WALLPAPER_MGR", "Switched to %s after %.2fms preparation; fade=%dms", request.path.c_str(),
+              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - load_job_->started).count(),
+              config.duration_ms);
+    LOG_TAG_I("WALLPAPER_MGR", "Preparation playback: %u frames, max presented interval %.2fms",
+              load_job_->preparation_frames, load_job_->max_frame_ms);
     // A changed scaling is baked into the new instance at load; re-apply the
     // layout so the switch takes effect without a restart.
     onResize((float)surface::width(), (float)surface::height());
-    return true;
+    load_job_.reset();
 }
 
 void WallpaperManager::updateTransition(float dt) {
+    const bool was_active = transition_.active();
     transition_.update(dt);
+    if (was_active && !transition_.active()) LOG_TAG_I("WALLPAPER_MGR", "Visual transition completed");
 
     if (!audio_crossfade_) return;
     AudioEngine& audio = AudioEngine::instance();

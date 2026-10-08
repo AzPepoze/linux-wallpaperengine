@@ -184,6 +184,8 @@ target("linux-wallpaperengine")
         add_files("src/**.cpp" .. web_helper_sources .. "|shared/graphics/diagnostics/**.cpp" .. layer_exclude)
         -- Capture export hashes and diffs every pass image pixel by pixel, which takes minutes unoptimised.
         add_files("src/shared/graphics/diagnostics/**.cpp", {cxxflags = "-O2"})
+        -- Keep expensive CPU asset/shader preparation responsive in debug builds.
+        add_files("src/shared/graphics/shader/**.cpp", "src/shared/assets/tex*.cpp", {cxxflags = "-O2"})
         add_defines("DEBUG_BUILD=1")
         add_packages("imgui")
     else
@@ -342,6 +344,9 @@ add_test("project_tests", {"tests/project_info_test.cpp", "src/wallpaper/project
                            "src/shared/core/logger.cpp"},
          {"cjson"})
 
+add_test("vfs_package_tests", {"tests/vfs_package_test.cpp", "src/shared/core/vfs.cpp",
+                                "src/shared/core/logger.cpp"})
+
 add_test("user_properties_tests", {"tests/user_properties_test.cpp", "src/wallpaper/user_properties.cpp",
                                    "src/wallpaper/project_info.cpp", "src/wallpaper/video/video_properties.cpp",
                                    "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
@@ -379,6 +384,8 @@ add_test("wallpaper_instance_tests", {"tests/wallpaper_instance_test.cpp", "src/
                                       "src/wallpaper/user_properties.cpp", "src/shared/core/vfs.cpp",
                                       "src/shared/core/logger.cpp"},
          {"cjson", "sokol", "vulkan-headers", "linmath.h"})
+
+add_test("prepared_load_tests", {"tests/prepared_load_test.cpp"})
 
 add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio/audio_engine.cpp",
                                 "src/shared/audio/audio_engine_stream.cpp", "src/shared/audio/audio_engine_spectrum.cpp",

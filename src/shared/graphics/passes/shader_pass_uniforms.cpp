@@ -104,6 +104,7 @@ std::string ShaderPass::buildComboDefines(const ShaderSourceSet& sources) const 
     for (const auto& [name, value] : combos) setComboDefine(combo_defines, name, value);
 
     const auto bound = [&](size_t slot) {
+        if (slot < preparation_texture_bound_.size()) return preparation_texture_bound_[slot];
         return pass_textures.textures.size() > slot && pass_textures.textures[slot].id != SG_INVALID_ID;
     };
     if (shader_name.find("depthparallax") != std::string::npos) {
