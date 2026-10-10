@@ -194,6 +194,75 @@ void testUserShaderValues() {
     CHECK(values.count("specularstrength") && values.at("specularstrength") == std::vector<float>({0.5f}));
 }
 
+float determinant3(const mat4x4 m) {
+    return m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) - m[1][0] * (m[0][1] * m[2][2] - m[2][1] * m[0][2]) +
+           m[2][0] * (m[0][1] * m[1][2] - m[1][1] * m[0][2]);
+}
+
+void transformPoint(vec4 out, const mat4x4 m, float x, float y, float z) {
+    vec4 point = {x, y, z, 1.0f};
+    mat4x4_mul_vec4(out, m, point);
+}
+
+void testFloorMirror() {
+    mat4x4 mirror;
+    floorMirror(mirror, 0.5f);
+    vec4 reflected;
+    transformPoint(reflected, mirror, 1.0f, 2.0f, -3.0f);
+    CHECK(near(reflected[0], 1.0f) && near(reflected[1], -1.0f) && near(reflected[2], -3.0f));
+    transformPoint(reflected, mirror, 4.0f, 0.5f, 2.0f);
+    CHECK(near(reflected[1], 0.5f));  // points on the plane stay put
+
+    mat4x4 twice;
+    mat4x4_mul(twice, mirror, mirror);
+    bool identity = true;
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row) identity = identity && near(twice[column][row], column == row ? 1.0f : 0.0f);
+    CHECK(identity);
+    CHECK(determinant3(mirror) < 0.0f);  // a mirror alone reverses winding
+}
+
+void testReflectedCameraSeesTheMirrorImage() {
+    wallpaper_engine::SceneCameraDocument camera_doc;
+    camera_doc.eye = {0.0f, 2.0f, 5.0f};
+    camera_doc.center = {0.0f, 0.5f, 0.0f};
+    camera_doc.up = {0.0f, 1.0f, 0.0f};
+    PerspectiveCamera camera;
+    buildPerspectiveCamera(camera_doc, wallpaper_engine::SceneGeneralDocument(), 16.0f / 9.0f, camera);
+    PerspectiveCamera mirrored;
+    buildReflectedCamera(camera, 0.0f, mirrored);
+
+    CHECK(near(mirrored.eye[0], 0.0f) && near(mirrored.eye[1], -2.0f) && near(mirrored.eye[2], 5.0f));
+
+    // A point above the floor lands where its mirror image (below the floor) appears, with clip y flipped.
+    vec4 seen_in_mirror, below_floor;
+    transformPoint(seen_in_mirror, mirrored.view_projection, 0.3f, 1.0f, 0.2f);
+    transformPoint(below_floor, camera.view_projection, 0.3f, -1.0f, 0.2f);
+    CHECK(near(seen_in_mirror[0] / seen_in_mirror[3], below_floor[0] / below_floor[3]));
+    CHECK(near(seen_in_mirror[1] / seen_in_mirror[3], -below_floor[1] / below_floor[3]));
+    CHECK(near(seen_in_mirror[2] / seen_in_mirror[3], below_floor[2] / below_floor[3]));
+
+    // Mirror and clip flip cancel, so the scene pipelines keep their front-face winding.
+    mat4x4 mirror;
+    floorMirror(mirror, 0.0f);
+    mat4x4 flip_clip_y;
+    mat4x4_identity(flip_clip_y);
+    flip_clip_y[1][1] = -1.0f;
+    mat4x4 combined;
+    mat4x4_mul(combined, flip_clip_y, mirror);
+    CHECK(determinant3(combined) > 0.0f);
+}
+
+void testTextureSlotsNamed() {
+    cJSON* pass = cJSON_Parse(R"({"textures":["grid/grid","_rt_Reflection",null,"_rt_Reflection"]})");
+    CHECK(textureSlotsNamed(pass, "_rt_Reflection") == 0b1010u);
+    CHECK(textureSlotsNamed(pass, "_rt_Other") == 0u);
+    cJSON_Delete(pass);
+    cJSON* bare = cJSON_Parse(R"({"shader":"car"})");
+    CHECK(textureSlotsNamed(bare, "_rt_Reflection") == 0u);
+    cJSON_Delete(bare);
+}
+
 void testComboNames() {
     const auto combos = upperCaseCombos({{"metal", 1}, {"normalmap", 1}, {"TEX1FORMAT", 4}});
     CHECK(combos.size() == 3);
@@ -214,5 +283,8 @@ int main() {
     testPipelineState();
     testUserShaderValues();
     testComboNames();
+    testFloorMirror();
+    testReflectedCameraSeesTheMirrorImage();
+    testTextureSlotsNamed();
     return test::finish("static_model_tests");
 }

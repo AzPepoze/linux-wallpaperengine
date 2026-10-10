@@ -27,6 +27,13 @@ void buildPerspectiveCamera(const wallpaper_engine::SceneCameraDocument& camera,
                             const wallpaper_engine::SceneGeneralDocument& general, float aspect,
                             PerspectiveCamera& out);
 
+// Mirror across the horizontal plane y = plane_y; it reverses triangle winding.
+void floorMirror(mat4x4 out, float plane_y);
+
+// The camera seen in a floor mirror at y = plane_y. Its clip y is flipped as well, so the image is stored
+// bottom-up and the two winding flips cancel: the scene pipelines draw it unchanged.
+void buildReflectedCamera(const PerspectiveCamera& camera, float plane_y, PerspectiveCamera& out);
+
 // Translation, then rotation about Z, Y and X (radians), then scale.
 void buildModelMatrix(mat4x4 out, const std::array<float, 3>& origin, const std::array<float, 3>& angles,
                       const std::array<float, 3>& scale);

@@ -66,6 +66,17 @@ std::map<std::string, std::vector<float>> resolveUserShaderValues(const cJSON* p
     return values;
 }
 
+uint32_t textureSlotsNamed(const cJSON* pass, const char* texture) {
+    uint32_t slots = 0;
+    int slot = 0;
+    const cJSON* entry = nullptr;
+    cJSON_ArrayForEach(entry, cJSON_GetObjectItemCaseSensitive(pass, "textures")) {
+        if (slot < 32 && cJSON_IsString(entry) && strcmp(entry->valuestring, texture) == 0) slots |= 1u << slot;
+        ++slot;
+    }
+    return slots;
+}
+
 std::map<std::string, int> upperCaseCombos(const std::map<std::string, int>& combos) {
     std::map<std::string, int> upper;
     for (const auto& [name, value] : combos) upper[upperCase(name)] = value;

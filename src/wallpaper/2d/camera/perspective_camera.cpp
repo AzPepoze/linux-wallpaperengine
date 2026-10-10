@@ -51,6 +51,31 @@ void buildPerspectiveCamera(const wallpaper_engine::SceneCameraDocument& camera,
     mat4x4_mul(out.view_projection, out.projection, out.view);
 }
 
+void floorMirror(mat4x4 out, float plane_y) {
+    mat4x4_identity(out);
+    out[1][1] = -1.0f;
+    out[3][1] = 2.0f * plane_y;
+}
+
+void buildReflectedCamera(const PerspectiveCamera& camera, float plane_y, PerspectiveCamera& out) {
+    mat4x4 mirror;
+    floorMirror(mirror, plane_y);
+    mat4x4_mul(out.view, camera.view, mirror);
+
+    mat4x4 flip_clip_y;
+    mat4x4_identity(flip_clip_y);
+    flip_clip_y[1][1] = -1.0f;
+    mat4x4_mul(out.projection, flip_clip_y, camera.projection);
+    mat4x4_mul(out.view_projection, out.projection, out.view);
+
+    vec4 eye = {camera.eye[0], camera.eye[1], camera.eye[2], 1.0f};
+    vec4 mirrored_eye;
+    mat4x4_mul_vec4(mirrored_eye, mirror, eye);
+    out.eye[0] = mirrored_eye[0];
+    out.eye[1] = mirrored_eye[1];
+    out.eye[2] = mirrored_eye[2];
+}
+
 void buildModelMatrix(mat4x4 out, const std::array<float, 3>& origin, const std::array<float, 3>& angles,
                       const std::array<float, 3>& scale) {
     mat4x4_translate(out, origin[0], origin[1], origin[2]);
