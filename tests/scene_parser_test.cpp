@@ -3,12 +3,15 @@
 #include <cjson/cJSON.h>
 #include <unistd.h>
 
+#include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "app/package_extractor.h"
 #include "shared/core/vfs.h"
@@ -364,6 +367,86 @@ void testBloomFlag() {
     test::expect("bloom", on.general.bloom.enabled, "a bloom user toggle turned on enables bloom");
 }
 
+const char* kModelScene = R"JSON({
+  "camera": {"center": "1 2 3", "eye": "4 5 6", "up": "0 1 0", "paths": ["scripts/camera_00.json"]},
+  "general": {"ambientcolor": "0.1 0.2 0.3", "skylightcolor": "0.4 0.5 0.6"},
+  "objects": [
+    {"id": 14, "name": "Dome", "model": "models/dome/dome.mdl", "reflected": true,
+     "origin": "1 2 3", "angles": "0.5 0 -0.25", "scale": "2 2 2"},
+    {"id": 15, "name": "Grid", "model": "models/grid/grid.mdl", "origin": "0 0 0", "scale": "1 1 1"},
+    {"id": 16, "name": "Layer", "image": "models/layer.json", "size": "100 50"}
+  ]
+})JSON";
+
+const char* kCameraPaths = R"JSON({"paths": [
+  {"duration": 26, "name": "", "transforms": [
+    {"timestamp": 0, "eye": "2 1 4", "center": "0 0.5 0", "up": "0 1 0"},
+    {"timestamp": 26, "eye": "3 2 3", "center": "-0.1 0.2 0.2", "up": "-0.2 0.9 -0.3"}]},
+  {"duration": 29, "name": "second", "transforms": [
+    {"timestamp": 0, "eye": "1 1 1", "center": "0 0 0", "up": "0 1 0"}]}
+]})JSON";
+
+void writeFile(const std::filesystem::path& path, const char* text) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream(path) << text;
+}
+
+void testModelObjects() {
+    namespace fs = std::filesystem;
+    char base_template[] = "/tmp/lwe_model_scene_XXXXXX";
+    const fs::path base = mkdtemp(base_template);
+    writeFile(base / "scene.json", kModelScene);
+    writeFile(base / "scripts/camera_00.json", kCameraPaths);
+    SceneDocument doc;
+    test::expect("model", parseSceneFile((base / "scene.json").c_str(), doc), "3D scene parses");
+    fs::remove_all(base);
+
+    test::expect("model", doc.objects.size() == 3, "every object is kept");
+    if (doc.objects.size() != 3) return;
+    const SceneObjectDocument& dome = doc.objects[0];
+    test::expect("model", dome.kind == SceneObjectKind::Model, "a model object is not an image layer");
+    test::expect("model", dome.model.model == "models/dome/dome.mdl" && dome.model.reflected,
+                 "model path and reflected");
+    test::expect("model", dome.node.origin == (std::array<float, 3>{1, 2, 3}), "origin");
+    test::expect("model", dome.node.angles == (std::array<float, 3>{0.5f, 0, -0.25f}), "angles");
+    test::expect("model", dome.node.scale == (std::array<float, 3>{2, 2, 2}), "scale");
+    test::expect("model", doc.objects[1].kind == SceneObjectKind::Model && !doc.objects[1].model.reflected,
+                 "reflected defaults to false");
+    const SceneObjectDocument& layer = doc.objects[2];
+    test::expect("model", layer.kind == SceneObjectKind::Image && layer.image.image == "models/layer.json",
+                 "an image object stays an image layer");
+
+    const bool camera_kept =
+        doc.camera.eye == (std::array<float, 3>{4, 5, 6}) && doc.camera.center == (std::array<float, 3>{1, 2, 3});
+    test::expect("camera", camera_kept, "camera eye and center");
+    test::expect("camera", doc.camera.path_files.size() == 1 && doc.camera.path_files[0] == "scripts/camera_00.json",
+                 "camera path file list");
+    test::expect("camera", doc.camera.paths.size() == 2, "camera paths load from the file beside the scene");
+    test::expect("general", doc.general.ambient_color == (std::array<float, 3>{0.1f, 0.2f, 0.3f}), "ambient color");
+    test::expect("general", doc.general.skylight_color == (std::array<float, 3>{0.4f, 0.5f, 0.6f}), "skylight color");
+}
+
+void testCameraPathJson() {
+    std::vector<CameraPathDocument> paths;
+    test::expect("camera path", parseCameraPathJson(kCameraPaths, paths), "camera path JSON parses");
+    test::expect("camera path", paths.size() == 2, "two paths");
+    if (paths.size() != 2) return;
+    test::expect("camera path", paths[0].duration == 26.0f && paths[1].name == "second", "duration and name");
+    test::expect("camera path", paths[0].transforms.size() == 2 && paths[1].transforms.size() == 1,
+                 "transforms per path");
+    if (paths[0].transforms.size() != 2) return;
+    const CameraTransformDocument& last = paths[0].transforms[1];
+    test::expect("camera path", last.timestamp == 26.0f, "timestamp");
+    test::expect("camera path", last.eye == (std::array<float, 3>{3, 2, 3}), "eye");
+    test::expect("camera path", last.center == (std::array<float, 3>{-0.1f, 0.2f, 0.2f}), "center");
+    test::expect("camera path", last.up == (std::array<float, 3>{-0.2f, 0.9f, -0.3f}), "up");
+
+    std::vector<CameraPathDocument> rejected;
+    test::expect("camera path", !parseCameraPathJson("{not json", rejected), "invalid JSON is rejected");
+    test::expect("camera path", !parseCameraPathJson(R"({"paths": 3})", rejected) && rejected.empty(),
+                 "a file without a paths array is rejected");
+}
+
 void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
@@ -500,6 +583,8 @@ int main(int argc, char** argv) {
     testPropertyAnimations();
     testUserBindings();
     testBloomFlag();
+    testModelObjects();
+    testCameraPathJson();
     testMissingFile();
     testPackageMetadata();
     return test::finish("scene parser tests");
