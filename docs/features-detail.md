@@ -443,6 +443,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Wayland layer-shell surfaces forward `wl_pointer` button and enter/leave events; the frame loop tracks the pressed-button mask and the cursor's scene-world position
     - A tested hit-test module finds the topmost visible solid layer under the cursor (rotation, non-uniform and negative scale, parents) and a tracker produces enter, leave, move, down, up and click
     - Solid image layers with cursor hooks are hit targets and their scripts receive the events
+    - Layers with cursor hooks that are not solid get `cursorDown`, `cursorUp` and `cursorClick` for the primary button anywhere on screen, with the world position only (no hover, no local position)
     - A pressed layer retains move/up delivery outside its bounds, with current local coordinates for dragging
   - Missing
     - Live delivery to a background layer-shell surface has not been confirmed
@@ -456,7 +457,9 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 - [x] Wallpaper Engine `.tex`: RGBA8, RG8, R8, BC1/DXT1, BC2/DXT3, BC3/DXT5, LZ4-compressed payloads, multiple images and mip levels
 - [x] Embedded PNG/JPEG payloads, GIF containers and MP4 video payloads inside `.tex`
 - [-] Texture flags
-  - Missing: clamp/wrap and interpolation flags from the header are not applied
+  - Works: the no-interpolation flag switches image layers and their effect passes to nearest-neighbour sampling (pixel art stays sharp)
+  - Works: effect targets of no-interpolation layers grow to their on-screen size, so repeated tiles stay even
+  - Missing: the clamp flag from the header is not applied; effect passes still sample linearly
 - [-] Materials, shaders and particle definitions
   - Works: loaded from wallpapers and from the install (see [wallpaper-engine-assets.md](wallpaper-engine-assets.md))
   - Missing: formats and fields not listed in the sections above
