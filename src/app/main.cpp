@@ -316,6 +316,19 @@ static void runDesktopLayerIfPossible() {
     exit(code);
 }
 
+// --window sets the windowed size; an output (-r or --layer) always covers its full area.
+static void applyWindowGeometry(sapp_desc& desc) {
+    if (!cli.window.set) return;
+    if (wantsDesktopLayer()) {
+        LOG_TAG_W("OPTIONS", "--window is ignored when drawing on an output (-r or --layer)");
+        return;
+    }
+    desc.width = cli.window.width;
+    desc.height = cli.window.height;
+    LOG_TAG_I("OPTIONS", "window size %dx%d; position %d,%d is not applied", cli.window.width, cli.window.height,
+              cli.window.x, cli.window.y);
+}
+
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     // Two malloc arenas keep parallel loading from leaving tens of MB resident.
     mallopt(M_ARENA_MAX, 2);
@@ -421,6 +434,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     desc.cleanup_cb = cleanup;
     desc.width = 1280;
     desc.height = 720;
+    applyWindowGeometry(desc);
     if (!x11_desktop_title.empty()) {
         desc.window_title = x11_desktop_title.c_str();
     } else {

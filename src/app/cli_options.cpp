@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <climits>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -77,6 +78,23 @@ std::string valueAnySpelling(const char* name) {
 #endif
 
 }  // namespace
+
+bool parseWindowGeometry(const std::string& text, WindowGeometry& out) {
+    int values[4] = {};
+    const char* cursor = text.c_str();
+    for (int i = 0; i < 4; ++i) {
+        char* end = nullptr;
+        const long value = strtol(cursor, &end, 10);
+        if (end == cursor || value < INT_MIN || value > INT_MAX) return false;
+        values[i] = (int)value;
+        const char separator = i == 3 ? '\0' : 'x';
+        if (*end != separator) return false;
+        cursor = end + 1;
+    }
+    if (values[2] <= 0 || values[3] <= 0) return false;
+    out = WindowGeometry{true, values[0], values[1], values[2], values[3]};
+    return true;
+}
 
 CliOptions CliOptions::parse(int argc, char* argv[]) {
     sargs_desc a_desc = {};
@@ -171,6 +189,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
             opts.has_volume = true;
         }
     }
+    std::string window_arg;
+    if (cli_args::optionValue(args, {"--window"}, window_arg) && !parseWindowGeometry(window_arg, opts.window))
+        fprintf(stderr, "Invalid --window '%s'; ignoring\n", window_arg.c_str());
     opts.performance_profile = cli_args::hasFlag(args, {"--performance-profile"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"});
     opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});

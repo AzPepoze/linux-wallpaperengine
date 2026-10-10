@@ -9,6 +9,16 @@
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 #include "wallpaper/web/web_options.h"
 
+struct WindowGeometry {
+    bool set = false;
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+// Parses "XxYxWxH". X and Y may be negative; W and H must be positive.
+bool parseWindowGeometry(const std::string& text, WindowGeometry& out);
+
 struct TransitionOptions {
     std::string effect;   // --transition
     std::string mode;     // --transition-mode
@@ -39,6 +49,7 @@ struct CliOptions {
     float intro_zoom = 1.0f;
     float intro_duration = 4.0f;
     resolution::Setting resolution;  // --resolution
+    WindowGeometry window;           // --window XxYxWxH
     bool performance_profile = false;
     bool script_profile = false;  // log the most expensive scripts every few seconds
     bool no_ui = false;
