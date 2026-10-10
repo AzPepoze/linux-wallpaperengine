@@ -115,3 +115,4 @@ Each feature below needs its own libraries. Install only the ones you want.
 | See every option | [docs/options.md](docs/options.md) |
 | Build, test and debug the program | [docs/development.md](docs/development.md) |
 | See what works and what does not | [docs/features.md](docs/features.md) |
+| Compare with the upstream launcher | [docs/compatibility.md](docs/compatibility.md) |
