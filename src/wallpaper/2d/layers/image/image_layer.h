@@ -86,6 +86,11 @@ class ImageLayer : public Layer {
         tint[3] = alpha;
         alpha_script_value = alpha;
     }
+    // Changes the scene's base alpha; update() copies it into tint each frame unless a timeline or script drives alpha.
+    void setBaseAlpha(float alpha) {
+        alpha_document.alpha = alpha;
+        setAlpha(alpha);
+    }
     bool alpha_from_timeline = false;  // SceneAnimations writes tint[3]; the per-layer alpha curve is not evaluated
     bool cursor_solid = false;         // scene `solid`: receives cursor events (not the plain-colour solid layer)
     int color_blend_mode = 0;

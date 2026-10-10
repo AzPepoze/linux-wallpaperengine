@@ -1,10 +1,10 @@
 #include "wallpaper/wallpaper_manager.h"
 
-#include <cjson/cJSON.h>
-
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <functional>
+#include <string_view>
 #include <utility>
 
 #include "app/control/control_server.h"
@@ -14,10 +14,14 @@
 #include "shared/core/task_pool.h"
 #include "shared/graphics/backend/surface.h"
 #include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/layers/image/image_layer.h"
+#include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/2d/script/scene_scripts.h"
 #include "wallpaper/2d/script/script_engine.h"
+#include "wallpaper/2d/tree/scene_tree.h"
+#include "wallpaper/live_fields.h"
 #include "wallpaper/prepared_load.h"
 #include "wallpaper/project_info.h"
 #include "wallpaper/transition/transition_audio.h"
@@ -62,45 +66,139 @@ Layer* findLayer(const EngineContext& ctx, uint32_t object_id) {
     return nullptr;
 }
 
-// The object JSON without its top-level "visible", so a visibility change can be told apart from others.
-std::string jsonWithoutVisible(const std::string& json) {
-    cJSON* root = cJSON_Parse(json.c_str());
-    if (!root) return json;
-    cJSON_DeleteItemFromObjectCaseSensitive(root, "visible");
-    char* printed = cJSON_PrintUnformatted(root);
-    std::string result = printed ? printed : json;
-    cJSON_free(printed);
-    cJSON_Delete(root);
-    return result;
+using LiveEdits = std::vector<std::function<void()>>;
+
+// Text color is baked into the text texture, so only image layers take alpha and color live.
+ImageLayer* liveImageLayer(Layer* layer) {
+    if (dynamic_cast<TextLayer*>(layer)) return nullptr;
+    return dynamic_cast<ImageLayer*>(layer);
 }
 
-// Collects the layers whose visibility changes. False when anything else changed, or a layer cannot take it.
-bool planVisibilityChanges(const EngineContext& ctx, const std::vector<wallpaper_engine::SceneObjectDocument>& fresh,
-                           std::vector<std::pair<Layer*, bool>>& toggles) {
-    if (fresh.size() != ctx.scene.bound_objects.size()) return false;
-    for (size_t i = 0; i < fresh.size(); ++i) {
-        const wallpaper_engine::SceneObjectDocument& old_object = ctx.scene.bound_objects[i];
-        const wallpaper_engine::SceneObjectDocument& new_object = fresh[i];
-        if (old_object.node.id != new_object.node.id ||
-            jsonWithoutVisible(old_object.raw_json) != jsonWithoutVisible(new_object.raw_json))
-            return false;
-        if (old_object.visible == new_object.visible) continue;
-        Layer* layer = findLayer(ctx, new_object.node.id);
-        // A visibility script owns the flag every frame, so a stored value would not stick.
-        if (!layer || !new_object.visible_script.empty()) return false;
-        toggles.emplace_back(layer, new_object.visible);
+SceneTreeNode* treeNodeOf(EngineContext& ctx, uint32_t object_id) {
+    return ctx.scene.scene_tree ? ctx.scene.scene_tree->find(object_id) : nullptr;
+}
+
+bool animated(const wallpaper_engine::SceneObjectDocument& object, std::string_view property) {
+    return std::any_of(object.animations.begin(), object.animations.end(),
+                       [property](const auto& animation) { return animation.property == property; });
+}
+
+// A script or timeline rewrites a field every frame, so a stored value would not stick.
+bool scriptOwns(const wallpaper_engine::SceneObjectDocument& object, std::string_view field) {
+    if (field == "visible") return !object.visible_script.empty();
+    if (field == "scale") return !object.node.scale_script.empty() || animated(object, "scale");
+    if (field == "alpha")
+        return !object.image.alpha_script.empty() || !object.image.alpha_keys.empty() || animated(object, "alpha");
+    if (field == "color") return !object.image.color_script.empty() || animated(object, "color");
+    return false;
+}
+
+// The object JSON without the fields a live edit may change, so any other difference still means a rebuild.
+std::string jsonWithoutLiveFields(const std::string& json, bool image) {
+    if (image) return jsonWithout(json, {"visible", "scale", "alpha", "color"});
+    return jsonWithout(json, {"visible", "scale"});
+}
+
+// Logs why an object forces a rebuild and returns false, so the caller can stop planning.
+bool rebuildFor(const wallpaper_engine::SceneObjectDocument& object, std::string_view field) {
+    LOG_TAG_I("WALLPAPER_MGR", "'%s' changed %.*s; rebuilding the scene", object.name.c_str(), (int)field.size(),
+              field.data());
+    return false;
+}
+
+// Collects the edits that bring one object up to date. False when the object needs a rebuild.
+bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocument& old_object,
+                     const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
+    const uint32_t id = new_object.node.id;
+    Layer* layer = findLayer(ctx, id);
+    ImageLayer* image = liveImageLayer(layer);
+    const bool image_layer = image != nullptr;
+    if (jsonWithoutLiveFields(old_object.raw_json, image_layer) !=
+        jsonWithoutLiveFields(new_object.raw_json, image_layer))
+        return rebuildFor(new_object, "a field that is not live");
+
+    if (old_object.visible != new_object.visible) {
+        if (scriptOwns(new_object, "visible")) return rebuildFor(new_object, "visible");
+        SceneTreeNode* node = treeNodeOf(ctx, id);
+        if (layer)
+            edits.push_back([layer, visible = new_object.visible] { layer->setVisible(visible); });
+        else if (node)
+            edits.push_back([node, visible = new_object.visible] { node->visible = visible; });
+        else
+            return rebuildFor(new_object, "visible");
+    }
+
+    if (old_object.node.scale != new_object.node.scale) {
+        SceneTreeNode* node = treeNodeOf(ctx, id);
+        if (!node || scriptOwns(new_object, "scale")) return rebuildFor(new_object, "scale");
+        edits.push_back([node, scale = new_object.node.scale] { node->scale = scale; });
+    }
+
+    if (old_object.image.alpha != new_object.image.alpha) {
+        if (!image || scriptOwns(new_object, "alpha")) return rebuildFor(new_object, "alpha");
+        edits.push_back([image, alpha = new_object.image.alpha] { image->setBaseAlpha(alpha); });
+    }
+
+    if (old_object.image.color != new_object.image.color) {
+        if (!image || scriptOwns(new_object, "color")) return rebuildFor(new_object, "color");
+        edits.push_back([image, color = new_object.image.color] {
+            for (int i = 0; i < 3; ++i) image->tint[i] = color[i];
+        });
     }
     return true;
 }
 
-// Re-resolves the scene's bindings for `properties` and toggles layer visibility; false when a rebuild is needed.
+// The general block without camera parallax, which is the only general setting applied in place.
+std::string generalWithoutParallax(const std::string& json) {
+    return jsonWithout(
+        json, {"cameraparallax", "cameraparallaxamount", "cameraparallaxdelay", "cameraparallaxmouseinfluence"});
+}
+
+bool sameParallax(const wallpaper_engine::SceneGeneralDocument& a, const wallpaper_engine::SceneGeneralDocument& b) {
+    return a.camera_parallax_enabled == b.camera_parallax_enabled &&
+           a.camera_parallax_amount == b.camera_parallax_amount && a.camera_parallax_delay == b.camera_parallax_delay &&
+           a.camera_parallax_mouse_influence == b.camera_parallax_mouse_influence;
+}
+
+// Applies a changed camera parallax in place. Script edits live in ctx.parallax, so they are not reset here.
+void applyParallaxChange(EngineContext& ctx, const wallpaper_engine::SceneGeneralDocument& fresh) {
+    wallpaper_engine::SceneGeneralDocument& current = ctx.scene.general;
+    if (sameParallax(current, fresh)) return;
+    current.camera_parallax_enabled = fresh.camera_parallax_enabled;
+    current.camera_parallax_amount = fresh.camera_parallax_amount;
+    current.camera_parallax_delay = fresh.camera_parallax_delay;
+    current.camera_parallax_mouse_influence = fresh.camera_parallax_mouse_influence;
+    applyParallaxScene(ctx, current);
+}
+
+// Plans every live edit for the fresh scene. Nothing is applied until the whole plan succeeds.
+bool planSceneEdits(EngineContext& ctx, const wallpaper_engine::SceneDocument& fresh, LiveEdits& edits) {
+    if (fresh.objects.size() != ctx.scene.bound_objects.size()) {
+        LOG_TAG_I("WALLPAPER_MGR", "Object count changed; rebuilding the scene");
+        return false;
+    }
+    for (size_t i = 0; i < fresh.objects.size(); ++i) {
+        const wallpaper_engine::SceneObjectDocument& old_object = ctx.scene.bound_objects[i];
+        const wallpaper_engine::SceneObjectDocument& new_object = fresh.objects[i];
+        if (old_object.node.id != new_object.node.id) return false;
+        if (!planObjectEdits(ctx, old_object, new_object, edits)) return false;
+    }
+    if (generalWithoutParallax(ctx.scene.general.raw_json) != generalWithoutParallax(fresh.general.raw_json)) {
+        LOG_TAG_I("WALLPAPER_MGR", "A general setting other than parallax changed; rebuilding the scene");
+        return false;
+    }
+    return true;
+}
+
+// Re-resolves the scene's bindings for `properties` and applies the changes in place; false when a rebuild is needed.
 bool applyBindingsInPlace(EngineContext& ctx, const UserProperties& properties) {
     const ProjectInfo info = ProjectInfo::detect(ctx.asset_root);
     wallpaper_engine::SceneDocument fresh;
     if (!wallpaper_engine::parseSceneFile(info.entry.c_str(), fresh, &properties)) return false;
-    std::vector<std::pair<Layer*, bool>> toggles;
-    if (!planVisibilityChanges(ctx, fresh.objects, toggles)) return false;
-    for (const auto& [layer, visible] : toggles) layer->setVisible(visible);
+    LiveEdits edits;
+    if (!planSceneEdits(ctx, fresh, edits)) return false;
+    for (const auto& edit : edits) edit();
+    applyParallaxChange(ctx, fresh.general);
     ctx.scene.bound_objects = std::move(fresh.objects);
     return true;
 }

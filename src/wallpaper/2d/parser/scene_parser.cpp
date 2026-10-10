@@ -55,6 +55,10 @@ void parseCamera(const cJSON* camera, SceneDocument& out) {
 
 void parseGeneral(const cJSON* general, SceneDocument& out) {
     if (!general) return;
+    if (char* printed = cJSON_PrintUnformatted(general)) {
+        out.general.raw_json = printed;
+        cJSON_free(printed);
+    }
 
     parseVec(cJSON_GetObjectItemCaseSensitive(general, "ambientcolor"), out.general.ambient_color.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(general, "skylightcolor"), out.general.skylight_color.data(), 3);

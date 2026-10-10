@@ -328,6 +328,8 @@ add_test("web_renderer_tests", {"tests/web_renderer_shared_test.cpp", "src/wallp
 
 add_test("flag_config_tests", {"tests/flag_config_test.cpp", "src/app/flag_config.cpp"}, {"cjson"})
 
+add_test("live_fields_tests", {"tests/live_fields_test.cpp", "src/wallpaper/live_fields.cpp"}, {"cjson"})
+
 add_test("cli_options_tests", {"tests/cli_options_test.cpp", "src/app/cli_options.cpp", "src/app/cli_args.cpp",
                                "src/app/flag_config.cpp", "src/shared/core/logger.cpp"}, {"sokol", "cjson"})
 

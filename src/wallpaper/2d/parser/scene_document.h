@@ -194,6 +194,7 @@ struct SceneBloomDocument {
 };
 
 struct SceneGeneralDocument {
+    std::string raw_json;  // the general block after bindings resolved, to diff a live change
     std::array<float, 3> ambient_color = {0.3f, 0.3f, 0.3f};
     std::array<float, 3> skylight_color = {0.3f, 0.3f, 0.3f};
     std::array<float, 4> clear_color = {0.0f, 0.0f, 0.0f, 1.0f};
