@@ -44,6 +44,14 @@ typedef struct {
     float u, v;
 } vertex_t;
 
+// One vertex of a 3D model mesh; attributes the model lacks stay zero.
+typedef struct {
+    float position[3];
+    float normal[3];
+    float tangent[4];  // xyz plus handedness in w
+    float uv[2];
+} mesh_vertex_t;
+
 struct renderer_t {
     GfxPipeline pip_alpha;
     GfxPipeline pip_copy;
@@ -93,6 +101,7 @@ typedef struct {
     vec4 light_skylight_color;
 } builtin_uniforms_t;
 
+// Object-space built-ins of particle and 3D model shaders (uniform block 3).
 typedef struct {
     mat4x4 model_matrix;
     mat4x4 model_matrix_inverse;
@@ -113,6 +122,7 @@ static_assert(offsetof(builtin_uniforms_t, pointer_position) % 16 == 0,
 static_assert(sizeof(builtin_uniforms_t) % 16 == 0, "built-in uniform block must preserve std140 tail alignment");
 static_assert(sizeof(particle_builtin_uniforms_t) % 16 == 0,
               "particle built-in uniform block must preserve std140 alignment");
+static_assert(sizeof(mesh_vertex_t) == sizeof(float) * 12, "mesh vertices must be tightly packed");
 #endif
 
 #ifdef __cplusplus

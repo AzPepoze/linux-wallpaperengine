@@ -12,12 +12,21 @@ enum class ShaderVertexLayout {
     Sprite2D,
     ParticleSprite,
     ParticleRope,
+    Mesh3D,
 };
 
 enum class ShaderBlendMode {
     Disabled,
     Alpha,
     Additive,
+};
+
+// Fixed-function state of a depth-tested 3D mesh draw.
+struct MeshPipelineState {
+    ShaderBlendMode blend = ShaderBlendMode::Disabled;
+    bool cull_back_faces = true;
+    bool depth_test = true;
+    bool depth_write = true;
 };
 
 struct CompiledUniformBlock {
@@ -47,12 +56,16 @@ struct CompiledShader {
 
 class ShaderCompiler {
    public:
+    // `mesh_geometry` selects the 3D mesh vertex layout; otherwise the layout is detected from the source.
     static CompiledShader compile(const std::string& shader_name, const std::string& vertSource,
                                   const std::string& fragSource,
-                                  const std::map<std::string, std::vector<float>>& uniforms, int textureCount);
+                                  const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
+                                  bool mesh_geometry = false);
     static void prewarm(const std::string& shader_name, const std::string& vertSource, const std::string& fragSource,
-                        const std::map<std::string, std::vector<float>>& uniforms, int textureCount);
+                        const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
+                        bool mesh_geometry = false);
     static GfxPipeline makePipeline(sg_shader shader, ShaderVertexLayout layout, ShaderBlendMode blend_mode);
+    static GfxPipeline makeMeshPipeline(sg_shader shader, const MeshPipelineState& state);
     static std::string applyDebugMode(const std::string& fsSource, int debug_mode);
     static std::string applyDebugStep(const std::string& shader_name, const std::string& fsSource, int debug_step);
 
@@ -60,7 +73,7 @@ class ShaderCompiler {
     static CompiledShader build(const std::string& shader_name, const std::string& vertSource,
                                 const std::string& fragSource,
                                 const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
-                                bool create_gpu_objects);
+                                bool mesh_geometry, bool create_gpu_objects);
 };
 
 #endif  // SHADER_COMPILER_H

@@ -236,7 +236,8 @@ bool ShaderPass::prepare(EngineContext& ctx, bool warm_cache, bool apply_observe
                                                                   highestDeclaredTextureSlot(sources.processed_fs))));
     prepared->texture_count = texture_count;
     if (warm_cache) {
-        ShaderCompiler::prewarm(shader_name, sources.full_vs, sources.full_fs, uniforms, texture_count);
+        ShaderCompiler::prewarm(shader_name, sources.full_vs, sources.full_fs, uniforms, texture_count,
+                                mesh_geometry);
     }
     prepared_ = std::move(prepared);
     return true;
@@ -250,6 +251,7 @@ std::shared_ptr<ShaderPass> ShaderPass::makePreparationClone() const {
     clone->animated_uniforms = animated_uniforms;
     clone->render_target = render_target;
     clone->render_texture_bindings = render_texture_bindings;
+    clone->mesh_geometry = mesh_geometry;
     clone->debug_view_mode = debug_view_mode;
     clone->debug_step = debug_step;
     clone->pass_textures.textures.resize(pass_textures.textures.size());
@@ -280,8 +282,8 @@ void ShaderPass::finish(EngineContext& ctx) {
     if (!prepared) return;
     shader_uniform_configs_ = prepared->shader_uniforms;
     const ShaderSourceSet& sources = prepared->sources;
-    compiled =
-        ShaderCompiler::compile(shader_name, sources.full_vs, sources.full_fs, uniforms, prepared->texture_count);
+    compiled = ShaderCompiler::compile(shader_name, sources.full_vs, sources.full_fs, uniforms,
+                                       prepared->texture_count, mesh_geometry);
 
     pass_textures.buildCachedViews();
     if (renderObserver().isCollectingShaderInfo()) registerDiagnostics(sources, prepared->shader_uniforms);

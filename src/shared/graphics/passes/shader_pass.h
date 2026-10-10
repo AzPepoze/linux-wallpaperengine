@@ -54,6 +54,8 @@ class ShaderPass {
     bool show_files = false;
     bool is_fullscreen_quad = false;
     bool geometry_classified = false;
+    // Set before init() to compile for 3D model meshes instead of sprites.
+    bool mesh_geometry = false;
     std::string render_target;
     float render_scale = 1.0f;
     std::map<int, std::string> render_texture_bindings;
