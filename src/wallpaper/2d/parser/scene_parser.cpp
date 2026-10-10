@@ -139,8 +139,7 @@ void addBoundKey(std::vector<std::string>& keys, const std::string& key) {
     if (std::find(keys.begin(), keys.end(), key) == keys.end()) keys.push_back(key);
 }
 
-// A condition turns the value into a boolean: true while the property equals it.
-// Every key a binding reads is added to `keys`, so a later change can tell whether the scene must rebuild.
+// Bound keys let live property changes determine whether the scene needs rebuilding.
 void resolveUserBindings(cJSON* node, const UserProperties& properties, std::vector<std::string>& keys) {
     if (cJSON_IsObject(node)) {
         const cJSON* user = cJSON_GetObjectItemCaseSensitive(node, "user");

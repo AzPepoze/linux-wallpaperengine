@@ -26,11 +26,8 @@ namespace wallpaper_engine {
 //   stride 48 (unskinned): normal +12, tangent +24/+36, uv +40, no bones
 // Weights sum to 1.
 //
-// MDLS holds one entry per bone: u32 type, u32 parent (0xFFFFFFFF = root),
-// u32 payloadBytes (64 = bind matrix), the row-major 4x4 bind matrix, an info
-// JSON string and a name string. MDLA holds clips; each clip samples every
-// frame: fps, frameCount, then one track per bone of (frameCount + 1) 36-byte
-// keyframes (translation xyz, rotation xyz in radians, scale xyz).
+// MDLS: per bone, u32 type, parent (0xFFFFFFFF = root), payloadBytes (64 = bind matrix), row-major 4x4 matrix, info JSON, name.
+// MDLA: fps, frameCount, then one track per bone of (frameCount + 1) 36-byte keyframes (translation, rotation radians, scale).
 
 struct MdlVertex {
     float position[3] = {0, 0, 0};
