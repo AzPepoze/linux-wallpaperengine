@@ -173,6 +173,8 @@ class ScriptBindings {
     bool read(const Binding& binding, ScriptValue& value);
     void write(const Binding& binding, const ScriptValue& value);
     void dispatchPointer();
+    void dispatchUnsolidButton(bool down, float world_x, float world_y);
+    void collectUnsolidCursorLayers();
     void removeDestroyed();
 
     EngineContext& ctx_;
@@ -185,7 +187,9 @@ class ScriptBindings {
     float view_height_ = 0.0f;
     PointerTracker pointer_;
     std::vector<uint32_t> cursor_layers_;  // scene objects with a script that handles any cursor event
+    std::vector<uint32_t> unsolid_cursor_layers_;  // the subset that is not a solid hit target
     bool cursor_layers_ready_ = false;
+    bool left_was_down_ = false;
     ScriptEvent user_properties_;
     bool user_properties_pending_ = false;
     bool general_settings_sent_ = false;
