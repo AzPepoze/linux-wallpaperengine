@@ -34,6 +34,7 @@ static Scene2DRuntime* activeRuntime(WallpaperManager& mgr) {
 
 // Keeps the pointer position up to date while the cursor is off the wallpaper surface.
 static void updateGlobalPointer(EngineContext& ctx) {
+    if (ctx.disable_mouse) return;
     static GlobalPointer global_pointer;
     static bool opened = false;
     if (!opened) {
@@ -276,7 +277,28 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 #endif
 }
 
+static bool isMouseEvent(const sapp_event* e) {
+    switch (e->type) {
+        case SAPP_EVENTTYPE_MOUSE_DOWN:
+        case SAPP_EVENTTYPE_MOUSE_UP:
+        case SAPP_EVENTTYPE_MOUSE_SCROLL:
+        case SAPP_EVENTTYPE_MOUSE_MOVE:
+        case SAPP_EVENTTYPE_MOUSE_ENTER:
+        case SAPP_EVENTTYPE_MOUSE_LEAVE:
+            return true;
+        default:
+            return false;
+    }
+}
+
 void handleAppEvent(const sapp_event* e, EngineContext& ctx, WallpaperManager& mgr) {
+    if (ctx.disable_mouse && isMouseEvent(e)) {
+#if DEBUG_BUILD
+        // The debug panel still takes the mouse; the wallpaper does not.
+        simgui_handle_event(e);
+#endif
+        return;
+    }
     if (e->type == SAPP_EVENTTYPE_MOUSE_ENTER) {
         ctx.input.pointer_over_surface = true;
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_LEAVE) {

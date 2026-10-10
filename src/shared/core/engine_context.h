@@ -154,6 +154,8 @@ struct EngineContext {
     ParallaxState parallax;
     float parallax_smoothing = 0.0f;  // config override; 0 keeps the scene value
     float parallax_scale = 0.0f;      // config override; 0 keeps the built-in default
+    bool disable_parallax = false;    // --disable-parallax
+    bool disable_mouse = false;       // --disable-mouse: the wallpaper never sees pointer input
     CameraShakeState shake;
     DebugState debug;
     float time = 0.0f;

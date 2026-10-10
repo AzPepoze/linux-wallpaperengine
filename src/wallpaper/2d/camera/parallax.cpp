@@ -60,7 +60,7 @@ void camera_shake_update(EngineContext& ctx) {
 }  // namespace
 
 void applyParallaxScene(EngineContext& ctx, const wallpaper_engine::SceneGeneralDocument& general) {
-    ctx.parallax.enabled = general.camera_parallax_enabled;
+    ctx.parallax.enabled = general.camera_parallax_enabled && !ctx.disable_parallax;
     ctx.parallax.amount = general.camera_parallax_amount;
     ctx.parallax.delay = general.camera_parallax_delay;
     ctx.parallax.mouse_influence = general.camera_parallax_mouse_influence;
