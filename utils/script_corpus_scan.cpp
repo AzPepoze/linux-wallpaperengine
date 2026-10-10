@@ -112,7 +112,7 @@ std::string normalise(const std::string& message) {
     return message.size() > 160 ? message.substr(0, 160) : message;
 }
 
-// The source line a stack trace ("... (script://<id>:<line>)") points at, trimmed for the report.
+// Source line from a stack trace (`script://<id>:<line>`), trimmed for the report.
 std::string failingLine(const std::string& source, const std::string& stack) {
     const size_t marker = stack.find("script://");
     if (marker == std::string::npos) return "";

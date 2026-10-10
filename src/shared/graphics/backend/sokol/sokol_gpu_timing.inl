@@ -5,7 +5,7 @@
 #include "../gpu_timing.h"
 
 namespace {
-constexpr uint32_t kTimingRanges = 256;
+constexpr uint32_t kTimingRanges = 1024;
 struct TimingSlot {
     VkQueryPool pool = VK_NULL_HANDLE;
     std::array<std::string, kTimingRanges> labels;
@@ -86,10 +86,10 @@ void gpu_timing_begin_frame() {
     timing_active = &slot;
 }
 
-int gpu_timing_begin_pass(const std::string& label) {
+int gpu_timing_begin_pass(std::string_view label) {
     if (!timing_active || timing_active->ranges == kTimingRanges) return -1;
     const uint32_t token = timing_active->ranges++;
-    timing_active->labels[token] = label;
+    timing_active->labels[token].assign(label);
     vkCmdWriteTimestamp(_sg.vk.frame.cmd_buf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timing_active->pool, token * 2);
     return (int)token;
 }

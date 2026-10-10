@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -100,6 +101,29 @@ bool isPackageFile(const std::string& path) {
     return path.size() >= 4 && path.compare(path.size() - 4, 4, ".pkg") == 0;
 }
 
+std::string presetBaseRoot(const std::string& path) {
+    if (path.empty() || exists(path + "/scene.json")) return "";
+    const std::string json_text = readFile(path + "/project.json");
+    cJSON* root = json_text.empty() ? nullptr : cJSON_Parse(json_text.c_str());
+    if (!root) return "";
+
+    std::string base;
+    const cJSON* preset = cJSON_GetObjectItemCaseSensitive(root, "preset");
+    const char* dependency = jsonString(root, "dependency");
+    if (cJSON_IsObject(preset) && dependency) {
+        std::filesystem::path folder = std::filesystem::path(path).lexically_normal();
+        if (folder.filename().empty()) folder = folder.parent_path();
+        base = (folder.parent_path() / dependency).string();
+    }
+    cJSON_Delete(root);
+    return exists(base + "/project.json") ? base : "";
+}
+
+std::string contentRoot(const std::string& path) {
+    const std::string base = presetBaseRoot(path);
+    return base.empty() ? path : base;
+}
+
 ProjectInfo ProjectInfo::detect(const std::string& path) {
     ProjectInfo info;
     info.root = path;
@@ -108,6 +132,13 @@ ProjectInfo ProjectInfo::detect(const std::string& path) {
     if (isVideoFile(path.c_str()) && exists(path)) {
         info.type = ProjectType::Video;
         info.entry = path;
+        return info;
+    }
+
+    const std::string base = presetBaseRoot(path);
+    if (!base.empty()) {
+        info = detect(base);
+        info.preset_root = path;
         return info;
     }
 

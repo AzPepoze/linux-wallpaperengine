@@ -17,7 +17,7 @@
 
 namespace {
 std::string packageFile(const WallpaperSource& source) {
-    return source.is_pkg ? source.path : source.path + "/scene.pkg";
+    return source.is_pkg ? source.path : contentRoot(source.path) + "/scene.pkg";
 }
 
 std::string extractOutputDir(const WallpaperSource& source, const CliOptions& opts) {

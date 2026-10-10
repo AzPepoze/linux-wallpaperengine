@@ -2,7 +2,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
+#include <climits>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -10,6 +12,7 @@
 #include "app/cli_args.h"
 #include "app/flag_config.h"
 #include "shared/core/build_config.h"
+#include "shared/core/config_candidates.h"
 #include "shared/core/logger.h"
 #include "sokol_args.h"
 
@@ -21,6 +24,18 @@ bool hasFlag(const char* name) {
 
 bool hasDashedFlag(const char* name) {
     return sargs_exists(name) || sargs_exists((std::string("--") + name).c_str());
+}
+
+std::string audioState(const CliOptions& opts) {
+    if (opts.no_audio) return "disabled";
+    if (opts.silent) return "muted";
+    return "enabled";
+}
+
+const char* audioSource(const CliOptions& opts) {
+    if (opts.silent) return "CLI";
+    if (opts.no_audio) return "diagnostics/no-ui";
+    return "default";
 }
 
 std::string gpuArg(int argc, char* argv[]) {
@@ -66,6 +81,23 @@ std::string valueAnySpelling(const char* name) {
 
 }  // namespace
 
+bool parseWindowGeometry(const std::string& text, WindowGeometry& out) {
+    int values[4] = {};
+    const char* cursor = text.c_str();
+    for (int i = 0; i < 4; ++i) {
+        char* end = nullptr;
+        const long value = strtol(cursor, &end, 10);
+        if (end == cursor || value < INT_MIN || value > INT_MAX) return false;
+        values[i] = (int)value;
+        const char separator = i == 3 ? '\0' : 'x';
+        if (*end != separator) return false;
+        cursor = end + 1;
+    }
+    if (values[2] <= 0 || values[3] <= 0) return false;
+    out = WindowGeometry{true, values[0], values[1], values[2], values[3]};
+    return true;
+}
+
 CliOptions CliOptions::parse(int argc, char* argv[]) {
     sargs_desc a_desc = {};
     a_desc.argc = argc;
@@ -74,6 +106,16 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     sargs_setup(&a_desc);
 
     CliOptions opts;
+    const std::vector<std::string> args(argv, argv + argc);
+    cli_args::optionValue(args, {"--config"}, opts.config_path);
+    if (!opts.config_path.empty()) {
+        if (access(opts.config_path.c_str(), R_OK) != 0) {
+            fprintf(stderr, "Cannot read config '%s'\n", opts.config_path.c_str());
+            exit(EXIT_FAILURE);
+        }
+        // flag_config and the engine path lookup read this before the rest of the parse runs.
+        configPathOverride() = opts.config_path;
+    }
     opts.gpu = gpuArg(argc, argv);
     opts.list_gpus = hasDashedFlag("list-gpus");
 #if DEBUG_BUILD
@@ -87,7 +129,6 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
     opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
-    const std::vector<std::string> args(argv, argv + argc);
     auto record = [&](const std::string& key, const std::string& value, const char* source) {
         opts.startup_options.push_back(key + "=" + (value.empty() ? "<unset>" : value) + " (source: " + source + ")");
     };
@@ -132,15 +173,37 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.intro_zoom = introValue("--intro-zoom", "intro_zoom", "1.0");
     opts.intro_duration = introValue("--intro-duration", "intro_duration", "4");
 
-    const std::string effect_resolution = resolve({"--effect-resolution"}, "effect_resolution", "auto");
-    opts.native_effect_resolution = effect_resolution == "native";
-    if (effect_resolution != "auto" && effect_resolution != "native")
-        fprintf(stderr, "Unknown effect resolution '%s'; using auto\n", effect_resolution.c_str());
+    // --effect-resolution and the effect_resolution key are older names for the same setting.
+    const std::string legacy_resolution = flag_config::string("effect_resolution");
+    const std::string resolution_fallback = legacy_resolution.empty() ? "auto" : legacy_resolution;
+    const std::string resolution_text = resolve({"--resolution", "--effect-resolution"}, "resolution", resolution_fallback);
+    if (!resolution::parse(resolution_text, opts.resolution)) {
+        fprintf(stderr, "Unknown resolution '%s'; using auto\n", resolution_text.c_str());
+        opts.resolution = resolution::Setting{};
+    }
 
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.whoareyou = cli_args::hasFlag(args, {"--whoareyou"});
-    opts.no_audio = hasDashedFlag("no-audio") || opts.no_ui || opts.diagnostics.enabled ||
-                    cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    opts.version = cli_args::hasFlag(args, {"-V", "--version"});
+    opts.list_outputs = cli_args::hasFlag(args, {"--list-outputs"});
+    opts.list_transitions = cli_args::hasFlag(args, {"--list-transitions"});
+    opts.list_properties = cli_args::hasFlag(args, {"-l", "--list-properties"});
+    opts.disable_parallax = cli_args::hasFlag(args, {"--disable-parallax"});
+    opts.disable_mouse = cli_args::hasFlag(args, {"--disable-mouse"});
+
+    // --quiet wins over --log-level and config.json.
+    const log_level_t fallback_level = DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO;
+    std::string log_level_text = resolve({"--log-level"}, "log_level", DEBUG_BUILD ? "debug" : "info");
+    if (cli_args::hasFlag(args, {"--quiet", "-q"})) log_level_text = "error";
+    if (!parseLogLevel(log_level_text, opts.log_level)) {
+        fprintf(stderr, "Unknown log level '%s'; using default\n", log_level_text.c_str());
+        opts.log_level = fallback_level;
+    }
+    opts.silent = hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    opts.no_audio = opts.no_ui || opts.diagnostics.enabled;
+    opts.no_audio_processing = hasDashedFlag("no-audio-processing");
+    opts.list_audio_devices = hasDashedFlag("list-audio-devices");
+    opts.audio_device = resolve({"--audio-device"}, "audio_device", "");
     std::string volume_arg;
     if (cli_args::optionValue(args, {"--volume"}, volume_arg)) {
         char* end = nullptr;
@@ -152,6 +215,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
             opts.has_volume = true;
         }
     }
+    std::string window_arg;
+    if (cli_args::optionValue(args, {"--window"}, window_arg) && !parseWindowGeometry(window_arg, opts.window))
+        fprintf(stderr, "Invalid --window '%s'; ignoring\n", window_arg.c_str());
     opts.performance_profile = cli_args::hasFlag(args, {"--performance-profile"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"});
     opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});
@@ -229,10 +295,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cliValue("fps_limit", std::to_string(opts.fps_limit), {"-f", "--fps"});
     record("volume", opts.has_volume ? std::to_string((int)opts.volume) : "100", opts.has_volume ? "CLI" : "default");
     record("gpu", opts.gpu.empty() ? "auto" : opts.gpu, opts.gpu.empty() ? "default" : "CLI");
-    record("audio", opts.no_audio ? "disabled" : "enabled",
-           hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"})
-               ? "CLI"
-               : (opts.no_ui || opts.diagnostics.enabled ? "diagnostics/no-ui" : "default"));
+    record("audio", audioState(opts), audioSource(opts));
+    record("audio_processing", opts.no_audio_processing ? "disabled" : "enabled",
+           opts.no_audio_processing ? "CLI" : "default");
     record("cover", opts.cover ? "true" : "false", opts.cover ? "CLI" : "default");
     record("control", opts.no_control ? "disabled" : "enabled", opts.no_control ? "CLI" : "default");
     record("video_ram", opts.video_ram ? "true" : "false", opts.video_ram ? "CLI" : "default");

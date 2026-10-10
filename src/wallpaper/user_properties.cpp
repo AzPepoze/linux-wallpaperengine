@@ -94,8 +94,33 @@ UserPropertyValue parseRaw(const std::string& type, const std::string& raw) {
     return value;
 }
 
+// A "text" property is an editor label, so only a string default is a value; a bool default is not text.
+bool isLabel(const std::string& type) {
+    return lowered(type.c_str()) == "text";
+}
+
 UserPropertyValue defaultValue(const std::string& type, const cJSON* value) {
+    if (isLabel(type) && !cJSON_IsString(value)) return UserPropertyValue{};
     return parseRaw(type, jsonText(value));
+}
+
+double numberOf(const cJSON* object, const char* key) {
+    const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, key);
+    return cJSON_IsNumber(item) ? item->valuedouble : 0.0;
+}
+
+std::vector<UserPropertyOption> optionsOf(const cJSON* item) {
+    std::vector<UserPropertyOption> options;
+    const cJSON* list = cJSON_GetObjectItemCaseSensitive(item, "options");
+    if (!cJSON_IsArray(list)) return options;
+    const cJSON* entry = nullptr;
+    cJSON_ArrayForEach(entry, list) {
+        UserPropertyOption option;
+        option.label = jsonText(cJSON_GetObjectItemCaseSensitive(entry, "label"));
+        option.value = jsonText(cJSON_GetObjectItemCaseSensitive(entry, "value"));
+        options.push_back(std::move(option));
+    }
+    return options;
 }
 }  // namespace
 
@@ -117,12 +142,41 @@ bool UserProperties::loadProject(const std::string& project_json_path) {
             def.key = item->string;
             const cJSON* type = cJSON_GetObjectItemCaseSensitive(item, "type");
             if (cJSON_IsString(type) && type->valuestring) def.type = type->valuestring;
+            def.label = jsonText(cJSON_GetObjectItemCaseSensitive(item, "text"));
+            def.min = numberOf(item, "min");
+            def.max = numberOf(item, "max");
+            def.step = numberOf(item, "step");
+            def.options = optionsOf(item);
             def.value = defaultValue(def.type, cJSON_GetObjectItemCaseSensitive(item, "value"));
             properties_.push_back(std::move(def));
         }
     }
     cJSON_Delete(root);
     return true;
+}
+
+void UserProperties::applyPreset(const std::string& preset_json_path, const std::string& preset_root) {
+    const std::string text = readFile(preset_json_path);
+    cJSON* root = text.empty() ? nullptr : cJSON_Parse(text.c_str());
+    if (!root) return;
+
+    const cJSON* preset = cJSON_GetObjectItemCaseSensitive(root, "preset");
+    if (cJSON_IsObject(preset)) {
+        const cJSON* item = nullptr;
+        cJSON_ArrayForEach(item, preset) {
+            if (!item->string || cJSON_IsNull(item)) continue;
+            for (UserPropertyDef& def : properties_) {
+                if (def.key != item->string) continue;
+                if (isLabel(def.type) && !cJSON_IsString(item)) break;
+                std::string raw = jsonText(item);
+                // Texture values are stored beside the preset, so they resolve from its folder.
+                if (def.type == "scenetexture" && !raw.empty() && raw[0] != '/') raw = preset_root + "/" + raw;
+                def.value = parseRaw(def.type, raw);
+                break;
+            }
+        }
+    }
+    cJSON_Delete(root);
 }
 
 void UserProperties::applySaved(const std::string& gui_config_json_text, const std::string& workshop_id) {
@@ -160,6 +214,12 @@ const UserPropertyValue* UserProperties::find(const std::string& key) const {
         if (def.key == key) return &def.value;
     }
     return nullptr;
+}
+
+const std::string* UserProperties::texturePath(const std::string& key) const {
+    const UserPropertyValue* value = find(key);
+    if (!value || value->type != UserPropertyValue::Type::Text || value->text.empty()) return nullptr;
+    return &value->text;
 }
 
 std::vector<std::pair<std::string, std::string>> UserProperties::toStrings() const {

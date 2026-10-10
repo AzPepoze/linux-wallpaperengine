@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 // Process-wide audio backend: file playback, video PCM streams, and spectrum capture.
 class AudioEngine {
@@ -29,12 +30,26 @@ class AudioEngine {
     bool groupFading(GroupId group) const;
     void cancelGroupFade(GroupId group);
 
-    void init();
+    struct Options {
+        std::string device;   // name substring; empty or "default" = system default output
+        bool capture = true;  // false skips the monitor capture, so the spectrum stays at zero
+    };
+
+    void init(const Options& options);
+    void init() {
+        init(Options{});
+    }
     void shutdown();
     bool isAvailable() const;
     // Disables all playback, capture and streaming before init(); used by automated runs.
     void setAudioDisabled(bool disabled);
     bool isAudioDisabled() const;
+
+    // Reopens playback on another device. Live sounds and streams are dropped; callers reload them.
+    bool setPlaybackDevice(const std::string& device);
+    const std::string& playbackDevice() const;
+    void setCaptureEnabled(bool enabled);
+    static std::vector<std::string> playbackDeviceNames();
 
     SoundHandle play(const std::string& path, bool loop, float volume, bool start_paused = false,
                      GroupId group = kDefaultGroup);
@@ -75,6 +90,12 @@ class AudioEngine {
 
    private:
     AudioEngine();
+    bool ensureContext();
+    void openPlayback();
+    void closePlayback();
+    void openCapture();
+    void closeCapture();
+    void releaseSounds();
     ~AudioEngine();
     AudioEngine(const AudioEngine&) = delete;
     AudioEngine& operator=(const AudioEngine&) = delete;

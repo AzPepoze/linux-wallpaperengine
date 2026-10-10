@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <unistd.h>
 
 #include "app/cli_args.h"
 #include "app/cli_options.h"
@@ -41,7 +42,9 @@
 #include "wallpaper/2d/scene_2d_wallpaper.h"
 #include "wallpaper/2d/script/script_engine.h"
 #include "wallpaper/project_info.h"
+#include "wallpaper/property_listing.h"
 #include "wallpaper/transition/transition_catalog.h"
+#include "wallpaper/wallpaper_loader.h"
 #include "wallpaper/wallpaper_manager.h"
 
 #if DEBUG_BUILD
@@ -93,8 +96,15 @@ static void initAudio() {
         AudioEngine::instance().setAudioDisabled(true);
         return;
     }
-    AudioEngine::instance().init();
-    if (cli.has_volume) AudioEngine::instance().setMasterVolume(cli.volume / 100.0f);
+    AudioEngine::Options options;
+    options.device = cli.audio_device;
+    options.capture = !cli.no_audio_processing;
+    AudioEngine::instance().init(options);
+    if (cli.silent) {
+        AudioEngine::instance().setMasterVolume(0.0f);
+    } else if (cli.has_volume) {
+        AudioEngine::instance().setMasterVolume(cli.volume / 100.0f);
+    }
 }
 
 static void initGraphics() {
@@ -131,9 +141,11 @@ static void applyCliToContext() {
     ctx.performance_profile = cli.performance_profile;
     ctx.intro_zoom = cli.intro_zoom;
     ctx.intro_duration = cli.intro_duration;
-    ctx.native_effect_resolution = cli.native_effect_resolution;
+    ctx.resolution = cli.resolution;
     ctx.parallax_smoothing = cli.parallax.smoothing;
     ctx.parallax_scale = cli.parallax.scale;
+    ctx.disable_parallax = cli.disable_parallax;
+    ctx.disable_mouse = cli.disable_mouse;
     ctx.fps_limit = cli.fps_limit;
 
     int transition = 0;
@@ -173,7 +185,6 @@ static void loadInitialWallpaper() {
 }
 
 static void init(void) {
-    logger_init(DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO);
 #if DEBUG_BUILD
     // Names this debug build's process so its GPU faults are identifiable in kernel logs.
     prctl(PR_SET_NAME, "lwe-debug-repo", 0, 0, 0);
@@ -309,18 +320,84 @@ static void runDesktopLayerIfPossible() {
     exit(code);
 }
 
+// --window sets the windowed size; an output (-r or --layer) always covers its full area.
+static void applyWindowGeometry(sapp_desc& desc) {
+    if (!cli.window.set) return;
+    if (wantsDesktopLayer()) {
+        LOG_TAG_W("OPTIONS", "--window is ignored when drawing on an output (-r or --layer)");
+        return;
+    }
+    desc.width = cli.window.width;
+    desc.height = cli.window.height;
+    LOG_TAG_I("OPTIONS", "window size %dx%d; position %d,%d is not applied", cli.window.width, cli.window.height,
+              cli.window.x, cli.window.y);
+}
+
+// Output names come from the session's plugin: Wayland when there is a Wayland display, else X11.
+static int listOutputs() {
+    using ListOutputsFunction = bool (*)();
+    if (std::getenv("WAYLAND_DISPLAY")) {
+        const auto list = reinterpret_cast<ListOutputsFunction>(pluginSymbol("wayland", "lwe_list_outputs"));
+        if (list && list()) return EXIT_SUCCESS;
+    }
+    if (std::getenv("DISPLAY")) {
+        const auto list = reinterpret_cast<ListOutputsFunction>(pluginSymbol("x11", "lwe_x11_list_outputs"));
+        if (list && list()) return EXIT_SUCCESS;
+    }
+    fprintf(stderr, "Cannot list outputs: no Wayland or X11 session is reachable\n");
+    return EXIT_FAILURE;
+}
+
+static void listTransitions() {
+    for (int i = 0; i < lwe::transition::effectCount(); ++i) printf("%s\n", lwe::transition::effectByIndex(i)->name);
+    printf("none\nrandom\n");
+}
+
+static int listProperties() {
+    if (wallpaper_source.path.empty() || wallpaper_source.is_pkg) {
+        fprintf(stderr, "--list-properties needs a wallpaper folder\n");
+        return EXIT_FAILURE;
+    }
+    // Packed scenes (scene.pkg) have no scene.json, so only project.json decides here.
+    const ProjectInfo info = ProjectInfo::detect(wallpaper_source.path);
+    if (access((info.root + "/project.json").c_str(), F_OK) != 0) {
+        fprintf(stderr, "No project.json in %s\n", info.root.c_str());
+        return EXIT_FAILURE;
+    }
+    printProperties(stdout, WallpaperLoader::prepareProperties(info, cli.set_properties));
+    return EXIT_SUCCESS;
+}
+
+// These flags print their result on stdout, so logs are limited to errors while they run.
+static bool printsInfoOnly() {
+    return cli.whoareyou || cli.version || cli.list_transitions || cli.list_outputs || cli.list_properties;
+}
+
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     // Two malloc arenas keep parallel loading from leaving tens of MB resident.
     mallopt(M_ARENA_MAX, 2);
-    logger_init(LOG_LEVEL_DEBUG);
     cli = CliOptions::parse(argc, argv);
+    logger_init(printsInfoOnly() ? LOG_LEVEL_ERROR : cli.log_level);
     // Identity probe must come before GPU work and logging so stdout stays one JSON line.
     if (cli.whoareyou) {
         lwe::identity::printEngineIdentity(stdout);
         exit(EXIT_SUCCESS);
     }
+    if (cli.version) {
+        printf("linux-wallpaperengine %s\n", lwe::identity::kVersion);
+        exit(EXIT_SUCCESS);
+    }
+    if (cli.list_transitions) {
+        listTransitions();
+        exit(EXIT_SUCCESS);
+    }
+    if (cli.list_outputs) exit(listOutputs());
     if (cli.help) {
         cli_args::printHelp(stdout);
+        exit(EXIT_SUCCESS);
+    }
+    if (cli.list_audio_devices) {
+        for (const std::string& name : AudioEngine::playbackDeviceNames()) printf("%s\n", name.c_str());
         exit(EXIT_SUCCESS);
     }
     cli.logResolvedOptions();
@@ -337,6 +414,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     if (!parsePointerSource(cli.pointer, ctx.pointer_source))
         LOG_TAG_W("OPTIONS", "unknown --pointer '%s'; using auto", cli.pointer.c_str());
     wallpaper_source = resolveWallpaperSource(cli);
+    if (cli.list_properties) exit(listProperties());
     strncpy(ctx.wallpaper_path, wallpaper_source.path.c_str(), sizeof(ctx.wallpaper_path) - 1);
     ctx.is_pkg = wallpaper_source.is_pkg;
     LOG_TAG_I("OPTIONS", "Wallpaper: %s (source: %s)", wallpaper_source.path.c_str(),
@@ -362,8 +440,11 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
             request.scaling = cli.cover ? "fill" : cli.scaling;
             request.volume = cli.volume;
             request.has_volume = cli.has_volume;
-            request.muted = cli.no_audio;
+            request.muted = cli.silent;
             request.has_muted = true;
+            request.audio_device = cli.audio_device;
+            request.audio_processing = !cli.no_audio_processing;
+            request.has_audio_processing = true;
             request.fps = cli.fps_limit;
             request.has_fps = cli.fps_limit > 0;
             request.toggle_debug_ui = cli.toggle_debug_ui;
@@ -407,6 +488,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     desc.cleanup_cb = cleanup;
     desc.width = 1280;
     desc.height = 720;
+    applyWindowGeometry(desc);
     if (!x11_desktop_title.empty()) {
         desc.window_title = x11_desktop_title.c_str();
     } else {

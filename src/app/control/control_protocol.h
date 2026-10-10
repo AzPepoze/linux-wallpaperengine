@@ -21,6 +21,9 @@ struct SwitchRequest {
     bool has_volume = false;
     bool muted = false;
     bool has_muted = false;
+    std::string audio_device;  // output name or part of it, "default" for system output; empty keeps it
+    bool audio_processing = true;
+    bool has_audio_processing = false;
     int fps = 0;
     bool has_fps = false;
 

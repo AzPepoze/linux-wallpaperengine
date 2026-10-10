@@ -114,7 +114,11 @@ void ImageLayer::updatePuppetPositions(int width, int height) {
 bool ImageLayer::renderGeometry(EngineContext& ctx, int width, int height, const std::function<void()>& draw) {
     width = std::max(1, width);
     height = std::max(1, height);
-    if (!ensurePuppetTarget(width, height)) return false;
+    // Geometry stays in layer pixels; the target only needs the size it is drawn at.
+    const auto target = layerTargetSize(ctx, width, height);
+    const int target_width = target.first;
+    const int target_height = target.second;
+    if (!ensurePuppetTarget(target_width, target_height)) return false;
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
@@ -125,7 +129,7 @@ bool ImageLayer::renderGeometry(EngineContext& ctx, int width, int height, const
     pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
     pass.attachments.colors[0] = puppet_target.attachment_view;
     sg_begin_pass(&pass);
-    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
+    renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
     draw();
     sg_end_pass();
 
@@ -135,8 +139,9 @@ bool ImageLayer::renderGeometry(EngineContext& ctx, int width, int height, const
     resolve_pass.action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 0.0f};
     resolve_pass.attachments.colors[0] = puppet_straight.attachment_view;
     sg_begin_pass(&resolve_pass);
-    renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    renderer_draw_unpremultiplied(&ctx.renderer, puppet_target.texture_view, (float)width, (float)height);
+    renderer_update_viewport(&ctx.renderer, (float)target_width, (float)target_height);
+    renderer_draw_unpremultiplied(&ctx.renderer, puppet_target.texture_view, (float)target_width,
+                                  (float)target_height);
     sg_end_pass();
 
     renderer_update_viewport(&ctx.renderer, saved_view_width, saved_view_height);

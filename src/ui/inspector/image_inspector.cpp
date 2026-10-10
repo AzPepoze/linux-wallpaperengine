@@ -6,8 +6,10 @@
 
 #include "imgui.h"
 #include "shared/core/engine_context.h"
+#include "shared/core/resolution.h"
 #include "shared/core/web_devtools.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "util/sokol_imgui.h"
@@ -123,6 +125,51 @@ bool showBlendModeSelector(const char* label, int& blend_mode) {
     return changed;
 }
 
+// GPU time of this layer's update, draw, composite and effect passes in the last profile window.
+void showLayerGpuTimes(bool profiling, const std::string& name) {
+    if (!profiling) {
+        ImGui::TextDisabled("Start with --performance-profile to see GPU time");
+        return;
+    }
+    const std::string update_label = "update/" + name;
+    const std::string draw_label = "layer/" + name;
+    const std::string composite_label = "composite/" + name;
+    const std::string pass_prefix = name + "/";
+    double pass_ms = 0.0;
+    size_t pass_count = 0;
+    bool any = false;
+    for (const performance_profile::GpuSpanStat& span : performance_profile::gpuSpanStats()) {
+        if (span.label == update_label || span.label == draw_label || span.label == composite_label) {
+            ImGui::Text("%s: %.3f ms", span.label.c_str(), span.mean_ms);
+            any = true;
+        } else if (span.label.rfind(pass_prefix, 0) == 0) {
+            pass_ms += span.mean_ms;
+            ++pass_count;
+        }
+    }
+    if (pass_count > 0) {
+        ImGui::Text("Effect passes: %.3f ms (%zu passes)", pass_ms, pass_count);
+        any = true;
+    }
+    if (!any) ImGui::TextDisabled("No GPU samples in the last 10 s window");
+}
+
+// How the layer is sized under --resolution, and what it cost in the last profile window.
+void showRenderSize(const EngineContext& ctx, const ImageLayer& layer) {
+    if (!ImGui::CollapsingHeader("Render Size", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    const ImageLayer::RenderSizeInfo size = layer.renderSizeInfo();
+    ImGui::Text("Resolution: %s", resolution::describe(ctx.resolution).c_str());
+    ImGui::Text("Authored: %dx%d", size.authored_width, size.authored_height);
+    if (size.target_width > 0) {
+        ImGui::Text("Target (%s): %dx%d", size.target, size.target_width, size.target_height);
+        if (size.authored_width > 0)
+            ImGui::Text("Target is %.0f%% of authored width", 100.0 * size.target_width / size.authored_width);
+    } else {
+        ImGui::TextDisabled("Target: none (drawn directly)");
+    }
+    showLayerGpuTimes(ctx.performance_profile, layer.name);
+}
+
 }  // namespace
 
 namespace Inspector {
@@ -156,6 +203,7 @@ void showImageLayerInspector(EngineContext& ctx, ImageLayer& il) {
         const sg_image_desc desc = sg_query_image_desc(il.effect_source_image);
         showTextureSlot(0, "Post-Process Source (scene)", il.effect_source_view, "", desc.width, desc.height);
     }
+    showRenderSize(ctx, il);
 
     float layer_scale[3] = {il.scale[0], il.scale[1], il.scale[2]};
     float layer_origin[3] = {il.origin[0], il.origin[1], il.origin[2]};

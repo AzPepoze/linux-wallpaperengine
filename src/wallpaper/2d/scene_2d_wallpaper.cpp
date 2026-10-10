@@ -4,6 +4,7 @@
 #include "shared/core/logger.h"
 #include "shared/core/vfs.h"
 #include "shared/graphics/backend/surface.h"
+#include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/scene_builder.h"
 #include "wallpaper/2d/script/script_engine.h"
@@ -31,13 +32,7 @@ bool Scene2DWallpaper::applyParsedScene(ParsedScene parsed, EngineContext& ctx, 
     ctx.scene.scripts = parsed.scripts;
     ctx.scene.scene_w = parsed.design_width;
     ctx.scene.scene_h = parsed.design_height;
-    ctx.parallax.enabled = parsed.general.camera_parallax_enabled;
-    ctx.parallax.amount = parsed.general.camera_parallax_amount;
-    ctx.parallax.delay = parsed.general.camera_parallax_delay;
-    ctx.parallax.mouse_influence = parsed.general.camera_parallax_mouse_influence;
-    // config.json overrides the scene's parallax response and the particle multiplier.
-    if (ctx.parallax_smoothing > 0.0f) ctx.parallax.delay = ctx.parallax_smoothing;
-    ctx.parallax.scale = ctx.parallax_scale > 0.0f ? ctx.parallax_scale : Config::kParallaxScale;
+    applyParallaxScene(ctx, parsed.general);
     ctx.shake.enabled = parsed.general.camera_shake_enabled;
     ctx.shake.amplitude = parsed.general.camera_shake_amplitude;
     ctx.shake.speed = parsed.general.camera_shake_speed;

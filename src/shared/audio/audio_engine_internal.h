@@ -86,9 +86,17 @@ struct AudioEngine::Impl {
     std::vector<std::unique_ptr<Stream>> streams;
     std::vector<StreamHandle> stream_free;
 
-    ma_context capture_context = {};
+    // Owns device enumeration; playback and capture devices are created from it.
+    ma_context context = {};
+    bool context_ok = false;
+
+    // Name substring from --audio-device; empty or "default" means the system default device.
+    std::string device_name;
+    ma_device_id playback_id = {};
+    bool has_playback_id = false;
+
+    bool capture_wanted = true;
     ma_device capture_device = {};
-    bool capture_context_ok = false;
     bool capture_ok = false;
     uint32_t capture_rate = 48000;
     uint32_t capture_channels = 2;

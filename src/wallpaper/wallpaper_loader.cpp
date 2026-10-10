@@ -45,11 +45,14 @@ UserProperties WallpaperLoader::prepareProperties(const ProjectInfo& info,
     const std::string root = info.root == vfs::kRoot && vfs::mounted() ? vfs::sourceDirectory() : info.root;
     UserProperties properties;
     properties.loadProject(root + "/project.json");
+    if (!info.preset_root.empty()) properties.applyPreset(info.preset_root + "/project.json", info.preset_root);
+    // Saved GUI values belong to the wallpaper the user picked, so a preset uses its own folder name.
+    const std::string picked_root = info.preset_root.empty() ? root : info.preset_root;
     if (const char* home = getenv("HOME")) {
         std::ifstream file(std::string(home) + "/.config/linux-wallpaperengine-gui/config.json");
         std::stringstream text;
         text << file.rdbuf();
-        properties.applySaved(text.str(), std::filesystem::path(root).filename().string());
+        properties.applySaved(text.str(), std::filesystem::path(picked_root).filename().string());
     }
     for (const auto& [key, value] : overrides) properties.setFromString(key, value);
     return properties;

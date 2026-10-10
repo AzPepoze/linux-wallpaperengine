@@ -7,7 +7,6 @@
 int main() {
     AudioEngine& audio = AudioEngine::instance();
 
-    // Groups are pure bookkeeping and work with no audio device open.
     CHECK(audio.groupVolume(AudioEngine::kDefaultGroup) == 1.0f);
 
     const AudioEngine::GroupId g1 = audio.createGroup();
@@ -37,6 +36,13 @@ int main() {
     CHECK(audio.streamDroppedFrames(stream) == 0);
     CHECK(audio.streamQueuedFrames(stream) >= 24000);
     audio.destroyStream(stream);
+
+    audio.setCaptureEnabled(false);
+    CHECK(!audio.hasCapture());
+    audio.update(1.0f / 60.0f);
+    CHECK(audio.spectrum().bands64_left[0] == 0.0f);
+    audio.setCaptureEnabled(false);
+    CHECK(!audio.hasCapture());
 
     return test::finish("audio engine group checks");
 }

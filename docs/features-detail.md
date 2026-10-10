@@ -14,7 +14,7 @@ Legend:
 
 "Supported" means it is implemented and used; pixel-exact output against the Windows renderer is not guaranteed. Anything marked *unverified* was read from code or notes but not checked against a real wallpaper.
 
-Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the Wallpaper Engine install provides and how we use it.
+Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the Wallpaper Engine install provides and how this project uses it.
 
 ## Contents
 
@@ -80,7 +80,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [x] `none` (hard cut) and `random` (one effect picked per switch), with a configurable duration (`--transition`, `--transition-duration`, default `fade` / 1000 ms)
 - [x] Audio crossfade: the outgoing wallpaper's audio fades out while the incoming wallpaper's fades in, driven by the transition progress. Scene sound layers crossfade; video/web audio is assigned to the same group but still cuts at the swap (fixed when per-instance retention lands in P2)
 - [x] Transition mode (`--transition-mode`, config `transition_mode`, default `freeze`)
-  - `freeze` holds the outgoing wallpaper's last frame for the fade; `continue` steps and renders the outgoing wallpaper through the fade (scene, video and web), then destroys it
+  - `freeze` holds the outgoing wallpaper's last frame for the transition; `continue` steps and renders the outgoing wallpaper through the transition (scene, video and web), then destroys it
   - Both modes crossfade the outgoing audio into the incoming audio
 - [x] The outgoing frame is captured and held while the new wallpaper loads, so a slow load does not show a black gap; a failed load keeps the frozen frame
 - [x] Live settings on switch: the control request also carries scaling (`default|fill|fit|stretch`), master volume (0-100), mute and the frame cap, applied without restarting the process
@@ -95,6 +95,8 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 ## Projects and packages
 
 - [x] Wallpaper project folders and standalone `.pkg` files
+- [x] Dependency presets: a `project.json` with `dependency` and `preset` loads the base wallpaper from the same folder, with the preset's values applied
+  - The base wallpaper must be installed beside the preset folder
 - [x] `scene.pkg` handling
   - Release builds read the package in place from a memory map
   - Debug runtime extraction uses a separate `extracted/<wallpaper-id>/` directory and preserves the adjacent `project.json`
@@ -223,7 +225,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - A `waterwaves` pass with an opacity mask on an opaque layer copies its input through and runs only over the mask's non-zero bounds, since it leaves the input untouched wherever the mask is zero
     - Layers hidden by their own flag or by an ancestor group keep running scripts and animation but skip effect chains, puppet rendering and text rasterization until they become visible
     - `--performance-profile` also reports a GPU time per layer draw and composite (`draw/<layer>`, `composite/<layer>`) next to the per-pass spans
-    - Effect chains on layers authored larger than they are drawn (including puppets and multi-target effects such as shine) run at the on-screen size; shaders still see the authored size in `g_TextureNResolution`, `g_Screen` and `g_TexelSize`, so texel-offset blurs keep their look. Shaders that read the pixel position (`gl_FragCoord`, derivatives) and full-screen layers keep the full size; `--effect-resolution native` disables the reduction
+    - Effect chains on layers authored larger than they are drawn (including puppets and multi-target effects such as shine) run at the on-screen size; shaders still see the authored size in `g_TextureNResolution`, `g_Screen` and `g_TexelSize`, so texel-offset blurs keep their look. Shaders that read the pixel position (`gl_FragCoord`, derivatives) and full-screen layers keep the full size. Puppet and model targets follow the same setting. `--resolution native` disables the reduction, and `--resolution WxH` sizes the targets as if the output were that size
     - Vertex inputs are bound by the pipeline layout order, so shaders may declare attributes in any order (the native rope particle shader does)
   - Missing
     - Full vertex attribute support (2D `a_Position` / `a_TexCoord` and the particle layout only)
@@ -309,24 +311,27 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Resolution of every `project.json` property by type (bool, slider, combo, color in 0..1 or 0..255, text)
     - Overrides from the desktop GUI's saved values and from repeatable `--set-property key=value`
     - Scene user bindings and conditional visibility resolve before parsing, including script-property overrides
+    - Image properties (`scenetexture`): a picked image replaces the scene texture of its `usertextures` slot and the material's first texture
+    - Preset values from a dependency project apply over the base defaults, then saved GUI values and `--set-property`
     - Initial `engine.userProperties` and `applyUserProperties` delivery after script initialization
     - Live changes from a second launch with the same wallpaper and `--set-property`: keys that no scene binding reads update in place (scripts get `applyUserProperties`); bindings that only change object visibility toggle the layers in place; any other binding change reloads the scene with every current value
   - Missing
     - Editor display conditions and groups
     - Material constants bound to a user property (`"user"` in material JSON) are not applied; only scene.json bindings are
-    - Texture replacement, user shortcut and file properties
+    - User shortcut and file properties
 
 ## Audio
 
 - [x] Audio playback (WAV, MP3, FLAC through miniaudio; Ogg Vorbis is decoded with stb_vorbis into memory when the sound loads), loop playback
 - [x] Sound layers (see [Scene layers](#scene-layers)) and video audio
-- [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute`; diagnostic runs are always silent
+- [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute` mute the output only; the visualizer keeps running. Diagnostic runs are always fully silent
 - [x] Master volume: `--volume <n>` (0-100) at launch, and live volume/mute carried by a control-socket wallpaper switch
 - [-] System audio capture and spectrum
   - Works
-    - Captures the PulseAudio monitor of the default sink at 48 kHz stereo
+    - Captures the monitor of the chosen output (default: system output) at 48 kHz stereo
     - Smoothed 16, 32 and 64-band spectra per channel
     - Spectrum uniforms for shaders and `engine.registerAudioBuffers` for scripts
+    - Output device and spectrum on/off can change on a running wallpaper (`--audio-device`, `--no-audio-processing`)
   - Missing
     - Zeros when no monitor device exists
     - No volume control UI
@@ -461,7 +466,10 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 
 - [x] Vulkan renderer (sokol) with GPU selection (`--list-gpus`, `--gpu`), frame cap (`-f`/`--fps`) and scaling (`--scaling default|fit|fill|stretch`)
 - [x] `--whoareyou` prints a one-line JSON identity (name, implementation, version, control socket and feature list) for GUI detection; no GPU work or logs run on that path
-- [x] Compatibility with upstream launcher flags: unsupported options (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
+- [x] Compatibility with upstream launcher flags: unsupported options (for example `--noautomute`, `--screenshot`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
+- [x] Info and listing flags: `-V`/`--version`, `--list-outputs` (Wayland or X11 output names for `-r`), `--list-transitions`, `-l`/`--list-properties` (same layout as upstream, with `--set-property` and GUI-saved values applied)
+- [x] Logging and config flags: `--log-level debug|info|warn|error`, `-q`/`--quiet`, and `--config <path>` to read a `config.json` from another place
+- [x] `--disable-parallax` turns camera parallax off; `--disable-mouse` keeps the wallpaper from receiving mouse input or reading the global pointer
 - [-] Wayland wlr-layer-shell backend (`-r`/`--screen-root`, `--layer`; debug builds also `--layer-size`, `--layer-anchor`)
   - Works: background, bottom, top and overlay layers, anchoring, output selection, pointer motion and buttons, parallax
   - Missing: `--scaling stretch` and `--clamp` are accepted but ignored

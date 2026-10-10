@@ -14,6 +14,7 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
+#include "shared/graphics/backend/gpu_timing.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/render.h"
 #include "wallpaper/2d/alpha_curve.h"
@@ -81,8 +82,12 @@ void ImageLayer::update(float dt, EngineContext& ctx) {
         }
     }
     if (!render_active) return;
+    const int effects_token = gpu_timing_begin_pass("update/effects");
     renderEffectChain(ctx);
+    gpu_timing_end_pass(effects_token);
+    const int puppet_token = gpu_timing_begin_pass("update/puppet");
     puppet_resolved = has_puppet_mesh && renderPuppet(ctx);
+    gpu_timing_end_pass(puppet_token);
 }
 
 void ImageLayer::start() {

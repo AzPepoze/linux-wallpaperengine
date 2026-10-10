@@ -5,9 +5,39 @@
 #include "imgui.h"
 #include "shared/core/engine_context.h"
 #include "shared/graphics/backend/gpu_device_manager.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/shader/shader_backend.h"
 #include "ui/widgets/ui_components.h"
+
+namespace {
+// Mean GPU time per pass over the last 10 s window, slowest first.
+void drawGpuPassTable(const EngineContext& ctx) {
+    const auto& spans = performance_profile::gpuSpanStats();
+    if (spans.empty()) {
+        ImGui::TextDisabled(ctx.performance_profile ? "Waiting for the first 10 s sample..."
+                                                    : "Start with --performance-profile to fill this table");
+        return;
+    }
+    const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
+    if (!ImGui::BeginTable("##GpuPasses", 3, flags, ImVec2(-1.0f, 320.0f))) return;
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableSetupColumn("Pass");
+    ImGui::TableSetupColumn("Mean ms", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("Samples", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+    ImGui::TableHeadersRow();
+    for (const performance_profile::GpuSpanStat& span : spans) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(span.label.c_str());
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.3f", span.mean_ms);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Text("%zu", span.samples);
+    }
+    ImGui::EndTable();
+}
+}  // namespace
 
 void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
     RenderDiagnostics& diagnostics = RenderDiagnostics::instance();
@@ -53,6 +83,10 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
         UiComponents::TimelinePlot("##RenderHistory", ctx.profiler.render_history,
                                    static_cast<int>(profiler_stats_t::HISTORY_SIZE),
                                    static_cast<int>(ctx.profiler.history_offset), render_overlay, 0.0f, 16.6f, 40.0f);
+    }
+
+    if (ImGui::CollapsingHeader("GPU Passes")) {
+        drawGpuPassTable(ctx);
     }
 
     UiComponents::SectionHeader("GPU & Hardware Acceleration");

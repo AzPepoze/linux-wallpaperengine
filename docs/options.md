@@ -6,7 +6,7 @@ Command-line flags override `config.json`. The wallpaper path can come first or 
 
 ## Config file
 
-The engine reads `config.json` from the working directory or one of its parents. `config.example.json` is a template. Every key is optional.
+The engine reads `config.json` from the working directory or one of its parents. `--config` names a file to read instead. `config.example.json` is a template. Every key is optional.
 
 | Key | Value | Default | What it does |
 | --- | --- | --- | --- |
@@ -17,10 +17,14 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `parallax_scale` | `<factor>` | 50.0 | Particle parallax multiplier |
 | `transition` | `<name\|none\|random>` | fade | Transition shader (also `0`-`26`) |
 | `transition_duration_ms` | `<ms>` | 1000 | Transition length |
-| `transition_mode` | `freeze\|continue` | freeze | What the old wallpaper does during the fade |
+| `transition_mode` | `freeze\|continue` | freeze | What the old wallpaper does during the transition |
 | `web_transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Web frame transport |
 | `web_devtools_port` | `<port>` | 9222 | DevTools port |
 | `web_devtools_browser` | `<cmd>` | xdg-open | Browser for DevTools |
+| `audio_device` | `<name>` | system output | Same as `--audio-device` |
+| `log_level` | `debug\|info\|warn\|error` | debug in debug builds, else info | Same as `--log-level` |
+| `pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Same as `--pointer` |
+| `resolution` | `auto\|native\|WxH` | auto | Same as `--resolution` |
 
 ## Environment variables
 
@@ -41,6 +45,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--extract-only` | | off | Extract the package and exit |
 | `--extract-dir` | `<path>` | — | Where to extract, with `--extract-only` |
 | `--set-property` | `<name=value>` | — | Set a wallpaper property; repeatable |
+| `-l`, `--list-properties` | | off | Print the wallpaper's properties and their values, then exit |
 
 ### Graphics
 
@@ -50,11 +55,13 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--list-gpus` | | off | List GPUs and exit |
 | `-f`, `--fps` | `<n>` | display rate | Frame-rate cap; `0` follows the display |
 | `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops, `fit` letterboxes, `stretch` ignores aspect ratio |
+| `--intro-zoom` | `<factor>` | 1.0 | Startup zoom. The view eases from this zoom to 1.0. `1.0` is off |
+| `--intro-duration` | `<seconds>` | 4 | Length of the startup zoom |
 | `--cover` | | off | Force cover scaling |
-| `--clamp` | `<mode>` | ignored | Accepted, does nothing |
+| `--clamp`, `--clamping` | `<mode>` | ignored | Accepted, does nothing |
 | `--video-ram` | | off | Load video into RAM instead of streaming |
 | `--performance-profile` | | off | Log frame timing after a 5-second warmup |
-| `--effect-resolution` | `auto\|native` | auto | Size of shake effect chains |
+| `--resolution` | `auto\|native\|WxH` | auto | Render size of effect chains, puppets and models. `auto` follows the output size. `native` uses the authored size. `WxH` sizes them as if the output were that size (for example `3840x2160`). `--effect-resolution` still works |
 | `--script-profile` | | off | Log the slowest scripts every 10 seconds |
 
 ### Display
@@ -62,9 +69,9 @@ The engine reads `config.json` from the working directory or one of its parents.
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
 | `-r`, `--screen-root` | `<output>` | — | Draw on this output (for example `DP-4`) |
+| `--window` | `<XxYxWxH>` | 1280x720 | Windowed mode at this size. The X,Y position is not applied. Ignored with `-r` or `--layer` |
 | `--layer` | `background\|bottom\|top\|overlay` | background | Which layer to draw on |
-| `--layer-size` | `<WxH>` | — | Debug: small test rectangle, e.g. `320x180` |
-| `--layer-anchor` | `<edges>` | — | Debug: where the small rectangle sits, e.g. `top-left` |
+| `--list-outputs` | | off | Print the output names that `-r` accepts, then exit |
 
 On Wayland, `-r` uses the layer-shell feature. On X11, it uses the X11 desktop feature. If neither works, the wallpaper runs in a normal window.
 
@@ -73,6 +80,8 @@ On Wayland, `-r` uses the layer-shell feature. On X11, it uses the X11 desktop f
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
 | `--pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Where the mouse position comes from |
+| `--disable-mouse` | | off | The wallpaper ignores the mouse. Parallax then rests at the centre |
+| `--disable-parallax` | | off | Turn off camera parallax |
 
 - `auto` (default): tries these in order and uses the first that works: `x11`, `hyprland`, `surface`, `evdev`.
 - `x11`: the real cursor position on an X11 session.
@@ -88,7 +97,8 @@ If the source you pick does not work, the program moves down the same list and l
 | --- | --- | --- | --- |
 | `--transition` | `<name\|none\|random>` | fade | Transition shader |
 | `--transition-duration` | `<ms>` | 1000 | Transition length |
-| `--transition-mode` | `freeze\|continue` | freeze | What the old wallpaper does during the fade |
+| `--transition-mode` | `freeze\|continue` | freeze | What the old wallpaper does during the transition |
+| `--list-transitions` | | off | Print the transition names, then exit |
 
 ### Control
 
@@ -100,9 +110,18 @@ If the source you pick does not work, the program moves down the same list and l
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
-| `--no-audio` | | off | Turn audio off |
+| `--no-audio` | | off | Mute the output. The visualizer keeps working |
 | `-s`, `--silent`, `--mute` | | off | Same as `--no-audio` |
 | `--volume` | `<n>` | 100 | Volume, 0-100 |
+| `--audio-device` | `<name>` | system output | Output to play on. Part of the name is enough. `default` means system output |
+| `--no-audio-processing` | | off | Stop the spectrum capture. The visualizer stays at zero and uses less CPU |
+| `--list-audio-devices` | | | List output devices and exit |
+
+> [!NOTE]
+> `--no-audio-processing` only affects the visualizer. Sound still plays.
+
+> [!TIP]
+> Set `audio_device` in `config.json` to pick an output every time.
 
 ### Web
 
@@ -117,7 +136,14 @@ If the source you pick does not work, the program moves down the same list and l
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
+| `-V`, `--version` | | — | Print the version, then exit |
 | `--whoareyou` | | — | Print the engine identity as one JSON line, then exit |
+| `--config` | `<path>` | — | Read this `config.json` instead of searching for one |
+| `--log-level` | `debug\|info\|warn\|error` | debug in debug builds, else info | Lowest level to print |
+| `-q`, `--quiet` | | off | Print only errors. Same as `--log-level error` and wins over it |
+
+> [!NOTE]
+> `--version`, `--whoareyou`, `--list-outputs`, `--list-transitions` and `--list-properties` print only their result on stdout. Logs are limited to errors while they run.
 
 ### Particles
 
@@ -132,6 +158,9 @@ If the source you pick does not work, the program moves down the same list and l
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
+| `--layer-size` | `<WxH>` | — | Small test rectangle, e.g. `320x180` |
+| `--layer-anchor` | `<edges>` | — | Where the small rectangle sits, e.g. `top-left` |
+| `--toggle-debug-ui` | | off | Show or hide the debug panel of the running wallpaper on this output |
 | `--diagnose`, `--diagnostics` | | off | Capture render diagnostics |
 | `--diagnose-frame` | `<n>` | 100 | Frame to capture |
 | `--diagnose-final-only` | | off | Capture only the final output |
@@ -145,14 +174,14 @@ If the source you pick does not work, the program moves down the same list and l
 
 ## Ignored launcher options
 
-Options from the original launcher that this build does not support (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are accepted and logged as `ignoring unsupported option`. They never become the wallpaper path.
+Options from the upstream launcher that this build does not support are accepted and logged as `ignoring unsupported option`. They never become the wallpaper path. The full list with status is in [Compatibility](compatibility.md).
 
 ## Hand-off to a running wallpaper
 
 If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits. The running instance then:
 
-1. Crossfades to the new wallpaper, using the original transition shaders from your install.
+1. Switches to the new wallpaper with the transition from `--transition` (default `fade`, a crossfade). `none` cuts straight over, and `random` picks one effect per switch. Effects use the original transition shaders from your install, or the built-in fade if they are missing.
 2. Applies new `--set-property` values live.
-3. Updates volume, mute and frame cap, if given.
+3. Updates volume, mute, frame cap, output device and visualizer on or off. A device change reloads the wallpaper so its sounds play on the new output.
 
 Pass `--no-control` to start a separate instance instead.

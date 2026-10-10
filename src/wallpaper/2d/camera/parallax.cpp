@@ -59,6 +59,16 @@ void camera_shake_update(EngineContext& ctx) {
 
 }  // namespace
 
+void applyParallaxScene(EngineContext& ctx, const wallpaper_engine::SceneGeneralDocument& general) {
+    ctx.parallax.enabled = general.camera_parallax_enabled && !ctx.disable_parallax;
+    ctx.parallax.amount = general.camera_parallax_amount;
+    ctx.parallax.delay = general.camera_parallax_delay;
+    ctx.parallax.mouse_influence = general.camera_parallax_mouse_influence;
+    // config.json overrides the scene's parallax response and the particle multiplier.
+    if (ctx.parallax_smoothing > 0.0f) ctx.parallax.delay = ctx.parallax_smoothing;
+    ctx.parallax.scale = ctx.parallax_scale > 0.0f ? ctx.parallax_scale : Config::kParallaxScale;
+}
+
 void parallax_update(EngineContext& ctx, float dt, int viewport_width, int viewport_height) {
     float target_x = 0.5f;
     float target_y = 0.5f;

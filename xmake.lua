@@ -316,6 +316,7 @@ target_end()
 
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
 add_test("effect_resolution_tests", {"tests/effect_resolution_test.cpp"})
+add_test("resolution_tests", {"tests/resolution_test.cpp"})
 add_test("content_bounds_tests", {"tests/content_bounds_test.cpp"})
 add_test("gpu_timing_tests", {"tests/gpu_timing_test.cpp"})
 add_test("performance_profile_tests", {"tests/performance_profile_test.cpp",
@@ -327,6 +328,8 @@ add_test("web_renderer_tests", {"tests/web_renderer_shared_test.cpp", "src/wallp
                                 "src/wallpaper/web/web_dmabuf_ipc.cpp"})
 
 add_test("flag_config_tests", {"tests/flag_config_test.cpp", "src/app/flag_config.cpp"}, {"cjson"})
+
+add_test("live_fields_tests", {"tests/live_fields_test.cpp", "src/wallpaper/live_fields.cpp"}, {"cjson"})
 
 add_test("cli_options_tests", {"tests/cli_options_test.cpp", "src/app/cli_options.cpp", "src/app/cli_args.cpp",
                                "src/app/flag_config.cpp", "src/shared/core/logger.cpp"}, {"sokol", "cjson"})
@@ -398,6 +401,12 @@ add_test("vfs_package_tests", {"tests/vfs_package_test.cpp", "src/shared/core/vf
 add_test("user_properties_tests", {"tests/user_properties_test.cpp", "src/wallpaper/user_properties.cpp",
                                    "src/wallpaper/project_info.cpp", "src/wallpaper/video/video_properties.cpp",
                                    "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
+         {"cjson"})
+
+add_test("property_listing_tests", {"tests/property_listing_test.cpp", "src/wallpaper/property_listing.cpp",
+                                    "src/wallpaper/user_properties.cpp", "src/wallpaper/project_info.cpp",
+                                    "src/wallpaper/video/video_properties.cpp", "src/shared/core/vfs.cpp",
+                                    "src/shared/core/logger.cpp"},
          {"cjson"})
 
 add_test("scene_parser_tests", {"tests/scene_parser_test.cpp", "src/wallpaper/2d/parser/scene_parser.cpp",

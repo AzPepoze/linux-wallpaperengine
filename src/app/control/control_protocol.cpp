@@ -39,6 +39,8 @@ std::string encodeSwitchRequest(const SwitchRequest& request) {
     if (!request.scaling.empty()) cJSON_AddStringToObject(root, "scaling", request.scaling.c_str());
     if (request.has_volume) cJSON_AddNumberToObject(root, "volume", request.volume);
     if (request.has_muted) cJSON_AddBoolToObject(root, "muted", request.muted);
+    if (!request.audio_device.empty()) cJSON_AddStringToObject(root, "audio_device", request.audio_device.c_str());
+    if (request.has_audio_processing) cJSON_AddBoolToObject(root, "audio_processing", request.audio_processing);
     if (request.has_fps) cJSON_AddNumberToObject(root, "fps", request.fps);
     if (request.toggle_debug_ui) cJSON_AddBoolToObject(root, "toggle_debug_ui", true);
 
@@ -65,11 +67,6 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
 
     SwitchRequest parsed;
     parsed.path = readString(cJSON_GetObjectItemCaseSensitive(root, "path"));
-    if (parsed.path.empty()) {
-        cJSON_Delete(root);
-        error = "missing path";
-        return false;
-    }
 
     if (const cJSON* is_pkg = cJSON_GetObjectItemCaseSensitive(root, "is_pkg"); cJSON_IsBool(is_pkg)) {
         parsed.is_pkg = cJSON_IsTrue(is_pkg);
@@ -110,6 +107,21 @@ bool decodeSwitchRequest(const std::string& json, SwitchRequest& out, std::strin
     if (const cJSON* muted = cJSON_GetObjectItemCaseSensitive(root, "muted"); cJSON_IsBool(muted)) {
         parsed.muted = cJSON_IsTrue(muted);
         parsed.has_muted = true;
+    }
+    parsed.audio_device = readString(cJSON_GetObjectItemCaseSensitive(root, "audio_device"));
+    if (const cJSON* processing = cJSON_GetObjectItemCaseSensitive(root, "audio_processing");
+        cJSON_IsBool(processing)) {
+        parsed.audio_processing = cJSON_IsTrue(processing);
+        parsed.has_audio_processing = true;
+    }
+
+    // A path is required unless the request only changes audio or volume settings.
+    const bool has_settings =
+        parsed.has_volume || parsed.has_muted || parsed.has_audio_processing || !parsed.audio_device.empty();
+    if (parsed.path.empty() && !has_settings) {
+        cJSON_Delete(root);
+        error = "missing path";
+        return false;
     }
     if (const cJSON* fps = cJSON_GetObjectItemCaseSensitive(root, "fps"); cJSON_IsNumber(fps)) {
         parsed.fps = static_cast<int>(fps->valuedouble);

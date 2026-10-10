@@ -1,5 +1,3 @@
-// Checks for user property resolution from synthetic project and GUI JSON.
-
 #include "wallpaper/user_properties.h"
 
 #include <stdlib.h>
@@ -70,6 +68,18 @@ void testDefaults(const fs::path& dir) {
     const UserPropertyValue* title = props.find("title");
     expect("defaults", title && title->type == UserPropertyValue::Type::Text && title->text == "hello", "text default");
     expect("defaults", props.find("missing") == nullptr, "unknown key is absent");
+
+    const UserPropertyDef* speed_def = nullptr;
+    const UserPropertyDef* mode_def = nullptr;
+    for (const UserPropertyDef& def : props.all()) {
+        if (def.key == "speed") speed_def = &def;
+        if (def.key == "mode") mode_def = &def;
+    }
+    expect("metadata", speed_def && near((float)speed_def->max, 1.0f) && speed_def->min == 0.0, "slider range is read");
+    expect("metadata",
+           mode_def && mode_def->options.size() == 2 && mode_def->options[1].label == "B" &&
+               mode_def->options[1].value == "1",
+           "combo options are read");
 }
 
 void testSavedOverrides(const fs::path& dir) {
@@ -103,6 +113,57 @@ void testCliWins(const fs::path& dir) {
     expect("cli",
            props.find("modeLabel")->type == UserPropertyValue::Type::Number && near(props.find("modeLabel")->n, 9.0),
            "numeric combo value becomes a number");
+}
+
+void testPreset(const fs::path& dir) {
+    const char* base_json = R"({
+  "general": {"properties": {
+    "enabled": {"type": "bool", "value": true},
+    "tint": {"type": "color", "value": "0 0 0"},
+    "photo": {"type": "scenetexture", "value": ""}
+  }}
+})";
+    const fs::path preset = dir / "preset";
+    fs::create_directories(preset);
+    std::ofstream(preset / "project.json", std::ios::binary) << R"({
+  "preset": {"enabled": false, "tint": "255 0 0", "photo": "files/a.jpg", "unknown": "x", "gone": null}
+})";
+    std::ofstream(dir / "base.json", std::ios::binary) << base_json;
+
+    UserProperties props;
+    expect("preset base", props.loadProject((dir / "base.json").string()), "base defaults should load");
+    props.applyPreset((preset / "project.json").string(), preset.string());
+    expect("preset", !props.find("enabled")->b, "preset overrides a bool default");
+    expect("preset", near(props.find("tint")->color[0], 1.0f), "preset color is parsed in 0..255");
+    expect("preset", props.find("photo")->text == preset.string() + "/files/a.jpg",
+           "relative texture resolves beside the preset");
+    expect("preset", props.find("unknown") == nullptr, "undeclared preset keys are ignored");
+
+    props.applySaved(kGui, "123");
+    expect("preset", props.find("photo")->text == preset.string() + "/files/a.jpg",
+           "preset value survives saved state");
+    props.setFromString("enabled", "1");
+    expect("preset", props.find("enabled")->b, "command line still wins over the preset");
+}
+
+void testLabelDefaults(const fs::path& dir) {
+    fs::path label_json = dir / "label.json";
+    std::ofstream(label_json, std::ios::binary) << R"({
+  "general": {"properties": {
+    "newproperty": {"type": "text", "value": false},
+    "caption": {"type": "text", "value": "shown"}
+  }}
+})";
+    UserProperties props;
+    expect("label", props.loadProject(label_json.string()), "label project should load");
+    expect("label", props.find("newproperty")->text.empty(), "a bool default on a label is not text");
+    expect("label", props.find("caption")->text == "shown", "a string label keeps its text");
+
+    fs::path preset = dir / "label_preset";
+    fs::create_directories(preset);
+    std::ofstream(preset / "project.json", std::ios::binary) << R"({"preset": {"newproperty": false}})";
+    props.applyPreset((preset / "project.json").string(), preset.string());
+    expect("label", props.find("newproperty")->text.empty(), "a preset bool on a label stays empty");
 }
 
 void testTypeParsing(const fs::path& dir) {
@@ -159,6 +220,8 @@ int main() {
         testDefaults(base);
         testSavedOverrides(base);
         testCliWins(base);
+        testPreset(base);
+        testLabelDefaults(base);
         testTypeParsing(base);
         testToStringsRoundTrip(base);
     }

@@ -24,6 +24,7 @@
 #include "shared/media/media_thumbnail_texture.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/parser/scene_document.h"
+#include "wallpaper/user_properties.h"
 
 namespace {
 sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
@@ -45,6 +46,11 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
     }
 }
 
+// The image the user picked for a usertextures entry that names a scenetexture property.
+const std::string* pickedTexture(const cJSON* key, const UserProperties* properties) {
+    if (!properties || !cJSON_IsString(key) || !key->valuestring) return nullptr;
+    return properties->texturePath(key->valuestring);
+}
 }  // namespace
 
 AssetManager::AssetManager() : wallpaper_decode_cache_(std::make_unique<TextureDecodeCache>()) {}
@@ -576,7 +582,8 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
     return {};
 }
 
-GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::string* out_path) const {
+GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::string* out_path,
+                                              const UserProperties* user_properties) const {
     char abs_path[1024];
     if (!resolvePath(mat_rel_path, abs_path, sizeof(abs_path))) return {};
 
@@ -600,7 +607,10 @@ GfxImage AssetManager::resolveMaterialTexture(const char* mat_rel_path, std::str
                                      (strcmp(user_name->valuestring, "$mediaThumbnail") == 0 ||
                                       strcmp(user_name->valuestring, "$mediaPreviousThumbnail") == 0);
         if (media_thumbnail) img = resolveTextureInternal(user_name->valuestring, out_path, 0, false);
-        if (!media_thumbnail && cJSON_IsArray(textures)) {
+        // An image the user picked for this slot replaces the material's own texture.
+        const std::string* picked = pickedTexture(first_user, user_properties);
+        if (picked) img = resolveTextureInternal(picked->c_str(), out_path, 0, false);
+        if (!media_thumbnail && !picked && cJSON_IsArray(textures)) {
             cJSON* tex_node = cJSON_GetArrayItem(textures, 0);
             if (cJSON_IsString(tex_node) && tex_node->valuestring && tex_node->valuestring[0] != '\0') {
                 const std::string texture_ref = tex_node->valuestring;

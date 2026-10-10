@@ -2,12 +2,71 @@
 
 #if DEBUG_BUILD
 
+#include <algorithm>
+#include <cstdio>
+
 #include "imgui.h"
 #include "shared/core/engine_context.h"
+#include "shared/core/resolution.h"
+#include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
+#include "ui/widgets/ui_components.h"
+#include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/web/web_transport.h"
 
 namespace Inspector {
+namespace {
+constexpr size_t kTopGpuPasses = 8;
+
+void showGpuPasses(const EngineContext& ctx) {
+    if (!ctx.performance_profile) {
+        ImGui::TextDisabled("Start with --performance-profile for GPU timings");
+        return;
+    }
+    const auto& spans = performance_profile::gpuSpanStats();
+    if (spans.empty()) {
+        ImGui::TextDisabled("Waiting for the first 10 s GPU sample");
+        return;
+    }
+    ImGui::TextUnformatted("GPU, slowest passes (last 10 s):");
+    const size_t shown = std::min(spans.size(), kTopGpuPasses);
+    for (size_t i = 0; i < shown; ++i) ImGui::Text("%s: %.3f ms", spans[i].label.c_str(), spans[i].mean_ms);
+}
+
+// Output size, frame timing, render sizes of image layers, and the GPU cost of the last window.
+void showRender(EngineContext& ctx) {
+    if (!ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    ImGui::Text("Resolution: %s", resolution::describe(ctx.resolution).c_str());
+    ImGui::Text("Output: %.0fx%.0f (physical %.0fx%.0f)", ctx.renderer.view_width, ctx.renderer.view_height,
+                ctx.scene.physical_view_width, ctx.scene.physical_view_height);
+    ImGui::Text("Frame: %.2f ms avg | %.2f ms peak | %.1f FPS", ctx.profiler.frame_avg_ms, ctx.profiler.frame_peak_ms,
+                ctx.profiler.measured_fps);
+    char overlay[32] = {};
+    snprintf(overlay, sizeof(overlay), "%.2f ms", ctx.profiler.frame_ms);
+    UiComponents::TimelinePlot("##FrameHistory", ctx.profiler.frame_history,
+                               static_cast<int>(profiler_stats_t::HISTORY_SIZE),
+                               static_cast<int>(ctx.profiler.history_offset), overlay, 0.0f, 33.3f, 50.0f);
+
+    size_t targeted_layers = 0;
+    long long authored_pixels = 0;
+    long long target_pixels = 0;
+    for (const Layer* layer : ctx.scene.layers) {
+        const auto* image = dynamic_cast<const ImageLayer*>(layer);
+        if (!image) continue;
+        const ImageLayer::RenderSizeInfo size = image->renderSizeInfo();
+        if (size.target_width <= 0) continue;
+        ++targeted_layers;
+        authored_pixels += static_cast<long long>(size.authored_width) * size.authored_height;
+        target_pixels += static_cast<long long>(size.target_width) * size.target_height;
+    }
+    ImGui::Text("Layers with a render target: %zu", targeted_layers);
+    if (authored_pixels > 0) {
+        ImGui::Text("Target pixels: %.2f M of %.2f M authored (%.0f%%)", target_pixels / 1.0e6, authored_pixels / 1.0e6,
+                    100.0 * target_pixels / authored_pixels);
+    }
+    showGpuPasses(ctx);
+}
+}  // namespace
 
 void GlobalInspector::show(EngineContext& ctx) {
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "GLOBAL ENGINE SETTINGS");
@@ -25,6 +84,7 @@ void GlobalInspector::show(EngineContext& ctx) {
     ImGui::Text("Render Scale: %.3f (Offsets: %.1f, %.1f)", ctx.scene.render_scale, ctx.scene.offset_x,
                 ctx.scene.offset_y);
     ImGui::Text("FPS: %.1f | CPU frame: %.2f ms", ctx.profiler.measured_fps, ctx.profiler.frame_avg_ms);
+    showRender(ctx);
     ImGui::Checkbox("Show node IDs in scene tree", &ctx.debug.show_node_ids);
 
     ImGui::Separator();

@@ -12,7 +12,6 @@ int main() {
     ControlServer server;
     CHECK(server.bind(key));
 
-    // No client yet: poll must yield nothing and must not block.
     std::vector<SwitchRequest> pending;
     server.poll(pending);
     CHECK(pending.empty());
@@ -27,12 +26,10 @@ int main() {
     CHECK(pending[0].path == "/wp/test");
     CHECK(pending[0].transition == 21);
 
-    // A second server on the same key fails while the first is bound.
     ControlServer duplicate;
     CHECK(!duplicate.bind(key));
 
     server.close();
-    // After close, handoff finds no live owner.
     CHECK(!ControlClient::tryHandoff(key, request));
     return test::finish("control socket checks");
 }

@@ -42,6 +42,7 @@ class WallpaperManager {
         control_ = server;
     }
     void pollControl(EngineContext& ctx);
+    void applyAudioRequest(EngineContext& ctx, const SwitchRequest& request);
     bool hasPendingSwitch() const {
         return pending_switch_.has_value();
     }

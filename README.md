@@ -4,6 +4,9 @@ Shows animated wallpapers from Wallpaper Engine on Linux.
 
 > **Beta.** There is no release yet. Install it by building from source.
 
+> [!TIP]
+> For a GUI, consider using [linux-wallpaperengine-gui](https://github.com/AzPepoze/linux-wallpaperengine-gui). It is my GUI for this project.
+
 ## What is this?
 
 Wallpaper Engine is a program that shows animated wallpapers. People share their wallpapers as **projects**. This program plays those projects on Linux, so you do not need Windows.
@@ -18,6 +21,8 @@ Wallpaper Engine is a program that shows animated wallpapers. People share their
 | ![Scene wallpaper](docs/imgs/scene.jpg) | ![Video wallpaper](docs/imgs/video.jpg) |
 | Web | Transition |
 | ![Web wallpaper](docs/imgs/web.jpg) | ![Transition between wallpapers](docs/imgs/transition.jpg) |
+| Preset | |
+| ![Preset wallpaper](docs/imgs/preset.jpg) | |
 
 ## Words used in this guide
 
@@ -59,7 +64,7 @@ linux-wallpaperengine /path/to/wallpaper [OPTIONS]
 | Use it as the desktop background on screen DP-4 | `linux-wallpaperengine /path/to/wallpaper -r DP-4 --layer bottom` |
 | Play it without sound | add `-s` |
 | Change a setting while it runs | add `--set-property light=0` |
-| Switch to another wallpaper | run the new one. It fades in over the old one |
+| Switch to another wallpaper | run the new one. It uses the transition from `--transition` (default `fade`) |
 
 `-r DP-4` picks the screen. Replace `DP-4` with the name of your screen:
 
@@ -104,6 +109,16 @@ Each feature below needs its own libraries. Install only the ones you want.
 
 - Only Arch Linux has been tested.
 
+## Credits
+
+Some references come from these projects:
+
+| Project | Link |
+| --- | --- |
+| linux-wallpaperengine by Almamu | [github.com/Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine) |
+| open-wallpaper-engine by waywallen | [github.com/waywallen/open-wallpaper-engine](https://github.com/waywallen/open-wallpaper-engine) |
+| linux-wallpaperengine-gui by AzPepoze | [github.com/AzPepoze/linux-wallpaperengine-gui](https://github.com/AzPepoze/linux-wallpaperengine-gui) |
+
 ## More
 
 | I want to... | Read |
@@ -113,3 +128,20 @@ Each feature below needs its own libraries. Install only the ones you want.
 | See every option | [docs/options.md](docs/options.md) |
 | Build, test and debug the program | [docs/development.md](docs/development.md) |
 | See what works and what does not | [docs/features.md](docs/features.md) |
+| Compare with the upstream launcher | [docs/compatibility.md](docs/compatibility.md) |
+| Learn the Wallpaper Engine file formats and behaviour | [docs/wallpaper-engine-knowledge.md](docs/wallpaper-engine-knowledge.md) |
+
+## STONKS!
+
+<div align="center">
+  <a href="https://www.star-history.com/#AzPepoze/linux-wallpaperengine&type=date&legend=top-left">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&theme=dark&legend=top-left" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&legend=top-left" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&legend=top-left" width="600" />
+    </picture>
+  </a>
+  <br>
+  <br>
+  <strong>Made by AzPepoze</strong>
+</div>

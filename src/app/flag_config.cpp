@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "shared/core/config_candidates.h"
+
 namespace {
 
 char* readTextFile(const char* path) {
@@ -28,10 +30,8 @@ char* readTextFile(const char* path) {
 }
 
 cJSON* loadConfig(std::string* loaded_path = nullptr) {
-    const char* candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
-                                "../../../../config.json"};
-    for (const char* path : candidates) {
-        char* text = readTextFile(path);
+    for (const std::string& path : configCandidates()) {
+        char* text = readTextFile(path.c_str());
         if (!text) continue;
         cJSON* json = cJSON_Parse(text);
         free(text);

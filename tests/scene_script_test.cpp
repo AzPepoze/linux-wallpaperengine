@@ -1,4 +1,3 @@
-// SceneScript runtime checks: the clock/date text pattern used by WE wallpapers.
 #include "wallpaper/2d/script/scene_script.h"
 
 #include <cstdio>

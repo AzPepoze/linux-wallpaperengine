@@ -93,7 +93,7 @@ void ImageLayer::addEffectFromDocument(const wallpaper_engine::EffectInstanceDoc
 
 void ImageLayer::loadMaterial(const char* mat_rel_path, EngineContext& ctx) {
     const auto trace_start = std::chrono::steady_clock::now();
-    img = ctx.asset_mgr->resolveMaterialTexture(mat_rel_path, &path);
+    img = ctx.asset_mgr->resolveMaterialTexture(mat_rel_path, &path, &ctx.user_properties);
     updateCachedView();
     const auto* v = ctx.asset_mgr->findVideoTexture(img);
     if (!v && !path.empty()) v = ctx.asset_mgr->findVideoTexture(path);

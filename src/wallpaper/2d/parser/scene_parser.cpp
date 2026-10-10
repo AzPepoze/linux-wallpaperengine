@@ -55,6 +55,10 @@ void parseCamera(const cJSON* camera, SceneDocument& out) {
 
 void parseGeneral(const cJSON* general, SceneDocument& out) {
     if (!general) return;
+    if (char* printed = cJSON_PrintUnformatted(general)) {
+        out.general.raw_json = printed;
+        cJSON_free(printed);
+    }
 
     parseVec(cJSON_GetObjectItemCaseSensitive(general, "ambientcolor"), out.general.ambient_color.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(general, "skylightcolor"), out.general.skylight_color.data(), 3);
@@ -97,8 +101,7 @@ void parseGeneral(const cJSON* general, SceneDocument& out) {
         parseFloat(cJSON_GetObjectItemCaseSensitive(ortho, "height"), out.general.orthogonal_projection[1]);
     }
 
-    const bool is_hdr = parseBool(cJSON_GetObjectItemCaseSensitive(general, "hdr"), false);
-    out.general.bloom.enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "bloom"), false) || is_hdr;
+    out.general.bloom.enabled = parseBool(cJSON_GetObjectItemCaseSensitive(general, "bloom"), false);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomstrength"), out.general.bloom.strength);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomthreshold"), out.general.bloom.threshold);
     parseFloat(cJSON_GetObjectItemCaseSensitive(general, "bloomhdrfeather"), out.general.bloom.hdr_feather);
@@ -136,8 +139,7 @@ void addBoundKey(std::vector<std::string>& keys, const std::string& key) {
     if (std::find(keys.begin(), keys.end(), key) == keys.end()) keys.push_back(key);
 }
 
-// A condition turns the value into a boolean: true while the property equals it.
-// Every key a binding reads is added to `keys`, so a later change can tell whether the scene must rebuild.
+// Bound keys let live property changes determine whether the scene needs rebuilding.
 void resolveUserBindings(cJSON* node, const UserProperties& properties, std::vector<std::string>& keys) {
     if (cJSON_IsObject(node)) {
         const cJSON* user = cJSON_GetObjectItemCaseSensitive(node, "user");

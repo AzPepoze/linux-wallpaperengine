@@ -15,6 +15,9 @@ struct parallax_position_t {
     float y = 0.5f;
 };
 
+// Copies the scene's parallax settings into ctx, keeping the config.json overrides.
+void applyParallaxScene(EngineContext& ctx, const wallpaper_engine::SceneGeneralDocument& general);
+
 void parallax_update(EngineContext& ctx, float dt, int viewport_width, int viewport_height);
 
 parallax_offset_t parallax_layer_offset(const EngineContext& ctx, uint32_t scene_object_id,

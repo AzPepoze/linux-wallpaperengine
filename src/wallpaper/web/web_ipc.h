@@ -8,8 +8,7 @@
 
 #include <atomic>
 
-// A frame the helper exported as a DMA-BUF (tier B / zero-copy). The fds are
-// transferred separately with SCM_RIGHTS; this is only the image metadata.
+// DMA-BUF frame metadata; the fds travel separately via SCM_RIGHTS.
 struct WebDmaBufBuffer {
     uint32_t fourcc;    // DRM_FORMAT_* of the image
     uint64_t modifier;  // DRM format modifier (0 = linear)
@@ -22,15 +21,13 @@ struct WebDmaBufBuffer {
 // Number of DMA-BUF buffers the helper cycles through.
 constexpr uint32_t kWebDmaBufBuffers = 3;
 
-// Sent helper -> engine over the control socket, with the fds attached as
-// SCM_RIGHTS ancillary data (one per ring slot, in order).
+// Helper-to-engine offer; SCM_RIGHTS carries one fd per ring slot, in order.
 struct WebDmaBufOffer {
     uint32_t type;   // WEB_MSG_DMABUF_OFFER
     uint32_t count;  // number of attached fds
 };
 
-// Header at the start of a memfd-backed region; the BGRA pixel payload of
-// width * height * 4 bytes follows immediately after.
+// memfd header followed by a BGRA payload of width * height * 4 bytes.
 struct WebFrameBuffer {
     pthread_mutex_t mutex;
     uint32_t width;
@@ -39,8 +36,7 @@ struct WebFrameBuffer {
     uint32_t reserved;
     uint64_t frame_counter;
 
-    // Zero-copy transport. transport is 0 for shm pixels and 1 for the DMA-BUF
-    // ring below; the pixel payload is unused when it is 1.
+    // 0 selects shm pixels; 1 selects the DMA-BUF ring and leaves pixel payload unused.
     uint32_t transport;
     uint32_t buffer_count;
     WebDmaBufBuffer buffers[kWebDmaBufBuffers];

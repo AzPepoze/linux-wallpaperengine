@@ -81,6 +81,21 @@ void logger_clear_recent_entries() {
     recent_logs.clear();
 }
 
+bool parseLogLevel(const std::string& text, log_level_t& out) {
+    if (text == "debug") {
+        out = LOG_LEVEL_DEBUG;
+    } else if (text == "info") {
+        out = LOG_LEVEL_INFO;
+    } else if (text == "warn") {
+        out = LOG_LEVEL_WARN;
+    } else if (text == "error") {
+        out = LOG_LEVEL_ERROR;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 void log_msg(log_level_t level, const char* tag, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);

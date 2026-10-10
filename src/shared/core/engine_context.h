@@ -10,6 +10,7 @@
 #include "app/platform/pointer/pointer_source.h"
 #include "shared/assets/asset_manager.h"
 #include "shared/core/config.h"
+#include "shared/core/resolution.h"
 #include "shared/graphics/render.h"
 #include "sokol_gfx.h"
 #include "wallpaper/2d/parser/scene_document.h"
@@ -125,7 +126,7 @@ struct DebugState {
 struct EngineContext {
     float intro_zoom = 1.0f;
     float intro_duration = 4.0f;
-    bool native_effect_resolution = false;
+    resolution::Setting resolution;
     bool performance_profile = false;
     int fps_limit = 0;  // runtime frame-rate cap; 0 = vsync, no software cap
     sg_pass_action pass_action = {};
@@ -153,6 +154,8 @@ struct EngineContext {
     ParallaxState parallax;
     float parallax_smoothing = 0.0f;  // config override; 0 keeps the scene value
     float parallax_scale = 0.0f;      // config override; 0 keeps the built-in default
+    bool disable_parallax = false;    // --disable-parallax
+    bool disable_mouse = false;       // --disable-mouse: the wallpaper never sees pointer input
     CameraShakeState shake;
     DebugState debug;
     float time = 0.0f;

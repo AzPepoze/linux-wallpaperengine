@@ -46,7 +46,6 @@ struct DiagnosticConfig {
     bool disable_particles = false;
     bool disable_bloom = false;
 
-    // A/B test flag (deferred / controlled)
     bool enable_ab = false;
 
     bool capture_triggered = false;

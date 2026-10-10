@@ -7,7 +7,9 @@
     "transition": "fade",
     "transition_duration_ms": 1000,
     "transition_mode": "freeze",
+    "resolution": "auto",
     "web_transport": "auto",
     "web_devtools_port": 9222,
-    "web_devtools_browser": ""
+    "web_devtools_browser": "",
+    "audio_device": ""
 }

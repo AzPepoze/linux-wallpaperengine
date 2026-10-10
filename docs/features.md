@@ -59,6 +59,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [ ] Some APIs are stubs
 - [x] User properties (Partial)
   - [x] Sliders, colors, checkboxes and text
+  - [x] Image picks and dependency presets
   - [x] Most changes apply live
   - [ ] Editor groups and conditions
 - [x] Audio
@@ -69,7 +70,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [ ] Web album art links
 - [x] Transitions between wallpapers
   - [x] 27 transition effects
-  - [x] Crossfade with audio
+  - [x] Audio crossfade for scene sound (video and web audio cut at the swap)
 - [x] Mouse (Partial)
   - [x] Follows the mouse
   - [x] Click and hover on layers
@@ -97,6 +98,6 @@ Note: a checked box means the feature runs and is used. It does not mean the out
 ## More
 
 - [Feature details](features-detail.md): the item-by-item list
-- [Wallpaper Engine assets](wallpaper-engine-assets.md): the assets we load from Wallpaper Engine
+- [Wallpaper Engine assets](wallpaper-engine-assets.md): the assets this project loads from Wallpaper Engine
 
 When a feature changes, update both this page and the details page in the same commit.

@@ -86,6 +86,11 @@ class ImageLayer : public Layer {
         tint[3] = alpha;
         alpha_script_value = alpha;
     }
+    // Changes the scene's base alpha; update() copies it into tint each frame unless a timeline or script drives alpha.
+    void setBaseAlpha(float alpha) {
+        alpha_document.alpha = alpha;
+        setAlpha(alpha);
+    }
     bool alpha_from_timeline = false;  // SceneAnimations writes tint[3]; the per-layer alpha curve is not evaluated
     bool cursor_solid = false;         // scene `solid`: receives cursor events (not the plain-colour solid layer)
     int color_blend_mode = 0;
@@ -225,12 +230,23 @@ class ImageLayer : public Layer {
     void updateCachedView();
     void updateAnimatedFrame(EngineContext& ctx);
     bool ensureEffectTargets(EngineContext& ctx, sg_image source_image = {SG_INVALID_ID});
+    // Target size for a layer whose authored size is width x height, under the --resolution setting.
+    std::pair<int, int> layerTargetSize(EngineContext& ctx, int width, int height) const;
 
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});
     // The image the effect chain read this frame (the scene for a post-process layer); shown in the inspector.
     sg_image effect_source_image = {SG_INVALID_ID};
     sg_view effect_source_view = {SG_INVALID_ID};
+    // Authored size and the offscreen target this layer is drawn through; shown in the inspector.
+    struct RenderSizeInfo {
+        const char* target = "none";  // "puppet", "effects" or "none"
+        int authored_width = 0;
+        int authored_height = 0;
+        int target_width = 0;
+        int target_height = 0;
+    };
+    RenderSizeInfo renderSizeInfo() const;
 
    private:
     struct ChainState {

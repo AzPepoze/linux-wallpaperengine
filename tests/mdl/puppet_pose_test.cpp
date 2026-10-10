@@ -1,4 +1,3 @@
-// Synthetic checks for puppet pose skinning. Part of the mdl_tests target.
 #include "wallpaper/2d/puppet/puppet_pose.h"
 
 #include <math.h>
@@ -89,7 +88,6 @@ void runPuppetPoseTests() {
     pose.advance(model, layers, 1.0f);
     check(fabsf(layers[0].time - 0.5f) < 1e-5f, "a paused layer does not advance");
 
-    // A one-shot layer stops at the last frame even though the clip loops.
     std::vector<PuppetAnimationLayer> once_layers(1);
     once_layers[0].animation_id = 7;
     once_layers[0].once = true;
@@ -99,13 +97,11 @@ void runPuppetPoseTests() {
     pose.skin(model, once_layers, out);
     check(fabsf(out[0] - 210.0f) < 1e-3f, "a one-shot layer shows its last frame instead of wrapping");
 
-    // Without root motion the root bone keeps its first-frame translation.
     pose.root_motion = false;
     pose.skin(model, layers, out);
     check(fabsf(out[0] - 110.0f) < 1e-3f, "root motion off ignores the root bone's animated translation");
     pose.root_motion = true;
 
-    // A script-set bone pose replaces the animated one until it is cleared.
     std::vector<MdlKeyframe> local;
     check(pose.localPose(model, layers, local) && fabsf(local[0].translation[0] - 150.0f) < 1e-3f,
           "local pose reports the animated translation");
