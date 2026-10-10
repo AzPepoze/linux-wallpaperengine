@@ -2,6 +2,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>
+#include <stdio.h>
 
 #include <string>
 #include <vector>
@@ -159,6 +160,24 @@ bool queryPointer(const std::string& output, float& x, float& y) {
     return x >= 0.0f && x < 1.0f && y >= 0.0f && y < 1.0f;
 }
 
+// Prints the monitor names X reports, one per line.
+bool listOutputNames() {
+    XConnection connection;
+    Display* dpy = connection.get();
+    if (!dpy) return false;
+
+    int count = 0;
+    XRRMonitorInfo* monitors = XRRGetMonitors(dpy, DefaultRootWindow(dpy), True, &count);
+    for (int i = 0; monitors && i < count; ++i) {
+        char* name = XGetAtomName(dpy, monitors[i].name);
+        if (!name) continue;
+        printf("%s\n", name);
+        XFree(name);
+    }
+    if (monitors) XRRFreeMonitors(monitors);
+    return true;
+}
+
 // Plugin entry points, resolved by x11_desktop_loader.cpp in the host binary.
 extern "C" {
 int lwe_plugin_abi() {
@@ -171,5 +190,9 @@ bool lwe_x11_place_desktop_window(const char* title, const char* output) {
 
 bool lwe_x11_query_pointer(const char* output, float* x, float* y) {
     return queryPointer(output ? output : "", *x, *y);
+}
+
+bool lwe_x11_list_outputs() {
+    return listOutputNames();
 }
 }
