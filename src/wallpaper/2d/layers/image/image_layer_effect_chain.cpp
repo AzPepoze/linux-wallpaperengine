@@ -34,14 +34,14 @@ bool isCompositeRenderTarget(const std::string& name) {
 
 // `exact` replaces the target texel for texel instead of alpha-blending onto transparent black.
 void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_view, sg_view target, int width,
-                       int height, bool exact = false) {
+                       int height, bool exact = false, bool nearest = false) {
     sg_pass copy_pass = colorPass(target, SG_LOADACTION_CLEAR);
     const int gpu_token = gpu_timing_begin_pass("copy");
     sg_begin_pass(&copy_pass);
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f,
-                         white, false, nullptr, exact);
+                         white, false, nullptr, exact, {}, nearest);
     sg_end_pass();
     gpu_timing_end_pass(gpu_token);
 }
@@ -286,6 +286,7 @@ uint64_t ImageLayer::effectChainSignature(EngineContext& ctx, sg_image base_imag
 }
 
 void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
+    const bool nearest = (texture_metadata.flags & wallpaper_engine::kTextureFlagNoInterpolation) != 0;
     const sg_image previous_output_image = effect_output_image;
     const sg_view previous_output_view = effect_output_view;
     effect_output_image = {SG_INVALID_ID};
@@ -374,7 +375,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 if (named_target) {
                     // Copy the input through so downstream passes do not sample an uninitialised buffer.
                     copyInputToTarget(ctx, state.input_image, state.input_view,
-                                      named_target->currentWrite().attachment_view, target_width, target_height);
+                                      named_target->currentWrite().attachment_view, target_width, target_height, false,
+                                      nearest);
                     named_target->swap();
                 }
                 continue;
@@ -388,7 +390,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             if (pass->compiled.pipeline.id == SG_INVALID_ID) {
                 // A pass that never compiled forwards its input, so no later pass reads uninitialised targets.
                 copyInputToTarget(ctx, state.input_image, state.input_view, output_attachment, target_width,
-                                  target_height);
+                                  target_height, false, nearest);
                 advanceChain(state, named_target);
                 continue;
             }
@@ -425,7 +427,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 if (region.valid) active_region = &region;
             }
             if (active_region) {
-                copyInputToTarget(ctx, inputs.image, inputs.view, output_attachment, target_width, target_height, true);
+                copyInputToTarget(ctx, inputs.image, inputs.view, output_attachment, target_width, target_height, true,
+                                  nearest);
             }
             sg_pass offscreen_pass =
                 colorPass(output_attachment, active_region ? SG_LOADACTION_LOAD : SG_LOADACTION_CLEAR);
@@ -446,7 +449,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             render_pass.logical_scale = effect_logical_scale;
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             renderer_draw_sprite(ctx, &ctx.renderer, inputs.image, inputs.view, 0.0f, 0.0f, (float)target_width,
-                                 (float)target_height, 0.0f, effect_tint, false, &render_pass);
+                                 (float)target_height, 0.0f, effect_tint, false, &render_pass, false, {}, nearest);
             sg_end_pass();
             if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 

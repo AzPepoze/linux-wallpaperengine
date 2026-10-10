@@ -292,6 +292,14 @@ void createSamplers(renderer_t* r) {
     s_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
     s_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
     r->smp_clamp = sg_make_sampler(&s_desc);
+    s_desc.min_filter = SG_FILTER_NEAREST;
+    s_desc.mag_filter = SG_FILTER_NEAREST;
+    s_desc.wrap_u = SG_WRAP_REPEAT;
+    s_desc.wrap_v = SG_WRAP_REPEAT;
+    r->smp_nearest_repeat = sg_make_sampler(&s_desc);
+    s_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    s_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    r->smp_nearest_clamp = sg_make_sampler(&s_desc);
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
         r->bind.samplers[i] = r->smp_repeat;
     }
@@ -452,6 +460,8 @@ void renderer_cleanup(renderer_t* r) {
     r->index_buffer = {};
     r->smp_repeat = {};
     r->smp_clamp = {};
+    r->smp_nearest_repeat = {};
+    r->smp_nearest_clamp = {};
     r->white_view = {};
     r->white_pixel = {};
     r->black_view = {};

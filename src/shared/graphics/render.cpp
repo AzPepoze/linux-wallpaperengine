@@ -18,9 +18,18 @@
 using render_internal::kFirstWallpaperBlendMode;
 using render_internal::kLastWallpaperBlendMode;
 
+namespace {
+// Render targets always clamp. Pixel-art sources sample nearest; others wrap or clamp as asked.
+const GfxSampler& spriteSampler(const renderer_t* r, bool attachment, bool repeat, bool nearest) {
+    const bool wrap = repeat && !attachment;
+    if (nearest) return wrap ? r->smp_nearest_repeat : r->smp_nearest_clamp;
+    return wrap ? r->smp_repeat : r->smp_clamp;
+}
+}  // namespace
+
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass,
-                          bool replace, sg_buffer quad_buffer) {
+                          bool replace, sg_buffer quad_buffer, bool nearest) {
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, r->view_width, r->view_height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -30,16 +39,14 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     mat4x4_mul(mvp, proj, model);
 
     const sg_image_desc main_img_desc = sg_query_image_desc(img);
+    const bool attachment = main_img_desc.usage.color_attachment;
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; ++i) r->bind.samplers[i] = r->smp_repeat;
-    if (main_img_desc.usage.color_attachment) {
-        r->bind.samplers[0] = r->smp_clamp;
-    }
+    r->bind.samplers[0] = spriteSampler(r, attachment, true, nearest);
 
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
         sg_apply_pipeline(pass->pipeline);
         r->bind.vertex_buffers[0] = pass->is_fullscreen_quad ? r->fullscreen_vertex_buffer : r->vertex_buffer;
-        r->bind.samplers[0] =
-            (!main_img_desc.usage.color_attachment && pass->repeat_effect_input) ? r->smp_repeat : r->smp_clamp;
+        r->bind.samplers[0] = spriteSampler(r, attachment, pass->repeat_effect_input, nearest);
 
         builtin_uniforms_t builtin = {};
         memcpy(builtin.mvp, mvp, sizeof(mat4x4));

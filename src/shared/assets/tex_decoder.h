@@ -8,6 +8,9 @@
 
 namespace wallpaper_engine {
 
+// Header flag: sample with nearest-neighbour filtering (pixel art).
+constexpr uint32_t kTextureFlagNoInterpolation = 0x1;
+
 struct TextureAnimationFrame {
     uint32_t image_index = 0;
     float duration = 0.0f;
