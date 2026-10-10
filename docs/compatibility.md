@@ -19,10 +19,10 @@ Upstream: [Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpap
 | `--clamping <mode>` | No |
 | `--assets-dir <path>` | Yes |
 | `--screenshot <file>` | No |
-| `--list-properties` | No |
+| `--list-properties` | Yes |
 | `--set-property name=value` | Yes |
-| `--disable-mouse` | No |
-| `--disable-parallax` | No |
+| `--disable-mouse` | Yes |
+| `--disable-parallax` | Yes |
 | `--no-fullscreen-pause` | No |
 | `--fullscreen-pause-only-active` | No |
 | `--fullscreen-pause-ignore-appid <id>` | No |

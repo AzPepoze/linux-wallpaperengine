@@ -466,7 +466,10 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 
 - [x] Vulkan renderer (sokol) with GPU selection (`--list-gpus`, `--gpu`), frame cap (`-f`/`--fps`) and scaling (`--scaling default|fit|fill|stretch`)
 - [x] `--whoareyou` prints a one-line JSON identity (name, implementation, version, control socket and feature list) for GUI detection; no GPU work or logs run on that path
-- [x] Compatibility with upstream launcher flags: unsupported options (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
+- [x] Compatibility with upstream launcher flags: unsupported options (for example `--noautomute`, `--screenshot`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
+- [x] Info and listing flags: `-V`/`--version`, `--list-outputs` (Wayland or X11 output names for `-r`), `--list-transitions`, `-l`/`--list-properties` (same layout as upstream, with `--set-property` and GUI-saved values applied)
+- [x] Logging and config flags: `--log-level debug|info|warn|error`, `-q`/`--quiet`, and `--config <path>` to read a `config.json` from another place
+- [x] `--disable-parallax` turns camera parallax off; `--disable-mouse` keeps the wallpaper from receiving mouse input or reading the global pointer
 - [-] Wayland wlr-layer-shell backend (`-r`/`--screen-root`, `--layer`; debug builds also `--layer-size`, `--layer-anchor`)
   - Works: background, bottom, top and overlay layers, anchoring, output selection, pointer motion and buttons, parallax
   - Missing: `--scaling stretch` and `--clamp` are accepted but ignored

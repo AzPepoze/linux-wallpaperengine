@@ -6,7 +6,7 @@ Command-line flags override `config.json`. The wallpaper path can come first or 
 
 ## Config file
 
-The engine reads `config.json` from the working directory or one of its parents. `config.example.json` is a template. Every key is optional.
+The engine reads `config.json` from the working directory or one of its parents. `--config` names a file to read instead. `config.example.json` is a template. Every key is optional.
 
 | Key | Value | Default | What it does |
 | --- | --- | --- | --- |
@@ -22,6 +22,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `web_devtools_port` | `<port>` | 9222 | DevTools port |
 | `web_devtools_browser` | `<cmd>` | xdg-open | Browser for DevTools |
 | `audio_device` | `<name>` | system output | Same as `--audio-device` |
+| `log_level` | `debug\|info\|warn\|error` | debug in debug builds, else info | Same as `--log-level` |
 | `pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Same as `--pointer` |
 | `resolution` | `auto\|native\|WxH` | auto | Same as `--resolution` |
 
@@ -44,6 +45,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--extract-only` | | off | Extract the package and exit |
 | `--extract-dir` | `<path>` | — | Where to extract, with `--extract-only` |
 | `--set-property` | `<name=value>` | — | Set a wallpaper property; repeatable |
+| `-l`, `--list-properties` | | off | Print the wallpaper's properties and their values, then exit |
 
 ### Graphics
 
@@ -69,6 +71,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `-r`, `--screen-root` | `<output>` | — | Draw on this output (for example `DP-4`) |
 | `--window` | `<XxYxWxH>` | 1280x720 | Windowed mode at this size. The X,Y position is not applied. Ignored with `-r` or `--layer` |
 | `--layer` | `background\|bottom\|top\|overlay` | background | Which layer to draw on |
+| `--list-outputs` | | off | Print the output names that `-r` accepts, then exit |
 
 On Wayland, `-r` uses the layer-shell feature. On X11, it uses the X11 desktop feature. If neither works, the wallpaper runs in a normal window.
 
@@ -77,6 +80,8 @@ On Wayland, `-r` uses the layer-shell feature. On X11, it uses the X11 desktop f
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
 | `--pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Where the mouse position comes from |
+| `--disable-mouse` | | off | The wallpaper ignores the mouse. Parallax then rests at the centre |
+| `--disable-parallax` | | off | Turn off camera parallax |
 
 - `auto` (default): tries these in order and uses the first that works: `x11`, `hyprland`, `surface`, `evdev`.
 - `x11`: the real cursor position on an X11 session.
@@ -93,6 +98,7 @@ If the source you pick does not work, the program moves down the same list and l
 | `--transition` | `<name\|none\|random>` | fade | Transition shader |
 | `--transition-duration` | `<ms>` | 1000 | Transition length |
 | `--transition-mode` | `freeze\|continue` | freeze | What the old wallpaper does during the transition |
+| `--list-transitions` | | off | Print the transition names, then exit |
 
 ### Control
 
@@ -130,7 +136,14 @@ If the source you pick does not work, the program moves down the same list and l
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
+| `-V`, `--version` | | — | Print the version, then exit |
 | `--whoareyou` | | — | Print the engine identity as one JSON line, then exit |
+| `--config` | `<path>` | — | Read this `config.json` instead of searching for one |
+| `--log-level` | `debug\|info\|warn\|error` | debug in debug builds, else info | Lowest level to print |
+| `-q`, `--quiet` | | off | Print only errors. Same as `--log-level error` and wins over it |
+
+> [!NOTE]
+> `--version`, `--whoareyou`, `--list-outputs`, `--list-transitions` and `--list-properties` print only their result on stdout. Logs are limited to errors while they run.
 
 ### Particles
 
