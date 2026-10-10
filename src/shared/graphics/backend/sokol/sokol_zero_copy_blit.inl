@@ -44,7 +44,6 @@ static bool blitImportedSurface(VkImage src_image, VkDescriptorSet descriptor_se
 
     VkCommandBuffer cmd = _sg_vk_staging_copy_begin();
 
-    // Transition surface image to shader read optimal
     VkImageMemoryBarrier surface_barrier = {};
     surface_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     surface_barrier.srcAccessMask = 0;
@@ -90,7 +89,6 @@ static bool blitImportedSurface(VkImage src_image, VkDescriptorSet descriptor_se
     vkCmdDraw(cmd, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmd);
 
-    // Transition destination image to shader read optimal
     dst_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     dst_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     dst_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
