@@ -144,10 +144,14 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.intro_zoom = introValue("--intro-zoom", "intro_zoom", "1.0");
     opts.intro_duration = introValue("--intro-duration", "intro_duration", "4");
 
-    const std::string effect_resolution = resolve({"--effect-resolution"}, "effect_resolution", "auto");
-    opts.native_effect_resolution = effect_resolution == "native";
-    if (effect_resolution != "auto" && effect_resolution != "native")
-        fprintf(stderr, "Unknown effect resolution '%s'; using auto\n", effect_resolution.c_str());
+    // --effect-resolution and the effect_resolution key are older names for the same setting.
+    const std::string legacy_resolution = flag_config::string("effect_resolution");
+    const std::string resolution_fallback = legacy_resolution.empty() ? "auto" : legacy_resolution;
+    const std::string resolution_text = resolve({"--resolution", "--effect-resolution"}, "resolution", resolution_fallback);
+    if (!resolution::parse(resolution_text, opts.resolution)) {
+        fprintf(stderr, "Unknown resolution '%s'; using auto\n", resolution_text.c_str());
+        opts.resolution = resolution::Setting{};
+    }
 
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.whoareyou = cli_args::hasFlag(args, {"--whoareyou"});

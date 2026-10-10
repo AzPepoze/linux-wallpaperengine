@@ -2,7 +2,25 @@
 #include "image_layer.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
+#include "shared/core/resolution.h"
 #include "wallpaper/2d/effects/effect.h"
+
+std::pair<int, int> ImageLayer::layerTargetSize(EngineContext& ctx, int width, int height) const {
+    if (ctx.resolution.mode == resolution::Setting::Mode::Native) return {width, height};
+    const ScreenRect rect = screenRect(ctx);
+    const double sx = ctx.renderer.view_width > 0 && ctx.scene.physical_view_width > 0
+                          ? ctx.scene.physical_view_width / ctx.renderer.view_width
+                          : 1.0;
+    const double sy = ctx.renderer.view_height > 0 && ctx.scene.physical_view_height > 0
+                          ? ctx.scene.physical_view_height / ctx.renderer.view_height
+                          : 1.0;
+    const double angle = rect.rotation * 3.141592653589793 / 180.0;
+    const double c = std::cos(angle), s = std::sin(angle);
+    const double ratio =
+        resolution::referenceRatio(ctx.resolution, ctx.scene.physical_view_width, ctx.scene.physical_view_height);
+    return resolution::targetSize(width, height, rect.width * std::hypot(c * sx, s * sy) * ratio,
+                                  rect.height * std::hypot(s * sx, c * sy) * ratio);
+}
 
 bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) {
     sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
@@ -12,8 +30,7 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
     int width = source_desc.width;
     int height = source_desc.height;
     // Layers larger than the screen run effects at on-screen size; resolution uniforms keep the authored size.
-    bool eligible =
-        !ctx.native_effect_resolution && !is_fullscreen && !copy_background && !is_compose_region && !effects.empty();
+    bool eligible = !is_fullscreen && !copy_background && !is_compose_region && !effects.empty();
     for (const Effect* effect : effects) {
         if (!effect || effect->passes.empty()) {
             eligible = false;
@@ -33,17 +50,7 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
         if (!eligible) break;
     }
     if (eligible) {
-        const ScreenRect rect = screenRect(ctx);
-        const double sx = ctx.renderer.view_width > 0 && ctx.scene.physical_view_width > 0
-                              ? ctx.scene.physical_view_width / ctx.renderer.view_width
-                              : 1.0;
-        const double sy = ctx.renderer.view_height > 0 && ctx.scene.physical_view_height > 0
-                              ? ctx.scene.physical_view_height / ctx.renderer.view_height
-                              : 1.0;
-        const double angle = rect.rotation * 3.141592653589793 / 180.0;
-        const double c = std::cos(angle), s = std::sin(angle);
-        const auto dimensions = effect_resolution::targetSize(width, height, rect.width * std::hypot(c * sx, s * sy),
-                                                              rect.height * std::hypot(s * sx, c * sy));
+        const auto dimensions = layerTargetSize(ctx, width, height);
         width = dimensions.first;
         height = dimensions.second;
     }

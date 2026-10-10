@@ -138,7 +138,7 @@ static void applyCliToContext() {
     ctx.performance_profile = cli.performance_profile;
     ctx.intro_zoom = cli.intro_zoom;
     ctx.intro_duration = cli.intro_duration;
-    ctx.native_effect_resolution = cli.native_effect_resolution;
+    ctx.resolution = cli.resolution;
     ctx.parallax_smoothing = cli.parallax.smoothing;
     ctx.parallax_scale = cli.parallax.scale;
     ctx.fps_limit = cli.fps_limit;

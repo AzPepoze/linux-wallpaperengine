@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "shared/core/resolution.h"
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 #include "wallpaper/web/web_options.h"
 
@@ -37,7 +38,7 @@ struct CliOptions {
     bool video_ram = false;
     float intro_zoom = 1.0f;
     float intro_duration = 4.0f;
-    bool native_effect_resolution = false;
+    resolution::Setting resolution;  // --resolution
     bool performance_profile = false;
     bool script_profile = false;  // log the most expensive scripts every few seconds
     bool no_ui = false;

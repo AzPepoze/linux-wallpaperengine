@@ -230,6 +230,8 @@ class ImageLayer : public Layer {
     void updateCachedView();
     void updateAnimatedFrame(EngineContext& ctx);
     bool ensureEffectTargets(EngineContext& ctx, sg_image source_image = {SG_INVALID_ID});
+    // Target size for a layer whose authored size is width x height, under the --resolution setting.
+    std::pair<int, int> layerTargetSize(EngineContext& ctx, int width, int height) const;
 
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});

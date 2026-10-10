@@ -19,11 +19,6 @@
 #include "wallpaper/2d/tree/scene_tree.h"
 
 namespace {
-// Layer pixels reduced to the size the layer is shown at; never larger than the layer.
-int displayedExtent(int extent, float display_scale) {
-    return std::clamp((int)std::lround(extent * display_scale), 1, extent);
-}
-
 bool readFileBytes(const char* path, std::vector<uint8_t>& out) {
     return vfs::readAll(path, out) && !out.empty();
 }
@@ -120,8 +115,9 @@ bool ImageLayer::renderGeometry(EngineContext& ctx, int width, int height, const
     width = std::max(1, width);
     height = std::max(1, height);
     // Geometry stays in layer pixels; the target only needs the size it is drawn at.
-    const int target_width = displayedExtent(width, scale[0] * ctx.scene.render_scale);
-    const int target_height = displayedExtent(height, scale[1] * ctx.scene.render_scale);
+    const auto target = layerTargetSize(ctx, width, height);
+    const int target_width = target.first;
+    const int target_height = target.second;
     if (!ensurePuppetTarget(target_width, target_height)) return false;
 
     const float saved_view_width = ctx.renderer.view_width;
