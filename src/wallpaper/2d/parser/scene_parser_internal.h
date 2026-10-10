@@ -31,6 +31,10 @@ void parseAnimationLayers(const cJSON* array, std::vector<AnimationLayerDocument
 void parsePropertyAnimation(const cJSON* object, const char* property, std::vector<PropertyAnimationDocument>& out);
 void parseCameraPath(const cJSON* object, SceneCameraDocument& out);
 
+// 3D fly-through paths: the file list under `camera.paths`, then each file read beside the scene file.
+void parseCameraPathFiles(const cJSON* camera, std::vector<std::string>& out);
+void loadCameraPaths(const char* scene_json_path, SceneCameraDocument& camera);
+
 }  // namespace scene_parser_detail
 }  // namespace wallpaper_engine
 

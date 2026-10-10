@@ -12,6 +12,9 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserP
 // Parses one scene object; false when the JSON is invalid or has no id.
 bool parseSceneObject(const char* object_json, SceneObjectDocument& out);
 
+// Appends the paths of a 3D camera path file; false when the JSON is invalid or has no `paths` array.
+bool parseCameraPathJson(const char* json, std::vector<CameraPathDocument>& out);
+
 }  // namespace wallpaper_engine
 
 #endif  // WALLPAPER_ENGINE_FORMAT_SCENE_PARSER_H

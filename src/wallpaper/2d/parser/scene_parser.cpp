@@ -51,6 +51,7 @@ void parseCamera(const cJSON* camera, SceneDocument& out) {
     parseVec(cJSON_GetObjectItemCaseSensitive(camera, "center"), out.camera.center.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(camera, "eye"), out.camera.eye.data(), 3);
     parseVec(cJSON_GetObjectItemCaseSensitive(camera, "up"), out.camera.up.data(), 3);
+    parseCameraPathFiles(camera, out.camera.path_files);
 }
 
 void parseGeneral(const cJSON* general, SceneDocument& out) {
@@ -202,6 +203,7 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserP
     if (user_properties) resolveUserBindings(root, *user_properties, out.user_keys);
     detectResolution(root, out);
     parseCamera(cJSON_GetObjectItemCaseSensitive(root, "camera"), out);
+    loadCameraPaths(scene_json_path, out.camera);
     parseGeneral(cJSON_GetObjectItemCaseSensitive(root, "general"), out);
 
     const cJSON* objects = cJSON_GetObjectItemCaseSensitive(root, "objects");
