@@ -9,25 +9,7 @@
 
 namespace wallpaper_engine {
 
-// Wallpaper Engine puppet model (.mdl). Layout confirmed against real Workshop
-// assets and cross-checked by vertexBytes % 80 and indexBytes % 6:
-//
-//   "MDLV00XX" | u8 pad | u32 type | u16 subversion | u16 flags | u32 reserved
-//   | material path (null-terminated) | 28 zero bytes
-//   | tag 0x0180000F | u32 vertexBytes | vertices | u32 indexBytes | u16 indices
-//   | trailer | optional MDLS skeleton | optional MDAT | optional MDLA | optional MDLE
-//
-// Every vertex holds position (f32x3 at +0) and uv; the stride and the skin
-// offsets depend on the model version and whether it is skinned:
-//   stride 80 (v0017+): normal +12, tangent +24/+36, 4 u32 bone indices +40,
-//                       4 f32 weights +56, uv +72
-//   stride 84 (some v0023): as 80 with one extra word, bones +44, weights +60, uv +76
-//   stride 52 (v0013):  4 u32 bone indices +12, 4 f32 weights +28, uv +44
-//   stride 48 (unskinned): normal +12, tangent +24/+36, uv +40, no bones
-// Weights sum to 1.
-//
-// MDLS: per bone, u32 type, parent (0xFFFFFFFF = root), payloadBytes (64 = bind matrix), row-major 4x4 matrix, info JSON, name.
-// MDLA: fps, frameCount, then one track per bone of (frameCount + 1) 36-byte keyframes (translation, rotation radians, scale).
+// Wallpaper Engine .mdl puppet model; byte layout is in docs/wallpaper-engine-knowledge.md.
 
 struct MdlVertex {
     float position[3] = {0, 0, 0};
