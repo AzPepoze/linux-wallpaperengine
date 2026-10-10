@@ -94,7 +94,13 @@ UserPropertyValue parseRaw(const std::string& type, const std::string& raw) {
     return value;
 }
 
+// A "text" property is an editor label, so only a string default is a value; a bool default is not text.
+bool isLabel(const std::string& type) {
+    return lowered(type.c_str()) == "text";
+}
+
 UserPropertyValue defaultValue(const std::string& type, const cJSON* value) {
+    if (isLabel(type) && !cJSON_IsString(value)) return UserPropertyValue{};
     return parseRaw(type, jsonText(value));
 }
 }  // namespace
@@ -137,6 +143,7 @@ void UserProperties::applyPreset(const std::string& preset_json_path, const std:
             if (!item->string || cJSON_IsNull(item)) continue;
             for (UserPropertyDef& def : properties_) {
                 if (def.key != item->string) continue;
+                if (isLabel(def.type) && !cJSON_IsString(item)) break;
                 std::string raw = jsonText(item);
                 // Texture values are stored beside the preset, so they resolve from its folder.
                 if (def.type == "scenetexture" && !raw.empty() && raw[0] != '/') raw = preset_root + "/" + raw;

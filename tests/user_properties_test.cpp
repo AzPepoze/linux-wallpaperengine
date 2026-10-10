@@ -135,6 +135,26 @@ void testPreset(const fs::path& dir) {
     expect("preset", props.find("enabled")->b, "command line still wins over the preset");
 }
 
+void testLabelDefaults(const fs::path& dir) {
+    fs::path label_json = dir / "label.json";
+    std::ofstream(label_json, std::ios::binary) << R"({
+  "general": {"properties": {
+    "newproperty": {"type": "text", "value": false},
+    "caption": {"type": "text", "value": "shown"}
+  }}
+})";
+    UserProperties props;
+    expect("label", props.loadProject(label_json.string()), "label project should load");
+    expect("label", props.find("newproperty")->text.empty(), "a bool default on a label is not text");
+    expect("label", props.find("caption")->text == "shown", "a string label keeps its text");
+
+    fs::path preset = dir / "label_preset";
+    fs::create_directories(preset);
+    std::ofstream(preset / "project.json", std::ios::binary) << R"({"preset": {"newproperty": false}})";
+    props.applyPreset((preset / "project.json").string(), preset.string());
+    expect("label", props.find("newproperty")->text.empty(), "a preset bool on a label stays empty");
+}
+
 void testTypeParsing(const fs::path& dir) {
     UserProperties props = loadInto(dir);
     props.setFromString("enabled", "1");
@@ -190,6 +210,7 @@ int main() {
         testSavedOverrides(base);
         testCliWins(base);
         testPreset(base);
+        testLabelDefaults(base);
         testTypeParsing(base);
         testToStringsRoundTrip(base);
     }
