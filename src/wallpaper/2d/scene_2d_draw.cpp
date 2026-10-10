@@ -22,6 +22,19 @@
 #include "wallpaper/2d/tree/scene_visibility.h"
 
 namespace {
+// Times one layer's GPU work; the label is built only while profiling.
+class LayerGpuScope {
+public:
+    LayerGpuScope(const EngineContext& ctx, const Layer& layer)
+        : token_(ctx.performance_profile ? gpu_timing_begin_pass("layer/" + layer.name) : -1) {}
+    ~LayerGpuScope() { gpu_timing_end_pass(token_); }
+    LayerGpuScope(const LayerGpuScope&) = delete;
+    LayerGpuScope& operator=(const LayerGpuScope&) = delete;
+
+private:
+    int token_;
+};
+
 void drawFullscreenTarget(EngineContext& ctx, sg_image image, sg_view texture_view, int, int) {
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_sprite(ctx, &ctx.renderer, image, texture_view, 0.0f, 0.0f, ctx.renderer.view_width,
@@ -87,7 +100,10 @@ void Scene2DRuntime::drawDirect() {
         sg_apply_scissor_rect(output_x, output_y, output_width, output_height, true);
     }
 
-    forEachDrawnLayer(ctx, [&](Layer* layer) { layer->draw(ctx); });
+    forEachDrawnLayer(ctx, [&](Layer* layer) {
+        const LayerGpuScope timed(ctx, *layer);
+        layer->draw(ctx);
+    });
 
     if (has_output_viewport) {
         sg_apply_viewport(0, 0, surface::width(), surface::height(), true);
@@ -220,13 +236,16 @@ void Scene2DRuntime::drawOffscreen() {
             sg_begin_pass(&layer_pass);
             batch_open = true;
         }
+        const LayerGpuScope timed(ctx, *layer);
         layer->draw(ctx);
     };
 
     forEachDrawnLayer(ctx, draw_layer);
     close_batch();
 
+    const int bloom_token = gpu_timing_begin_pass("bloom");
     current = renderBloom(current, width, height);
+    gpu_timing_end_pass(bloom_token);
     // Capture a final post-bloom stage so diagnostics match what present() sends.
     if (IRenderObserver& diagnostics = renderObserver(); diagnostics.isCapturingFrame()) {
         Snapshot snapshot = makeSnapshot(width, height);

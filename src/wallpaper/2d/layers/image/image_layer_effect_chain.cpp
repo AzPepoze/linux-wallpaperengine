@@ -36,12 +36,14 @@ bool isCompositeRenderTarget(const std::string& name) {
 void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_view, sg_view target, int width,
                        int height, bool exact = false) {
     sg_pass copy_pass = colorPass(target, SG_LOADACTION_CLEAR);
+    const int gpu_token = gpu_timing_begin_pass("copy");
     sg_begin_pass(&copy_pass);
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f,
                          white, false, nullptr, exact);
     sg_end_pass();
+    gpu_timing_end_pass(gpu_token);
 }
 
 bool aliasesOutput(const std::string& layer_name, const ShaderPass& pass, sg_image slot0_image,

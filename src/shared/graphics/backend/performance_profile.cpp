@@ -33,6 +33,7 @@ struct State {
     std::vector<double> intervals;
     Aggregate cpu, acquire, resources, present;
     std::map<std::string, Aggregate> gpu_spans;
+    std::vector<GpuSpanStat> latest_gpu;
 } state;
 }  // namespace
 
@@ -47,6 +48,10 @@ void initialize(bool enabled) {
 
 bool enabled() {
     return state.enabled;
+}
+
+const std::vector<GpuSpanStat>& gpuSpanStats() {
+    return state.latest_gpu;
 }
 
 void beginFrame(double dt) {
@@ -74,8 +79,12 @@ void beginFrame(double dt) {
         LOG_I("Performance CPU: present %.3f ms", state.present.mean());
     else
         LOG_I("Performance CPU: present unavailable on this window backend");
-    for (const auto& [label, span] : state.gpu_spans)
-        LOG_I("Performance GPU: %s mean %.3f ms (%zu samples)", label.c_str(), span.mean(), span.count);
+    state.latest_gpu.clear();
+    for (const auto& [label, span] : state.gpu_spans) state.latest_gpu.push_back({label, span.mean(), span.count});
+    std::sort(state.latest_gpu.begin(), state.latest_gpu.end(),
+              [](const GpuSpanStat& a, const GpuSpanStat& b) { return a.mean_ms > b.mean_ms; });
+    for (const GpuSpanStat& span : state.latest_gpu)
+        LOG_I("Performance GPU: %s mean %.3f ms (%zu samples)", span.label.c_str(), span.mean_ms, span.samples);
     state.seconds = 0.0;
     state.intervals.clear();
     state.cpu = state.acquire = state.resources = state.present = {};

@@ -7,6 +7,7 @@
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/backend/gpu_timing.h"
 #include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/pointer_state.h"
@@ -197,8 +198,10 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
     Scene2DRuntime* runtime = activeRuntime(mgr);
     if (ctx.performance_profile) performance_profile::beginRender();
+    const int update_token = gpu_timing_begin_pass("update");
     updateFrame(ctx, mgr, runtime);
     mgr.updateTransition((float)surface::frameDuration());
+    gpu_timing_end_pass(update_token);
     // Continue mode steps the outgoing instance before the incoming one draws.
     if (mgr.isTransitioning()) mgr.stepOutgoingForTransition(ctx, (float)surface::frameDuration());
     if (runtime && mgr.isTransitioning())
@@ -213,7 +216,9 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
     const bool offscreen_composition =
         runtime ? (runtime->requiresOffscreenComposition() || mgr.isTransitioning()) : false;
+    const int offscreen_token = gpu_timing_begin_pass("scene/offscreen");
     if (offscreen_composition && runtime) runtime->draw();
+    gpu_timing_end_pass(offscreen_token);
 
 #if DEBUG_BUILD
     // Captured before the swapchain pass, which cannot be nested.
@@ -225,14 +230,20 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     const uint64_t acquire_start = ctx.performance_profile ? stm_now() : 0;
     pass.swapchain = surface::acquireSwapchain();
     if (ctx.performance_profile) performance_profile::recordAcquire(stm_ms(stm_since(acquire_start)));
+    const int clear_token = gpu_timing_begin_pass("swapchain/clear");
     sg_begin_pass(&pass);
+    gpu_timing_end_pass(clear_token);
 
+    const int present_token = gpu_timing_begin_pass(offscreen_composition ? "present/scene" : "scene/direct");
     if (offscreen_composition && runtime)
         runtime->present();
     else if (runtime)
         runtime->draw();
+    gpu_timing_end_pass(present_token);
 
+    const int transition_token = gpu_timing_begin_pass("transition");
     if (mgr.isTransitioning()) mgr.compositeTransition(ctx);
+    gpu_timing_end_pass(transition_token);
 
     if (runtime) runtime->drawParticleDiagnostics();
 
@@ -240,7 +251,9 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     ctx.profiler.render_ms = stm_ms(stm_since(render_start));
 
     const uint64_t ui_start = stm_now();
+    const int ui_token = gpu_timing_begin_pass("ui/debugger");
     Debugger::draw(ctx);
+    gpu_timing_end_pass(ui_token);
     ctx.profiler.ui_ms = stm_ms(stm_since(ui_start));
 #endif
 
