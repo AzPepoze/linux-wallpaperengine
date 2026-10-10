@@ -106,6 +106,15 @@ Each feature below needs its own libraries. Install only the ones you want.
 
 - Only Arch Linux has been tested.
 
+## Credits
+
+Some references come from these projects:
+
+| Project | Link |
+| --- | --- |
+| linux-wallpaperengine by Almamu | [github.com/Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine) |
+| open-wallpaper-engine by waywallen | [github.com/waywallen/open-wallpaper-engine](https://github.com/waywallen/open-wallpaper-engine) |
+
 ## More
 
 | I want to... | Read |
