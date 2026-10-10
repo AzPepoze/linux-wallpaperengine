@@ -52,10 +52,10 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `-f`, `--fps` | `<n>` | display rate | Frame-rate cap; `0` follows the display |
 | `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops, `fit` letterboxes, `stretch` ignores aspect ratio |
 | `--cover` | | off | Force cover scaling |
-| `--clamp` | `<mode>` | ignored | Accepted, does nothing |
+| `--clamp`, `--clamping` | `<mode>` | ignored | Accepted, does nothing |
 | `--video-ram` | | off | Load video into RAM instead of streaming |
 | `--performance-profile` | | off | Log frame timing after a 5-second warmup |
-| `--effect-resolution` | `auto\|native` | auto | Size of shake effect chains |
+| `--resolution` | `auto\|native\|WxH` | auto | Render size of effect chains, puppets and models. `auto` follows the output size. `native` uses the authored size. `WxH` sizes them as if the output were that size (for example `3840x2160`). `--effect-resolution` still works |
 | `--script-profile` | | off | Log the slowest scripts every 10 seconds |
 
 ### Display
@@ -63,6 +63,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
 | `-r`, `--screen-root` | `<output>` | — | Draw on this output (for example `DP-4`) |
+| `--window` | `<XxYxWxH>` | 1280x720 | Windowed mode at this size. The X,Y position is not applied. Ignored with `-r` or `--layer` |
 | `--layer` | `background\|bottom\|top\|overlay` | background | Which layer to draw on |
 | `--layer-size` | `<WxH>` | — | Debug: small test rectangle, e.g. `320x180` |
 | `--layer-anchor` | `<edges>` | — | Debug: where the small rectangle sits, e.g. `top-left` |
@@ -155,7 +156,7 @@ If the source you pick does not work, the program moves down the same list and l
 
 ## Ignored launcher options
 
-Options from the original launcher that this build does not support (for example `--disable-mouse`, `--screenshot`, `--screen-span`) are accepted and logged as `ignoring unsupported option`. They never become the wallpaper path.
+Options from the upstream launcher that this build does not support are accepted and logged as `ignoring unsupported option`. They never become the wallpaper path. The full list with status is in [Compatibility](compatibility.md).
 
 ## Hand-off to a running wallpaper
 
