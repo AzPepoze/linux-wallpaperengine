@@ -29,13 +29,18 @@ namespace {
 std::string prepareReplacementRoot(const SwitchRequest& request) {
     if (isVideoFile(request.path.c_str())) return request.path;
     const bool package_file = request.is_pkg || isPackageFile(request.path);
-    const std::string package_path = package_file ? request.path : request.path + "/scene.pkg";
+    const std::string package_path = package_file ? request.path : contentRoot(request.path) + "/scene.pkg";
     std::error_code error;
     if (std::filesystem::is_regular_file(package_path, error) && vfs::mount(package_path.c_str())) {
         if (vfs::exists("pkg:/scene.json")) return vfs::kRoot;
         vfs::unmount();
     }
     return prepareAssetRoot({request.path, package_file});
+}
+
+// Keeps the preset folder on the info so its values reach the base scene.
+void attachPreset(ProjectInfo& info, const std::string& source_path) {
+    if (!presetBaseRoot(source_path).empty()) info.preset_root = source_path;
 }
 
 TaskPool& preparationPool() {
@@ -135,7 +140,8 @@ struct WallpaperManager::LoadJob : PreparedLoad {
 bool WallpaperManager::load(const std::string& scene_directory, EngineContext& ctx) {
     if (scene_directory.empty()) return false;
 
-    const ProjectInfo info = ProjectInfo::detect(scene_directory);
+    ProjectInfo info = ProjectInfo::detect(scene_directory);
+    attachPreset(info, ctx.wallpaper_path);
     if (!WallpaperLoader::canLoad(info)) return false;
 
     // The outgoing wallpaper stays alive and playing until the transition ends.
@@ -393,6 +399,7 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
                 if (root.empty() || job->cancelled) return false;
                 job->instance->package = vfs::currentPackage();
                 job->info = ProjectInfo::detect(root);
+                attachPreset(job->info, request.path);
                 if (!WallpaperLoader::canLoad(job->info)) return false;
                 job->instance->state.asset_root = root;
                 job->instance->state.user_properties =

@@ -92,6 +92,30 @@ void testEmptyAndBroken(const fs::path& base) {
            "missing entry file does not resolve");
 }
 
+void testPresetDependency(const fs::path& base) {
+    fs::path shared = makeDir(base, "shared_base");
+    writeFile(shared / "scene.json", "{}");
+    writeFile(shared / "project.json", R"({"type":"scene","title":"Base","file":"scene.json"})");
+
+    fs::path preset = base / "shared_preset";
+    fs::create_directories(preset);
+    writeFile(preset / "project.json",
+              R"({"dependency":"shared_base","preset":{"basecolor":"1 0 0"},"title":"Preset"})");
+    ProjectInfo info = ProjectInfo::detect(preset.string());
+    expect("preset", info.type == ProjectType::Scene, "preset should resolve to the base scene");
+    expect("preset", info.root == shared.string(), "root should be the base folder");
+    expect("preset", info.entry == shared.string() + "/scene.json", "entry should be the base scene");
+    expect("preset", info.preset_root == preset.string(), "preset folder should be kept");
+    expect("preset", contentRoot(preset.string()) == shared.string(), "content root should be the base folder");
+    expect("preset", contentRoot(shared.string()) == shared.string(), "a normal project is its own content root");
+
+    fs::path orphan = base / "orphan_preset";
+    fs::create_directories(orphan);
+    writeFile(orphan / "project.json", R"({"dependency":"not_installed","preset":{}})");
+    expect("missing dependency", ProjectInfo::detect(orphan.string()).type == ProjectType::None,
+           "a preset with a missing base does not resolve");
+}
+
 void testPackagePath() {
     expect("package", isPackageFile("a/b/scene.pkg"), ".pkg should be a package");
     expect("package", !isPackageFile("a/b/scene.json"), ".json is not a package");
@@ -113,6 +137,7 @@ int main() {
     testProjectJsonTypes(base);
     testVideoOnlyDirectory(base);
     testEmptyAndBroken(base);
+    testPresetDependency(base);
     testPackagePath();
 
     fs::remove_all(base);
