@@ -316,6 +316,7 @@ target_end()
 
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
 add_test("effect_resolution_tests", {"tests/effect_resolution_test.cpp"})
+add_test("resolution_tests", {"tests/resolution_test.cpp"})
 add_test("content_bounds_tests", {"tests/content_bounds_test.cpp"})
 add_test("gpu_timing_tests", {"tests/gpu_timing_test.cpp"})
 add_test("performance_profile_tests", {"tests/performance_profile_test.cpp",

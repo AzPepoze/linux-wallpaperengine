@@ -38,7 +38,7 @@ int main() {
     {
         const CliOptions opts = parse({"app", "/wp"});
         CHECK(opts.scaling == "fill");
-        CHECK(opts.native_effect_resolution);
+        CHECK(opts.resolution.mode == resolution::Setting::Mode::Native);
         CHECK(std::find(opts.startup_options.begin(), opts.startup_options.end(),
                         "scaling_mode=fill (source: config)") != opts.startup_options.end());
         CHECK(std::find(opts.startup_options.begin(), opts.startup_options.end(), "fps_limit=0 (source: default)") !=
@@ -59,17 +59,70 @@ int main() {
     }
 
     {
-        const CliOptions opts = parse({"app", "--effect-resolution", "native", "/wp"});
-        CHECK(opts.native_effect_resolution);
+        const CliOptions opts = parse({"app", "--resolution", "native", "/wp"});
+        CHECK(opts.resolution.mode == resolution::Setting::Mode::Native);
         CHECK(opts.wallpaper_arg == "/wp");
     }
 
     {
-        const CliOptions opts = parse({"app", "--effect-resolution", "auto", "--performance-profile", "/wp"});
-        CHECK(!opts.native_effect_resolution);
+        const CliOptions opts = parse({"app", "--resolution", "auto", "--performance-profile", "/wp"});
+        CHECK(opts.resolution.mode == resolution::Setting::Mode::Auto);
         CHECK(opts.performance_profile);
         CHECK(opts.wallpaper_arg == "/wp");
     }
+
+    // The older --effect-resolution spelling still works.
+    {
+        const CliOptions opts = parse({"app", "--effect-resolution", "native", "/wp"});
+        CHECK(opts.resolution.mode == resolution::Setting::Mode::Native);
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    {
+        const CliOptions opts = parse({"app", "--resolution", "3840x2160", "/wp"});
+        CHECK(opts.resolution.mode == resolution::Setting::Mode::Fixed);
+        CHECK(opts.resolution.width == 3840);
+        CHECK(opts.resolution.height == 2160);
+    }
+
+    // An unknown value falls back to auto.
+    {
+        const CliOptions opts = parse({"app", "--resolution", "bogus", "/wp"});
+        CHECK(opts.resolution.mode == resolution::Setting::Mode::Auto);
+    }
+
+    {
+        const CliOptions opts = parse({"app", "--window", "-100x20x1280x720", "/wp"});
+        CHECK(opts.window.set);
+        CHECK(opts.window.x == -100);
+        CHECK(opts.window.y == 20);
+        CHECK(opts.window.width == 1280);
+        CHECK(opts.window.height == 720);
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    // Upstream names that are accepted but do nothing; their values never become the wallpaper path.
+    {
+        const CliOptions opts = parse({"app", "--bg", "123", "/wp"});
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+    {
+        const CliOptions opts = parse({"app", "--clamping", "border", "/wp"});
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+    {
+        const CliOptions opts = parse({"app", "--list-properties", "/wp"});
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    WindowGeometry window;
+    CHECK(!parseWindowGeometry("800x450", window));
+    CHECK(!parseWindowGeometry("800x0x0x450", window));
+    CHECK(!parseWindowGeometry("axbxcxd", window));
+    CHECK(!parseWindowGeometry("0x0x800x450x1", window));
+    CHECK(!window.set);
+    CHECK(parseWindowGeometry("0x0x800x450", window));
+    CHECK(window.set && window.width == 800 && window.height == 450);
 
     chdir("/");
     {
