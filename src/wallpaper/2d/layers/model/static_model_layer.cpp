@@ -15,6 +15,7 @@
 namespace {
 
 constexpr int kTextureSlots = 12;
+constexpr const char* kReflectionTarget = "_rt_Reflection";
 
 // Uniform blocks 0-3 as the shader compiler declares them for every shader.
 struct MeshUniforms {
@@ -44,7 +45,7 @@ sg_view viewOr(const GfxView& view, sg_view fallback) {
     return view.id != SG_INVALID_ID ? (sg_view)view : fallback;
 }
 
-// g_Texture1 and up; a render target such as _rt_Reflection is not loaded and gets the fallback.
+// g_Texture1 and up; a render target such as _rt_Reflection is not loaded and gets the fallback until bound.
 sg_view extraTextureView(const PassTextures& textures, size_t index, sg_view fallback) {
     if (index >= textures.cached_views.size()) return fallback;
     return viewOr(textures.cached_views[index], fallback);
@@ -76,10 +77,12 @@ void fillFrameBuiltins(const EngineContext& ctx, builtin_uniforms_t& out) {
     out.light_skylight_color[3] = 1.0f;
 }
 
-void fillMeshUniforms(const EngineContext& ctx, const mat4x4 model, MeshUniforms& out) {
-    PerspectiveCamera camera;
-    buildPerspectiveCamera(ctx.scene.camera, ctx.scene.general, viewAspect(ctx), camera);
+void sceneCamera(const EngineContext& ctx, PerspectiveCamera& out) {
+    buildPerspectiveCamera(ctx.scene.camera, ctx.scene.general, viewAspect(ctx), out);
+}
 
+void fillMeshUniforms(const EngineContext& ctx, const PerspectiveCamera& camera, const mat4x4 model,
+                      MeshUniforms& out) {
     fillFrameBuiltins(ctx, out.builtins);
     mat4x4_mul(out.builtins.mvp, camera.view_projection, model);
     mat4x4_invert(out.builtins.mvp_inverse, out.builtins.mvp);
@@ -115,6 +118,7 @@ StaticModelLayer* StaticModelLayer::createFromDocument(const wallpaper_engine::S
                                                        EngineContext& ctx) {
     auto* layer = new StaticModelLayer(doc.name.empty() ? "Model" : doc.name.c_str());
     layer->initFromDocument(doc, ctx, false);
+    layer->reflected_ = doc.model.reflected;
     buildModelMatrix(layer->model_matrix_, doc.node.origin, doc.node.angles, doc.node.scale);
     if (!layer->loadMesh(doc.model.model.c_str(), ctx)) {
         delete layer;
@@ -184,6 +188,7 @@ bool StaticModelLayer::loadMaterial(const std::string& path, EngineContext& ctx,
 
     cJSON* pass = firstPass(document);
     const MeshPipelineState state = parseMeshPipelineState(pass);
+    out.reflection_slots = textureSlotsNamed(pass, kReflectionTarget);
     out.pass = std::make_unique<ShaderPass>(pass, nullptr, ctx);
     out.pass->mesh_geometry = true;
     out.pass->combos = upperCaseCombos(out.pass->combos);
@@ -208,9 +213,40 @@ void StaticModelLayer::bindMaterial(EngineContext& ctx, Material& material) cons
     for (int slot = 0; slot < kTextureSlots; ++slot) bindings.samplers[slot] = ctx.renderer.smp_repeat;
 }
 
+bool StaticModelLayer::samplesReflection() const {
+    for (const Material& material : materials_)
+        if (material.reflection_slots != 0) return true;
+    return false;
+}
+
+void StaticModelLayer::setReflectionView(sg_view view, EngineContext& ctx) {
+    const sg_view bound = view.id != SG_INVALID_ID ? view : (sg_view)ctx.renderer.black_view;
+    for (Material& material : materials_) {
+        for (int slot = 0; slot < kTextureSlots; ++slot) {
+            if ((material.reflection_slots & (1u << slot)) == 0) continue;
+            material.bindings.views[slot] = bound;
+            material.bindings.samplers[slot] = ctx.renderer.smp_clamp;
+        }
+    }
+}
+
 void StaticModelLayer::draw(EngineContext& ctx) {
+    PerspectiveCamera camera;
+    sceneCamera(ctx, camera);
+    drawWithCamera(ctx, camera);
+}
+
+void StaticModelLayer::drawReflection(EngineContext& ctx, float plane_y) {
+    PerspectiveCamera camera;
+    sceneCamera(ctx, camera);
+    PerspectiveCamera mirrored;
+    buildReflectedCamera(camera, plane_y, mirrored);
+    drawWithCamera(ctx, mirrored);
+}
+
+void StaticModelLayer::drawWithCamera(EngineContext& ctx, const PerspectiveCamera& camera) {
     MeshUniforms uniforms;
-    fillMeshUniforms(ctx, model_matrix_, uniforms);
+    fillMeshUniforms(ctx, camera, model_matrix_, uniforms);
     for (const MeshDraw& draw : draws_) {
         Material& material = materials_[draw.material];
         sg_apply_pipeline(material.pipeline);
