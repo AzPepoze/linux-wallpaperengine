@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <climits>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include "app/cli_args.h"
 #include "app/flag_config.h"
 #include "shared/core/build_config.h"
+#include "shared/core/config_candidates.h"
 #include "shared/core/logger.h"
 #include "sokol_args.h"
 
@@ -104,6 +106,16 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     sargs_setup(&a_desc);
 
     CliOptions opts;
+    const std::vector<std::string> args(argv, argv + argc);
+    cli_args::optionValue(args, {"--config"}, opts.config_path);
+    if (!opts.config_path.empty()) {
+        if (access(opts.config_path.c_str(), R_OK) != 0) {
+            fprintf(stderr, "Cannot read config '%s'\n", opts.config_path.c_str());
+            exit(EXIT_FAILURE);
+        }
+        // flag_config and the engine path lookup read this before the rest of the parse runs.
+        configPathOverride() = opts.config_path;
+    }
     opts.gpu = gpuArg(argc, argv);
     opts.list_gpus = hasDashedFlag("list-gpus");
 #if DEBUG_BUILD
@@ -117,7 +129,6 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
     opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
-    const std::vector<std::string> args(argv, argv + argc);
     auto record = [&](const std::string& key, const std::string& value, const char* source) {
         opts.startup_options.push_back(key + "=" + (value.empty() ? "<unset>" : value) + " (source: " + source + ")");
     };
@@ -173,6 +184,21 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.whoareyou = cli_args::hasFlag(args, {"--whoareyou"});
+    opts.version = cli_args::hasFlag(args, {"-V", "--version"});
+    opts.list_outputs = cli_args::hasFlag(args, {"--list-outputs"});
+    opts.list_transitions = cli_args::hasFlag(args, {"--list-transitions"});
+    opts.list_properties = cli_args::hasFlag(args, {"-l", "--list-properties"});
+    opts.disable_parallax = cli_args::hasFlag(args, {"--disable-parallax"});
+    opts.disable_mouse = cli_args::hasFlag(args, {"--disable-mouse"});
+
+    // --quiet wins over --log-level and config.json.
+    const log_level_t fallback_level = DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO;
+    std::string log_level_text = resolve({"--log-level"}, "log_level", DEBUG_BUILD ? "debug" : "info");
+    if (cli_args::hasFlag(args, {"--quiet", "-q"})) log_level_text = "error";
+    if (!parseLogLevel(log_level_text, opts.log_level)) {
+        fprintf(stderr, "Unknown log level '%s'; using default\n", log_level_text.c_str());
+        opts.log_level = fallback_level;
+    }
     opts.silent = hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
     opts.no_audio = opts.no_ui || opts.diagnostics.enabled;
     opts.no_audio_processing = hasDashedFlag("no-audio-processing");

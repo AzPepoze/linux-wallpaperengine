@@ -34,6 +34,9 @@ extern Logger effect_log;
 
 std::vector<RuntimeLogEntry> logger_recent_entries();
 void logger_clear_recent_entries();
+
+// Accepts debug, info, warn or error. False leaves `out` unchanged.
+bool parseLogLevel(const std::string& text, log_level_t& out);
 #endif
 
 #ifdef __cplusplus

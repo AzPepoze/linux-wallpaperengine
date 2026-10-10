@@ -8,6 +8,7 @@
 #include <string>
 
 #include "config.h"
+#include "config_candidates.h"
 #include "logger.h"
 #include "vfs.h"
 
@@ -96,10 +97,8 @@ bool detect_engine_path(char* out_path, size_t max_len) {
         return false;
     };
 
-    const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
-                                       "../../../../config.json"};
-    for (const char* cfg : config_candidates) {
-        if (try_config(cfg)) return true;
+    for (const std::string& cfg : configCandidates()) {
+        if (try_config(cfg.c_str())) return true;
     }
 
     const char* home = getenv("HOME");
@@ -135,10 +134,8 @@ void detect_default_wallpaper(char* out_path, size_t max_len) {
         }
     }
 
-    const char* config_candidates[] = {"config.json", "../config.json", "../../config.json", "../../../config.json",
-                                       "../../../../config.json"};
-    for (const char* cfg : config_candidates) {
-        char* config_str = read_file_to_string(cfg);
+    for (const std::string& cfg : configCandidates()) {
+        char* config_str = read_file_to_string(cfg.c_str());
         if (config_str) {
             cJSON* config_json = cJSON_Parse(config_str);
             if (config_json) {

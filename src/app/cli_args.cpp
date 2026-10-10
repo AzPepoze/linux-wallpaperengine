@@ -20,6 +20,7 @@ constexpr CliOption kWallpaper[] = {
     {{"--extract-dir", "-extract-dir", nullptr}, "<path>", CliBuild::All, "Target directory for extraction"},
     {{"--assets-dir", nullptr}, "<path>", CliBuild::All, "Wallpaper Engine install root or its assets/ directory"},
     {{"--set-property", nullptr}, "<name=value>", CliBuild::All, "Override a project property (repeatable)"},
+    {{"--list-properties", "-l", nullptr}, nullptr, CliBuild::All, "List the wallpaper's user properties and exit"},
     kSentinel,
 };
 
@@ -35,7 +36,9 @@ constexpr CliOption kGraphics[] = {
     {{"--list-gpus", "-list-gpus", nullptr}, nullptr, CliBuild::All, "List available GPUs and exit"},
     {{"-f", "--fps", nullptr}, "<n>", CliBuild::All, "Frame-rate cap; 0 or omitted follows the display"},
     {{"--scaling", nullptr}, "<default|fit|fill|stretch>", CliBuild::All, "fill crops to cover, fit letterboxes"},
-    {{"--pointer", nullptr}, "<auto|surface|evdev>", CliBuild::All, "Global pointer source: evdev reads mouse motion"},
+    {{"--pointer", nullptr}, "<auto|x11|hyprland|surface|evdev>", CliBuild::All, "Where the mouse position comes from"},
+    {{"--disable-mouse", nullptr}, nullptr, CliBuild::All, "Ignore the mouse; the wallpaper never reacts to it"},
+    {{"--disable-parallax", nullptr}, nullptr, CliBuild::All, "Turn off camera parallax"},
     {{"--clamp", "--clamping", nullptr}, "<mode>", CliBuild::All, "Accepted and ignored"},
     {{"--cover", nullptr}, nullptr, CliBuild::All, "Force cover scaling, ignoring the project's fit"},
     {{"--video-ram", nullptr}, nullptr, CliBuild::All, "Load video files fully into RAM instead of streaming"},
@@ -49,6 +52,7 @@ constexpr CliOption kDisplay[] = {
     {{"--layer-size", nullptr}, "<WxH>", CliBuild::Debug, "Use a small anchored rectangle (for example 320x180)"},
     {{"--layer-anchor", nullptr}, "<edges>", CliBuild::Debug, "Anchor edges for --layer-size (for example top-left)"},
     {{"--window", nullptr}, "<XxYxWxH>", CliBuild::All, "Windowed mode at this size; the X,Y position is not applied"},
+    {{"--list-outputs", nullptr}, nullptr, CliBuild::All, "List output names for -r and exit"},
     kSentinel,
 };
 
@@ -56,6 +60,7 @@ constexpr CliOption kTransition[] = {
     {{"--transition", nullptr}, "<name|none|random>", CliBuild::All, "Transition shader (default fade; 0-26 accepted)"},
     {{"--transition-duration", nullptr}, "<ms>", CliBuild::All, "Transition length in milliseconds (default 1000)"},
     {{"--transition-mode", nullptr}, "<freeze|continue>", CliBuild::All, "Outgoing wallpaper behavior during the fade"},
+    {{"--list-transitions", nullptr}, nullptr, CliBuild::All, "List transition names and exit"},
     kSentinel,
 };
 
@@ -109,15 +114,17 @@ constexpr CliOption kParticles[] = {
 };
 
 constexpr CliOption kInfo[] = {
+    {{"--version", "-V", nullptr}, nullptr, CliBuild::All, "Print the version and exit"},
     {{"--whoareyou", nullptr}, nullptr, CliBuild::All, "Print engine identity as JSON and exit"},
+    {{"--config", nullptr}, "<path>", CliBuild::All, "Read this config.json instead of searching for one"},
+    {{"--log-level", nullptr}, "<debug|info|warn|error>", CliBuild::All, "Lowest log level to print"},
+    {{"--quiet", "-q", nullptr}, nullptr, CliBuild::All, "Print only errors; same as --log-level error"},
     kSentinel,
 };
 
 // Launcher flags are consumed so they never become the positional wallpaper.
 constexpr CliOption kCompatibility[] = {
     {{"--noautomute", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
-    {{"--disable-mouse", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
-    {{"--disable-parallax", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--no-fullscreen-pause", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--fullscreen-pause-only-active", nullptr},
      nullptr,
@@ -133,7 +140,6 @@ constexpr CliOption kCompatibility[] = {
     {{"--screenshot-delay", nullptr}, "<n>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--screen-span", nullptr}, "<names>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--bg", nullptr}, "<id/path>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
-    {{"--list-properties", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--dump-structure", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     kSentinel,
 };

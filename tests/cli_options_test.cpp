@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "shared/core/build_config.h"
+#include "shared/core/config_candidates.h"
 #include "test_util.h"
 
 namespace {
@@ -113,6 +115,41 @@ int main() {
     {
         const CliOptions opts = parse({"app", "--list-properties", "/wp"});
         CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    // --quiet beats --log-level; an unknown level keeps the build default.
+    {
+        CHECK(parse({"app", "--log-level", "warn", "/wp"}).log_level == LOG_LEVEL_WARN);
+        CHECK(parse({"app", "--quiet", "--log-level", "debug", "/wp"}).log_level == LOG_LEVEL_ERROR);
+        CHECK(parse({"app", "-q", "/wp"}).log_level == LOG_LEVEL_ERROR);
+        CHECK(parse({"app", "--log-level", "loud", "/wp"}).log_level ==
+              (DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO));
+    }
+
+    {
+        const CliOptions opts = parse({"app", "--version", "--list-outputs", "--list-transitions", "/wp"});
+        CHECK(opts.version && opts.list_outputs && opts.list_transitions);
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    {
+        const CliOptions opts = parse({"app", "-l", "--disable-parallax", "--disable-mouse", "/wp"});
+        CHECK(opts.list_properties && opts.disable_parallax && opts.disable_mouse);
+        CHECK(opts.wallpaper_arg == "/wp");
+    }
+
+    // --config replaces the search and is also read for log_level.
+    {
+        FILE* other = fopen("other.json", "w");
+        CHECK(other != nullptr);
+        fputs("{\"scaling_mode\":\"stretch\",\"log_level\":\"warn\"}", other);
+        fclose(other);
+        const CliOptions opts = parse({"app", "--config", "other.json", "/wp"});
+        CHECK(opts.config_path == "other.json");
+        CHECK(opts.scaling == "stretch");
+        CHECK(opts.log_level == LOG_LEVEL_WARN);
+        CHECK(configPathOverride() == "other.json");
+        configPathOverride().clear();
     }
 
     WindowGeometry window;

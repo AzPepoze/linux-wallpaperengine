@@ -84,16 +84,18 @@ int main() {
     CHECK(cli_args::positional(identity).empty());
 
     // Compatibility flags are consumed and reported as unsupported; implemented options never are.
-    const V compat = {"app",      "--disable-mouse", "--noautomute", "--screenshot",
-                      "shot.png", "--screen-span",   "DP-1,DP-2",    "/wp"};
+    const V compat = {"app",      "--dump-structure", "--noautomute", "--screenshot",
+                      "shot.png", "--screen-span",    "DP-1,DP-2",    "/wp"};
     CHECK(cli_args::positional(compat) == "/wp");
     CHECK(cli_args::takesValue("--screenshot"));
     const V unsupported = cli_args::unknownOptions(compat);
     CHECK(unsupported.size() == 4);
-    CHECK(unsupported[0] == "--disable-mouse");
+    CHECK(unsupported[0] == "--dump-structure");
     CHECK(unsupported[1] == "--noautomute");
     CHECK(unsupported[2] == "--screenshot");
     CHECK(unsupported[3] == "--screen-span");
+    // --disable-mouse is implemented now, so it is not reported.
+    CHECK(cli_args::unknownOptions({"app", "--disable-mouse", "/wp"}).empty());
 
     const V mixed = {"app", "--gpu", "1", "--fps=30", "--totally-new", "shot.png", "/wp"};
     const V mixed_unknown = cli_args::unknownOptions(mixed);
@@ -130,6 +132,37 @@ int main() {
     CHECK(help.find("Diagnostics:") == std::string::npos);
     CHECK(help.find("--diagnose") == std::string::npos);
 #endif
+
+    // Value detection for the info and compatibility flags.
+    CHECK(cli_args::takesValue("--config"));
+    CHECK(cli_args::takesValue("--log-level"));
+    CHECK(!cli_args::takesValue("--quiet"));
+    CHECK(!cli_args::takesValue("--version"));
+    CHECK(!cli_args::takesValue("--list-properties"));
+    CHECK(!cli_args::takesValue("--disable-mouse"));
+    CHECK(!cli_args::takesValue("--disable-parallax"));
+    CHECK(!cli_args::takesValue("--list-outputs"));
+    CHECK(!cli_args::takesValue("--list-transitions"));
+
+    // The new flags are known, so only the launcher-ignored options are reported.
+    const V known = {"app", "--version",       "--config",           "a.json",         "--log-level=warn",
+                     "-l",  "--disable-mouse", "--disable-parallax", "--list-outputs", "--list-transitions",
+                     "/wp"};
+    CHECK(cli_args::unknownOptions(known).empty());
+    CHECK(cli_args::positional(known) == "/wp");
+
+    char* new_help = nullptr;
+    size_t new_help_size = 0;
+    FILE* new_help_stream = open_memstream(&new_help, &new_help_size);
+    CHECK(new_help_stream != nullptr);
+    cli_args::printHelp(new_help_stream);
+    fclose(new_help_stream);
+    const std::string new_help_text(new_help, new_help_size);
+    free(new_help);
+    for (const char* name : {"--version", "--config", "--log-level", "--quiet", "--list-outputs", "--list-transitions",
+                             "--list-properties", "--disable-mouse", "--disable-parallax"}) {
+        CHECK(new_help_text.find(name) != std::string::npos);
+    }
 
     return test::finish("cli args checks");
 }

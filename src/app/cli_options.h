@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "shared/core/logger.h"
 #include "shared/core/resolution.h"
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 #include "wallpaper/web/web_options.h"
@@ -71,7 +72,15 @@ struct CliOptions {
     bool toggle_debug_ui = false;
     bool help = false;
     bool whoareyou = false;
-    float volume = 100.0f;  // --volume master percent
+    bool version = false;                    // --version
+    bool list_outputs = false;               // --list-outputs
+    bool list_transitions = false;           // --list-transitions
+    bool list_properties = false;            // --list-properties
+    bool disable_parallax = false;           // --disable-parallax
+    bool disable_mouse = false;              // --disable-mouse
+    std::string config_path;                 // --config
+    log_level_t log_level = LOG_LEVEL_INFO;  // --log-level, --quiet
+    float volume = 100.0f;                   // --volume master percent
     bool has_volume = false;
     bool particle_debug_bounds = false;
     bool particle_debug_velocity = false;
