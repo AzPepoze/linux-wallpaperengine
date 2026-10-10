@@ -401,6 +401,7 @@ bool Scene2DRuntime::stepCleanup() {
     if (cleanup_phase_ == 6) {
         bloom_targets[1].reset();
         depth_target.reset();
+        resetReflectionTarget();
         cleanup_phase_ = 7;
         warn_overrun();
         return false;
@@ -431,6 +432,7 @@ void Scene2DRuntime::cleanup() {
     bloom_targets[0].reset();
     bloom_targets[1].reset();
     depth_target.reset();
+    resetReflectionTarget();
     hdr_bloom_levels.clear();
     scene_output_index = -1;
     force_offscreen_ = false;

@@ -142,6 +142,9 @@ class Scene2DRuntime {
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];
     DepthTarget depth_target;
+    // _rt_Reflection: reflected models seen in the floor mirror, only while the scene has some.
+    SceneTarget reflection_target;
+    DepthTarget reflection_depth;
     std::vector<SceneTarget> hdr_bloom_levels;
     int scene_output_index = -1;
     bool float_composition_available_ = true;
@@ -163,6 +166,11 @@ class Scene2DRuntime {
     void updateDepthTarget(int width, int height);
     // Adds the scene depth buffer to a pass that draws layers, keeping its contents.
     void attachDepth(sg_pass& pass) const;
+    bool hasReflectedLayers() const;
+    void updateReflectionTarget(int width, int height, sg_pixel_format format);
+    void resetReflectionTarget();
+    // Draws the reflected models mirrored into _rt_Reflection and binds it to the mirror surfaces.
+    void renderReflection();
     bool ensureBloomTargets(int width, int height);
     int renderHdrBloom(int current_target_index, int width, int height);
     int renderBloom(int current_target_index, int width, int height);

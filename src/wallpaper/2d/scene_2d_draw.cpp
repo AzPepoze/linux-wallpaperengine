@@ -121,6 +121,8 @@ void Scene2DRuntime::drawOffscreen() {
 
     updateViewport();
     updateDepthTarget(width, height);
+    updateReflectionTarget(width, height, scene_targets[0].pixel_format);
+    renderReflection();
 
     int current = 0;
     sg_pass clear_pass = {};
