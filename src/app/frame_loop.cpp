@@ -141,11 +141,19 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
     media_bridge.update(thumbnail_texture.inUse(), [&](const wallpaper_engine::ThumbnailColors& thumbnail) {
         thumbnail_texture.setThumbnail(thumbnail);
     });
+    const int thumbnail_token = gpu_timing_begin_pass("update/thumbnail");
     thumbnail_texture.flush();
+    gpu_timing_end_pass(thumbnail_token);
 
+    const int video_token = gpu_timing_begin_pass("update/video");
     ctx.asset_mgr->updateVideoTextures(dt, ctx.scene.layers);
+    gpu_timing_end_pass(video_token);
+
     parallax_update(ctx, dt, surface::width(), surface::height());
+
+    const int layers_token = gpu_timing_begin_pass("update/layers");
     mgr.update(dt, ctx);
+    gpu_timing_end_pass(layers_token);
 }
 
 #if DEBUG_BUILD

@@ -8,6 +8,7 @@
 #include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
+#include "shared/graphics/backend/gpu_timing.h"
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
@@ -116,7 +117,9 @@ void Scene2DRuntime::update(float dt) {
     for (auto layer : ctx.scene.layers) {
         layer->render_active = layer->solo || visibility.visible(*layer);
         if (dynamic_cast<ParticleLayer*>(layer) && !layer->render_active) continue;
+        const int update_token = ctx.performance_profile ? gpu_timing_begin_pass("update/" + layer->name) : -1;
         layer->update(dt, ctx);
+        gpu_timing_end_pass(update_token);
     }
 }
 
