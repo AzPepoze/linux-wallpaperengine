@@ -370,7 +370,8 @@ add_test("script_manifest_tests", {"tests/script_manifest_test.cpp", "src/wallpa
          {"quickjs"})
 
 add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
-                       "src/wallpaper/2d/puppet/puppet_pose.cpp", "src/wallpaper/2d/tree/scene_tree.cpp"},
+                       "src/wallpaper/2d/puppet/mdl_mesh.cpp", "src/wallpaper/2d/puppet/puppet_pose.cpp",
+                       "src/wallpaper/2d/tree/scene_tree.cpp"},
          {"linmath.h"})
 
 add_test("shader_tests", {"tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp",
