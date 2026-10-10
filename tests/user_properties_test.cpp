@@ -105,6 +105,36 @@ void testCliWins(const fs::path& dir) {
            "numeric combo value becomes a number");
 }
 
+void testPreset(const fs::path& dir) {
+    const char* base_json = R"({
+  "general": {"properties": {
+    "enabled": {"type": "bool", "value": true},
+    "tint": {"type": "color", "value": "0 0 0"},
+    "photo": {"type": "scenetexture", "value": ""}
+  }}
+})";
+    const fs::path preset = dir / "preset";
+    fs::create_directories(preset);
+    std::ofstream(preset / "project.json", std::ios::binary) << R"({
+  "preset": {"enabled": false, "tint": "255 0 0", "photo": "files/a.jpg", "unknown": "x", "gone": null}
+})";
+    std::ofstream(dir / "base.json", std::ios::binary) << base_json;
+
+    UserProperties props;
+    expect("preset base", props.loadProject((dir / "base.json").string()), "base defaults should load");
+    props.applyPreset((preset / "project.json").string(), preset.string());
+    expect("preset", !props.find("enabled")->b, "preset overrides a bool default");
+    expect("preset", near(props.find("tint")->color[0], 1.0f), "preset color is parsed in 0..255");
+    expect("preset", props.find("photo")->text == preset.string() + "/files/a.jpg",
+           "relative texture resolves beside the preset");
+    expect("preset", props.find("unknown") == nullptr, "undeclared preset keys are ignored");
+
+    props.applySaved(kGui, "123");
+    expect("preset", props.find("photo")->text == preset.string() + "/files/a.jpg", "preset value survives saved state");
+    props.setFromString("enabled", "1");
+    expect("preset", props.find("enabled")->b, "command line still wins over the preset");
+}
+
 void testTypeParsing(const fs::path& dir) {
     UserProperties props = loadInto(dir);
     props.setFromString("enabled", "1");
@@ -159,6 +189,7 @@ int main() {
         testDefaults(base);
         testSavedOverrides(base);
         testCliWins(base);
+        testPreset(base);
         testTypeParsing(base);
         testToStringsRoundTrip(base);
     }

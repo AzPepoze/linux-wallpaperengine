@@ -125,6 +125,29 @@ bool UserProperties::loadProject(const std::string& project_json_path) {
     return true;
 }
 
+void UserProperties::applyPreset(const std::string& preset_json_path, const std::string& preset_root) {
+    const std::string text = readFile(preset_json_path);
+    cJSON* root = text.empty() ? nullptr : cJSON_Parse(text.c_str());
+    if (!root) return;
+
+    const cJSON* preset = cJSON_GetObjectItemCaseSensitive(root, "preset");
+    if (cJSON_IsObject(preset)) {
+        const cJSON* item = nullptr;
+        cJSON_ArrayForEach(item, preset) {
+            if (!item->string || cJSON_IsNull(item)) continue;
+            for (UserPropertyDef& def : properties_) {
+                if (def.key != item->string) continue;
+                std::string raw = jsonText(item);
+                // Texture values are stored beside the preset, so they resolve from its folder.
+                if (def.type == "scenetexture" && !raw.empty() && raw[0] != '/') raw = preset_root + "/" + raw;
+                def.value = parseRaw(def.type, raw);
+                break;
+            }
+        }
+    }
+    cJSON_Delete(root);
+}
+
 void UserProperties::applySaved(const std::string& gui_config_json_text, const std::string& workshop_id) {
     if (gui_config_json_text.empty() || workshop_id.empty()) return;
     cJSON* root = cJSON_Parse(gui_config_json_text.c_str());
@@ -160,6 +183,12 @@ const UserPropertyValue* UserProperties::find(const std::string& key) const {
         if (def.key == key) return &def.value;
     }
     return nullptr;
+}
+
+const std::string* UserProperties::texturePath(const std::string& key) const {
+    const UserPropertyValue* value = find(key);
+    if (!value || value->type != UserPropertyValue::Type::Text || value->text.empty()) return nullptr;
+    return &value->text;
 }
 
 std::vector<std::pair<std::string, std::string>> UserProperties::toStrings() const {

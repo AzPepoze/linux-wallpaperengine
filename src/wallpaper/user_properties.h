@@ -28,9 +28,13 @@ struct UserPropertyDef {
 class UserProperties {
    public:
     bool loadProject(const std::string& project_json_path);
+    // Sets the values of a preset's "preset" object; keys the base project does not declare are ignored.
+    void applyPreset(const std::string& preset_json_path, const std::string& preset_root);
     void applySaved(const std::string& gui_config_json_text, const std::string& workshop_id);
     void setFromString(const std::string& key, const std::string& raw);
     const UserPropertyValue* find(const std::string& key) const;
+    // The image a scenetexture property holds; null when it is unset.
+    const std::string* texturePath(const std::string& key) const;
     const std::vector<UserPropertyDef>& all() const {
         return properties_;
     }
