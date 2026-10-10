@@ -98,6 +98,6 @@ Note: a checked box means the feature runs and is used. It does not mean the out
 ## More
 
 - [Feature details](features-detail.md): the item-by-item list
-- [Wallpaper Engine assets](wallpaper-engine-assets.md): the assets we load from Wallpaper Engine
+- [Wallpaper Engine assets](wallpaper-engine-assets.md): the assets this project loads from Wallpaper Engine
 
 When a feature changes, update both this page and the details page in the same commit.

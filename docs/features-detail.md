@@ -14,7 +14,7 @@ Legend:
 
 "Supported" means it is implemented and used; pixel-exact output against the Windows renderer is not guaranteed. Anything marked *unverified* was read from code or notes but not checked against a real wallpaper.
 
-Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the Wallpaper Engine install provides and how we use it.
+Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the Wallpaper Engine install provides and how this project uses it.
 
 ## Contents
 
