@@ -9,8 +9,7 @@
 #include "app/platform/pointer/output_pointer.h"
 #include "app/platform/pointer/pointer_source.h"
 
-// Finds the pointer position on this output. Sources, most accurate first: an exact desktop source (X11 or
-// Hyprland), the wallpaper surface while the pointer is over it, then mouse motion from evdev as an estimate.
+// Finds the pointer position, preferring exact desktop sources, then the surface, then evdev estimates.
 class GlobalPointer {
    public:
     void open(const std::string& output, PointerSource source);

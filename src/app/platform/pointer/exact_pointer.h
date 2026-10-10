@@ -8,13 +8,13 @@
 #include "app/platform/pointer/output_pointer.h"
 #include "app/platform/pointer/pointer_source.h"
 
-// A desktop source that reports the real cursor position. `sample` returns nothing when the cursor is off the output.
+// Reports the real cursor position; `sample` is empty when the cursor is off the output.
 struct ExactSource {
     std::string name;
     std::function<std::optional<OutputPointer>()> sample;
 };
 
-// The exact source the session offers: X11 first, then Hyprland. `requested` narrows the choice; nullopt when none works.
+// Chooses X11 before Hyprland; `requested` narrows the choice, and nullopt means neither works.
 std::optional<ExactSource> findExactSource(const std::string& output, PointerSource requested);
 
 #endif  // EXACT_POINTER_H

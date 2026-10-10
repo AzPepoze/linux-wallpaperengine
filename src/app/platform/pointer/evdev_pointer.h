@@ -5,7 +5,7 @@
 
 #include "app/platform/pointer/output_pointer.h"
 
-// Moves `from` by a relative motion in pixels, scaled to an output of width x height pixels and clamped to it.
+// Applies relative pixel motion to `from`, scaled to and clamped within the output dimensions.
 OutputPointer movedBy(OutputPointer from, int dx, int dy, float width, float height);
 
 // Follows relative motion from mouse-like devices in /dev/input. Works on any compositor, but only

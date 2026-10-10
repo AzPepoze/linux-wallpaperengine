@@ -1,4 +1,4 @@
-// Entry points of the wayland plugin, resolved by the host when -r is used on a Wayland session.
+// Wayland plugin entry points resolved by the host when -r is used in a Wayland session.
 #include <stdio.h>
 #include <string.h>
 #include <wayland-client.h>
