@@ -374,6 +374,13 @@ add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cp
                        "src/wallpaper/2d/tree/scene_tree.cpp"},
          {"linmath.h"})
 
+add_test("static_model_tests", {"tests/static_model_test.cpp", "src/wallpaper/2d/camera/perspective_camera.cpp",
+                                "src/wallpaper/2d/layers/model/static_mesh.cpp",
+                                "src/wallpaper/2d/layers/model/model_material.cpp",
+                                "src/wallpaper/user_properties.cpp", "src/shared/core/vfs.cpp",
+                                "src/shared/core/logger.cpp"},
+         {"linmath.h", "sokol", "cjson"})
+
 add_test("shader_tests", {"tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp",
                           "src/shared/graphics/shader/shader_processor_metadata.cpp",
                           "src/shared/graphics/shader/shader_preprocessor_fix.cpp",
