@@ -461,6 +461,8 @@ add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio
 
 add_test("intro_zoom_tests", {"tests/intro_zoom_test.cpp"})
 
+add_test("camera_path_tests", {"tests/camera_path_test.cpp", "src/wallpaper/2d/camera/camera_path.cpp"})
+
 add_test("ogg_decoder_tests", {"tests/ogg_decoder_test.cpp", "src/shared/audio/ogg_decoder.cpp"}, {"stb"})
 
 add_test("control_protocol_tests", {"tests/control_protocol_test.cpp", "src/app/control/control_protocol.cpp",
