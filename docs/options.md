@@ -22,6 +22,8 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `web_devtools_port` | `<port>` | 9222 | DevTools port |
 | `web_devtools_browser` | `<cmd>` | xdg-open | Browser for DevTools |
 | `audio_device` | `<name>` | system output | Same as `--audio-device` |
+| `pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Same as `--pointer` |
+| `resolution` | `auto\|native\|WxH` | auto | Same as `--resolution` |
 
 ## Environment variables
 
@@ -51,6 +53,8 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--list-gpus` | | off | List GPUs and exit |
 | `-f`, `--fps` | `<n>` | display rate | Frame-rate cap; `0` follows the display |
 | `--scaling` | `default\|fit\|fill\|stretch` | fit | `fill` crops, `fit` letterboxes, `stretch` ignores aspect ratio |
+| `--intro-zoom` | `<factor>` | 1.0 | Startup zoom. The view eases from this zoom to 1.0. `1.0` is off |
+| `--intro-duration` | `<seconds>` | 4 | Length of the startup zoom |
 | `--cover` | | off | Force cover scaling |
 | `--clamp`, `--clamping` | `<mode>` | ignored | Accepted, does nothing |
 | `--video-ram` | | off | Load video into RAM instead of streaming |
@@ -65,8 +69,6 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `-r`, `--screen-root` | `<output>` | — | Draw on this output (for example `DP-4`) |
 | `--window` | `<XxYxWxH>` | 1280x720 | Windowed mode at this size. The X,Y position is not applied. Ignored with `-r` or `--layer` |
 | `--layer` | `background\|bottom\|top\|overlay` | background | Which layer to draw on |
-| `--layer-size` | `<WxH>` | — | Debug: small test rectangle, e.g. `320x180` |
-| `--layer-anchor` | `<edges>` | — | Debug: where the small rectangle sits, e.g. `top-left` |
 
 On Wayland, `-r` uses the layer-shell feature. On X11, it uses the X11 desktop feature. If neither works, the wallpaper runs in a normal window.
 
@@ -143,6 +145,9 @@ If the source you pick does not work, the program moves down the same list and l
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
+| `--layer-size` | `<WxH>` | — | Small test rectangle, e.g. `320x180` |
+| `--layer-anchor` | `<edges>` | — | Where the small rectangle sits, e.g. `top-left` |
+| `--toggle-debug-ui` | | off | Show or hide the debug panel of the running wallpaper on this output |
 | `--diagnose`, `--diagnostics` | | off | Capture render diagnostics |
 | `--diagnose-frame` | `<n>` | 100 | Frame to capture |
 | `--diagnose-final-only` | | off | Capture only the final output |
