@@ -129,6 +129,7 @@ Some references come from these projects:
 | Build, test and debug the program | [docs/development.md](docs/development.md) |
 | See what works and what does not | [docs/features.md](docs/features.md) |
 | Compare with the upstream launcher | [docs/compatibility.md](docs/compatibility.md) |
+| Learn the Wallpaper Engine file formats and behaviour | [docs/wallpaper-engine-knowledge.md](docs/wallpaper-engine-knowledge.md) |
 
 ## STONKS!
 
