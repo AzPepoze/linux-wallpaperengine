@@ -70,4 +70,13 @@ inline std::pair<int, int> targetSize(int source_width, int source_height, doubl
         std::min(1.0, std::max(std::abs(displayed_width) / source_width, std::abs(displayed_height) / source_height));
     return {std::max(1, (int)std::ceil(source_width * ratio)), std::max(1, (int)std::ceil(source_height * ratio))};
 }
+
+// Per axis, never below the source, so pixel-art layers shown larger than authored get a sharp target.
+inline std::pair<int, int> upscaledTargetSize(int source_width, int source_height, double displayed_width,
+                                              double displayed_height) {
+    if (source_width <= 0 || source_height <= 0) return {1, 1};
+    if (!std::isfinite(displayed_width) || !std::isfinite(displayed_height)) return {source_width, source_height};
+    return {std::max(source_width, (int)std::ceil(std::abs(displayed_width))),
+            std::max(source_height, (int)std::ceil(std::abs(displayed_height)))};
+}
 }  // namespace resolution

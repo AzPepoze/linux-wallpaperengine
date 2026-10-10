@@ -7,6 +7,18 @@
 
 std::pair<int, int> ImageLayer::layerTargetSize(EngineContext& ctx, int width, int height) const {
     if (ctx.resolution.mode == resolution::Setting::Mode::Native) return {width, height};
+    const auto [displayed_width, displayed_height] = displayedPixelSize(ctx);
+    return resolution::targetSize(width, height, displayed_width, displayed_height);
+}
+
+std::pair<int, int> ImageLayer::effectTargetSize(EngineContext& ctx, int width, int height) const {
+    const bool nearest = (texture_metadata.flags & wallpaper_engine::kTextureFlagNoInterpolation) != 0;
+    if (!nearest || ctx.resolution.mode == resolution::Setting::Mode::Native) return layerTargetSize(ctx, width, height);
+    const auto [displayed_width, displayed_height] = displayedPixelSize(ctx);
+    return resolution::upscaledTargetSize(width, height, displayed_width, displayed_height);
+}
+
+std::pair<double, double> ImageLayer::displayedPixelSize(EngineContext& ctx) const {
     const ScreenRect rect = screenRect(ctx);
     const double sx = ctx.renderer.view_width > 0 && ctx.scene.physical_view_width > 0
                           ? ctx.scene.physical_view_width / ctx.renderer.view_width
@@ -18,8 +30,7 @@ std::pair<int, int> ImageLayer::layerTargetSize(EngineContext& ctx, int width, i
     const double c = std::cos(angle), s = std::sin(angle);
     const double ratio =
         resolution::referenceRatio(ctx.resolution, ctx.scene.physical_view_width, ctx.scene.physical_view_height);
-    return resolution::targetSize(width, height, rect.width * std::hypot(c * sx, s * sy) * ratio,
-                                  rect.height * std::hypot(s * sx, c * sy) * ratio);
+    return {rect.width * std::hypot(c * sx, s * sy) * ratio, rect.height * std::hypot(s * sx, c * sy) * ratio};
 }
 
 ImageLayer::RenderSizeInfo ImageLayer::renderSizeInfo() const {
@@ -69,7 +80,7 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
         if (!eligible) break;
     }
     if (eligible) {
-        const auto dimensions = layerTargetSize(ctx, width, height);
+        const auto dimensions = effectTargetSize(ctx, width, height);
         width = dimensions.first;
         height = dimensions.second;
     }

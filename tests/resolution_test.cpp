@@ -40,5 +40,14 @@ int main() {
     CHECK(resolution::referenceRatio(uhd, 1920, 1080) == 2.0);
     CHECK(resolution::referenceRatio(uhd, 3840, 2160) == 1.0);
     CHECK(resolution::referenceRatio(uhd, 0, 1080) == 1.0);
+
+    using resolution::upscaledTargetSize;
+    // A 32x32 texture shown 1920x89 keeps its authored height only when that is larger.
+    CHECK(upscaledTargetSize(32, 32, 1920, 89) == std::make_pair(1920, 89));
+    CHECK(upscaledTargetSize(32, 32, 16, 16) == std::make_pair(32, 32));
+    CHECK(upscaledTargetSize(32, 32, -1920, 89) == std::make_pair(1920, 89));
+    CHECK(upscaledTargetSize(32, 32, 0, 0) == std::make_pair(32, 32));
+    CHECK(upscaledTargetSize(32, 32, std::numeric_limits<double>::infinity(), 89) == std::make_pair(32, 32));
+    CHECK(upscaledTargetSize(0, 32, 1920, 89) == std::make_pair(1, 1));
     return test::finish("resolution checks");
 }
