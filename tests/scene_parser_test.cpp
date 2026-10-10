@@ -341,6 +341,29 @@ void testUserBindings() {
     test::expect("user", !defaults.objects[1].visible, "and so is a condition binding");
 }
 
+void testBloomFlag() {
+    const SceneDocument hdr_only = parseText(R"({"general": {"hdr": true}, "objects": []})");
+    test::expect("bloom", !hdr_only.general.bloom.enabled, "hdr alone does not enable bloom");
+
+    const SceneDocument hdr_off = parseText(R"({"general": {"hdr": true, "bloom": false}, "objects": []})");
+    test::expect("bloom", !hdr_off.general.bloom.enabled, "an explicit bloom false wins over hdr");
+
+    const std::string project_path = writeTemp(
+        R"JSON({"general": {"properties": {"ultra": {"type": "bool", "value": false}}}})JSON");
+    const std::string scene_path = writeTemp(R"JSON({
+      "general": {"hdr": true, "bloom": {"user": "ultra", "value": false}}, "objects": []})JSON");
+    UserProperties properties;
+    test::expect("bloom", properties.loadProject(project_path), "bloom project defaults load");
+    SceneDocument off, on;
+    test::expect("bloom", parseSceneFile(scene_path.c_str(), off, &properties), "bloom scene parses with defaults");
+    properties.setFromString("ultra", "1");
+    test::expect("bloom", parseSceneFile(scene_path.c_str(), on, &properties), "bloom scene parses when toggled");
+    unlink(project_path.c_str());
+    unlink(scene_path.c_str());
+    test::expect("bloom", !off.general.bloom.enabled, "a bloom user toggle left off keeps bloom off");
+    test::expect("bloom", on.general.bloom.enabled, "a bloom user toggle turned on enables bloom");
+}
+
 void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
@@ -476,6 +499,7 @@ int main(int argc, char** argv) {
     testEffectScripts();
     testPropertyAnimations();
     testUserBindings();
+    testBloomFlag();
     testMissingFile();
     testPackageMetadata();
     return test::finish("scene parser tests");
