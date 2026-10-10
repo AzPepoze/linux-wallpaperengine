@@ -4,6 +4,9 @@ Shows animated wallpapers from Wallpaper Engine on Linux.
 
 > **Beta.** There is no release yet. Install it by building from source.
 
+> [!TIP]
+> For a GUI, consider using [linux-wallpaperengine-gui](https://github.com/AzPepoze/linux-wallpaperengine-gui). It is my GUI for this project.
+
 ## What is this?
 
 Wallpaper Engine is a program that shows animated wallpapers. People share their wallpapers as **projects**. This program plays those projects on Linux, so you do not need Windows.
@@ -114,6 +117,7 @@ Some references come from these projects:
 | --- | --- |
 | linux-wallpaperengine by Almamu | [github.com/Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine) |
 | open-wallpaper-engine by waywallen | [github.com/waywallen/open-wallpaper-engine](https://github.com/waywallen/open-wallpaper-engine) |
+| linux-wallpaperengine-gui by AzPepoze | [github.com/AzPepoze/linux-wallpaperengine-gui](https://github.com/AzPepoze/linux-wallpaperengine-gui) |
 
 ## More
 
@@ -125,3 +129,18 @@ Some references come from these projects:
 | Build, test and debug the program | [docs/development.md](docs/development.md) |
 | See what works and what does not | [docs/features.md](docs/features.md) |
 | Compare with the upstream launcher | [docs/compatibility.md](docs/compatibility.md) |
+
+## STONKS!
+
+<div align="center">
+  <a href="https://www.star-history.com/#AzPepoze/linux-wallpaperengine&type=date&legend=top-left">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&theme=dark&legend=top-left" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&legend=top-left" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=AzPepoze/linux-wallpaperengine&type=date&legend=top-left" width="600" />
+    </picture>
+  </a>
+  <br>
+  <br>
+  <strong>Made by AzPepoze</strong>
+</div>
