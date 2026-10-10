@@ -14,6 +14,7 @@
 #include "shared/core/task_pool.h"
 #include "wallpaper/2d/effects/effect.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
+#include "wallpaper/2d/layers/model/static_model_layer.h"
 #include "wallpaper/2d/layers/particle/particle_layer.h"
 #include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
@@ -33,6 +34,8 @@ const char* runtimeClassName(wallpaper_engine::SceneObjectKind kind) {
             return "TextLayer";
         case wallpaper_engine::SceneObjectKind::Sound:
             return "SoundLayer";
+        case wallpaper_engine::SceneObjectKind::Model:
+            return "StaticModelLayer";
         default:
             return "SceneTreeNode";
     }
@@ -321,6 +324,8 @@ Layer* SceneBuilder::buildLayer(const wallpaper_engine::SceneObjectDocument& obj
             return TextLayer::createFromDocument(object, ctx, std::move(text_cache));
         case wallpaper_engine::SceneObjectKind::Sound:
             return SoundLayer::createFromDocument(object, ctx);
+        case wallpaper_engine::SceneObjectKind::Model:
+            return StaticModelLayer::createFromDocument(object, ctx);
         default:
             return nullptr;
     }
