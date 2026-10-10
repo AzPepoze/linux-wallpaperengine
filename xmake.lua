@@ -8,7 +8,7 @@ add_rules("plugin.compile_commands.autoupdate", {outputdir = "."})
 -- ---------------------------------------------------------------------------
 -- Track the upstream heads. Run `xmake require --upgrade` when you want to
 -- refresh the cached dependency revisions.
-add_requires("sokol master")
+add_requires("sokol 662761bc242382216f8d508cde3d5ee317cc34f3")
 add_requires("linmath.h master")
 add_requires("vulkan-headers")
 add_requires("lz4")
