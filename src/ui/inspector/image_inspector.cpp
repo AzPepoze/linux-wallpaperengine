@@ -125,13 +125,6 @@ bool showBlendModeSelector(const char* label, int& blend_mode) {
     return changed;
 }
 
-std::string resolutionModeText(const resolution::Setting& setting) {
-    if (setting.mode == resolution::Setting::Mode::Native) return "native (authored size)";
-    if (setting.mode == resolution::Setting::Mode::Fixed)
-        return std::to_string(setting.width) + "x" + std::to_string(setting.height) + " reference";
-    return "auto (follows the output)";
-}
-
 // GPU time of this layer's update, draw, composite and effect passes in the last profile window.
 void showLayerGpuTimes(bool profiling, const std::string& name) {
     if (!profiling) {
@@ -165,7 +158,7 @@ void showLayerGpuTimes(bool profiling, const std::string& name) {
 void showRenderSize(const EngineContext& ctx, const ImageLayer& layer) {
     if (!ImGui::CollapsingHeader("Render Size", ImGuiTreeNodeFlags_DefaultOpen)) return;
     const ImageLayer::RenderSizeInfo size = layer.renderSizeInfo();
-    ImGui::Text("Resolution: %s", resolutionModeText(ctx.resolution).c_str());
+    ImGui::Text("Resolution: %s", resolution::describe(ctx.resolution).c_str());
     ImGui::Text("Authored: %dx%d", size.authored_width, size.authored_height);
     if (size.target_width > 0) {
         ImGui::Text("Target (%s): %dx%d", size.target, size.target_width, size.target_height);

@@ -48,6 +48,14 @@ inline bool parse(std::string_view text, Setting& out) {
     return true;
 }
 
+// Text for the inspector and logs.
+inline std::string describe(const Setting& setting) {
+    if (setting.mode == Setting::Mode::Native) return "native (authored size)";
+    if (setting.mode == Setting::Mode::Fixed)
+        return std::to_string(setting.width) + "x" + std::to_string(setting.height) + " reference";
+    return "auto (follows the output)";
+}
+
 // Scale that maps the physical output onto the reference size; 1 unless a fixed size is set.
 inline double referenceRatio(const Setting& setting, double physical_width, double physical_height) {
     if (setting.mode != Setting::Mode::Fixed || physical_width <= 0.0 || physical_height <= 0.0) return 1.0;
