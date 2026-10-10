@@ -1,5 +1,3 @@
-// Checks the pointer source names, the relative motion math, and the order the sources are used in.
-
 #include "app/platform/pointer/global_pointer.h"
 
 #include <cmath>

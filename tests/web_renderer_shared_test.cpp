@@ -20,7 +20,6 @@ int main() {
     CHECK(shim.find("{\"a\":{\"value\":1}}") != std::string::npos);
     CHECK(shim.find("\"fps\":30") != std::string::npos);
 
-    // Control-message decoding.
     WebInputMessage m = {};
     m.type = WEB_INPUT_MOUSE_MOVE;
     m.x = 0.25f;
@@ -43,7 +42,6 @@ int main() {
     m.type = 999;
     CHECK(web_renderer::decodeInput(m).kind == web_renderer::EventKind::None);
 
-    // publishFrame copies the pixels under the mutex and bumps the counter.
     std::vector<uint8_t> storage(sizeof(WebFrameBuffer) + 16);
     std::memset(storage.data(), 0, storage.size());
     auto* fb = reinterpret_cast<WebFrameBuffer*>(storage.data());
@@ -59,7 +57,6 @@ int main() {
     CHECK(fb->frame_counter == 1);
     pthread_mutex_destroy(&fb->mutex);
 
-    // Zero-copy ring: acquire hands out successive slots and publish advances.
     std::vector<uint8_t> ring_storage(sizeof(WebFrameBuffer));
     std::memset(ring_storage.data(), 0, ring_storage.size());
     auto* ring = reinterpret_cast<WebFrameBuffer*>(ring_storage.data());
@@ -75,7 +72,6 @@ int main() {
     CHECK(ring->published_index.load() == 0);
     CHECK(web_renderer::acquireDmaBuf(ring) == 1);
 
-    // With all slots in flight, acquire blocks until the engine consumes one.
     web_renderer::publishDmaBuf(ring, 1);
     web_renderer::publishDmaBuf(ring, 2);
     ring->consumed_frame.store(1);
@@ -97,7 +93,6 @@ int main() {
     close(sockets[0]);
     close(sockets[1]);
 
-    // Transport names round-trip; anything else is rejected.
     WebTransport transport = WebTransport::Auto;
     CHECK(parseWebTransport("auto", transport) && transport == WebTransport::Auto);
     CHECK(parseWebTransport("dma-buf", transport) && transport == WebTransport::DmaBuf);

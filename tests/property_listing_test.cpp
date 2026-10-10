@@ -1,4 +1,3 @@
-// Checks the --list-properties layout against the text upstream prints.
 #include "wallpaper/property_listing.h"
 
 #include <stdio.h>
@@ -46,7 +45,6 @@ int main() {
     const std::string listing(buffer, size);
     free(buffer);
 
-    // Sorted by key; each property ends with a blank line.
     const std::string expected =
         "audiobars - boolean\n"
         "\tText: Audio Bars 1\n"

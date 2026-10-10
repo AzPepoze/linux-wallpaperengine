@@ -1,5 +1,3 @@
-// Unit checks for the GLSL -> Slang compatibility layer; one pattern class per snippet.
-
 #include <cstdio>
 #include <string>
 
@@ -30,7 +28,6 @@ int countOccurrences(const std::string& text, const std::string& needle) {
     return count;
 }
 
-// Resolves nothing; used to exercise the full source-processing pipeline.
 struct StubResolver : public IAssetResolver {
     GfxImage resolveTexture(const char*, std::string* = nullptr, int = 0) const override {
         return GfxImage{};

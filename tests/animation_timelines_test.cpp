@@ -1,4 +1,3 @@
-// AnimationTimelines: shared per-object clocks, playback control and end events (synthetic keyframes only).
 #include "wallpaper/2d/animation/animation_timelines.h"
 
 #include <cmath>
@@ -26,7 +25,6 @@ PropertyAnimationDocument makeAnimation(const std::string& property, const std::
     return animation;
 }
 
-// Records the last value reported per "object:property".
 struct Recorder {
     std::map<std::string, double> last;
     std::function<void(const AnimatedValue&)> callback() {

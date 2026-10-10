@@ -1,5 +1,3 @@
-// Checks for user property resolution from synthetic project and GUI JSON.
-
 #include "wallpaper/user_properties.h"
 
 #include <stdlib.h>
@@ -71,7 +69,6 @@ void testDefaults(const fs::path& dir) {
     expect("defaults", title && title->type == UserPropertyValue::Type::Text && title->text == "hello", "text default");
     expect("defaults", props.find("missing") == nullptr, "unknown key is absent");
 
-    // Listing metadata: slider range, combo choices and the editor label.
     const UserPropertyDef* speed_def = nullptr;
     const UserPropertyDef* mode_def = nullptr;
     for (const UserPropertyDef& def : props.all()) {

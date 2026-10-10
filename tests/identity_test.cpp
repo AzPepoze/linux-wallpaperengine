@@ -16,7 +16,6 @@ int main() {
     const std::string json(buffer, size);
     free(buffer);
 
-    // The GUI keys off these exact values.
     CHECK(json.rfind("{\"name\":\"linux-wallpaperengine\"", 0) == 0);
     CHECK(json.find("\"implementation\":\"azpepoze\"") != std::string::npos);
     CHECK(json.find("\"control_socket\":true") != std::string::npos);

@@ -7,7 +7,6 @@
 int main() {
     AudioEngine& audio = AudioEngine::instance();
 
-    // Groups are pure bookkeeping and work with no audio device open.
     CHECK(audio.groupVolume(AudioEngine::kDefaultGroup) == 1.0f);
 
     const AudioEngine::GroupId g1 = audio.createGroup();
@@ -38,7 +37,6 @@ int main() {
     CHECK(audio.streamQueuedFrames(stream) >= 24000);
     audio.destroyStream(stream);
 
-    // With capture off the spectrum stays at zero, and turning it off again is harmless.
     audio.setCaptureEnabled(false);
     CHECK(!audio.hasCapture());
     audio.update(1.0f / 60.0f);

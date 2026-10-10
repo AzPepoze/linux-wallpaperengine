@@ -1,5 +1,3 @@
-// Checks how Hyprland's replies are read: the cursor position and the monitor it is mapped onto.
-
 #include "app/platform/pointer/hyprland_pointer.h"
 
 #include <cmath>

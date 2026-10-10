@@ -1,5 +1,3 @@
-// Checks for wallpaper project detection using synthetic temp directories.
-
 #include "wallpaper/project_info.h"
 
 #include <stdlib.h>

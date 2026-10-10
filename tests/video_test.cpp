@@ -1,5 +1,3 @@
-// Checks for video wallpaper property parsing and playback rate math.
-
 #include <cjson/cJSON.h>
 
 #include <cstdio>

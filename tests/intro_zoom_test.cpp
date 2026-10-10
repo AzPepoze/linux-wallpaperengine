@@ -16,7 +16,6 @@ int main() {
     CHECK(near(introZoom(1.08f, 4.0f, 4.0f), 1.0f));
     CHECK(near(introZoom(1.08f, 4.0f, 100.0f), 1.0f));
 
-    // Smoothstep: halfway is the midpoint, and the curve is monotonic and flat at both ends.
     CHECK(near(introZoom(1.08f, 4.0f, 2.0f), 1.04f));
     float previous = introZoom(1.08f, 4.0f, 0.0f);
     for (int step = 1; step <= 40; ++step) {
@@ -26,10 +25,8 @@ int main() {
     }
     CHECK(introZoom(1.08f, 4.0f, 0.1f) - 1.08f > -0.001f);  // gentle start
 
-    // Negative elapsed time (before the first frame) clamps to the start.
     CHECK(near(introZoom(1.08f, 4.0f, -3.0f), 1.08f));
 
-    // A disabled duration means no zoom, and a start below 1 zooms out instead.
     CHECK(near(introZoom(1.08f, 0.0f, 0.0f), 1.0f));
     CHECK(near(introZoom(1.08f, -1.0f, 1.0f), 1.0f));
     CHECK(near(introZoom(0.9f, 2.0f, 0.0f), 0.9f));

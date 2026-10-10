@@ -1,5 +1,3 @@
-// Checks that live-edit comparisons ignore only the listed top-level keys.
-
 #include "wallpaper/live_fields.h"
 
 #include "test_util.h"

@@ -32,10 +32,8 @@ int main() {
     CHECK(!resolution::parse("1920X1080", setting));
     CHECK(!resolution::parse("1920x1080x2", setting));
     CHECK(!resolution::parse("huge", setting));
-    // A rejected value leaves the previous setting in place.
     CHECK(setting.mode == resolution::Setting::Mode::Fixed && setting.width == 3840);
 
-    // The reference output scales displayed sizes; without a fixed size nothing changes.
     CHECK(resolution::referenceRatio(resolution::Setting{}, 1920, 1080) == 1.0);
     CHECK(resolution::referenceRatio(resolution::Setting{resolution::Setting::Mode::Native, 0, 0}, 1920, 1080) == 1.0);
     const resolution::Setting uhd{resolution::Setting::Mode::Fixed, 3840, 2160};

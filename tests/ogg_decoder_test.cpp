@@ -25,7 +25,6 @@ int main() {
     for (int16_t sample : pcm) peak = std::max(peak, std::abs((int)sample));
     CHECK(peak > 1000);  // an actual tone, not silence
 
-    // Truncated and non-Ogg input must fail cleanly.
     std::vector<int16_t> unused;
     CHECK(!decodeOggVorbis(bytes.data(), 64, unused, channels, sample_rate));
     const uint8_t garbage[16] = {1, 2, 3, 4, 5, 6, 7, 8};

@@ -141,7 +141,6 @@ void runSceneRotationTests() {
     }
     check(same, "decompose recovers origin, scale and angles");
 
-    // Rotating around the node's own axes: 90 degrees about z, then 90 about local x.
     const float z90[3] = {0.0f, 0.0f, 90.0f};
     const float x90[3] = {90.0f, 0.0f, 0.0f};
     mat4x4 base, extra, combined;

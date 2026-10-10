@@ -1,4 +1,3 @@
-// Synthetic checks for .tex video-payload detection. Not part of the default build.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

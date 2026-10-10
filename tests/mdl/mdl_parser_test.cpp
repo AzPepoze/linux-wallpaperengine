@@ -1,4 +1,3 @@
-// Synthetic checks for the puppet MDLV parser. Not part of the default build.
 #include "wallpaper/2d/puppet/mdl_parser.h"
 
 #include <stdint.h>

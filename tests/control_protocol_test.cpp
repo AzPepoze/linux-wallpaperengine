@@ -55,7 +55,6 @@ int main() {
         CHECK(!bad_mode_error.empty());
     }
 
-    // Optional live settings round-trip and are only encoded when set.
     {
         SwitchRequest extended;
         extended.path = "/wp";

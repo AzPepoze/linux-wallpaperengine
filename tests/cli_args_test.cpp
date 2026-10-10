@@ -77,7 +77,6 @@ int main() {
     CHECK(!cli_args::takesValue("--cover"));
     CHECK(!cli_args::takesValue("--web-devtools"));
 
-    // --whoareyou is a value-less Info flag.
     const V identity = {"app", "--whoareyou"};
     CHECK(cli_args::hasFlag(identity, {"--whoareyou"}));
     CHECK(!cli_args::takesValue("--whoareyou"));
@@ -94,7 +93,6 @@ int main() {
     CHECK(unsupported[1] == "--noautomute");
     CHECK(unsupported[2] == "--screenshot");
     CHECK(unsupported[3] == "--screen-span");
-    // --disable-mouse is implemented now, so it is not reported.
     CHECK(cli_args::unknownOptions({"app", "--disable-mouse", "/wp"}).empty());
 
     const V mixed = {"app", "--gpu", "1", "--fps=30", "--totally-new", "shot.png", "/wp"};
@@ -133,7 +131,6 @@ int main() {
     CHECK(help.find("--diagnose") == std::string::npos);
 #endif
 
-    // Value detection for the info and compatibility flags.
     CHECK(cli_args::takesValue("--config"));
     CHECK(cli_args::takesValue("--log-level"));
     CHECK(!cli_args::takesValue("--quiet"));

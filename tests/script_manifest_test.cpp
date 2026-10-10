@@ -1,4 +1,3 @@
-// Checks that every member listed in script_api_manifest.txt exists on the live script globals.
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -13,7 +12,6 @@
 
 namespace {
 
-// A scene with one layer (id 3) that has an effect, a particle system and a video, so every handle exists.
 class ManifestScene : public ScriptSceneBackend {
    public:
     bool layerExists(uint32_t id) override {
