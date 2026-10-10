@@ -38,5 +38,13 @@ int main() {
     CHECK(audio.streamQueuedFrames(stream) >= 24000);
     audio.destroyStream(stream);
 
+    // With capture off the spectrum stays at zero, and turning it off again is harmless.
+    audio.setCaptureEnabled(false);
+    CHECK(!audio.hasCapture());
+    audio.update(1.0f / 60.0f);
+    CHECK(audio.spectrum().bands64_left[0] == 0.0f);
+    audio.setCaptureEnabled(false);
+    CHECK(!audio.hasCapture());
+
     return test::finish("audio engine group checks");
 }

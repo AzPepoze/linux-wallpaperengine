@@ -118,6 +118,8 @@ void AudioEngine::Impl::captureCallback(ma_device* device, void*, const void* in
 }
 
 void AudioEngine::update(float dt) {
+    // Closing capture already zeroed the bands, so there is nothing to smooth.
+    if (!impl->capture_ok) return;
     float target_left[kBandCount] = {};
     float target_right[kBandCount] = {};
     bool has_target = false;

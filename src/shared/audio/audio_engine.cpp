@@ -33,6 +33,24 @@ bool nameContains(const char* name, const char* needle) {
     }
     return false;
 }
+
+bool isDefaultDevice(const std::string& name) {
+    return name.empty() || name == "default";
+}
+
+bool findPlaybackId(ma_context& context, const std::string& name, ma_device_id& out) {
+    ma_device_info* playback_devices = nullptr;
+    ma_uint32 playback_count = 0;
+    ma_device_info* capture_devices = nullptr;
+    ma_uint32 capture_count = 0;
+    ma_context_get_devices(&context, &playback_devices, &playback_count, &capture_devices, &capture_count);
+    for (ma_uint32 i = 0; i < playback_count; ++i) {
+        if (!nameContains(playback_devices[i].name, name.c_str())) continue;
+        out = playback_devices[i].id;
+        return true;
+    }
+    return false;
+}
 }  // namespace
 
 AudioEngine::AudioEngine() : impl(std::make_unique<Impl>()) {}
@@ -46,50 +64,82 @@ AudioEngine& AudioEngine::instance() {
     return engine;
 }
 
-void AudioEngine::init() {
+bool AudioEngine::ensureContext() {
+    if (impl->context_ok) return true;
+    if (ma_context_init(nullptr, 0, nullptr, &impl->context) != MA_SUCCESS) return false;
+    impl->context_ok = true;
+    return true;
+}
+
+void AudioEngine::init(const Options& options) {
     if (impl->disabled || impl->engine_ok) return;
+    impl->device_name = options.device;
+    impl->capture_wanted = options.capture;
+    openPlayback();
+    openCapture();
+}
+
+void AudioEngine::openPlayback() {
+    impl->has_playback_id = false;
+    if (!ensureContext()) {
+        LOG_TAG_W("AUDIO", "Audio context unavailable; file and video audio will be silent");
+        return;
+    }
 
     ma_engine_config engine_config = ma_engine_config_init();
     engine_config.channels = 2;
     engine_config.sampleRate = 48000;
-    if (ma_engine_init(&engine_config, &impl->engine) == MA_SUCCESS) {
-        impl->engine_ok = true;
-        impl->master_volume = ma_engine_get_volume(&impl->engine);
-        LOG_TAG_I("AUDIO", "Playback device opened (%u Hz, %u channels)", ma_engine_get_sample_rate(&impl->engine),
-                  ma_engine_get_channels(&impl->engine));
-    } else {
-        LOG_TAG_W("AUDIO", "No playback device available; file and video audio will be silent");
+    engine_config.pContext = &impl->context;
+    if (!isDefaultDevice(impl->device_name)) {
+        impl->has_playback_id = findPlaybackId(impl->context, impl->device_name, impl->playback_id);
+        if (!impl->has_playback_id)
+            LOG_TAG_W("AUDIO", "No playback device matches '%s'; using the default", impl->device_name.c_str());
     }
+    if (impl->has_playback_id) engine_config.pPlaybackDeviceID = &impl->playback_id;
 
-    if (ma_context_init(nullptr, 0, nullptr, &impl->capture_context) != MA_SUCCESS) {
-        LOG_TAG_W("AUDIO", "Audio capture context unavailable; audio spectrum stays at zero");
+    if (ma_engine_init(&engine_config, &impl->engine) != MA_SUCCESS) {
+        LOG_TAG_W("AUDIO", "No playback device available; file and video audio will be silent");
         return;
     }
-    impl->capture_context_ok = true;
+    impl->engine_ok = true;
+    ma_engine_set_volume(&impl->engine, impl->master_volume);
+    LOG_TAG_I("AUDIO", "Playback device opened (%u Hz, %u channels)", ma_engine_get_sample_rate(&impl->engine),
+              ma_engine_get_channels(&impl->engine));
+}
+
+void AudioEngine::closePlayback() {
+    if (!impl->engine_ok) return;
+    ma_engine_uninit(&impl->engine);
+    impl->engine_ok = false;
+}
+
+void AudioEngine::openCapture() {
+    if (impl->capture_ok || !impl->capture_wanted || !ensureContext()) return;
 
     ma_device_info* playback_devices = nullptr;
     ma_uint32 playback_count = 0;
     ma_device_info* capture_devices = nullptr;
     ma_uint32 capture_count = 0;
-    ma_context_get_devices(&impl->capture_context, &playback_devices, &playback_count, &capture_devices,
-                           &capture_count);
+    ma_context_get_devices(&impl->context, &playback_devices, &playback_count, &capture_devices, &capture_count);
 
-    ma_device_info default_playback = {};
-    const bool has_default = ma_context_get_device_info(&impl->capture_context, ma_device_type_playback, nullptr,
-                                                        &default_playback) == MA_SUCCESS;
+    // The monitor of the output we play on, falling back to the system default output.
+    const ma_device_id* output_id = impl->has_playback_id ? &impl->playback_id : nullptr;
+    ma_device_info output = {};
+    const bool has_output =
+        ma_context_get_device_info(&impl->context, ma_device_type_playback, output_id, &output) == MA_SUCCESS;
 
     const ma_device_info* monitor = nullptr;
     for (ma_uint32 i = 0; i < capture_count; ++i) {
         if (!nameContains(capture_devices[i].name, "monitor")) continue;
         if (monitor == nullptr) monitor = &capture_devices[i];
-        if (has_default && nameContains(capture_devices[i].name, default_playback.name)) {
+        if (has_output && nameContains(capture_devices[i].name, output.name)) {
             monitor = &capture_devices[i];
             break;
         }
     }
 
     if (!monitor) {
-        LOG_TAG_W("AUDIO", "No default sink monitor found; audio spectrum stays at zero");
+        LOG_TAG_W("AUDIO", "No output monitor found; audio spectrum stays at zero");
         return;
     }
 
@@ -101,21 +151,30 @@ void AudioEngine::init() {
     capture_config.dataCallback = Impl::captureCallback;
     capture_config.pUserData = impl.get();
 
-    if (ma_device_init(&impl->capture_context, &capture_config, &impl->capture_device) != MA_SUCCESS ||
+    if (ma_device_init(&impl->context, &capture_config, &impl->capture_device) != MA_SUCCESS ||
         ma_device_start(&impl->capture_device) != MA_SUCCESS) {
         LOG_TAG_W("AUDIO", "Failed to open monitor capture on '%s'; audio spectrum stays at zero", monitor->name);
         return;
     }
 
     impl->capture_ok = true;
+    impl->capture_logged_signal = false;
     impl->capture_rate = impl->capture_device.sampleRate;
     impl->capture_channels = impl->capture_device.capture.channels;
     LOG_TAG_I("AUDIO", "Capture device opened on '%s' (%u Hz, %u channels, spectrum enabled)", monitor->name,
               impl->capture_rate, impl->capture_channels);
 }
 
-void AudioEngine::shutdown() {
-    if (!impl) return;
+void AudioEngine::closeCapture() {
+    if (impl->capture_ok) {
+        ma_device_uninit(&impl->capture_device);
+        impl->capture_ok = false;
+    }
+    impl->pending_valid = false;
+    impl->spectrum = Spectrum{};
+}
+
+void AudioEngine::releaseSounds() {
     std::unique_lock<std::mutex> stream_lock(impl->stream_mutex);
     for (auto& stream : impl->streams) {
         if (!stream) continue;
@@ -132,22 +191,62 @@ void AudioEngine::shutdown() {
     }
     impl->sound_slots.clear();
     impl->sound_free.clear();
+}
+
+void AudioEngine::shutdown() {
+    if (!impl) return;
+    releaseSounds();
 
     impl->groups = {Impl::GroupState{}};
     impl->group_free.clear();
 
-    if (impl->capture_ok) {
-        ma_device_uninit(&impl->capture_device);
-        impl->capture_ok = false;
+    closeCapture();
+    closePlayback();
+    if (impl->context_ok) {
+        ma_context_uninit(&impl->context);
+        impl->context_ok = false;
     }
-    if (impl->capture_context_ok) {
-        ma_context_uninit(&impl->capture_context);
-        impl->capture_context_ok = false;
+}
+
+bool AudioEngine::setPlaybackDevice(const std::string& device) {
+    impl->device_name = device;
+    if (impl->disabled) return false;
+    // Sounds and streams belong to the old engine; the caller reloads the wallpaper that owns them.
+    releaseSounds();
+    closeCapture();
+    closePlayback();
+    openPlayback();
+    openCapture();
+    return impl->engine_ok;
+}
+
+const std::string& AudioEngine::playbackDevice() const {
+    return impl->device_name;
+}
+
+void AudioEngine::setCaptureEnabled(bool enabled) {
+    impl->capture_wanted = enabled;
+    if (enabled) {
+        openCapture();
+    } else {
+        closeCapture();
     }
-    if (impl->engine_ok) {
-        ma_engine_uninit(&impl->engine);
-        impl->engine_ok = false;
-    }
+}
+
+std::vector<std::string> AudioEngine::playbackDeviceNames() {
+    std::vector<std::string> names;
+    ma_context context = {};
+    if (ma_context_init(nullptr, 0, nullptr, &context) != MA_SUCCESS) return names;
+
+    ma_device_info* playback_devices = nullptr;
+    ma_uint32 playback_count = 0;
+    ma_device_info* capture_devices = nullptr;
+    ma_uint32 capture_count = 0;
+    ma_context_get_devices(&context, &playback_devices, &playback_count, &capture_devices, &capture_count);
+    for (ma_uint32 i = 0; i < playback_count; ++i) names.push_back(playback_devices[i].name);
+
+    ma_context_uninit(&context);
+    return names;
 }
 
 bool AudioEngine::isAvailable() const {
