@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 
+#include "camera/camera_path.h"
 #include "camera/intro_zoom.h"
 #include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
@@ -107,6 +108,7 @@ bool Scene2DRuntime::stepPrewarm(std::chrono::milliseconds budget) {
 void Scene2DRuntime::update(float dt) {
     if (!first_frame_drawn_) dt = 0.0f;
     ctx.scene.elapsed_time += dt;
+    followCameraPaths(ctx.scene.camera, ctx.scene.elapsed_time);
     ScriptEngine::instance().setActiveScope(ctx.scene.scripts);
     if (ctx.scene.scripts) ctx.scene.scripts->update(dt);
     if (ctx.debug.test_mode && ctx.debug.selected_object >= 0 &&
