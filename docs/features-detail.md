@@ -95,6 +95,8 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 ## Projects and packages
 
 - [x] Wallpaper project folders and standalone `.pkg` files
+- [x] Dependency presets: a `project.json` with `dependency` and `preset` loads the base wallpaper from the same folder, with the preset's values applied
+  - The base wallpaper must be installed beside the preset folder
 - [x] `scene.pkg` handling
   - Release builds read the package in place from a memory map
   - Debug runtime extraction uses a separate `extracted/<wallpaper-id>/` directory and preserves the adjacent `project.json`
@@ -309,12 +311,14 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Resolution of every `project.json` property by type (bool, slider, combo, color in 0..1 or 0..255, text)
     - Overrides from the desktop GUI's saved values and from repeatable `--set-property key=value`
     - Scene user bindings and conditional visibility resolve before parsing, including script-property overrides
+    - Image properties (`scenetexture`): a picked image replaces the scene texture of its `usertextures` slot and the material's first texture
+    - Preset values from a dependency project apply over the base defaults, then saved GUI values and `--set-property`
     - Initial `engine.userProperties` and `applyUserProperties` delivery after script initialization
     - Live changes from a second launch with the same wallpaper and `--set-property`: keys that no scene binding reads update in place (scripts get `applyUserProperties`); bindings that only change object visibility toggle the layers in place; any other binding change reloads the scene with every current value
   - Missing
     - Editor display conditions and groups
     - Material constants bound to a user property (`"user"` in material JSON) are not applied; only scene.json bindings are
-    - Texture replacement, user shortcut and file properties
+    - User shortcut and file properties
 
 ## Audio
 

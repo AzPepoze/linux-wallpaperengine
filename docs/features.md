@@ -59,6 +59,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [ ] Some APIs are stubs
 - [x] User properties (Partial)
   - [x] Sliders, colors, checkboxes and text
+  - [x] Image picks and dependency presets
   - [x] Most changes apply live
   - [ ] Editor groups and conditions
 - [x] Audio
