@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "shared/core/logger.h"
+#include "wallpaper/user_properties.h"
 
 namespace {
 void ensure_slot(PassTextures& pass, int slot) {
@@ -16,13 +17,22 @@ void ensure_slot(PassTextures& pass, int slot) {
 }
 
 // A slot listed under `usertextures` as the $mediaThumbnail system texture replaces the authored texture.
-const char* slot_reference(cJSON* textures, cJSON* user_textures, int slot) {
+// A usertextures entry names a user property; an image the user picked replaces the authored texture.
+const char* userTextureValue(cJSON* user_textures, int slot, const UserProperties& properties) {
+    cJSON* key = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, slot) : nullptr;
+    if (!cJSON_IsString(key) || !key->valuestring) return nullptr;
+    const std::string* picked = properties.texturePath(key->valuestring);
+    return picked ? picked->c_str() : nullptr;
+}
+
+const char* slot_reference(cJSON* textures, cJSON* user_textures, int slot, const UserProperties& properties) {
     cJSON* user = cJSON_IsArray(user_textures) ? cJSON_GetArrayItem(user_textures, slot) : nullptr;
     cJSON* name = cJSON_IsObject(user) ? cJSON_GetObjectItemCaseSensitive(user, "name") : nullptr;
     if (cJSON_IsString(name) && name->valuestring &&
         (strcmp(name->valuestring, "$mediaThumbnail") == 0 ||
          strcmp(name->valuestring, "$mediaPreviousThumbnail") == 0))
         return name->valuestring;
+    if (const char* picked = userTextureValue(user_textures, slot, properties)) return picked;
     cJSON* node = cJSON_IsArray(textures) ? cJSON_GetArrayItem(textures, slot) : nullptr;
     return cJSON_IsString(node) ? node->valuestring : nullptr;
 }
@@ -70,11 +80,12 @@ void PassTextures::loadFromConfig(cJSON* base_config, const std::string& shader_
     const int slots = slot_count(textures_node, user_textures);
 
     if (slots > 0) {
-        load_texture0(*this, slot_reference(textures_node, user_textures, 0), shader_name, ctx, true);
+        load_texture0(*this, slot_reference(textures_node, user_textures, 0, ctx.user_properties), shader_name, ctx,
+                      true);
     }
 
     for (int source_slot = 1; source_slot < slots; ++source_slot) {
-        const char* reference = slot_reference(textures_node, user_textures, source_slot);
+        const char* reference = slot_reference(textures_node, user_textures, source_slot, ctx.user_properties);
         if (!reference && source_slot >= cJSON_GetArraySize(textures_node)) continue;
         const int pass_idx = source_slot - 1;
         ensure_slot(*this, pass_idx);
@@ -101,11 +112,12 @@ void PassTextures::applyInstanceOverrides(cJSON* instance_config, const std::str
     const int slots = slot_count(inst_textures, inst_user_textures);
 
     if (slots > 0) {
-        load_texture0(*this, slot_reference(inst_textures, inst_user_textures, 0), shader_name, ctx, true);
+        load_texture0(*this, slot_reference(inst_textures, inst_user_textures, 0, ctx.user_properties), shader_name,
+                      ctx, true);
     }
 
     for (int source_slot = 1; source_slot < slots; ++source_slot) {
-        const char* reference = slot_reference(inst_textures, inst_user_textures, source_slot);
+        const char* reference = slot_reference(inst_textures, inst_user_textures, source_slot, ctx.user_properties);
         if (!reference || reference[0] == '\0') continue;
 
         const int pass_idx = source_slot - 1;
