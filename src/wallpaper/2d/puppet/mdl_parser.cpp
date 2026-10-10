@@ -4,45 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mdl_reader.h"
+
 namespace wallpaper_engine {
 namespace {
 
-struct Reader {
-    const uint8_t* data;
-    size_t size;
-    size_t pos = 0;
-
-    bool u8(uint8_t& out) {
-        if (pos + 1 > size) return false;
-        out = data[pos++];
-        return true;
-    }
-    bool u16(uint16_t& out) {
-        if (pos + 2 > size) return false;
-        memcpy(&out, data + pos, 2);
-        pos += 2;
-        return true;
-    }
-    bool u32(uint32_t& out) {
-        if (pos + 4 > size) return false;
-        memcpy(&out, data + pos, 4);
-        pos += 4;
-        return true;
-    }
-    bool f32(float& out) {
-        uint32_t bits = 0;
-        if (!u32(bits)) return false;
-        memcpy(&out, &bits, 4);
-        return true;
-    }
-    bool cstring(std::string& out) {
-        const uint8_t* end = (const uint8_t*)memchr(data + pos, 0, size - pos);
-        if (!end) return false;
-        out.assign((const char*)data + pos, (size_t)(end - (data + pos)));
-        pos = (size_t)(end - data) + 1;
-        return true;
-    }
-};
+using mdl_detail::Reader;
 
 bool findBytes(const uint8_t* data, size_t size, size_t from, const uint8_t* tag, size_t tag_len, size_t& out) {
     if (from >= size || tag_len == 0 || size - from < tag_len) return false;
