@@ -238,6 +238,15 @@ class ImageLayer : public Layer {
     // The image the effect chain read this frame (the scene for a post-process layer); shown in the inspector.
     sg_image effect_source_image = {SG_INVALID_ID};
     sg_view effect_source_view = {SG_INVALID_ID};
+    // Authored size and the offscreen target this layer is drawn through; shown in the inspector.
+    struct RenderSizeInfo {
+        const char* target = "none";  // "puppet", "effects" or "none"
+        int authored_width = 0;
+        int authored_height = 0;
+        int target_width = 0;
+        int target_height = 0;
+    };
+    RenderSizeInfo renderSizeInfo() const;
 
    private:
     struct ChainState {

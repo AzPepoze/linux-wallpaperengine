@@ -22,6 +22,25 @@ std::pair<int, int> ImageLayer::layerTargetSize(EngineContext& ctx, int width, i
                                   rect.height * std::hypot(s * sx, c * sy) * ratio);
 }
 
+ImageLayer::RenderSizeInfo ImageLayer::renderSizeInfo() const {
+    RenderSizeInfo info;
+    if (img.id != SG_INVALID_ID) {
+        const sg_image_desc desc = sg_query_image_desc(img);
+        info.authored_width = desc.width;
+        info.authored_height = desc.height;
+    }
+    if (puppet_resolved && puppet_target.image.id != SG_INVALID_ID) {
+        info.target = "puppet";
+        info.target_width = puppet_target.width;
+        info.target_height = puppet_target.height;
+    } else if (effect_target_width > 0 && effect_targets[0].image.id != SG_INVALID_ID) {
+        info.target = "effects";
+        info.target_width = effect_target_width;
+        info.target_height = effect_target_height;
+    }
+    return info;
+}
+
 bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) {
     sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
     if (target_source.id == SG_INVALID_ID) return false;
