@@ -93,6 +93,45 @@ class Scene2DRuntime {
         }
     };
 
+    // Depth buffer shared by every scene pass while the scene has 3D model layers.
+    struct DepthTarget {
+        GfxImage image;
+        GfxView attachment_view;
+        int width = 0;
+        int height = 0;
+
+        bool valid() const {
+            return attachment_view.id != SG_INVALID_ID;
+        }
+        void reset() {
+            attachment_view = {};
+            image = {};
+            width = 0;
+            height = 0;
+        }
+        bool create(int w, int h) {
+            reset();
+            sg_image_desc image_desc = {};
+            image_desc.usage.depth_stencil_attachment = true;
+            image_desc.width = w;
+            image_desc.height = h;
+            image_desc.pixel_format = SG_PIXELFORMAT_DEPTH;
+            image = sg_make_image(&image_desc);
+            if (image.id == SG_INVALID_ID) return false;
+
+            sg_view_desc attachment_desc = {};
+            attachment_desc.depth_stencil_attachment.image = image;
+            attachment_view = sg_make_view(&attachment_desc);
+            if (!valid()) {
+                reset();
+                return false;
+            }
+            width = w;
+            height = h;
+            return true;
+        }
+    };
+
     EngineContext& ctx;
     int output_x = 0;
     int output_y = 0;
@@ -102,6 +141,7 @@ class Scene2DRuntime {
     bool force_offscreen_ = false;
     SceneTarget scene_targets[2];
     SceneTarget bloom_targets[2];
+    DepthTarget depth_target;
     std::vector<SceneTarget> hdr_bloom_levels;
     int scene_output_index = -1;
     bool float_composition_available_ = true;
@@ -119,6 +159,10 @@ class Scene2DRuntime {
     void destroyBloomPipelines();
     sg_pixel_format compositionPixelFormat() const;
     bool ensureSceneTargets(int width, int height);
+    bool hasDepthLayers() const;
+    void updateDepthTarget(int width, int height);
+    // Adds the scene depth buffer to a pass that draws layers, keeping its contents.
+    void attachDepth(sg_pass& pass) const;
     bool ensureBloomTargets(int width, int height);
     int renderHdrBloom(int current_target_index, int width, int height);
     int renderBloom(int current_target_index, int width, int height);

@@ -2,6 +2,7 @@
 
 #include <cjson/cJSON.h>
 
+#include <algorithm>
 #include <chrono>
 
 #include "camera/intro_zoom.h"
@@ -126,6 +127,7 @@ void Scene2DRuntime::update(float dt) {
 bool Scene2DRuntime::requiresOffscreenComposition() const {
     // Direct drawing has no readable target, so captures render offscreen to expose per-layer stages.
     if (renderObserver().isCapturingFrame()) return true;
+    if (hasDepthLayers()) return true;
 
     if (!RenderDiagnostics::instance().getConfig().disable_bloom) {
         const float bloom_strength =
@@ -193,6 +195,28 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
         return false;
     }
     return true;
+}
+
+bool Scene2DRuntime::hasDepthLayers() const {
+    return std::any_of(ctx.scene.layers.begin(), ctx.scene.layers.end(),
+                       [](const Layer* layer) { return layer->needsDepthBuffer(); });
+}
+
+void Scene2DRuntime::updateDepthTarget(int width, int height) {
+    if (!hasDepthLayers()) {
+        depth_target.reset();
+        return;
+    }
+    if (depth_target.valid() && depth_target.width == width && depth_target.height == height) return;
+    if (!depth_target.create(width, height))
+        LOG_TAG_E("SCENE_2D", "Could not create the scene depth buffer (%dx%d)", width, height);
+}
+
+void Scene2DRuntime::attachDepth(sg_pass& pass) const {
+    if (!depth_target.valid()) return;
+    pass.attachments.depth_stencil = depth_target.attachment_view;
+    pass.action.depth.load_action = SG_LOADACTION_LOAD;
+    pass.action.depth.store_action = SG_STOREACTION_STORE;
 }
 
 void Scene2DRuntime::draw() {
@@ -374,6 +398,7 @@ bool Scene2DRuntime::stepCleanup() {
     }
     if (cleanup_phase_ == 6) {
         bloom_targets[1].reset();
+        depth_target.reset();
         cleanup_phase_ = 7;
         warn_overrun();
         return false;
@@ -403,6 +428,7 @@ void Scene2DRuntime::cleanup() {
     scene_targets[1].reset();
     bloom_targets[0].reset();
     bloom_targets[1].reset();
+    depth_target.reset();
     hdr_bloom_levels.clear();
     scene_output_index = -1;
     force_offscreen_ = false;

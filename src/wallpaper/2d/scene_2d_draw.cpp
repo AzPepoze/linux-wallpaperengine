@@ -120,12 +120,18 @@ void Scene2DRuntime::drawOffscreen() {
     }
 
     updateViewport();
+    updateDepthTarget(width, height);
 
     int current = 0;
     sg_pass clear_pass = {};
     clear_pass.action = ctx.pass_action;
     clear_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
     clear_pass.attachments.colors[0] = scene_targets[current].attachment_view;
+    if (depth_target.valid()) {
+        clear_pass.attachments.depth_stencil = depth_target.attachment_view;
+        clear_pass.action.depth = {.load_action = SG_LOADACTION_CLEAR, .store_action = SG_STOREACTION_STORE,
+                                   .clear_value = 1.0f};
+    }
     sg_begin_pass(&clear_pass);
     sg_end_pass();
 
@@ -138,6 +144,7 @@ void Scene2DRuntime::drawOffscreen() {
         if (!snapshot.valid()) return;
 
         sg_pass snapshot_pass = colorPass(snapshot.attachment, SG_LOADACTION_CLEAR);
+        if (raw_layer) attachDepth(snapshot_pass);
         sg_begin_pass(&snapshot_pass);
         if (raw_layer) {
             // Capture the layer's own output before it blends into the accumulated scene.
@@ -223,6 +230,7 @@ void Scene2DRuntime::drawOffscreen() {
         if (renderObserver().isCapturingFrame()) {
             capture_layer_result(layer, true);
             sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+            attachDepth(layer_pass);
             sg_begin_pass(&layer_pass);
             layer->draw(ctx);
             sg_end_pass();
@@ -232,6 +240,7 @@ void Scene2DRuntime::drawOffscreen() {
 
         if (!batch_open) {
             sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+            attachDepth(layer_pass);
             batch_gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("draw/batch") : -1;
             sg_begin_pass(&layer_pass);
             batch_open = true;
