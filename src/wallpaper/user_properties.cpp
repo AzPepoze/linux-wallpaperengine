@@ -103,6 +103,25 @@ UserPropertyValue defaultValue(const std::string& type, const cJSON* value) {
     if (isLabel(type) && !cJSON_IsString(value)) return UserPropertyValue{};
     return parseRaw(type, jsonText(value));
 }
+
+double numberOf(const cJSON* object, const char* key) {
+    const cJSON* item = cJSON_GetObjectItemCaseSensitive(object, key);
+    return cJSON_IsNumber(item) ? item->valuedouble : 0.0;
+}
+
+std::vector<UserPropertyOption> optionsOf(const cJSON* item) {
+    std::vector<UserPropertyOption> options;
+    const cJSON* list = cJSON_GetObjectItemCaseSensitive(item, "options");
+    if (!cJSON_IsArray(list)) return options;
+    const cJSON* entry = nullptr;
+    cJSON_ArrayForEach(entry, list) {
+        UserPropertyOption option;
+        option.label = jsonText(cJSON_GetObjectItemCaseSensitive(entry, "label"));
+        option.value = jsonText(cJSON_GetObjectItemCaseSensitive(entry, "value"));
+        options.push_back(std::move(option));
+    }
+    return options;
+}
 }  // namespace
 
 bool UserProperties::loadProject(const std::string& project_json_path) {
@@ -123,6 +142,11 @@ bool UserProperties::loadProject(const std::string& project_json_path) {
             def.key = item->string;
             const cJSON* type = cJSON_GetObjectItemCaseSensitive(item, "type");
             if (cJSON_IsString(type) && type->valuestring) def.type = type->valuestring;
+            def.label = jsonText(cJSON_GetObjectItemCaseSensitive(item, "text"));
+            def.min = numberOf(item, "min");
+            def.max = numberOf(item, "max");
+            def.step = numberOf(item, "step");
+            def.options = optionsOf(item);
             def.value = defaultValue(def.type, cJSON_GetObjectItemCaseSensitive(item, "value"));
             properties_.push_back(std::move(def));
         }

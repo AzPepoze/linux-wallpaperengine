@@ -70,6 +70,19 @@ void testDefaults(const fs::path& dir) {
     const UserPropertyValue* title = props.find("title");
     expect("defaults", title && title->type == UserPropertyValue::Type::Text && title->text == "hello", "text default");
     expect("defaults", props.find("missing") == nullptr, "unknown key is absent");
+
+    // Listing metadata: slider range, combo choices and the editor label.
+    const UserPropertyDef* speed_def = nullptr;
+    const UserPropertyDef* mode_def = nullptr;
+    for (const UserPropertyDef& def : props.all()) {
+        if (def.key == "speed") speed_def = &def;
+        if (def.key == "mode") mode_def = &def;
+    }
+    expect("metadata", speed_def && near((float)speed_def->max, 1.0f) && speed_def->min == 0.0, "slider range is read");
+    expect("metadata",
+           mode_def && mode_def->options.size() == 2 && mode_def->options[1].label == "B" &&
+               mode_def->options[1].value == "1",
+           "combo options are read");
 }
 
 void testSavedOverrides(const fs::path& dir) {
@@ -130,7 +143,8 @@ void testPreset(const fs::path& dir) {
     expect("preset", props.find("unknown") == nullptr, "undeclared preset keys are ignored");
 
     props.applySaved(kGui, "123");
-    expect("preset", props.find("photo")->text == preset.string() + "/files/a.jpg", "preset value survives saved state");
+    expect("preset", props.find("photo")->text == preset.string() + "/files/a.jpg",
+           "preset value survives saved state");
     props.setFromString("enabled", "1");
     expect("preset", props.find("enabled")->b, "command line still wins over the preset");
 }

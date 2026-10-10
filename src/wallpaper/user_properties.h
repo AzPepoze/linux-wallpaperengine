@@ -17,10 +17,21 @@ struct UserPropertyValue {
     std::string asText() const;
 };
 
+// One choice of a combo property.
+struct UserPropertyOption {
+    std::string label;
+    std::string value;
+};
+
 // A user property: its declared type from project.json plus its effective value.
 struct UserPropertyDef {
     std::string key;
     std::string type;
+    std::string label;  // the "text" field: the name the editor shows
+    double min = 0.0;   // slider range
+    double max = 0.0;
+    double step = 0.0;
+    std::vector<UserPropertyOption> options;  // combo choices
     UserPropertyValue value;
 };
 
