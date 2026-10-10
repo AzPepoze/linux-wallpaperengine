@@ -23,6 +23,18 @@ bool hasDashedFlag(const char* name) {
     return sargs_exists(name) || sargs_exists((std::string("--") + name).c_str());
 }
 
+std::string audioState(const CliOptions& opts) {
+    if (opts.no_audio) return "disabled";
+    if (opts.silent) return "muted";
+    return "enabled";
+}
+
+const char* audioSource(const CliOptions& opts) {
+    if (opts.silent) return "CLI";
+    if (opts.no_audio) return "diagnostics/no-ui";
+    return "default";
+}
+
 std::string gpuArg(int argc, char* argv[]) {
     std::string gpu;
     for (int i = 1; i < argc; ++i) {
@@ -139,8 +151,11 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.whoareyou = cli_args::hasFlag(args, {"--whoareyou"});
-    opts.no_audio = hasDashedFlag("no-audio") || opts.no_ui || opts.diagnostics.enabled ||
-                    cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    opts.silent = hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
+    opts.no_audio = opts.no_ui || opts.diagnostics.enabled;
+    opts.no_audio_processing = hasDashedFlag("no-audio-processing");
+    opts.list_audio_devices = hasDashedFlag("list-audio-devices");
+    opts.audio_device = resolve({"--audio-device"}, "audio_device", "");
     std::string volume_arg;
     if (cli_args::optionValue(args, {"--volume"}, volume_arg)) {
         char* end = nullptr;
@@ -229,10 +244,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cliValue("fps_limit", std::to_string(opts.fps_limit), {"-f", "--fps"});
     record("volume", opts.has_volume ? std::to_string((int)opts.volume) : "100", opts.has_volume ? "CLI" : "default");
     record("gpu", opts.gpu.empty() ? "auto" : opts.gpu, opts.gpu.empty() ? "default" : "CLI");
-    record("audio", opts.no_audio ? "disabled" : "enabled",
-           hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"})
-               ? "CLI"
-               : (opts.no_ui || opts.diagnostics.enabled ? "diagnostics/no-ui" : "default"));
+    record("audio", audioState(opts), audioSource(opts));
+    record("audio_processing", opts.no_audio_processing ? "disabled" : "enabled",
+           opts.no_audio_processing ? "CLI" : "default");
     record("cover", opts.cover ? "true" : "false", opts.cover ? "CLI" : "default");
     record("control", opts.no_control ? "disabled" : "enabled", opts.no_control ? "CLI" : "default");
     record("video_ram", opts.video_ram ? "true" : "false", opts.video_ram ? "CLI" : "default");

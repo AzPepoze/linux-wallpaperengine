@@ -29,7 +29,11 @@ struct CliOptions {
     bool has_extract_dir = false;
     std::string gpu;
     bool list_gpus = false;
-    bool no_audio = false;
+    bool no_audio = false;  // audio fully off (diagnostics, --no-ui)
+    bool silent = false;    // output muted; the spectrum still runs
+    bool no_audio_processing = false;
+    bool list_audio_devices = false;
+    std::string audio_device;  // empty = not set
     bool video_ram = false;
     float intro_zoom = 1.0f;
     float intro_duration = 4.0f;

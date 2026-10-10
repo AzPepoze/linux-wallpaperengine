@@ -296,6 +296,8 @@ void WallpaperManager::pollControl(EngineContext& ctx) {
             ctx.debug.show_ui = !ctx.debug.show_ui;
             continue;
         }
+        applyAudioRequest(ctx, request);
+        if (request.path.empty()) continue;
         if (active_instance_ && isSameWallpaper(*active_instance_, request) && !request.properties.empty()) {
             if (applyPropertiesInPlace(ctx, request.properties)) continue;
             // A bound key needs a rebuild: reload with every current value so earlier live changes survive it.
@@ -305,6 +307,28 @@ void WallpaperManager::pollControl(EngineContext& ctx) {
         }
         // Keep only the newest request: an in-flight switch should not queue up.
         pending_switch_ = std::move(request);
+    }
+}
+
+void WallpaperManager::applyAudioRequest(EngineContext& ctx, const SwitchRequest& request) {
+    AudioEngine& audio = AudioEngine::instance();
+    if (request.has_volume || request.has_muted) {
+        float volume = request.has_volume ? request.volume / 100.0f : audio.masterVolume();
+        if (request.has_muted && request.muted) volume = 0.0f;
+        audio.setMasterVolume(volume);
+    }
+    if (request.has_audio_processing) audio.setCaptureEnabled(request.audio_processing);
+
+    if (request.audio_device.empty() || request.audio_device == audio.playbackDevice()) return;
+    if (!audio.setPlaybackDevice(request.audio_device))
+        LOG_TAG_W("WALLPAPER_MGR", "could not open output '%s'; audio stays silent", request.audio_device.c_str());
+    // The engine reopened, so sounds and video audio of the running wallpaper must be loaded again.
+    if (request.path.empty() && active_instance_ && !pending_switch_) {
+        SwitchRequest reload;
+        reload.path = ctx.wallpaper_path;
+        reload.is_pkg = ctx.is_pkg;
+        reload.properties = ctx.user_properties.toStrings();
+        pending_switch_ = std::move(reload);
     }
 }
 
@@ -405,12 +429,6 @@ bool WallpaperManager::beginPendingSwitch(EngineContext& ctx) {
         }
         load_job_ = std::move(job);
         if (request.has_fps) ctx.fps_limit = request.fps;
-        if (request.has_volume || request.has_muted) {
-            auto& audio = AudioEngine::instance();
-            float volume = request.has_volume ? request.volume / 100.0f : audio.masterVolume();
-            if (request.has_muted && request.muted) volume = 0.0f;
-            audio.setMasterVolume(volume);
-        }
     }
     pollLoad(ctx);
     return requested;

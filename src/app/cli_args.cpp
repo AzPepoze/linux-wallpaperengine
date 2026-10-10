@@ -65,9 +65,15 @@ constexpr CliOption kControl[] = {
 };
 
 constexpr CliOption kAudio[] = {
-    {{"--no-audio", nullptr}, nullptr, CliBuild::All, "Disable audio"},
-    {{"-s", "--silent", "--mute", nullptr}, nullptr, CliBuild::All, "Disable audio (alias of --no-audio)"},
+    {{"--no-audio", nullptr}, nullptr, CliBuild::All, "Mute output; the visualizer keeps working"},
+    {{"-s", "--silent", "--mute", nullptr}, nullptr, CliBuild::All, "Same as --no-audio"},
     {{"--volume", nullptr}, "<n>", CliBuild::All, "Master volume percent (0-100)"},
+    {{"--audio-device", nullptr},
+     "<name>",
+     CliBuild::All,
+     "Output device, name or part of it; 'default' = system output"},
+    {{"--no-audio-processing", nullptr}, nullptr, CliBuild::All, "Skip the spectrum capture; visualizer stays at zero"},
+    {{"--list-audio-devices", nullptr}, nullptr, CliBuild::All, "List output devices and exit"},
     kSentinel,
 };
 
@@ -109,7 +115,6 @@ constexpr CliOption kInfo[] = {
 // Launcher flags are consumed so they never become the positional wallpaper.
 constexpr CliOption kCompatibility[] = {
     {{"--noautomute", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
-    {{"--no-audio-processing", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--disable-mouse", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--disable-parallax", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--no-fullscreen-pause", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},

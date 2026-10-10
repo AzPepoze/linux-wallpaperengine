@@ -93,8 +93,15 @@ static void initAudio() {
         AudioEngine::instance().setAudioDisabled(true);
         return;
     }
-    AudioEngine::instance().init();
-    if (cli.has_volume) AudioEngine::instance().setMasterVolume(cli.volume / 100.0f);
+    AudioEngine::Options options;
+    options.device = cli.audio_device;
+    options.capture = !cli.no_audio_processing;
+    AudioEngine::instance().init(options);
+    if (cli.silent) {
+        AudioEngine::instance().setMasterVolume(0.0f);
+    } else if (cli.has_volume) {
+        AudioEngine::instance().setMasterVolume(cli.volume / 100.0f);
+    }
 }
 
 static void initGraphics() {
@@ -323,6 +330,10 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         cli_args::printHelp(stdout);
         exit(EXIT_SUCCESS);
     }
+    if (cli.list_audio_devices) {
+        for (const std::string& name : AudioEngine::playbackDeviceNames()) printf("%s\n", name.c_str());
+        exit(EXIT_SUCCESS);
+    }
     cli.logResolvedOptions();
     {
         const std::vector<std::string> args(argv, argv + argc);
@@ -362,8 +373,11 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
             request.scaling = cli.cover ? "fill" : cli.scaling;
             request.volume = cli.volume;
             request.has_volume = cli.has_volume;
-            request.muted = cli.no_audio;
+            request.muted = cli.silent;
             request.has_muted = true;
+            request.audio_device = cli.audio_device;
+            request.audio_processing = !cli.no_audio_processing;
+            request.has_audio_processing = true;
             request.fps = cli.fps_limit;
             request.has_fps = cli.fps_limit > 0;
             request.toggle_debug_ui = cli.toggle_debug_ui;
