@@ -9,5 +9,6 @@
     "transition_mode": "freeze",
     "web_transport": "auto",
     "web_devtools_port": 9222,
-    "web_devtools_browser": ""
+    "web_devtools_browser": "",
+    "audio_device": ""
 }

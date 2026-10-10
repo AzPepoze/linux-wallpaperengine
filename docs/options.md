@@ -21,6 +21,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `web_transport` | `auto\|dma-buf\|off-screen\|snapshot` | auto | Web frame transport |
 | `web_devtools_port` | `<port>` | 9222 | DevTools port |
 | `web_devtools_browser` | `<cmd>` | xdg-open | Browser for DevTools |
+| `audio_device` | `<name>` | system output | Same as `--audio-device` |
 
 ## Environment variables
 
@@ -100,9 +101,18 @@ If the source you pick does not work, the program moves down the same list and l
 
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
-| `--no-audio` | | off | Turn audio off |
+| `--no-audio` | | off | Mute the output. The visualizer keeps working |
 | `-s`, `--silent`, `--mute` | | off | Same as `--no-audio` |
 | `--volume` | `<n>` | 100 | Volume, 0-100 |
+| `--audio-device` | `<name>` | system output | Output to play on. Part of the name is enough. `default` means system output |
+| `--no-audio-processing` | | off | Stop the spectrum capture. The visualizer stays at zero and uses less CPU |
+| `--list-audio-devices` | | | List output devices and exit |
+
+> [!NOTE]
+> `--no-audio-processing` only affects the visualizer. Sound still plays.
+
+> [!TIP]
+> Set `audio_device` in `config.json` to pick an output every time.
 
 ### Web
 
@@ -153,6 +163,6 @@ If a wallpaper is already running on the same output, a new launch hands the cha
 
 1. Switches to the new wallpaper with the transition from `--transition` (default `fade`, a crossfade). `none` cuts straight over, and `random` picks one effect per switch. Effects use the original transition shaders from your install, or the built-in fade if they are missing.
 2. Applies new `--set-property` values live.
-3. Updates volume, mute and frame cap, if given.
+3. Updates volume, mute, frame cap, output device and visualizer on or off. A device change reloads the wallpaper so its sounds play on the new output.
 
 Pass `--no-control` to start a separate instance instead.

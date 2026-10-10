@@ -320,13 +320,14 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 
 - [x] Audio playback (WAV, MP3, FLAC through miniaudio; Ogg Vorbis is decoded with stb_vorbis into memory when the sound loads), loop playback
 - [x] Sound layers (see [Scene layers](#scene-layers)) and video audio
-- [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute`; diagnostic runs are always silent
+- [x] Silent mode: `--no-audio`, `-s`/`--silent` or `--mute` mute the output only; the visualizer keeps running. Diagnostic runs are always fully silent
 - [x] Master volume: `--volume <n>` (0-100) at launch, and live volume/mute carried by a control-socket wallpaper switch
 - [-] System audio capture and spectrum
   - Works
-    - Captures the PulseAudio monitor of the default sink at 48 kHz stereo
+    - Captures the monitor of the chosen output (default: system output) at 48 kHz stereo
     - Smoothed 16, 32 and 64-band spectra per channel
     - Spectrum uniforms for shaders and `engine.registerAudioBuffers` for scripts
+    - Output device and spectrum on/off can change on a running wallpaper (`--audio-device`, `--no-audio-processing`)
   - Missing
     - Zeros when no monitor device exists
     - No volume control UI
