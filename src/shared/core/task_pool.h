@@ -17,7 +17,7 @@ class TaskPool {
         return s_instance;
     }
 
-    explicit TaskPool(size_t threads = std::max(2u, std::thread::hardware_concurrency())) : stop(false) {
+    explicit TaskPool(size_t threads = std::clamp(std::thread::hardware_concurrency(), 2u, 4u)) : stop(false) {
         for (size_t i = 0; i < threads; ++i) {
             workers.emplace_back([this] {
                 while (true) {
