@@ -374,8 +374,8 @@ static bool printsInfoOnly() {
 }
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
-    // Two malloc arenas keep parallel loading from leaving tens of MB resident.
-    mallopt(M_ARENA_MAX, 2);
+    // One malloc arena: parallel loading otherwise leaves a separate heap per worker thread resident.
+    mallopt(M_ARENA_MAX, 1);
     cli = CliOptions::parse(argc, argv);
     logger_init(printsInfoOnly() ? LOG_LEVEL_ERROR : cli.log_level);
     // Identity probe must come before GPU work and logging so stdout stays one JSON line.
