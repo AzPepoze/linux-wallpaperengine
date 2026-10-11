@@ -8,6 +8,8 @@
 #include "imgui.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/resolution.h"
+#include "shared/core/system_stats.h"
+#include "shared/graphics/backend/gpu_device_manager.h"
 #include "shared/graphics/backend/performance_profile.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "ui/widgets/ui_components.h"
@@ -66,6 +68,30 @@ void showRender(EngineContext& ctx) {
     }
     showGpuPasses(ctx);
 }
+
+double kbToMiB(uint64_t kb) {
+    return static_cast<double>(kb) / 1024.0;
+}
+
+double bytesToMiB(uint64_t bytes) {
+    return static_cast<double>(bytes) / (1024.0 * 1024.0);
+}
+
+// RAM, CPU and GPU load of this process and its GPU.
+void showSystem() {
+    static SystemStatsSampler sampler(GpuDeviceManager::instance().getSelectedGpu().pci_bus_id);
+    if (!ImGui::CollapsingHeader("System", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    const SystemStats& stats = sampler.sample(ImGui::GetTime());
+    ImGui::Text("RAM: %.0f MB (anon %.0f, file %.0f) | peak %.0f MB", kbToMiB(stats.rss_kb),
+                kbToMiB(stats.rss_anon_kb), kbToMiB(stats.rss_file_kb), kbToMiB(stats.rss_peak_kb));
+    ImGui::Text("CPU: %.1f%% of one core", stats.cpu_percent);
+    if (!stats.gpu_available) {
+        ImGui::TextDisabled("GPU: no amdgpu counters for the active GPU");
+        return;
+    }
+    ImGui::Text("GPU busy: %llu%% | VRAM: %.0f of %.0f MB", static_cast<unsigned long long>(stats.gpu_busy_percent),
+                bytesToMiB(stats.vram_used_bytes), bytesToMiB(stats.vram_total_bytes));
+}
 }  // namespace
 
 void GlobalInspector::show(EngineContext& ctx) {
@@ -84,6 +110,7 @@ void GlobalInspector::show(EngineContext& ctx) {
     ImGui::Text("Render Scale: %.3f (Offsets: %.1f, %.1f)", ctx.scene.render_scale, ctx.scene.offset_x,
                 ctx.scene.offset_y);
     ImGui::Text("FPS: %.1f | CPU frame: %.2f ms", ctx.profiler.measured_fps, ctx.profiler.frame_avg_ms);
+    showSystem();
     showRender(ctx);
     ImGui::Checkbox("Show node IDs in scene tree", &ctx.debug.show_node_ids);
 
