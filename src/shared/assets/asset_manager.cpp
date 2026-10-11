@@ -254,24 +254,6 @@ void AssetManager::prefetchPackageTextures() const {
         enqueue(path);
         return false;
     });
-
-    std::error_code ec;
-    if (!wallpaper_path.empty() && std::filesystem::is_directory(wallpaper_path, ec)) {
-        for (std::filesystem::recursive_directory_iterator it(wallpaper_path, ec), end; it != end; it.increment(ec)) {
-            if (ec) {
-                ec.clear();
-                continue;
-            }
-            const bool regular_file = it->is_regular_file(ec);
-            if (ec) {
-                ec.clear();
-                continue;
-            }
-            if (!regular_file) continue;
-            const std::string path = it->path().string();
-            if (supported(path.c_str())) enqueue(path);
-        }
-    }
 }
 
 void AssetManager::releaseDecodedTextures() const {
