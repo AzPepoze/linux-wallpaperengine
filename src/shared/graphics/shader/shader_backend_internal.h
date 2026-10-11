@@ -19,7 +19,7 @@ struct ShaderDiskCache {
     std::atomic<uint64_t> cache_hits{0};
     std::atomic<uint64_t> cache_misses{0};
 
-    static constexpr size_t kMaxMemoryCacheBytes = 8u << 20;
+    static constexpr size_t kMaxMemoryCacheBytes = 2u << 20;
     size_t memory_cache_bytes = 0;
 
     static uint64_t computeHash(SlangStage stage, const std::string& source) {
