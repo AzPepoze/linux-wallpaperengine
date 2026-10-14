@@ -213,7 +213,7 @@ const std::string kPresentFxaaFragmentSource =
     "#define FXAA_PC 1\n"
     "#define FXAA_GLSL_130 1\n"
     "#define FXAA_QUALITY__PRESET 12\n"
-    "#define FXAA_GREEN_AS_LUMA 0\n"
+    "#define FXAA_GREEN_AS_LUMA 1\n"
     "uniform vec4 texel;\n"
     // Offsets are applied in UV space: the shader compiler needs constant texture offsets, and FXAA's are runtime.
     "vec4 textureLodOffset(LweCombinedSampler2D sampler, vec2 uv, float lod, vec2 offset) {\n"
@@ -334,6 +334,7 @@ void createSamplers(renderer_t* r, downscale::Method method) {
     s_desc.min_filter = SG_FILTER_NEAREST;
     s_desc.mag_filter = SG_FILTER_NEAREST;
     s_desc.mipmap_filter = SG_FILTER_NEAREST;
+    s_desc.max_lod = 0.0f;
     s_desc.max_anisotropy = 1;
     s_desc.wrap_u = SG_WRAP_REPEAT;
     s_desc.wrap_v = SG_WRAP_REPEAT;
