@@ -32,7 +32,7 @@ struct StubResolver : public IAssetResolver {
     GfxImage resolveTexture(const char*, std::string* = nullptr, int = 0) const override {
         return GfxImage{};
     }
-    GfxImage resolveMaterialTexture(const char*, std::string* = nullptr) const override {
+    GfxImage resolveMaterialTexture(const char*, std::string* = nullptr, const UserProperties* = nullptr) const override {
         return GfxImage{};
     }
     bool resolvePath(const char*, char*, int) const override {
