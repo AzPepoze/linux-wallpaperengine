@@ -4,7 +4,7 @@ Back to the [README](../README.md).
 
 ## Build
 
-The Wayland protocol files come from the `lib/wlr-protocols` submodule. Clone with `--recurse-submodules`, or run `git submodule update --init` in an existing checkout. Without it, the Wayland feature is not built.
+The Wayland protocol files come from the `third_party/wlr-protocols` submodule. Clone with `--recurse-submodules`, or run `git submodule update --init` in an existing checkout. Without it, the Wayland feature is not built.
 
 | Goal | Command |
 | --- | --- |
