@@ -25,7 +25,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `log_level` | `debug\|info\|warn\|error` | debug in debug builds, else info | Same as `--log-level` |
 | `pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Same as `--pointer` |
 | `resolution` | `auto\|native\|WxH` | auto | Same as `--resolution` |
-| `downscale` | `off\|mipmap\|aniso\|box\|lanczos` | off | Same as `--downscale` |
+| `downscale` | `off\|auto\|mipmap\|aniso\|box\|lanczos` | auto | Same as `--downscale` |
 | `antialias` | `off\|fxaa\|smaa\|msaa2\|msaa4\|msaa8` | off | Same as `--antialias` |
 
 ## Environment variables
@@ -64,7 +64,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--video-ram` | | off | Load video into RAM instead of streaming |
 | `--performance-profile` | | off | Log frame timing after a 5-second warmup |
 | `--resolution` | `auto\|native\|WxH` | auto | Render size of effect chains, puppets and models. `auto` follows the output size. `native` uses the authored size. `WxH` sizes them as if the output were that size (for example `3840x2160`). `--effect-resolution` still works |
-| `--downscale` | `off\|mipmap\|aniso\|box\|lanczos` | off | How big textures are made smaller. See the table below |
+| `--downscale` | `off\|auto\|mipmap\|aniso\|box\|lanczos` | auto | How textures are sampled when drawn smaller than their size. See the table below |
 | `--antialias` | `off\|fxaa\|smaa\|msaa2\|msaa4\|msaa8` | off | Edge smoothing. `fxaa` and `smaa` are post filters. `msaa2`, `msaa4` and `msaa8` multisample the scene, and fall back to off if the GPU does not support the count |
 | `--script-profile` | | off | Log the slowest scripts every 10 seconds |
 
@@ -72,7 +72,8 @@ The engine reads `config.json` from the working directory or one of its parents.
 
 | Value | What it does | Memory |
 | --- | --- | --- |
-| `off` | Draws the full-size texture | Full size |
+| `off` | Draws the full-size texture with no mip levels, so shrunk art shows stair-steps | Full size |
+| `auto` (default) | Uses the mip levels for textures larger than the output, and skips the rest | Full size, plus the smaller levels for large textures |
 | `mipmap` | Uses smaller levels stored in the file, or makes them, to reduce shimmer | Full size, plus the smaller levels |
 | `aniso` | Same as `mipmap`, with 8x anisotropic filtering at angles | Same as `mipmap` |
 | `box` | Shrinks RGBA8 textures once to fit the output, with a box filter | Smaller |

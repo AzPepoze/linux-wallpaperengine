@@ -78,7 +78,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
 - [x] Package files and textures
   - [x] `.pkg` files
   - [x] `.tex` textures
-  - [x] Stored mip levels, generated mip levels, and box or lanczos shrink (`--downscale`)
+  - [x] Mip levels for large textures by default (`--downscale auto`), stored or generated, plus box and lanczos shrink
   - [x] Anti-aliasing: FXAA 3.11 and SMAA 1x (`--antialias fxaa|smaa`)
   - [x] MSAA 2x, 4x, 8x for the scene (`--antialias msaa2|msaa4|msaa8`)
 - [x] Command line
