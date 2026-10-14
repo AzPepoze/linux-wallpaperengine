@@ -70,8 +70,10 @@ texture_resize::Image shrinkForOutput(const wallpaper_engine::DecodedImage& imag
 }
 
 // Only RGBA8 gets a generated chain; block-compressed textures keep their single level.
-bool wantsMipChain(downscale::Method method, sg_pixel_format format) {
-    return downscale::usesMipChain(method) && format == SG_PIXELFORMAT_RGBA8;
+bool wantsMipChain(downscale::Method method, sg_pixel_format format, uint32_t width, uint32_t height, int output_width,
+                   int output_height) {
+    return format == SG_PIXELFORMAT_RGBA8 &&
+           downscale::wantsMips(method, (int)width, (int)height, output_width, output_height);
 }
 
 // Uploads the base level plus every mip level. Files without stored mips get a generated chain when RGBA8.
@@ -560,13 +562,18 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
                     strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
         if (!is_video && downscale::usesMipChain(downscale_method_)) {
-            // Read the mip levels straight from the file and keep none in the cache: they are freed after upload.
-            const std::vector<wallpaper_engine::DecodedImage> levels = wallpaper_engine::decodeTextureMips(abs_path, image_index);
-            if (!levels.empty()) {
-                const sg_image uploaded = uploadWithMips(levels);
-                if (uploaded.id != SG_INVALID_ID) {
-                    LOG_TAG_D("TEXTURE", "Uploaded %s with %zu mip levels", abs_path, levels.size());
-                    return GfxImage(uploaded);
+            const wallpaper_engine::TextureMetadata metadata = wallpaper_engine::inspectTextureMetadata(abs_path);
+            if (metadata.valid && downscale::wantsMips(downscale_method_, (int)metadata.width, (int)metadata.height,
+                                                       output_width_, output_height_)) {
+                // Read the mip levels straight from the file and keep none in the cache: they are freed after upload.
+                const std::vector<wallpaper_engine::DecodedImage> levels =
+                    wallpaper_engine::decodeTextureMips(abs_path, image_index);
+                if (!levels.empty()) {
+                    const sg_image uploaded = uploadWithMips(levels);
+                    if (uploaded.id != SG_INVALID_ID) {
+                        LOG_TAG_D("TEXTURE", "Uploaded %s with %zu mip levels", abs_path, levels.size());
+                        return GfxImage(uploaded);
+                    }
                 }
             }
         }
@@ -593,7 +600,8 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
                     desc.pixel_format = pixel_format;
                     desc.data.mip_levels[0] = {upload_pixels, upload_bytes};
                     std::vector<texture_resize::Image> mip_levels;
-                    if (wantsMipChain(downscale_method_, pixel_format))
+                    if (wantsMipChain(downscale_method_, pixel_format, image.width, image.height, output_width_,
+                                      output_height_))
                         mip_levels = texture_resize::buildMipChain(upload_pixels, upload_width, upload_height);
                     desc.num_mipmaps = 1 + (int)mip_levels.size();
                     for (size_t level = 0; level < mip_levels.size(); ++level)

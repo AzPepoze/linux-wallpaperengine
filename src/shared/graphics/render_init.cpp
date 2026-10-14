@@ -325,7 +325,8 @@ void createSamplers(renderer_t* r, downscale::Method method) {
     s_desc.min_filter = SG_FILTER_LINEAR;
     s_desc.mag_filter = SG_FILTER_LINEAR;
     s_desc.mipmap_filter = downscale::usesMipChain(method) ? SG_FILTER_LINEAR : SG_FILTER_NEAREST;
-    s_desc.max_anisotropy = method == downscale::Method::Aniso ? kAnisotropyLevel : 1;
+    const bool anisotropic = method == downscale::Method::Aniso || method == downscale::Method::Auto;
+    s_desc.max_anisotropy = anisotropic ? kAnisotropyLevel : 1;
     s_desc.wrap_u = SG_WRAP_REPEAT;
     s_desc.wrap_v = SG_WRAP_REPEAT;
     r->smp_repeat = sg_make_sampler(&s_desc);
