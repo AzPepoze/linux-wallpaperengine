@@ -130,7 +130,7 @@ struct EngineContext {
     float intro_duration = 4.0f;
     resolution::Setting resolution;
     antialias::Mode antialias = antialias::Mode::Off;
-    downscale::Method downscale = downscale::Method::Off;
+    downscale::Method downscale = downscale::Method::Auto;
     bool performance_profile = false;
     int fps_limit = 0;  // runtime frame-rate cap; 0 = vsync, no software cap
     sg_pass_action pass_action = {};

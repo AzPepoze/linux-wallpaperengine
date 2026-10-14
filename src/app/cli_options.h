@@ -53,7 +53,7 @@ struct CliOptions {
     float intro_duration = 4.0f;
     resolution::Setting resolution;  // --resolution
     antialias::Mode antialias = antialias::Mode::Off;      // --antialias
-    downscale::Method downscale = downscale::Method::Off;  // --downscale
+    downscale::Method downscale = downscale::Method::Auto;  // --downscale
     WindowGeometry window;                                 // --window XxYxWxH
     bool performance_profile = false;
     bool script_profile = false;  // log the most expensive scripts every few seconds

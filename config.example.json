@@ -9,7 +9,7 @@
     "transition_mode": "freeze",
     "resolution": "auto",
     "antialias": "off",
-    "downscale": "off",
+    "downscale": "auto",
     "web_transport": "auto",
     "web_devtools_port": 9222,
     "web_devtools_browser": "",

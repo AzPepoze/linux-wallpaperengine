@@ -188,10 +188,10 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         opts.antialias = antialias::Mode::Off;
     }
 
-    const std::string downscale_text = resolve({"--downscale"}, "downscale", "off");
+    const std::string downscale_text = resolve({"--downscale"}, "downscale", "auto");
     if (!downscale::parse(downscale_text, opts.downscale)) {
-        fprintf(stderr, "Unknown downscale '%s'; using off\n", downscale_text.c_str());
-        opts.downscale = downscale::Method::Off;
+        fprintf(stderr, "Unknown downscale '%s'; using auto\n", downscale_text.c_str());
+        opts.downscale = downscale::Method::Auto;
     }
 
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
