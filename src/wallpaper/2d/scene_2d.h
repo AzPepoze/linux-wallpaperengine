@@ -5,6 +5,7 @@
 
 #include "shared/core/engine_context.h"
 #include "shared/graphics/gfx_resource.h"
+#include "shared/graphics/smaa_pass.h"
 
 class Scene2DRuntime {
    public:
@@ -147,6 +148,9 @@ class Scene2DRuntime {
     DepthTarget reflection_depth;
     std::vector<SceneTarget> hdr_bloom_levels;
     int scene_output_index = -1;
+    // Anti-aliased frame to present when --antialias smaa is set; invalid otherwise.
+    SmaaPass smaa_;
+    sg_view presented_view_ = {SG_INVALID_ID};
     bool float_composition_available_ = true;
     int cleanup_phase_ = 0;
     int prewarm_target_index_ = 0;

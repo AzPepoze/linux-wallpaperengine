@@ -15,6 +15,7 @@
 #include "wallpaper/2d/parser/scene_document.h"
 #include "wallpaper/2d/puppet/mdl_parser.h"
 #include "wallpaper/2d/puppet/puppet_pose.h"
+#include "shared/graphics/texture_size.h"
 #include "wallpaper/2d/script/scene_script.h"
 
 class EngineContext;

@@ -170,8 +170,9 @@ void ImageLayer::tracePass(IRenderObserver& diag, EngineContext& ctx, const Effe
         binding.image_id = image.id;
         binding.view_id = view.id;
         const sg_image_desc desc = sg_query_image_desc(image);
-        binding.width = desc.width;
-        binding.height = desc.height;
+        const texture_size::Size size = texture_size::of(image);
+        binding.width = size.width;
+        binding.height = size.height;
         binding.is_render_target = desc.usage.color_attachment;
     };
     auto describeNamedTarget = [](TextureBindingTrace& binding, const NamedRenderTarget& target) {
@@ -223,10 +224,10 @@ const content_bounds::Rect& ImageLayer::passActiveRegion(EngineContext& ctx, con
                               !textures.texture_paths.empty() && !textures.texture_paths[0].empty() &&
                               !textures.textures.empty() && textures.textures[0].id != SG_INVALID_ID;
     if (masked_waves && effect_target_width > 0 && effect_target_height > 0) {
-        const sg_image_desc mask_desc = sg_query_image_desc(textures.textures[0]);
-        const double mask_aspect = (double)mask_desc.width / std::max(1, mask_desc.height);
+        const texture_size::Size mask_size = texture_size::of(textures.textures[0]);
+        const double mask_aspect = (double)mask_size.width / std::max(1, mask_size.height);
         const double layer_aspect = (double)effect_target_width / effect_target_height;
-        if (mask_desc.width > 0 && std::abs(mask_aspect / layer_aspect - 1.0) < 0.01) {
+        if (mask_size.width > 0 && std::abs(mask_aspect / layer_aspect - 1.0) < 0.01) {
             region = ctx.asset_mgr->textureContentBounds(textures.texture_paths[0].c_str());
         }
     }
@@ -337,8 +338,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     ChainState state;
     state.layer_source_image = state.input_image = state.chain_image = base_img;
     state.layer_source_view = state.input_view = state.chain_view = base_view;
-    const sg_image_desc source_desc = sg_query_image_desc(state.input_image);
-    diag.onSourceImage(0, state.input_image, source_desc.width, source_desc.height);
+    const texture_size::Size source_size = texture_size::of(state.input_image);
+    diag.onSourceImage(0, state.input_image, source_size.width, source_size.height);
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;

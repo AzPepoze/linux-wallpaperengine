@@ -6,6 +6,8 @@
 #include <cstdio>
 
 #include "imgui.h"
+#include "shared/core/antialias.h"
+#include "shared/core/downscale.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/resolution.h"
 #include "shared/core/system_stats.h"
@@ -39,6 +41,8 @@ void showGpuPasses(const EngineContext& ctx) {
 void showRender(EngineContext& ctx) {
     if (!ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) return;
     ImGui::Text("Resolution: %s", resolution::describe(ctx.resolution).c_str());
+    ImGui::Text("Anti-aliasing (requested): %s", antialias::describe(ctx.antialias).c_str());
+    ImGui::Text("Downscale (requested): %s", downscale::describe(ctx.downscale).c_str());
     ImGui::Text("Output: %.0fx%.0f (physical %.0fx%.0f)", ctx.renderer.view_width, ctx.renderer.view_height,
                 ctx.scene.physical_view_width, ctx.scene.physical_view_height);
     ImGui::Text("Frame: %.2f ms avg | %.2f ms peak | %.1f FPS", ctx.profiler.frame_avg_ms, ctx.profiler.frame_peak_ms,

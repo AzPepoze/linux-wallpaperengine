@@ -11,6 +11,7 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/passes/shader_pass.h"
+#include "shared/graphics/texture_size.h"
 
 #define TAG "PARTICLE"
 
@@ -196,9 +197,9 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
 
         if ((particle_system->texture_width <= 0 || particle_system->texture_height <= 0) &&
             pass->pass_textures.texture0.id != SG_INVALID_ID) {
-            const sg_image_desc image_desc = sg_query_image_desc(pass->pass_textures.texture0);
-            particle_system->texture_width = image_desc.width;
-            particle_system->texture_height = image_desc.height;
+            const texture_size::Size image_size = texture_size::of(pass->pass_textures.texture0);
+            particle_system->texture_width = image_size.width;
+            particle_system->texture_height = image_size.height;
         }
     }
 

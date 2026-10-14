@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "linmath.h"
+#include "shared/core/downscale.h"
 #include "shared/core/vfs.h"
 #include "shared/graphics/gfx_resource.h"
 #include "sokol_gfx.h"
@@ -58,6 +59,7 @@ struct renderer_t {
     GfxPipeline pip_add;
     GfxPipeline pip_unpremul;
     GfxPipeline pip_present;
+    GfxPipeline pip_present_fxaa;
     GfxPipeline pip_lines;
     GfxPipeline pip_mesh;
     GfxPipeline pip_image_composite[31];
@@ -81,7 +83,7 @@ struct renderer_t {
     uint32_t draw_calls = 0;
 };
 
-void renderer_init(renderer_t* r, float w, float h);
+void renderer_init(renderer_t* r, float w, float h, downscale::Method downscale_method);
 void renderer_update_viewport(renderer_t* r, float w, float h);
 typedef struct {
     mat4x4 mvp;
@@ -136,7 +138,8 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float width, float height);
 
 // Highlight roll-off keeps additive effects from hard-clipping to flat white.
-void renderer_present(renderer_t* r, sg_view source_view, float width, float height);
+// Presents the composed scene; fxaa adds edge smoothing to the same pass.
+void renderer_present(renderer_t* r, sg_view source_view, float width, float height, bool fxaa);
 
 void renderer_draw_mesh(EngineContext& ctx, renderer_t* r, sg_buffer position_buffer, sg_buffer uv_buffer,
                         sg_buffer index_buffer, int index_count, sg_image image, sg_view main_view, const float tint[4],

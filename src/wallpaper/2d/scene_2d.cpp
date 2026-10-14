@@ -31,7 +31,7 @@
 void Scene2DRuntime::init() {
     // Geometry and common pipelines belong to the process, shared by instances.
     if (ctx.renderer.vertex_buffer.id == SG_INVALID_ID)
-        renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height());
+        renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height(), ctx.downscale);
 }
 
 void Scene2DRuntime::precompileBlendModes() {
@@ -130,6 +130,8 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
     // Direct drawing has no readable target, so captures render offscreen to expose per-layer stages.
     if (renderObserver().isCapturingFrame()) return true;
     if (hasDepthLayers()) return true;
+    // FXAA and SMAA read the composed scene, so they need the offscreen target.
+    if (ctx.antialias == antialias::Mode::Fxaa || ctx.antialias == antialias::Mode::Smaa) return true;
 
     if (!RenderDiagnostics::instance().getConfig().disable_bloom) {
         const float bloom_strength =
@@ -223,11 +225,19 @@ void Scene2DRuntime::attachDepth(sg_pass& pass) const {
 
 void Scene2DRuntime::draw() {
     updateViewport();
+    presented_view_ = {SG_INVALID_ID};
     if (force_offscreen_ || requiresOffscreenComposition())
         drawOffscreen();
     else {
         scene_output_index = -1;
         drawDirect();
+    }
+    // SMAA runs its own passes here, before any swapchain pass starts.
+    if (ctx.antialias == antialias::Mode::Smaa && scene_output_index >= 0) {
+        const bool has_output_viewport = output_width > 0 && output_height > 0;
+        const int width = has_output_viewport ? output_width : surface::width();
+        const int height = has_output_viewport ? output_height : surface::height();
+        presented_view_ = smaa_.apply(&ctx.renderer, composedView(), width, height);
     }
     first_frame_drawn_ = true;
 }
@@ -267,7 +277,8 @@ void Scene2DRuntime::present() {
     }
 
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
-    renderer_present(&ctx.renderer, target.texture_view, (float)width, (float)height);
+    const sg_view source = presented_view_.id != SG_INVALID_ID ? (sg_view)presented_view_ : (sg_view)target.texture_view;
+    renderer_present(&ctx.renderer, source, (float)width, (float)height, ctx.antialias == antialias::Mode::Fxaa);
 
     if (has_output_viewport) {
         sg_apply_viewport(0, 0, surface::width(), surface::height(), true);

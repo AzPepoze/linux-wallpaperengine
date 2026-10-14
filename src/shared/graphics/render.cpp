@@ -14,6 +14,7 @@
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "sokol_glue.h"
+#include "texture_size.h"
 
 using render_internal::kFirstWallpaperBlendMode;
 using render_internal::kLastWallpaperBlendMode;
@@ -89,11 +90,12 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         r->bind.views[0] = main_view;
 
         {
-            sg_image_desc d = sg_query_image_desc(img);
+            const sg_image_desc d = sg_query_image_desc(img);
+            const texture_size::Size size = texture_size::of(img);
             // Render targets owned by a downscaled effect chain report their authored size.
             const float target_scale = d.usage.color_attachment ? logical_scale : 1.0f;
-            builtin.texture_resolutions[0][0] = d.width > 0 ? (float)d.width * target_scale : 1.0f;
-            builtin.texture_resolutions[0][1] = d.height > 0 ? (float)d.height * target_scale : 1.0f;
+            builtin.texture_resolutions[0][0] = size.width > 0 ? (float)size.width * target_scale : 1.0f;
+            builtin.texture_resolutions[0][1] = size.height > 0 ? (float)size.height * target_scale : 1.0f;
             builtin.texture_resolutions[0][2] = builtin.texture_resolutions[0][0];
             builtin.texture_resolutions[0][3] = builtin.texture_resolutions[0][1];
         }
@@ -138,10 +140,11 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
             if (slot < 5) {
                 sg_image target_img = sg_query_view_image(r->bind.views[slot]);
                 if (target_img.id != SG_INVALID_ID) {
-                    sg_image_desc d = sg_query_image_desc(target_img);
+                    const sg_image_desc d = sg_query_image_desc(target_img);
+                    const texture_size::Size size = texture_size::of(target_img);
                     const float target_scale = d.usage.color_attachment ? logical_scale : 1.0f;
-                    builtin.texture_resolutions[slot][0] = d.width > 0 ? (float)d.width * target_scale : 1.0f;
-                    builtin.texture_resolutions[slot][1] = d.height > 0 ? (float)d.height * target_scale : 1.0f;
+                    builtin.texture_resolutions[slot][0] = size.width > 0 ? (float)size.width * target_scale : 1.0f;
+                    builtin.texture_resolutions[slot][1] = size.height > 0 ? (float)size.height * target_scale : 1.0f;
                     builtin.texture_resolutions[slot][2] = builtin.texture_resolutions[slot][0];
                     builtin.texture_resolutions[slot][3] = builtin.texture_resolutions[slot][1];
                 } else {
@@ -229,8 +232,9 @@ void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float wid
     r->bind.index_buffer = r->index_buffer;
 }
 
-void renderer_present(renderer_t* r, sg_view source_view, float width, float height) {
-    if (r->pip_present.id == SG_INVALID_ID || source_view.id == SG_INVALID_ID) return;
+void renderer_present(renderer_t* r, sg_view source_view, float width, float height, bool fxaa) {
+    const GfxPipeline& pipeline = fxaa ? r->pip_present_fxaa : r->pip_present;
+    if (pipeline.id == SG_INVALID_ID || source_view.id == SG_INVALID_ID) return;
     mat4x4 proj, model, mvp;
     mat4x4_ortho(proj, 0, width, height, 0, -1.0f, 1.0f);
     mat4x4_identity(model);
@@ -240,12 +244,15 @@ void renderer_present(renderer_t* r, sg_view source_view, float width, float hei
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; ++i) r->bind.samplers[i] = r->smp_clamp;
     r->bind.views[0] = source_view;
     for (int i = 1; i < 12; ++i) r->bind.views[i] = r->black_view;
-    sg_apply_pipeline(r->pip_present);
+    sg_apply_pipeline(pipeline);
     sg_range mvp_range = SG_RANGE(mvp);
     sg_apply_uniforms(0, &mvp_range);
+    // Slot 1 is the tint for the normal present, or the texel size for FXAA.
     const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    sg_range tint_range = {.ptr = white, .size = sizeof(white)};
-    sg_apply_uniforms(1, &tint_range);
+    const float texel[4] = {1.0f / width, 1.0f / height, 0.0f, 0.0f};
+    const float* slot_one = fxaa ? texel : white;
+    sg_range slot_one_range = {.ptr = slot_one, .size = 4 * sizeof(float)};
+    sg_apply_uniforms(1, &slot_one_range);
     sg_apply_bindings(&r->bind);
     sg_draw(0, 6, 1);
     r->draw_calls++;

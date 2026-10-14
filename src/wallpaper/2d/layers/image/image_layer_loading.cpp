@@ -15,6 +15,7 @@
 #include "shared/graphics/backend/gpu_debug_labels.h"
 #include "shared/graphics/diagnostics/render_observer.h"
 #include "shared/graphics/render.h"
+#include "shared/graphics/texture_size.h"
 #include "wallpaper/2d/alpha_curve.h"
 #include "wallpaper/2d/tree/scene_tree.h"
 
@@ -60,10 +61,10 @@ ImageLayer* ImageLayer::createBaseFromDocument(const wallpaper_engine::SceneObje
             layer->img = ctx.asset_mgr->resolveTexture(config.asset_path.c_str(), &layer->path);
 
         if (layer->img.id != SG_INVALID_ID) {
-            sg_image_desc desc = sg_query_image_desc(layer->img);
+            const texture_size::Size authored = texture_size::of(layer->img);
             if (layer->size[0] == 0) {
-                layer->size[0] = (float)desc.width;
-                layer->size[1] = (float)desc.height;
+                layer->size[0] = (float)authored.width;
+                layer->size[1] = (float)authored.height;
             }
             const auto* v = ctx.asset_mgr->findVideoTexture(layer->img);
             if (!v && !layer->path.empty()) v = ctx.asset_mgr->findVideoTexture(layer->path);

@@ -105,6 +105,7 @@ TextureMetadata inspectTextureMetadata(const char* path) {
 
     for (uint32_t image_number = 0; image_number < header.image_count; ++image_number) {
         const uint32_t mip_count = readU32(file);
+        metadata.mip_counts.push_back(mip_count);
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
             if (!skipMipmap(file, header.container_magic, header.flags)) return metadata;
         }

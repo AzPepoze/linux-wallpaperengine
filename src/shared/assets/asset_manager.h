@@ -13,6 +13,7 @@
 #include "shared/assets/media/video_audio.h"
 #include "shared/assets/media/video_texture.h"
 #include "shared/audio/audio_engine.h"
+#include "shared/core/downscale.h"
 #include "shared/core/interfaces.h"
 #include "shared/graphics/gfx_resource.h"
 #include "sokol_gfx.h"
@@ -28,6 +29,17 @@ class AssetManager : public IAssetResolver {
    public:
     AssetManager();
     ~AssetManager() override;
+
+    // Set once at startup, before any texture loads.
+    void setDownscaleMethod(downscale::Method method) {
+        downscale_method_ = method;
+    }
+
+    // Output size that box and lanczos shrink textures to. Set before a wallpaper loads.
+    void setOutputSize(int width, int height) {
+        output_width_ = width;
+        output_height_ = height;
+    }
 
     void init(const char* engine_path, const char* wallpaper_path);
 
@@ -123,6 +135,10 @@ class AssetManager : public IAssetResolver {
 
     GfxImage resolveTextureInternal(const char* name, std::string* out_path, int image_index,
                                     bool warn_on_failure) const;
+
+    downscale::Method downscale_method_ = downscale::Method::Off;
+    int output_width_ = 0;
+    int output_height_ = 0;
 
     std::unique_ptr<TextureDecodeCache> wallpaper_decode_cache_;
     const TextureDecodeCache& decodeCacheFor(const char* abs_path) const;

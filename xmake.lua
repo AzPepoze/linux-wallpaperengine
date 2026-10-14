@@ -354,6 +354,13 @@ target_end()
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
 add_test("effect_resolution_tests", {"tests/effect_resolution_test.cpp"})
 add_test("resolution_tests", {"tests/resolution_test.cpp"})
+add_test("antialias_tests", {"tests/antialias_test.cpp"})
+add_test("downscale_tests", {"tests/downscale_test.cpp"})
+add_test("texture_resize_tests", {"tests/texture_resize_test.cpp", "src/shared/assets/texture_resize.cpp"})
+add_test("tex_mips_tests", {"tests/tex_mips_test.cpp", "src/shared/assets/tex_decoder.cpp",
+                            "src/shared/assets/tex_format.cpp", "src/shared/assets/tex_header.cpp",
+                            "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp", "src/shared/core/vfs.cpp"},
+         {"lz4", "stb"})
 add_test("content_bounds_tests", {"tests/content_bounds_test.cpp"})
 add_test("gpu_timing_tests", {"tests/gpu_timing_test.cpp"})
 add_test("performance_profile_tests", {"tests/performance_profile_test.cpp",

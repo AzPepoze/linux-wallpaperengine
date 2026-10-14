@@ -235,12 +235,25 @@ struct WallpaperManager::LoadJob : PreparedLoad {
     std::chrono::steady_clock::time_point last_frame = started;
 };
 
+void WallpaperManager::applyTextureBounds(EngineContext& ctx) {
+    texture_width_ = surface::width();
+    texture_height_ = surface::height();
+    downscale_ = ctx.downscale;
+}
+
+// Each wallpaper instance loads its own textures, so every instance gets the current texture settings.
+void WallpaperManager::configureAssets(AssetManager& assets) const {
+    assets.setDownscaleMethod(downscale_);
+    assets.setOutputSize(texture_width_, texture_height_);
+}
+
 bool WallpaperManager::load(const std::string& scene_directory, EngineContext& ctx) {
     if (scene_directory.empty()) return false;
 
     ProjectInfo info = ProjectInfo::detect(scene_directory);
     attachPreset(info, ctx.wallpaper_path);
     if (!WallpaperLoader::canLoad(info)) return false;
+    applyTextureBounds(ctx);
 
     // The outgoing wallpaper stays alive and playing until the transition ends.
     if (active_instance_) outgoing_instance_ = std::move(active_instance_);
@@ -252,6 +265,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     LOG_TAG_I("WALLPAPER_MGR", "New instance audio group=%u for %s", (unsigned)instance->audio_group,
               scene_directory.c_str());
     if (shared_assets_) instance->assets.attachShared(shared_assets_);
+    configureAssets(instance->assets);
     instance->state.wallpaper_path = scene_directory;
     instance->state.source_path = ctx.wallpaper_path;
     instance->state.is_pkg = ctx.is_pkg;
@@ -316,6 +330,17 @@ void WallpaperManager::update(float dt, EngineContext& ctx) {
     }
 
     if (outgoing_instance_ && transition_.active() && !transition_.live()) tickOutgoingAudio(ctx, dt);
+
+    // Shrunk textures were sized for the old output, so the wallpaper reloads to match.
+    const bool output_changed = surface::width() != texture_width_ || surface::height() != texture_height_;
+    if (output_changed && downscale::resizesPixels(downscale_) && active_instance_ && !pending_switch_ && !load_job_) {
+        SwitchRequest reload;
+        reload.path = ctx.wallpaper_path;
+        reload.is_pkg = ctx.is_pkg;
+        reload.properties = ctx.user_properties.toStrings();
+        pending_switch_ = std::move(reload);
+    }
+
     if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->update(dt, ctx);
 }
 
@@ -592,6 +617,8 @@ void WallpaperManager::pollLoad(EngineContext& ctx) {
         activateInstance(ctx, *job.instance, active_view_);
         ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
         ScriptEngine::instance().setWallpaperId(std::filesystem::path(job.request.path).filename().string());
+        applyTextureBounds(ctx);
+        configureAssets(job.instance->assets);
         if (job.info.type == ProjectType::Scene) {
             auto scene = std::make_unique<Scene2DWallpaper>(ctx);
             scene->beginLoadDocument(std::move(job.document), ctx);

@@ -15,12 +15,16 @@
 #include "shared/assets/media/video_rate.h"
 #include "shared/assets/shared_assets.h"
 #include "shared/assets/tex_decoder.h"
+#include "shared/assets/texture_resize.h"
+#include "shared/core/downscale.h"
 #include "shared/core/load_trace.h"
+#include "shared/core/resolution.h"
 #include "shared/core/logger.h"
 #include "shared/core/task_pool.h"
 #include "shared/core/utils.h"
 #include "shared/core/vfs.h"
 #include "shared/graphics/backend/gpu_zero_copy.h"
+#include "shared/graphics/texture_size.h"
 #include "shared/media/media_thumbnail_texture.h"
 #include "wallpaper/2d/layers/layer.h"
 #include "wallpaper/2d/parser/scene_document.h"
@@ -44,6 +48,55 @@ sg_pixel_format toSokolPixelFormat(wallpaper_engine::PixelFormat format) {
         default:
             return SG_PIXELFORMAT_NONE;
     }
+}
+
+// Box or lanczos shrink of RGBA8 pixels to fit the output. Empty when no shrink applies.
+texture_resize::Image shrinkForOutput(const wallpaper_engine::DecodedImage& image, sg_pixel_format format,
+                                      downscale::Method method, int output_width, int output_height) {
+    if (format != SG_PIXELFORMAT_RGBA8 || output_width <= 0 || output_height <= 0) return {};
+    texture_resize::Filter filter;
+    if (method == downscale::Method::Box) {
+        filter = texture_resize::Filter::Box;
+    } else if (method == downscale::Method::Lanczos) {
+        filter = texture_resize::Filter::Lanczos3;
+    } else {
+        return {};
+    }
+    const auto [target_width, target_height] =
+        resolution::targetSize((int)image.width, (int)image.height, output_width, output_height);
+    if (target_width >= (int)image.width && target_height >= (int)image.height) return {};
+    return texture_resize::resizeRgba8(image.pixels.data(), (int)image.width, (int)image.height, target_width,
+                                       target_height, filter);
+}
+
+// Only RGBA8 gets a generated chain; block-compressed textures keep their single level.
+bool wantsMipChain(downscale::Method method, sg_pixel_format format) {
+    return downscale::usesMipChain(method) && format == SG_PIXELFORMAT_RGBA8;
+}
+
+// Uploads the base level plus every mip level. Files without stored mips get a generated chain when RGBA8.
+sg_image uploadWithMips(const std::vector<wallpaper_engine::DecodedImage>& levels) {
+    const wallpaper_engine::DecodedImage& base = levels.front();
+    const sg_pixel_format pixel_format = toSokolPixelFormat(base.format);
+    if (pixel_format == SG_PIXELFORMAT_NONE) return {SG_INVALID_ID};
+
+    std::vector<texture_resize::Image> generated;
+    std::vector<sg_range> lower_levels;
+    if (levels.size() == 1 && pixel_format == SG_PIXELFORMAT_RGBA8) {
+        generated = texture_resize::buildMipChain(base.pixels.data(), base.width, base.height);
+        for (const texture_resize::Image& level : generated) lower_levels.push_back({level.pixels.data(), level.pixels.size()});
+    } else {
+        for (size_t i = 1; i < levels.size(); ++i) lower_levels.push_back({levels[i].pixels.data(), levels[i].pixels.size()});
+    }
+
+    sg_image_desc desc = {};
+    desc.width = (int)base.width;
+    desc.height = (int)base.height;
+    desc.pixel_format = pixel_format;
+    desc.num_mipmaps = 1 + (int)lower_levels.size();
+    desc.data.mip_levels[0] = {base.pixels.data(), base.pixels.size()};
+    for (size_t i = 0; i < lower_levels.size(); ++i) desc.data.mip_levels[i + 1] = lower_levels[i];
+    return sg_make_image(&desc);
 }
 
 // The image the user picked for a usertextures entry that names a scenetexture property.
@@ -506,6 +559,18 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
         const bool is_video =
             ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".webm") == 0 || strcasecmp(ext, ".mkv") == 0 ||
                     strcasecmp(ext, ".avi") == 0 || strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".wmv") == 0);
+        if (!is_video && downscale::usesMipChain(downscale_method_)) {
+            // Read the mip levels straight from the file and keep none in the cache: they are freed after upload.
+            const std::vector<wallpaper_engine::DecodedImage> levels = wallpaper_engine::decodeTextureMips(abs_path, image_index);
+            if (!levels.empty()) {
+                const sg_image uploaded = uploadWithMips(levels);
+                if (uploaded.id != SG_INVALID_ID) {
+                    LOG_TAG_D("TEXTURE", "Uploaded %s with %zu mip levels", abs_path, levels.size());
+                    return GfxImage(uploaded);
+                }
+            }
+        }
+
         if (!is_video) {
             const auto trace_decode_start = std::chrono::steady_clock::now();
             const std::shared_ptr<const wallpaper_engine::DecodedImage> decoded = decodeShared(abs_path, image_index);
@@ -514,12 +579,32 @@ GfxImage AssetManager::resolveTextureInternal(const char* name, std::string* out
             if (!image.is_video && image.valid()) {
                 const sg_pixel_format pixel_format = toSokolPixelFormat(image.format);
                 if (pixel_format != SG_PIXELFORMAT_NONE) {
+                    const texture_resize::Image shrunk =
+                        shrinkForOutput(image, pixel_format, downscale_method_, output_width_, output_height_);
+                    const bool is_shrunk = shrunk.width > 0;
+                    const int upload_width = is_shrunk ? shrunk.width : (int)image.width;
+                    const int upload_height = is_shrunk ? shrunk.height : (int)image.height;
+                    const uint8_t* upload_pixels = is_shrunk ? shrunk.pixels.data() : image.pixels.data();
+                    const size_t upload_bytes = is_shrunk ? shrunk.pixels.size() : image.pixels.size();
+
                     sg_image_desc desc = {};
-                    desc.width = (int)image.width;
-                    desc.height = (int)image.height;
+                    desc.width = upload_width;
+                    desc.height = upload_height;
                     desc.pixel_format = pixel_format;
-                    desc.data.mip_levels[0] = {image.pixels.data(), image.pixels.size()};
+                    desc.data.mip_levels[0] = {upload_pixels, upload_bytes};
+                    std::vector<texture_resize::Image> mip_levels;
+                    if (wantsMipChain(downscale_method_, pixel_format))
+                        mip_levels = texture_resize::buildMipChain(upload_pixels, upload_width, upload_height);
+                    desc.num_mipmaps = 1 + (int)mip_levels.size();
+                    for (size_t level = 0; level < mip_levels.size(); ++level)
+                        desc.data.mip_levels[level + 1] = {mip_levels[level].pixels.data(),
+                                                           mip_levels[level].pixels.size()};
                     const sg_image uploaded = sg_make_image(&desc);
+                    if (is_shrunk && uploaded.id != SG_INVALID_ID) {
+                        texture_size::recordShrunk(uploaded, {(int)image.width, (int)image.height});
+                        LOG_TAG_D("TEXTURE", "Shrunk %s from %ux%u to %dx%d", abs_path, image.width, image.height,
+                                  upload_width, upload_height);
+                    }
                     if (load_trace::enabled())
                         LOG_TAG_I("LOAD_TRACE", "texture_decode_ms=%.3f texture_upload_ms=%.3f bytes=%zu %s",
                                   load_trace::milliseconds(trace_upload_start - trace_decode_start),

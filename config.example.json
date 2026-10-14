@@ -8,6 +8,8 @@
     "transition_duration_ms": 1000,
     "transition_mode": "freeze",
     "resolution": "auto",
+    "antialias": "off",
+    "downscale": "off",
     "web_transport": "auto",
     "web_devtools_port": 9222,
     "web_devtools_browser": "",

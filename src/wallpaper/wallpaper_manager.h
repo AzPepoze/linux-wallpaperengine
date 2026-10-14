@@ -9,6 +9,7 @@
 
 #include "app/control/control_protocol.h"
 #include "shared/audio/audio_engine.h"
+#include "shared/core/downscale.h"
 #include "shared/core/engine_context.h"
 #include "sokol_app.h"
 #include "wallpaper/transition/wallpaper_transition.h"
@@ -94,6 +95,13 @@ class WallpaperManager {
     SharedAssets* shared_assets_ = nullptr;
     ControlServer* control_ = nullptr;
     std::optional<SwitchRequest> pending_switch_;
+
+    // Output size the next textures are sized for. A change under box or lanczos reloads the wallpaper.
+    void applyTextureBounds(EngineContext& ctx);
+    void configureAssets(AssetManager& assets) const;
+    int texture_width_ = 0;
+    int texture_height_ = 0;
+    downscale::Method downscale_ = downscale::Method::Off;
     WallpaperTransition transition_;
     TransitionConfig transition_config_ = {};
     uint32_t random_seed_ = 0x5eed1234u;

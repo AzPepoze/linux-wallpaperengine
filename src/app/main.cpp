@@ -142,6 +142,8 @@ static void applyCliToContext() {
     ctx.intro_zoom = cli.intro_zoom;
     ctx.intro_duration = cli.intro_duration;
     ctx.resolution = cli.resolution;
+    ctx.antialias = cli.antialias;
+    ctx.downscale = cli.downscale;
     ctx.parallax_smoothing = cli.parallax.smoothing;
     ctx.parallax_scale = cli.parallax.scale;
     ctx.disable_parallax = cli.disable_parallax;
@@ -207,6 +209,7 @@ static void init(void) {
         exit(EXIT_FAILURE);
     }
     ctx.asset_mgr = &asset_manager;
+    asset_manager.setDownscaleMethod(ctx.downscale);
     shared_assets.engine_path = ctx.engine_path;
     shared_assets.engine_provider = std::make_unique<EngineAssetProvider>(ctx.engine_path);
     shared_assets.internal_provider = std::make_unique<InternalAssetProvider>();
