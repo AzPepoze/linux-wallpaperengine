@@ -339,6 +339,9 @@ void WallpaperManager::update(float dt, EngineContext& ctx) {
         reload.is_pkg = ctx.is_pkg;
         reload.properties = ctx.user_properties.toStrings();
         pending_switch_ = std::move(reload);
+        // Record the size now, so a failed reload is not queued again every frame.
+        texture_width_ = surface::width();
+        texture_height_ = surface::height();
     }
 
     if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->update(dt, ctx);
