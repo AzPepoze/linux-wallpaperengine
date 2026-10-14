@@ -35,7 +35,7 @@ constexpr CliOption kGraphics[] = {
     {{"--antialias", nullptr},
      "<off|fxaa|smaa|msaa2|msaa4|msaa8>",
      CliBuild::All,
-     "Edge smoothing: fxaa and smaa are post filters; msaa2/4/8 are not applied yet"},
+     "Edge smoothing: fxaa and smaa are post filters; msaa2/4/8 multisample the scene"},
     {{"--downscale", nullptr},
      "<off|mipmap|aniso|box|lanczos>",
      CliBuild::All,

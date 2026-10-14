@@ -65,7 +65,7 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--performance-profile` | | off | Log frame timing after a 5-second warmup |
 | `--resolution` | `auto\|native\|WxH` | auto | Render size of effect chains, puppets and models. `auto` follows the output size. `native` uses the authored size. `WxH` sizes them as if the output were that size (for example `3840x2160`). `--effect-resolution` still works |
 | `--downscale` | `off\|mipmap\|aniso\|box\|lanczos` | off | How big textures are made smaller. See the table below |
-| `--antialias` | `off\|fxaa\|smaa\|msaa2\|msaa4\|msaa8` | off | Edge smoothing. `fxaa` and `smaa` are post filters. The `msaa` values are accepted but not applied yet |
+| `--antialias` | `off\|fxaa\|smaa\|msaa2\|msaa4\|msaa8` | off | Edge smoothing. `fxaa` and `smaa` are post filters. `msaa2`, `msaa4` and `msaa8` multisample the scene, and fall back to off if the GPU does not support the count |
 | `--script-profile` | | off | Log the slowest scripts every 10 seconds |
 
 ### Downscale
