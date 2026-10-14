@@ -1,6 +1,7 @@
 #ifndef GFX_RESOURCE_H
 #define GFX_RESOURCE_H
 
+#include "pipeline_variants.h"
 #include "sokol_gfx.h"
 
 // Move-only RAII wrappers for Sokol resources, implicitly convertible to the raw handles.
@@ -80,18 +81,23 @@ struct GfxPipeline {
     GfxPipeline() = default;
     GfxPipeline(sg_pipeline h) : id(h.id) {}
     ~GfxPipeline() {
-        if (id != SG_INVALID_ID) sg_destroy_pipeline({id});
+        release();
     }
     GfxPipeline(GfxPipeline&& o) noexcept : id(o.id) {
         o.id = SG_INVALID_ID;
     }
     GfxPipeline& operator=(GfxPipeline&& o) noexcept {
         if (this != &o) {
-            if (id != SG_INVALID_ID) sg_destroy_pipeline({id});
+            release();
             id = o.id;
             o.id = SG_INVALID_ID;
         }
         return *this;
+    }
+    void release() {
+        if (id == SG_INVALID_ID) return;
+        pipeline_variants::forget(id);
+        sg_destroy_pipeline({id});
     }
     GfxPipeline(const GfxPipeline&) = delete;
     GfxPipeline& operator=(const GfxPipeline&) = delete;

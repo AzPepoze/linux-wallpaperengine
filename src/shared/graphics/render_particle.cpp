@@ -19,7 +19,7 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 
     for (int slot = 0; slot < SG_MAX_SAMPLER_BINDSLOTS; ++slot) r->bind.samplers[slot] = r->smp_repeat;
 
-    sg_apply_pipeline(pass->pipeline);
+    pipeline_variants::apply(pass->pipeline);
     r->bind.vertex_buffers[0] = vertex_buffer;
     r->bind.index_buffer = index_buffer;
     r->bind.views[0] = main_view;

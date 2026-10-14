@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "render.h"
+#include "pipeline_variants.h"
 #include "render_internal.h"
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
@@ -373,9 +374,9 @@ void createSpritePipelines(renderer_t* r) {
     pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.index_type = SG_INDEXTYPE_UINT16;
     useAlphaBlend(pip_desc);
-    r->pip_alpha = sg_make_pipeline(&pip_desc);
+    r->pip_alpha = pipeline_variants::make(pip_desc);
     pip_desc.colors[0].blend.enabled = false;
-    r->pip_copy = sg_make_pipeline(&pip_desc);
+    r->pip_copy = pipeline_variants::make(pip_desc);
     pip_desc.colors[0].blend.enabled = true;
 
     sg_pipeline_desc unpremul_desc = pip_desc;
@@ -396,11 +397,11 @@ void createSpritePipelines(renderer_t* r) {
 
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
-    r->pip_add = sg_make_pipeline(&pip_desc);
+    r->pip_add = pipeline_variants::make(pip_desc);
 
     pip_desc.primitive_type = SG_PRIMITIVETYPE_LINES;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    r->pip_lines = sg_make_pipeline(&pip_desc);
+    r->pip_lines = pipeline_variants::make(pip_desc);
 }
 
 void createMeshPipeline(renderer_t* r) {
@@ -411,7 +412,7 @@ void createMeshPipeline(renderer_t* r) {
     desc.layout.attrs[1].buffer_index = 1;
     desc.index_type = SG_INDEXTYPE_UINT16;
     useAlphaBlend(desc);
-    r->pip_mesh = sg_make_pipeline(&desc);
+    r->pip_mesh = pipeline_variants::make(desc);
 }
 }  // namespace
 

@@ -249,7 +249,7 @@ void StaticModelLayer::drawWithCamera(EngineContext& ctx, const PerspectiveCamer
     fillMeshUniforms(ctx, camera, model_matrix_, uniforms);
     for (const MeshDraw& draw : draws_) {
         Material& material = materials_[draw.material];
-        sg_apply_pipeline(material.pipeline);
+        pipeline_variants::apply(material.pipeline);
         sg_apply_bindings(&material.bindings);
         applyMeshUniforms(uniforms);
         material.pass->applyCompiledUniforms();

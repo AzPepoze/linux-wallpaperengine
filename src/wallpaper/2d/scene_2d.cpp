@@ -14,8 +14,10 @@
 #include "shared/graphics/backend/surface.h"
 #include "shared/graphics/diagnostics/render_diagnostics.h"
 #include "shared/graphics/diagnostics/render_observer.h"
+#include "shared/graphics/pass_util.h"
 #include "shared/graphics/passes/pass_loader.h"
 #include "shared/graphics/passes/shader_pass.h"
+#include "shared/graphics/pipeline_variants.h"
 #include "shared/graphics/render.h"
 #include "sokol_app.h"
 #include "wallpaper/2d/animation_curve.h"
@@ -30,8 +32,14 @@
 
 void Scene2DRuntime::init() {
     // Geometry and common pipelines belong to the process, shared by instances.
-    if (ctx.renderer.vertex_buffer.id == SG_INVALID_ID)
-        renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height(), ctx.downscale);
+    const bool first_instance = ctx.renderer.vertex_buffer.id == SG_INVALID_ID;
+    const int requested_samples = antialias::sampleCount(ctx.antialias);
+    msaa_samples_ = pipeline_variants::supportedSamples(requested_samples);
+    scene_samples_ = msaa_samples_;
+    if (!first_instance) return;
+    if (requested_samples > 1) LOG_TAG_I("SCENE_2D", "MSAA %dx (requested %dx)", msaa_samples_, requested_samples);
+    pipeline_variants::configure(msaa_samples_);
+    renderer_init(&ctx.renderer, (float)surface::width(), (float)surface::height(), ctx.downscale);
 }
 
 void Scene2DRuntime::precompileBlendModes() {
@@ -62,7 +70,7 @@ bool Scene2DRuntime::stepPrewarm(std::chrono::milliseconds budget) {
             const int width = output_width > 0 ? output_width : surface::width();
             const int height = output_height > 0 ? output_height : surface::height();
             if (width <= 0 || height <= 0) return false;
-            if (!scene_targets[prewarm_target_index_].create(width, height, compositionPixelFormat())) {
+            if (!scene_targets[prewarm_target_index_].create(width, height, compositionPixelFormat(), scene_samples_)) {
                 if (float_composition_available_) {
                     float_composition_available_ = false;
                     scene_targets[0].reset();
@@ -132,6 +140,8 @@ bool Scene2DRuntime::requiresOffscreenComposition() const {
     if (hasDepthLayers()) return true;
     // FXAA and SMAA read the composed scene, so they need the offscreen target.
     if (ctx.antialias == antialias::Mode::Fxaa || ctx.antialias == antialias::Mode::Smaa) return true;
+    // MSAA renders into multisampled scene targets.
+    if (msaa_samples_ > 1) return true;
 
     if (!RenderDiagnostics::instance().getConfig().disable_bloom) {
         const float bloom_strength =
@@ -175,22 +185,28 @@ bool Scene2DRuntime::ensureSceneTargets(int width, int height) {
     if (scene_targets[0].image.id != SG_INVALID_ID && scene_targets[0].width == width &&
         scene_targets[0].height == height && scene_targets[1].image.id != SG_INVALID_ID &&
         scene_targets[1].width == width && scene_targets[1].height == height &&
-        scene_targets[0].pixel_format == requested_format && scene_targets[1].pixel_format == requested_format) {
+        scene_targets[0].pixel_format == requested_format && scene_targets[1].pixel_format == requested_format &&
+        scene_targets[0].samples == scene_samples_ && scene_targets[1].samples == scene_samples_) {
         return true;
     }
 
     scene_targets[0].reset();
     scene_targets[1].reset();
 
-    if (!scene_targets[0].create(width, height, requested_format) ||
-        !scene_targets[1].create(width, height, requested_format)) {
+    if (!scene_targets[0].create(width, height, requested_format, scene_samples_) ||
+        !scene_targets[1].create(width, height, requested_format, scene_samples_)) {
         scene_targets[0].reset();
         scene_targets[1].reset();
+        if (scene_samples_ > 1) {
+            LOG_TAG_W("SCENE_2D", "Could not create %dx multisampled scene targets; using 1 sample", scene_samples_);
+            msaa_samples_ = scene_samples_ = 1;
+            return ensureSceneTargets(width, height);
+        }
         // Drivers without a float attachment fall back to the LDR format.
         if (requested_format == SG_PIXELFORMAT_RGBA16F) {
             float_composition_available_ = false;
-            if (scene_targets[0].create(width, height, SG_PIXELFORMAT_RGBA8) &&
-                scene_targets[1].create(width, height, SG_PIXELFORMAT_RGBA8)) {
+            if (scene_targets[0].create(width, height, SG_PIXELFORMAT_RGBA8, scene_samples_) &&
+                scene_targets[1].create(width, height, SG_PIXELFORMAT_RGBA8, scene_samples_)) {
                 return true;
             }
             scene_targets[0].reset();
@@ -211,8 +227,11 @@ void Scene2DRuntime::updateDepthTarget(int width, int height) {
         depth_target.reset();
         return;
     }
-    if (depth_target.valid() && depth_target.width == width && depth_target.height == height) return;
-    if (!depth_target.create(width, height))
+    if (depth_target.valid() && depth_target.width == width && depth_target.height == height &&
+        depth_target.samples == scene_samples_) {
+        return;
+    }
+    if (!depth_target.create(width, height, scene_samples_))
         LOG_TAG_E("SCENE_2D", "Could not create the scene depth buffer (%dx%d)", width, height);
 }
 
@@ -221,6 +240,23 @@ void Scene2DRuntime::attachDepth(sg_pass& pass) const {
     pass.attachments.depth_stencil = depth_target.attachment_view;
     pass.action.depth.load_action = SG_LOADACTION_LOAD;
     pass.action.depth.store_action = SG_STOREACTION_STORE;
+}
+
+sg_pass Scene2DRuntime::sceneColorPass(const SceneTarget& target, sg_load_action load, float clear_alpha) const {
+    if (!target.multisampled()) return colorPass(target.attachment_view, load, clear_alpha);
+    sg_pass pass = colorPass(target.msaa_view, load, clear_alpha);
+    pass.attachments.resolves[0] = target.resolve_view;
+    return pass;
+}
+
+void Scene2DRuntime::beginScenePass(const sg_pass& pass) {
+    pipeline_variants::setPassSamples(scene_samples_);
+    sg_begin_pass(&pass);
+}
+
+void Scene2DRuntime::endScenePass() {
+    sg_end_pass();
+    pipeline_variants::setPassSamples(1);
 }
 
 void Scene2DRuntime::draw() {

@@ -44,11 +44,24 @@ class Scene2DRuntime {
         GfxView attachment_view;
         GfxView texture_view;
         GfxImage image;
+        // With MSAA, passes draw into msaa_image and resolve into `image`, which stays the sampled texture.
+        GfxImage msaa_image;
+        GfxView msaa_view;
+        GfxView resolve_view;
         int width = 0;
         int height = 0;
+        int samples = 1;
         sg_pixel_format pixel_format = SG_PIXELFORMAT_NONE;
 
+        bool multisampled() const {
+            return msaa_view.id != SG_INVALID_ID;
+        }
+
         void reset() {
+            msaa_view = {};
+            resolve_view = {};
+            msaa_image = {};
+            samples = 1;
             if (attachment_view.id != SG_INVALID_ID) sg_destroy_view(attachment_view);
             if (texture_view.id != SG_INVALID_ID) sg_destroy_view(texture_view);
             if (image.id != SG_INVALID_ID) sg_destroy_image(image);
@@ -60,10 +73,30 @@ class Scene2DRuntime {
             pixel_format = SG_PIXELFORMAT_NONE;
         }
 
-        bool create(int w, int h, sg_pixel_format fmt) {
+        bool createMultisampled(int w, int h, sg_pixel_format fmt, int sample_count) {
+            sg_image_desc msaa_desc = {};
+            msaa_desc.usage.color_attachment = true;
+            msaa_desc.width = w;
+            msaa_desc.height = h;
+            msaa_desc.pixel_format = fmt;
+            msaa_desc.sample_count = sample_count;
+            msaa_image = sg_make_image(&msaa_desc);
+            if (sg_query_image_state(msaa_image) != SG_RESOURCESTATE_VALID) return false;
+
+            sg_view_desc msaa_view_desc = {};
+            msaa_view_desc.color_attachment.image = msaa_image;
+            msaa_view = sg_make_view(&msaa_view_desc);
+            sg_view_desc resolve_desc = {};
+            resolve_desc.resolve_attachment.image = image;
+            resolve_view = sg_make_view(&resolve_desc);
+            return msaa_view.id != SG_INVALID_ID && resolve_view.id != SG_INVALID_ID;
+        }
+
+        bool create(int w, int h, sg_pixel_format fmt, int sample_count = 1) {
             reset();
             sg_image_desc image_desc = {};
             image_desc.usage.color_attachment = true;
+            image_desc.usage.resolve_attachment = sample_count > 1;
             image_desc.width = w;
             image_desc.height = h;
             image_desc.pixel_format = fmt;
@@ -82,13 +115,15 @@ class Scene2DRuntime {
             attachment_desc.color_attachment.image = image;
             attachment_view = sg_make_view(&attachment_desc);
 
-            if (texture_view.id == SG_INVALID_ID || attachment_view.id == SG_INVALID_ID) {
+            if (texture_view.id == SG_INVALID_ID || attachment_view.id == SG_INVALID_ID ||
+                (sample_count > 1 && !createMultisampled(w, h, image_desc.pixel_format, sample_count))) {
                 reset();
                 return false;
             }
 
             width = w;
             height = h;
+            samples = sample_count;
             pixel_format = image_desc.pixel_format;
             return true;
         }
@@ -100,6 +135,7 @@ class Scene2DRuntime {
         GfxView attachment_view;
         int width = 0;
         int height = 0;
+        int samples = 1;
 
         bool valid() const {
             return attachment_view.id != SG_INVALID_ID;
@@ -109,14 +145,16 @@ class Scene2DRuntime {
             image = {};
             width = 0;
             height = 0;
+            samples = 1;
         }
-        bool create(int w, int h) {
+        bool create(int w, int h, int sample_count = 1) {
             reset();
             sg_image_desc image_desc = {};
             image_desc.usage.depth_stencil_attachment = true;
             image_desc.width = w;
             image_desc.height = h;
             image_desc.pixel_format = SG_PIXELFORMAT_DEPTH;
+            image_desc.sample_count = sample_count;
             image = sg_make_image(&image_desc);
             if (image.id == SG_INVALID_ID) return false;
 
@@ -129,6 +167,7 @@ class Scene2DRuntime {
             }
             width = w;
             height = h;
+            samples = sample_count;
             return true;
         }
     };
@@ -151,6 +190,9 @@ class Scene2DRuntime {
     // Anti-aliased frame to present when --antialias smaa is set; invalid otherwise.
     SmaaPass smaa_;
     sg_view presented_view_ = {SG_INVALID_ID};
+    // Samples the GPU grants for --antialias msaa; scene_samples_ is what the current frame uses.
+    int msaa_samples_ = 1;
+    int scene_samples_ = 1;
     bool float_composition_available_ = true;
     int cleanup_phase_ = 0;
     int prewarm_target_index_ = 0;
@@ -170,6 +212,10 @@ class Scene2DRuntime {
     void updateDepthTarget(int width, int height);
     // Adds the scene depth buffer to a pass that draws layers, keeping its contents.
     void attachDepth(sg_pass& pass) const;
+    // Color pass over a scene target: multisampled with a resolve into its texture when the frame uses MSAA.
+    sg_pass sceneColorPass(const SceneTarget& target, sg_load_action load, float clear_alpha = 0.0f) const;
+    void beginScenePass(const sg_pass& pass);
+    void endScenePass();
     bool hasReflectedLayers() const;
     void updateReflectionTarget(int width, int height, sg_pixel_format format);
     void resetReflectionTarget();

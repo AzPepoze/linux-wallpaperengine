@@ -45,7 +45,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
     r->bind.samplers[0] = spriteSampler(r, attachment, true, nearest);
 
     if (pass && pass->enabled && pass->pipeline.id != SG_INVALID_ID) {
-        sg_apply_pipeline(pass->pipeline);
+        pipeline_variants::apply(pass->pipeline);
         r->bind.vertex_buffers[0] = pass->is_fullscreen_quad ? r->fullscreen_vertex_buffer : r->vertex_buffer;
         r->bind.samplers[0] = spriteSampler(r, attachment, pass->repeat_effect_input, nearest);
 
@@ -181,7 +181,7 @@ void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_vi
         }
         // A caller-owned quad (pos == uv, inside the unit square) draws only part of the sprite.
         if (quad_buffer.id != SG_INVALID_ID) r->bind.vertex_buffers[0] = quad_buffer;
-        sg_apply_pipeline(target_pipeline);
+        pipeline_variants::apply(target_pipeline);
 
         sg_range mvp_range = SG_RANGE(mvp);
         sg_apply_uniforms(0, &mvp_range);
@@ -313,7 +313,7 @@ void renderer_draw_line(renderer_t* r, float x0, float y0, float x1, float y1, f
     r->bind.views[0] = r->white_view;
     for (int i = 1; i < 12; i++) r->bind.views[i] = r->black_view;
 
-    sg_apply_pipeline(r->pip_lines);
+    pipeline_variants::apply(r->pip_lines);
     sg_apply_bindings(&r->bind);
 
     mat4x4 proj, model, mvp;

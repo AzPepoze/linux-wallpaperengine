@@ -12,6 +12,7 @@
 #include "shared/core/config.h"
 #include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/pipeline_variants.h"
 #include "shared/graphics/render.h"
 
 namespace {
@@ -106,7 +107,7 @@ GfxPipeline ShaderCompiler::makeMeshPipeline(sg_shader shader, const MeshPipelin
     applyBlendMode(pip_desc, state.blend);
     // Opaque materials still write an alpha value; keep the scene's own alpha instead.
     if (state.blend == ShaderBlendMode::Disabled) pip_desc.colors[0].write_mask = SG_COLORMASK_RGB;
-    return sg_make_pipeline(&pip_desc);
+    return pipeline_variants::make(pip_desc);
 }
 
 GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout layout, ShaderBlendMode blend_mode) {
@@ -152,7 +153,7 @@ GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout la
     }
 
     applyBlendMode(pip_desc, blend_mode);
-    return sg_make_pipeline(&pip_desc);
+    return pipeline_variants::make(pip_desc);
 }
 
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,

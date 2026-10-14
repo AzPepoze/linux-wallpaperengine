@@ -14,7 +14,7 @@ void renderer_draw_mesh(EngineContext& ctx, renderer_t* r, sg_buffer position_bu
     mat4x4 proj;
     mat4x4_ortho(proj, 0.0f, width, height, 0.0f, -1.0f, 1.0f);
 
-    sg_apply_pipeline(r->pip_mesh);
+    pipeline_variants::apply(r->pip_mesh);
     r->bind.vertex_buffers[0] = position_buffer;
     r->bind.vertex_buffers[1] = uv_buffer;
     r->bind.index_buffer = index_buffer;

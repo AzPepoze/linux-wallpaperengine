@@ -114,6 +114,8 @@ void Scene2DRuntime::drawDirect() {
 void Scene2DRuntime::drawOffscreen() {
     const int width = output_width > 0 ? output_width : surface::width();
     const int height = output_height > 0 ? output_height : surface::height();
+    // Captures read single-sample snapshots of every layer, so they skip MSAA.
+    scene_samples_ = renderObserver().isCapturingFrame() ? 1 : msaa_samples_;
     if (!ensureSceneTargets(width, height)) {
         scene_output_index = -1;
         return;
@@ -125,10 +127,9 @@ void Scene2DRuntime::drawOffscreen() {
     renderReflection();
 
     int current = 0;
-    sg_pass clear_pass = {};
+    sg_pass clear_pass = sceneColorPass(scene_targets[current], SG_LOADACTION_CLEAR);
     clear_pass.action = ctx.pass_action;
     clear_pass.action.colors[0].store_action = SG_STOREACTION_STORE;
-    clear_pass.attachments.colors[0] = scene_targets[current].attachment_view;
     if (depth_target.valid()) {
         clear_pass.attachments.depth_stencil = depth_target.attachment_view;
         clear_pass.action.depth = {.load_action = SG_LOADACTION_CLEAR, .store_action = SG_STOREACTION_STORE,
@@ -174,7 +175,7 @@ void Scene2DRuntime::drawOffscreen() {
     int batch_gpu_token = -1;
     auto close_batch = [&] {
         if (!batch_open) return;
-        sg_end_pass();
+        endScenePass();
         if (ctx.performance_profile) gpu_timing_end_pass(batch_gpu_token);
         batch_open = false;
     };
@@ -190,15 +191,15 @@ void Scene2DRuntime::drawOffscreen() {
             capture_layer_result(layer, true);
             const int next = 1 - current;
 
-            sg_pass composite_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR);
+            sg_pass composite_pass = sceneColorPass(scene_targets[next], SG_LOADACTION_CLEAR);
             const int gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("composite/" + layer->name) : -1;
-            sg_begin_pass(&composite_pass);
+            beginScenePass(composite_pass);
             drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
             particle->setSceneColorView(scene_targets[current].texture_view);
             if (!RenderDiagnostics::instance().getConfig().disable_particles) {
                 particle->draw(ctx);
             }
-            sg_end_pass();
+            endScenePass();
             if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 
             current = next;
@@ -216,12 +217,12 @@ void Scene2DRuntime::drawOffscreen() {
             capture_layer_result(layer, true);
             const int next = 1 - current;
 
-            sg_pass composite_pass = colorPass(scene_targets[next].attachment_view, SG_LOADACTION_CLEAR, 1.0f);
+            sg_pass composite_pass = sceneColorPass(scene_targets[next], SG_LOADACTION_CLEAR, 1.0f);
             const int gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("composite/" + layer->name) : -1;
-            sg_begin_pass(&composite_pass);
+            beginScenePass(composite_pass);
             drawFullscreenTarget(ctx, scene_targets[current].image, scene_targets[current].texture_view, width, height);
             image->drawComposite(ctx, scene_targets[current].texture_view);
-            sg_end_pass();
+            endScenePass();
             if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 
             current = next;
@@ -231,20 +232,20 @@ void Scene2DRuntime::drawOffscreen() {
 
         if (renderObserver().isCapturingFrame()) {
             capture_layer_result(layer, true);
-            sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+            sg_pass layer_pass = sceneColorPass(scene_targets[current], SG_LOADACTION_LOAD);
             attachDepth(layer_pass);
-            sg_begin_pass(&layer_pass);
+            beginScenePass(layer_pass);
             layer->draw(ctx);
-            sg_end_pass();
+            endScenePass();
             capture_layer_result(layer, false);
             return;
         }
 
         if (!batch_open) {
-            sg_pass layer_pass = colorPass(scene_targets[current].attachment_view, SG_LOADACTION_LOAD);
+            sg_pass layer_pass = sceneColorPass(scene_targets[current], SG_LOADACTION_LOAD);
             attachDepth(layer_pass);
             batch_gpu_token = ctx.performance_profile ? gpu_timing_begin_pass("draw/batch") : -1;
-            sg_begin_pass(&layer_pass);
+            beginScenePass(layer_pass);
             batch_open = true;
         }
         const LayerGpuScope timed(ctx, *layer);
