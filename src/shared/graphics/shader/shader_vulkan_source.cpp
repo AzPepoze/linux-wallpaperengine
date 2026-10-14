@@ -152,11 +152,19 @@ void remove_uniform_declaration(std::string& source, const char* name) {
     }
 }
 
+// Only a statement that starts its line counts: a comment such as "precision errors" must not swallow the code after it.
 void remove_precision_statement(std::string& source) {
     size_t search_pos = 0;
     while (true) {
         const size_t precision_pos = source.find("precision ", search_pos);
         if (precision_pos == std::string::npos) break;
+        const size_t previous_newline = source.rfind('\n', precision_pos);
+        const size_t line_start = previous_newline == std::string::npos ? 0 : previous_newline + 1;
+        const size_t first_token = source.find_first_not_of(" \t\r", line_start);
+        if (first_token != precision_pos) {
+            search_pos = precision_pos + 1;
+            continue;
+        }
         const size_t semicolon = source.find(';', precision_pos);
         if (semicolon == std::string::npos) break;
         source.erase(precision_pos, semicolon - precision_pos + 1);
