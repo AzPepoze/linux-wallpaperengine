@@ -34,3 +34,13 @@ std::string jsonWithoutScriptProperties(const std::string& json) {
     cJSON_Delete(root);
     return result;
 }
+
+std::string jsonWithoutLiveGeneral(const std::string& json, bool zoom_live) {
+    // Bloom on/off and clear enable are not listed: they need render targets set up at load.
+    const std::string without_live =
+        jsonWithout(json, {"cameraparallax", "cameraparallaxamount", "cameraparallaxdelay",
+                           "cameraparallaxmouseinfluence", "camerashake", "camerashakeamplitude", "camerashakespeed",
+                           "camerashakeroughness", "bloomstrength", "bloomthreshold", "ambientcolor", "skylightcolor",
+                           "clearcolor"});
+    return zoom_live ? jsonWithout(without_live, {"zoom"}) : without_live;
+}

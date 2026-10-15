@@ -53,6 +53,27 @@ void testScriptSourceChangeStillDiffers() {
            "a changed script source still differs");
 }
 
+void testLiveGeneralSettingsCompareEqual() {
+    const std::string before = R"({"camerashakeamplitude":0.5,"bloomstrength":1.0,"ambientcolor":"0.3 0.3 0.3","zoom":1.0})";
+    const std::string after = R"({"camerashakeamplitude":0.9,"bloomstrength":2.0,"ambientcolor":"0.1 0.2 0.3","zoom":1.4})";
+    expect("live general", jsonWithoutLiveGeneral(before, true) == jsonWithoutLiveGeneral(after, true),
+           "live general values differ only, so the blocks compare equal");
+}
+
+void testNonLiveGeneralSettingStillDiffers() {
+    const std::string before = R"({"bloom":false,"hdr":true})";
+    const std::string after = R"({"bloom":true,"hdr":true})";
+    expect("non-live general", jsonWithoutLiveGeneral(before, true) != jsonWithoutLiveGeneral(after, true),
+           "toggling bloom still rebuilds");
+}
+
+void testScriptDrivenZoomStillDiffers() {
+    const std::string before = R"({"zoom":1.0})";
+    const std::string after = R"({"zoom":1.4})";
+    expect("script zoom", jsonWithoutLiveGeneral(before, false) != jsonWithoutLiveGeneral(after, false),
+           "a script-driven zoom is not live and still rebuilds");
+}
+
 }  // namespace
 
 int main() {
@@ -62,5 +83,8 @@ int main() {
     testUnparsableInputComesBackUnchanged();
     testScriptPropertiesAreRemovedAtAnyDepth();
     testScriptSourceChangeStillDiffers();
+    testLiveGeneralSettingsCompareEqual();
+    testNonLiveGeneralSettingStillDiffers();
+    testScriptDrivenZoomStillDiffers();
     return test::finish("live fields tests");
 }

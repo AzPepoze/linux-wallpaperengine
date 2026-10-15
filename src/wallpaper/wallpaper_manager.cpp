@@ -212,12 +212,6 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     return true;
 }
 
-// The general block without camera parallax, which is the only general setting applied in place.
-std::string generalWithoutParallax(const std::string& json) {
-    return jsonWithout(
-        json, {"cameraparallax", "cameraparallaxamount", "cameraparallaxdelay", "cameraparallaxmouseinfluence"});
-}
-
 bool sameParallax(const wallpaper_engine::SceneGeneralDocument& a, const wallpaper_engine::SceneGeneralDocument& b) {
     return a.camera_parallax_enabled == b.camera_parallax_enabled &&
            a.camera_parallax_amount == b.camera_parallax_amount && a.camera_parallax_delay == b.camera_parallax_delay &&
@@ -235,6 +229,30 @@ void applyParallaxChange(EngineContext& ctx, const wallpaper_engine::SceneGenera
     applyParallaxScene(ctx, current);
 }
 
+// Copies the live general settings from the fresh parse. Shake and clear color are copied at load, so they are set here too.
+void applyGeneralChange(EngineContext& ctx, const wallpaper_engine::SceneGeneralDocument& fresh) {
+    wallpaper_engine::SceneGeneralDocument& general = ctx.scene.general;
+    general.camera_shake_enabled = fresh.camera_shake_enabled;
+    general.camera_shake_amplitude = fresh.camera_shake_amplitude;
+    general.camera_shake_speed = fresh.camera_shake_speed;
+    general.camera_shake_roughness = fresh.camera_shake_roughness;
+    ctx.shake.enabled = fresh.camera_shake_enabled;
+    ctx.shake.amplitude = fresh.camera_shake_amplitude;
+    ctx.shake.speed = fresh.camera_shake_speed;
+    ctx.shake.roughness = fresh.camera_shake_roughness;
+    general.bloom.strength = fresh.bloom.strength;
+    general.bloom.threshold = fresh.bloom.threshold;
+    general.ambient_color = fresh.ambient_color;
+    general.skylight_color = fresh.skylight_color;
+    general.zoom = fresh.zoom;
+    general.clear_color = fresh.clear_color;
+    if (general.has_clear_color && general.clear_enabled) {
+        ctx.pass_action.colors[0].clear_value = {general.clear_color[0], general.clear_color[1], general.clear_color[2],
+                                                 general.clear_color[3]};
+    }
+    general.raw_json = fresh.raw_json;
+}
+
 // Plans every live edit for the fresh scene. Nothing is applied until the whole plan succeeds.
 bool planSceneEdits(EngineContext& ctx, const wallpaper_engine::SceneDocument& fresh, LiveEdits& edits) {
     if (fresh.objects.size() != ctx.scene.bound_objects.size()) {
@@ -247,8 +265,15 @@ bool planSceneEdits(EngineContext& ctx, const wallpaper_engine::SceneDocument& f
         if (old_object.node.id != new_object.node.id) return false;
         if (!planObjectEdits(ctx, old_object, new_object, edits)) return false;
     }
-    if (generalWithoutParallax(ctx.scene.general.raw_json) != generalWithoutParallax(fresh.general.raw_json)) {
-        LOG_TAG_I("WALLPAPER_MGR", "A general setting other than parallax changed; rebuilding the scene");
+    // Zoom driven by a script is rewritten every frame, so only a script-free zoom can change in place.
+    const bool zoom_live = ctx.scene.general.zoom_script.empty() && fresh.general.zoom_script.empty();
+    if (jsonWithoutLiveGeneral(ctx.scene.general.raw_json, zoom_live) !=
+        jsonWithoutLiveGeneral(fresh.general.raw_json, zoom_live)) {
+        LOG_TAG_I("WALLPAPER_MGR", "A general setting that is not live changed; rebuilding the scene");
+        return false;
+    }
+    if (ctx.scene.general.has_clear_color != fresh.general.has_clear_color) {
+        LOG_TAG_I("WALLPAPER_MGR", "The clear color was added or removed; rebuilding the scene");
         return false;
     }
     return true;
@@ -263,6 +288,7 @@ bool applyBindingsInPlace(EngineContext& ctx, const UserProperties& properties) 
     if (!planSceneEdits(ctx, fresh, edits)) return false;
     for (const auto& edit : edits) edit();
     applyParallaxChange(ctx, fresh.general);
+    applyGeneralChange(ctx, fresh.general);
     ctx.scene.bound_objects = std::move(fresh.objects);
     return true;
 }
