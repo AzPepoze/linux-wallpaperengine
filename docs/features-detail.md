@@ -25,6 +25,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [Camera and parallax](#camera-and-parallax)
 - [Image effects and shaders](#image-effects-and-shaders)
 - [Bloom and HDR](#bloom-and-hdr)
+- [Anti-aliasing](#anti-aliasing)
 - [Particles](#particles)
 - [Animations](#animations)
 - [Puppet warp](#puppet-warp)
@@ -242,6 +243,17 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
   - Missing
     - Bloom tint is fixed to white
     - "Ultra HDR" output
+
+## Anti-aliasing
+
+- [x] Edge smoothing for scene wallpapers (`--antialias`, default `off`)
+  - Works
+    - MSAA 2x, 4x and 8x (`msaa2`, `msaa4`, `msaa8`), the same choices as Wallpaper Engine's Anti-aliasing option (None, MSAA x2, x4, x8)
+    - FXAA 3.11 and SMAA 1x as post filters (`fxaa`, `smaa`), which Wallpaper Engine does not offer
+    - MSAA falls back to 1 sample when the GPU cannot multisample the scene formats
+  - Missing
+    - Video and web wallpapers are not smoothed
+    - Not yet compared pixel for pixel with Wallpaper Engine output
 
 ## Particles
 

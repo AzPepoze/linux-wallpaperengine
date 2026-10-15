@@ -79,8 +79,9 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [x] `.pkg` files
   - [x] `.tex` textures
   - [x] Mip levels for large textures by default (`--downscale auto`), stored or generated, plus box and lanczos shrink
-  - [x] Anti-aliasing: FXAA 3.11 and SMAA 1x (`--antialias fxaa|smaa`)
-  - [x] MSAA 2x, 4x, 8x for the scene (`--antialias msaa2|msaa4|msaa8`)
+  - [x] Anti-aliasing for scene wallpapers (`--antialias`, see [Anti-aliasing](features-detail.md#anti-aliasing))
+    - [x] MSAA 2x, 4x, 8x, same as Wallpaper Engine's Anti-aliasing options
+    - [x] FXAA and SMAA, which Wallpaper Engine does not offer
 - [x] Command line
 - [x] GPU selection
 - [ ] Multi-monitor in one process
