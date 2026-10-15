@@ -423,6 +423,32 @@ bool ScriptBindings::add(uint32_t object_id, BoundProperty property, const std::
     return true;
 }
 
+ScriptBindings::Binding* ScriptBindings::findBinding(uint32_t object_id, BoundProperty property, int effect_index,
+                                                     const std::string& constant) {
+    for (std::vector<Binding>* list : {&bindings_, &pending_bindings_}) {
+        for (Binding& binding : *list) {
+            if (binding.object_id == object_id && binding.property == property && binding.effect_index == effect_index &&
+                binding.constant == constant)
+                return &binding;
+        }
+    }
+    return nullptr;
+}
+
+bool ScriptBindings::hasBinding(uint32_t object_id, BoundProperty property, int effect_index,
+                                const std::string& constant) {
+    return findBinding(object_id, property, effect_index, constant) != nullptr;
+}
+
+bool ScriptBindings::updateProperties(uint32_t object_id, BoundProperty property, const std::string& properties_json,
+                                      int effect_index, const std::string& constant) {
+    Binding* binding = findBinding(object_id, property, effect_index, constant);
+    if (!binding || !binding->script) return false;
+    if (binding->script->updateProperties(properties_json)) return true;
+    LOG_TAG_W(TAG, "object %u: could not update script properties in place", object_id);
+    return false;
+}
+
 bool ScriptBindings::read(const Binding& binding, ScriptValue& value) {
     const SceneTreeNode* node = ctx_.scene.scene_tree ? ctx_.scene.scene_tree->find(binding.object_id) : nullptr;
     switch (binding.property) {

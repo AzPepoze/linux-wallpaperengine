@@ -94,9 +94,11 @@ bool scriptOwns(const wallpaper_engine::SceneObjectDocument& object, std::string
 }
 
 // The object JSON without the fields a live edit may change, so any other difference still means a rebuild.
+// Script property values are updated in place, so they are left out of the comparison too.
 std::string jsonWithoutLiveFields(const std::string& json, bool image) {
-    if (image) return jsonWithout(json, {"visible", "scale", "alpha", "color"});
-    return jsonWithout(json, {"visible", "scale"});
+    const std::string without_fields = image ? jsonWithout(json, {"visible", "scale", "alpha", "color"})
+                                             : jsonWithout(json, {"visible", "scale"});
+    return jsonWithoutScriptProperties(without_fields);
 }
 
 // Logs why an object forces a rebuild and returns false, so the caller can stop planning.
@@ -106,6 +108,62 @@ bool rebuildFor(const wallpaper_engine::SceneObjectDocument& object, std::string
     return false;
 }
 
+// A property script bound through ScriptBindings, addressed the way ScriptBindings::add registers it.
+struct PropertyScript {
+    BoundProperty property;
+    int effect_index;
+    std::string script;
+    std::string properties_json;
+};
+
+std::vector<PropertyScript> boundScripts(const wallpaper_engine::SceneObjectDocument& object) {
+    std::vector<PropertyScript> scripts = {
+        {BoundProperty::Origin, -1, object.node.origin_script.script, object.node.origin_script.properties_json},
+        {BoundProperty::Scale, -1, object.node.scale_script.script, object.node.scale_script.properties_json},
+        {BoundProperty::Angles, -1, object.node.angles_script.script, object.node.angles_script.properties_json},
+        {BoundProperty::Visible, -1, object.visible_script.script, object.visible_script.properties_json},
+        {BoundProperty::Color, -1, object.image.color_script.script, object.image.color_script.properties_json},
+        {BoundProperty::Size, -1, object.image.size_script.script, object.image.size_script.properties_json},
+        {BoundProperty::Text, -1, object.text.script, object.text.script_properties_json},
+    };
+    for (size_t i = 0; i < object.effects.size(); ++i) {
+        const wallpaper_engine::ScriptedValue& visible = object.effects[i].visible_script;
+        scripts.push_back({BoundProperty::EffectVisible, (int)i, visible.script, visible.properties_json});
+    }
+    return scripts;
+}
+
+// Queues the script value updates for one object. False when a script changed in a way that needs a rebuild.
+bool planScriptProperties(EngineContext& ctx, uint32_t id, const wallpaper_engine::SceneObjectDocument& old_object,
+                          const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
+    // Alpha and effect-constant scripts are not bound through ScriptBindings yet, so they still rebuild.
+    if (old_object.image.alpha_script_properties_json != new_object.image.alpha_script_properties_json) return false;
+    if (old_object.effects.size() != new_object.effects.size()) return false;
+    for (size_t i = 0; i < old_object.effects.size(); ++i) {
+        const auto& old_constants = old_object.effects[i].constant_scripts;
+        const auto& new_constants = new_object.effects[i].constant_scripts;
+        if (old_constants.size() != new_constants.size()) return false;
+        for (size_t j = 0; j < old_constants.size(); ++j) {
+            if (old_constants[j].script.script != new_constants[j].script.script ||
+                old_constants[j].script.properties_json != new_constants[j].script.properties_json)
+                return false;
+        }
+    }
+
+    const std::vector<PropertyScript> before = boundScripts(old_object);
+    const std::vector<PropertyScript> after = boundScripts(new_object);
+    for (size_t i = 0; i < before.size(); ++i) {
+        if (before[i].script != after[i].script) return false;
+        if (before[i].properties_json == after[i].properties_json) continue;
+        if (!ctx.scene.scripts || !ctx.scene.scripts->hasBinding(id, after[i].property, after[i].effect_index))
+            return false;
+        edits.push_back([&ctx, id, script = after[i]] {
+            ctx.scene.scripts->updateProperties(id, script.property, script.properties_json, script.effect_index);
+        });
+    }
+    return true;
+}
+
 // Collects the edits that bring one object up to date. False when the object needs a rebuild.
 bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocument& old_object,
                      const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
@@ -113,6 +171,8 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     Layer* layer = findLayer(ctx, id);
     ImageLayer* image = liveImageLayer(layer);
     const bool image_layer = image != nullptr;
+    if (!planScriptProperties(ctx, id, old_object, new_object, edits))
+        return rebuildFor(new_object, "a script that cannot update live");
     if (jsonWithoutLiveFields(old_object.raw_json, image_layer) !=
         jsonWithoutLiveFields(new_object.raw_json, image_layer))
         return rebuildFor(new_object, "a field that is not live");

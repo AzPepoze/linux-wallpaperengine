@@ -44,6 +44,9 @@ class SceneScript {
     // Calls an exported event hook; true when it exists and ran without throwing.
     bool callHook(const char* name, const ScriptEvent& event, bool with_event = true);
 
+    // Replaces the values of the loaded script's scriptProperties in place; false if the call threw.
+    bool updateProperties(const std::string& script_properties_json);
+
     void setLayerId(uint32_t layer_id);
     uint32_t layerId() const;
     int id() const;  // engine-wide script id used in logs

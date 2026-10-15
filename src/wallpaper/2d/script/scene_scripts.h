@@ -150,6 +150,11 @@ class ScriptBindings {
     bool add(uint32_t object_id, BoundProperty property, const std::string& script, const std::string& properties_json,
              int effect_index = -1, const std::string& constant = "");
     void update(float dt);
+    // True when the script bound to this object property (and effect or constant) exists.
+    bool hasBinding(uint32_t object_id, BoundProperty property, int effect_index = -1, const std::string& constant = "");
+    // Pushes new scriptproperties values into that script without reloading it; false if it is not bound.
+    bool updateProperties(uint32_t object_id, BoundProperty property, const std::string& properties_json,
+                          int effect_index = -1, const std::string& constant = "");
     // Publishes engine.userProperties and sends applyUserProperties once, after the scripts' init().
     void setUserProperties(const UserProperties& properties);
     size_t size() const {
@@ -170,6 +175,7 @@ class ScriptBindings {
         bool started = false;
     };
 
+    Binding* findBinding(uint32_t object_id, BoundProperty property, int effect_index, const std::string& constant);
     bool read(const Binding& binding, ScriptValue& value);
     void write(const Binding& binding, const ScriptValue& value);
     void dispatchPointer();

@@ -297,6 +297,21 @@ bool SceneScript::updateValue(ScriptValue& value) {
     return ok;
 }
 
+bool SceneScript::updateProperties(const std::string& script_properties_json) {
+    if (!impl_ || !impl_->retained || !JS_IsObject(impl_->exports)) return false;
+    JSContext* ctx = impl_->ctx();
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue apply = JS_GetPropertyStr(ctx, global, "__lweApplyOverrides");
+    JSValue args[2] = {impl_->exports, JS_NewStringLen(ctx, script_properties_json.c_str(), script_properties_json.size())};
+    JSValue result;
+    bool ok = impl_->call(apply, "scriptproperties", 2, args, result, kCallBudgetMs);
+    JS_FreeValue(ctx, result);
+    JS_FreeValue(ctx, args[1]);
+    JS_FreeValue(ctx, apply);
+    JS_FreeValue(ctx, global);
+    return ok;
+}
+
 bool SceneScript::callHook(const char* name, const ScriptEvent& event, bool with_event) {
     if (!impl_ || !impl_->retained) return false;
     JSContext* ctx = impl_->ctx();

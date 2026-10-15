@@ -33,6 +33,26 @@ void testUnparsableInputComesBackUnchanged() {
     expect("unparsable", jsonWithout(broken, {"visible"}) == broken, "input is returned as is");
 }
 
+void testScriptPropertiesAreRemovedAtAnyDepth() {
+    const std::string before =
+        R"({"origin":{"script":"a","scriptproperties":{"x":{"user":"x3","value":0.1}},"value":"1 2 0"},"name":"a"})";
+    const std::string after =
+        R"({"origin":{"script":"a","scriptproperties":{"x":{"user":"x3","value":0.9}},"value":"1 2 0"},"name":"a"})";
+    expect("script properties", jsonWithoutScriptProperties(before) == jsonWithoutScriptProperties(after),
+           "only the scriptproperties values changed, so the objects compare equal");
+    expect("script properties", jsonWithoutScriptProperties(before).find("scriptproperties") == std::string::npos,
+           "the scriptproperties key is removed");
+    expect("script properties", jsonWithoutScriptProperties(before).find("\"script\"") != std::string::npos,
+           "the script source is kept");
+}
+
+void testScriptSourceChangeStillDiffers() {
+    const std::string before = R"({"origin":{"script":"a","value":"1 2 0"}})";
+    const std::string after = R"({"origin":{"script":"b","value":"1 2 0"}})";
+    expect("script source", jsonWithoutScriptProperties(before) != jsonWithoutScriptProperties(after),
+           "a changed script source still differs");
+}
+
 }  // namespace
 
 int main() {
@@ -40,5 +60,7 @@ int main() {
     testDifferenceOutsideListedKeysIsKept();
     testSameExceptListedKeysCompareEqual();
     testUnparsableInputComesBackUnchanged();
+    testScriptPropertiesAreRemovedAtAnyDepth();
+    testScriptSourceChangeStillDiffers();
     return test::finish("live fields tests");
 }
