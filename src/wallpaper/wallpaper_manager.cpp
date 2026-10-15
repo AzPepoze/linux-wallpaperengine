@@ -87,6 +87,8 @@ bool animated(const wallpaper_engine::SceneObjectDocument& object, std::string_v
 bool scriptOwns(const wallpaper_engine::SceneObjectDocument& object, std::string_view field) {
     if (field == "visible") return !object.visible_script.empty();
     if (field == "scale") return !object.node.scale_script.empty() || animated(object, "scale");
+    if (field == "origin") return !object.node.origin_script.empty() || animated(object, "origin");
+    if (field == "angles") return !object.node.angles_script.empty() || animated(object, "angles");
     if (field == "alpha")
         return !object.image.alpha_script.empty() || !object.image.alpha_keys.empty() || animated(object, "alpha");
     if (field == "color") return !object.image.color_script.empty() || animated(object, "color");
@@ -100,6 +102,17 @@ std::string jsonWithoutLiveFields(const std::string& json, bool image, bool came
                                        : jsonWithout(json, {"visible", "scale"});
     if (camera_path) without_fields = jsonWithout(without_fields, {"zoom"});
     return jsonWithoutScriptProperties(without_fields);
+}
+
+// A node's origin and angles are read from the scene tree every frame, unless a script or timeline drives them.
+bool nodeTransformIsLive(const wallpaper_engine::SceneObjectDocument& object) {
+    return !scriptOwns(object, "origin") && !scriptOwns(object, "angles");
+}
+
+// The object JSON to compare, leaving out the node transform when it can change in place.
+std::string comparableObject(const wallpaper_engine::SceneObjectDocument& object, bool image, bool transform_live) {
+    const std::string json = jsonWithoutLiveFields(object.raw_json, image, object.camera_path);
+    return transform_live ? jsonWithout(json, {"origin", "angles"}) : json;
 }
 
 // Logs why an object forces a rebuild and returns false, so the caller can stop planning.
@@ -177,8 +190,9 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     if (old_object.camera_path != new_object.camera_path) return rebuildFor(new_object, "a camera path");
     if (new_object.camera_path && old_object.camera_zoom != new_object.camera_zoom)
         edits.push_back([&ctx, zoom = new_object.camera_zoom] { ctx.scene.camera.zoom_scale = zoom; });
-    if (jsonWithoutLiveFields(old_object.raw_json, image_layer, old_object.camera_path) !=
-        jsonWithoutLiveFields(new_object.raw_json, image_layer, new_object.camera_path))
+    const bool transform_live = nodeTransformIsLive(old_object) && nodeTransformIsLive(new_object);
+    if (comparableObject(old_object, image_layer, transform_live) !=
+        comparableObject(new_object, image_layer, transform_live))
         return rebuildFor(new_object, "a field that is not live");
 
     if (old_object.visible != new_object.visible) {
@@ -196,6 +210,18 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
         SceneTreeNode* node = treeNodeOf(ctx, id);
         if (!node || scriptOwns(new_object, "scale")) return rebuildFor(new_object, "scale");
         edits.push_back([node, scale = new_object.node.scale] { node->scale = scale; });
+    }
+
+    if (old_object.node.origin != new_object.node.origin) {
+        SceneTreeNode* node = treeNodeOf(ctx, id);
+        if (!node || scriptOwns(new_object, "origin")) return rebuildFor(new_object, "origin");
+        edits.push_back([node, origin = new_object.node.origin] { node->origin = origin; });
+    }
+
+    if (old_object.node.angles != new_object.node.angles) {
+        SceneTreeNode* node = treeNodeOf(ctx, id);
+        if (!node || scriptOwns(new_object, "angles")) return rebuildFor(new_object, "angles");
+        edits.push_back([node, angles = new_object.node.angles] { node->angles = angles; });
     }
 
     if (old_object.image.alpha != new_object.image.alpha) {
