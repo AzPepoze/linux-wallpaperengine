@@ -202,7 +202,7 @@ Options from the upstream launcher that this build does not support are accepted
 If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits. The running instance then:
 
 1. Switches to the new wallpaper with the transition from `--transition` (default `fade`, a crossfade). `none` cuts straight over, and `random` picks one effect per switch. Effects use the original transition shaders from your install, or the built-in fade if they are missing.
-2. Applies new `--set-property` values live.
+2. Applies new `--set-property` values live. Most settings update without a reload. Changes that need a new scene, such as turning bloom on or off, reload it. See [Features](features-detail.md) for the list.
 3. Updates volume, mute, frame cap, output device and visualizer on or off. A device change reloads the wallpaper so its sounds play on the new output.
 
 Pass `--no-control` to start a separate instance instead.

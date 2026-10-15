@@ -345,7 +345,7 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
     - Image properties (`scenetexture`): a picked image replaces the scene texture of its `usertextures` slot and the material's first texture
     - Preset values from a dependency project apply over the base defaults, then saved GUI values and `--set-property`
     - Initial `engine.userProperties` and `applyUserProperties` delivery after script initialization
-    - Live changes from a second launch with the same wallpaper and `--set-property`: keys that no scene binding reads update in place (scripts get `applyUserProperties`); bindings that only change object visibility toggle the layers in place; any other binding change reloads the scene with every current value
+    - Live changes from a second launch with the same wallpaper and `--set-property` update the running scene in place for: script property values (existing scripts keep running and read the new values in `update`), camera zoom (lens size), general settings (camera shake, bloom strength and threshold, ambient and skylight color, zoom), node origin and angles, effect constant values, particle overrides, sound volume and mute, and text alpha, text and color. Visibility, bloom on or off, clear color on or off, script source and animation changes, combos, textures and added or removed settings still reload the scene with every current value
   - Missing
     - Editor display conditions and groups
     - Material constants bound to a user property (`"user"` in material JSON) are not applied; only scene.json bindings are
