@@ -21,8 +21,8 @@ Wallpaper Engine is a program that shows animated wallpapers. People share their
 | ![Scene wallpaper](docs/imgs/scene.jpg) | ![Video wallpaper](docs/imgs/video.jpg) |
 | Web | Transition |
 | ![Web wallpaper](docs/imgs/web.jpg) | ![Transition between wallpapers](docs/imgs/transition.jpg) |
-| Preset | |
-| ![Preset wallpaper](docs/imgs/preset.jpg) | |
+| Preset | 3D model |
+| ![Preset wallpaper](docs/imgs/preset.jpg) | ![3D model wallpaper](docs/imgs/3d.jpg) |
 
 ## Words used in this guide
 
