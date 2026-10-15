@@ -100,6 +100,19 @@ void testEffectConstantsInObjectAreIgnored() {
            "an effect file change still differs");
 }
 
+void testInstanceOverridesAreIgnored() {
+    const std::string before =
+        R"({"particle":"particles/a.json","instanceoverride":{"rate":1.0,"alpha":0.5,"emitterflag":1}})";
+    const std::string after =
+        R"({"particle":"particles/a.json","instanceoverride":{"rate":2.0,"alpha":0.1,"emitterflag":1}})";
+    const std::string other =
+        R"({"particle":"particles/a.json","instanceoverride":{"rate":2.0,"alpha":0.1,"emitterflag":2}})";
+    expect("instance overrides", jsonWithoutInstanceOverrides(before) == jsonWithoutInstanceOverrides(after),
+           "a rate and alpha change compares equal");
+    expect("instance overrides", jsonWithoutInstanceOverrides(before) != jsonWithoutInstanceOverrides(other),
+           "an unknown instance override still differs");
+}
+
 }  // namespace
 
 int main() {
@@ -114,5 +127,6 @@ int main() {
     testScriptDrivenZoomStillDiffers();
     testPassConstantsAreIgnoredButCombosAreNot();
     testEffectConstantsInObjectAreIgnored();
+    testInstanceOverridesAreIgnored();
     return test::finish("live fields tests");
 }

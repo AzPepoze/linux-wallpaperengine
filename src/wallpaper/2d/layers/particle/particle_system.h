@@ -159,6 +159,8 @@ class ParticleSystem {
                                           const ParticleObjectConfig& overrides = {});
 
     void update(float dt);
+    // Applies instance overrides; alpha, rate and count act at once, the rest on newly spawned particles.
+    void applyInstanceOverrides(const ParticleObjectConfig& overrides);
     // Worldspace systems convert spawn values with this placement.
     void setPlacement(const ParticlePlacement& value, float camera_offset_x, float camera_offset_y);
     bool simulatesInWorld() const;

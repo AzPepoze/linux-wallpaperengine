@@ -29,6 +29,7 @@ class SoundLayer : public Layer {
         return doc.volume;
     }
     void setVolume(float volume);
+    void setMuted(bool muted);
 
    private:
     void playCurrent();

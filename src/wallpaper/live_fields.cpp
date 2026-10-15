@@ -71,6 +71,19 @@ std::string jsonWithoutEffectConstants(const std::string& object_json) {
     return result;
 }
 
+std::string jsonWithoutInstanceOverrides(const std::string& object_json) {
+    cJSON* root = cJSON_Parse(object_json.c_str());
+    if (!root) return object_json;
+    cJSON* overrides = cJSON_GetObjectItemCaseSensitive(root, "instanceoverride");
+    if (cJSON_IsObject(overrides)) {
+        for (const char* key : {"alpha", "rate", "size", "count", "speed", "lifetime", "color", "colorn"})
+            cJSON_DeleteItemFromObjectCaseSensitive(overrides, key);
+    }
+    std::string result = printJson(root, object_json);
+    cJSON_Delete(root);
+    return result;
+}
+
 std::string jsonWithoutLiveGeneral(const std::string& json, bool zoom_live) {
     // Bloom on/off and clear enable are not listed: they need render targets set up at load.
     const std::string without_live =

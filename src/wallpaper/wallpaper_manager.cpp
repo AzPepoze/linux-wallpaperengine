@@ -1,6 +1,7 @@
 #include "wallpaper/wallpaper_manager.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -19,6 +20,9 @@
 #include "wallpaper/2d/camera/parallax.h"
 #include "wallpaper/2d/effects/effect_parser.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
+#include "wallpaper/2d/layers/particle/particle_parser.h"
+#include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
@@ -113,10 +117,23 @@ bool nodeTransformIsLive(const wallpaper_engine::SceneObjectDocument& object) {
     return !scriptOwns(object, "origin") && !scriptOwns(object, "angles");
 }
 
-// The object JSON to compare, leaving out the node transform when it can change in place.
-std::string comparableObject(const wallpaper_engine::SceneObjectDocument& object, bool image, bool transform_live) {
-    const std::string json = jsonWithoutEffectConstants(jsonWithoutLiveFields(object.raw_json, image, object.camera_path));
-    return transform_live ? jsonWithout(json, {"origin", "angles"}) : json;
+// Which settings of one object can change in place, decided by the layer it was built into.
+struct LiveKeys {
+    bool image = false;      // visible, scale, alpha and color of an image layer
+    bool transform = false;  // origin and angles, read from the scene tree
+    bool sound = false;      // volume and mute
+    bool text = false;       // text, alpha and color of a text layer
+    bool particle = false;   // instance overrides of a particle layer
+};
+
+// The object JSON to compare, leaving out the settings that change in place.
+std::string comparableObject(const wallpaper_engine::SceneObjectDocument& object, const LiveKeys& live) {
+    std::string json = jsonWithoutEffectConstants(jsonWithoutLiveFields(object.raw_json, live.image, object.camera_path));
+    if (live.sound) json = jsonWithout(json, {"volume", "mute"});
+    if (live.text) json = jsonWithout(json, {"text", "alpha", "color"});
+    if (live.particle) json = jsonWithoutInstanceOverrides(json);
+    if (live.transform) json = jsonWithout(json, {"origin", "angles"});
+    return json;
 }
 
 // Logs why an object forces a rebuild and returns false, so the caller can stop planning.
@@ -245,6 +262,61 @@ bool planEffectConstants(EngineContext& ctx, uint32_t id, const wallpaper_engine
     return true;
 }
 
+bool sameInstanceOverrides(const wallpaper_engine::ParticleObjectDocument& a,
+                           const wallpaper_engine::ParticleObjectDocument& b) {
+    return a.override_alpha == b.override_alpha && a.override_rate == b.override_rate &&
+           a.override_size == b.override_size && a.override_count == b.override_count &&
+           a.override_speed == b.override_speed && a.override_lifetime == b.override_lifetime &&
+           a.has_override_color == b.has_override_color && a.override_color == b.override_color &&
+           a.override_color_is_legacy == b.override_color_is_legacy;
+}
+
+// Queues the sound, text and particle setting changes that have live setters. False when one needs a rebuild.
+bool planLayerProperties(EngineContext& ctx, uint32_t id, const wallpaper_engine::SceneObjectDocument& old_object,
+                         const wallpaper_engine::SceneObjectDocument& new_object, const LiveKeys& live,
+                         LiveEdits& edits) {
+    if (live.sound) {
+        if (old_object.sound.volume != new_object.sound.volume)
+            edits.push_back([&ctx, id, volume = new_object.sound.volume] {
+                if (auto* sound = dynamic_cast<SoundLayer*>(findLayer(ctx, id))) sound->setVolume(volume);
+            });
+        if (old_object.sound.mute != new_object.sound.mute)
+            edits.push_back([&ctx, id, muted = new_object.sound.mute] {
+                if (auto* sound = dynamic_cast<SoundLayer*>(findLayer(ctx, id))) sound->setMuted(muted);
+            });
+    }
+
+    if (live.text) {
+        const wallpaper_engine::TextObjectDocument& before = old_object.text;
+        const wallpaper_engine::TextObjectDocument& after = new_object.text;
+        if (before.alpha != after.alpha)
+            edits.push_back([&ctx, id, alpha = (double)after.alpha] {
+                if (auto* text = dynamic_cast<TextLayer*>(findLayer(ctx, id))) text->propertySetNumber("alpha", alpha);
+            });
+        // A script drives the text every frame, so its static text is not used.
+        if (before.text != after.text) {
+            if (!after.script.empty()) return false;
+            edits.push_back([&ctx, id, text = after.text] {
+                if (auto* layer = dynamic_cast<TextLayer*>(findLayer(ctx, id))) layer->propertySetString("text", text);
+            });
+        }
+        if (before.color != after.color) {
+            const std::array<double, 3> color = {after.color[0], after.color[1], after.color[2]};
+            edits.push_back([&ctx, id, color] {
+                if (auto* text = dynamic_cast<TextLayer*>(findLayer(ctx, id))) text->propertySetVector("color", color.data());
+            });
+        }
+    }
+
+    if (live.particle && !sameInstanceOverrides(old_object.particle, new_object.particle)) {
+        edits.push_back([&ctx, id, config = ParticleParser::parseObject(new_object)] {
+            auto* particle = dynamic_cast<ParticleLayer*>(findLayer(ctx, id));
+            if (particle && particle->ps) particle->ps->applyInstanceOverrides(config);
+        });
+    }
+    return true;
+}
+
 // Collects the edits that bring one object up to date. False when the object needs a rebuild.
 bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocument& old_object,
                      const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
@@ -259,9 +331,15 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     if (old_object.camera_path != new_object.camera_path) return rebuildFor(new_object, "a camera path");
     if (new_object.camera_path && old_object.camera_zoom != new_object.camera_zoom)
         edits.push_back([&ctx, zoom = new_object.camera_zoom] { ctx.scene.camera.zoom_scale = zoom; });
-    const bool transform_live = nodeTransformIsLive(old_object) && nodeTransformIsLive(new_object);
-    if (comparableObject(old_object, image_layer, transform_live) !=
-        comparableObject(new_object, image_layer, transform_live))
+    LiveKeys live;
+    live.image = image_layer;
+    live.transform = nodeTransformIsLive(old_object) && nodeTransformIsLive(new_object);
+    live.sound = dynamic_cast<SoundLayer*>(layer) != nullptr;
+    live.text = dynamic_cast<TextLayer*>(layer) != nullptr;
+    live.particle = dynamic_cast<ParticleLayer*>(layer) != nullptr;
+    if (!planLayerProperties(ctx, id, old_object, new_object, live, edits))
+        return rebuildFor(new_object, "a layer setting that cannot update live");
+    if (comparableObject(old_object, live) != comparableObject(new_object, live))
         return rebuildFor(new_object, "a field that is not live");
 
     if (old_object.visible != new_object.visible) {

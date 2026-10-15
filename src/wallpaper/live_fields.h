@@ -19,4 +19,7 @@ std::string jsonWithoutPassConstants(const std::string& instance_json);
 // An object without the constant values of its effects' passes, which update in place.
 std::string jsonWithoutEffectConstants(const std::string& object_json);
 
+// An object without the particle instance overrides that update in place.
+std::string jsonWithoutInstanceOverrides(const std::string& object_json);
+
 #endif  // LIVE_FIELDS_H

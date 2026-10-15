@@ -86,6 +86,11 @@ void SoundLayer::setVolume(float volume) {
     applyVolume();
 }
 
+void SoundLayer::setMuted(bool muted) {
+    doc.mute = muted;
+    applyVolume();
+}
+
 void SoundLayer::applyVolume() {
     if (current == AudioEngine::kInvalidSound) return;
     if (!AudioEngine::instance().isAvailable()) return;

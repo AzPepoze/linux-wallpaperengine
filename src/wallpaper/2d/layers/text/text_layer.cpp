@@ -118,6 +118,15 @@ bool TextLayer::propertyGetVector(const std::string& name, double out[3]) const 
 }
 
 bool TextLayer::propertySetVector(const std::string& name, const double value[3]) {
+    // Text color is baked into the raster and also tints the quad, so both change together.
+    if (name == "color") {
+        for (size_t i = 0; i < 3; ++i) {
+            config_.color[i] = (float)value[i];
+            tint[i] = (float)value[i];
+        }
+        needs_rebuild_ = true;
+        return true;
+    }
     if (name != "backgroundcolor") return false;
     for (size_t i = 0; i < 3; ++i) config_.background_color[i] = (float)value[i];
     needs_rebuild_ = true;
