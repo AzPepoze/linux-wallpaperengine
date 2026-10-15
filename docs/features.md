@@ -14,7 +14,8 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [x] Scene wallpapers (Partial)
     - [x] Image, text, particle and sound layers
     - [x] Effects and camera parallax
-    - [ ] Light layers and 3D models
+    - [x] Static 3D model objects (Partial)
+    - [ ] Light layers and skinned 3D models
   - [x] Video wallpapers (Partial)
     - [x] mp4, webm, mkv and more
     - [x] Hardware video decoding
@@ -41,7 +42,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [x] Parallax
   - [x] Shake
   - [x] Zoom
-  - [ ] Perspective cameras
+  - [x] Perspective camera for 3D model objects (Partial)
 - [x] Particles (Partial)
   - [x] Common emitters, movement and trails
   - [ ] Some operators
@@ -51,9 +52,10 @@ This page lists the features of Wallpaper Engine, and which ones this project su
 - [x] Puppet warp (Partial)
   - [x] Skinned models and clips
   - [ ] Blend shapes and physics
-- [ ] Lighting and 3D
+- [x] Lighting and 3D (Partial)
   - [ ] 2D lighting and normal maps
-  - [ ] 3D models
+  - [x] Static 3D models with depth and floor reflections (Partial)
+  - [ ] Skinned 3D models, lighting and shadows
 - [x] Scripts, SceneScript (Partial)
   - [x] Most common scripts
   - [ ] Some APIs are stubs

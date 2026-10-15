@@ -45,9 +45,10 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [-] Scene wallpapers
   - Works
     - Image, particle, text and sound layers, layer hierarchy, effects, bloom/HDR, camera parallax, camera shake and camera-path zoom/pan
+    - Static 3D model objects (see [Lighting and 3D](#lighting-and-3d))
     - Property scripts on image alpha and text
   - Missing
-    - Light layers, 3D model layers, perspective cameras
+    - Light layers, skinned 3D models, perspective image layers
     - Most SceneScript APIs (see [SceneScript](#scenescript))
 - [-] Video wallpapers
   - Works
@@ -86,7 +87,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Both modes crossfade the outgoing audio into the incoming audio
 - [x] The outgoing frame is captured and held while the new wallpaper loads, so a slow load does not show a black gap; a failed load keeps the frozen frame
 - [x] Live settings on switch: the control request also carries scaling (`default|fill|fit|stretch`), master volume (0-100), mute and the frame cap, applied without restarting the process
-- [x] Type-agnostic: scene, video and web wallpapers all switch through the same compositor, and 3D inherits it when 3D rendering lands
+- [x] Type-agnostic: scene, video and web wallpapers all switch through the same compositor, and scene 3D model objects are included
 - [-] Single-instance control
   - Works: launching with a wallpaper for a display that already runs an instance hands the switch over a Unix socket in `$XDG_RUNTIME_DIR/linux-wallpaperengine/` and exits; `--no-control` opts out
   - Missing: no explicit switch command separate from launching with a path, and no per-output targeting when a path is not the first argument
@@ -169,8 +170,13 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Missing
     - Scripted playback control (`getTextureAnimation()`)
 - [ ] Light layers
-- [ ] 3D model layers
-  - Objects of any other kind (lights, cameras, unknown) become hierarchy nodes only; no layer is drawn
+  - Objects of unknown kind (lights, cameras, others) become hierarchy nodes only; no layer is drawn
+- [-] 3D model layers (scene `model` objects)
+  - Works
+    - Static `.mdl` meshes, drawn with depth in the scene's perspective camera (see [Lighting and 3D](#lighting-and-3d))
+    - `reflected` models drawn in a floor mirror
+  - Missing
+    - Skinned `.mdl` models, lighting, shadows and fog
 
 ## Camera and parallax
 
@@ -183,10 +189,13 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
   - Works
     - Zoom curve and the X/Y origin curves of a visible camera object, in single, loop and mirror modes
     - Applied as zoom about the view centre plus a relative pan
+    - `eye`, `center` and `up` keyframes drive the 3D model camera
   - Missing
-    - Origin Z, `eye`/`center`/`up` changes and multiple paths (`queuemode`, the `paths` file)
+    - Origin Z and multiple paths (`queuemode`, the `paths` file)
     - Camera objects bound to a hidden user property are only honoured through their default
-- [ ] Perspective cameras and field of view (`fov`, `nearz` and `farz` are parsed but unused)
+- [-] Perspective camera and field of view
+  - Works: 3D model objects use the scene camera (`eye`, `center`, `up`) with the `general` `fov`, `nearz` and `farz`
+  - Missing: 2D layers stay orthographic; the `perspective` flag on image layers is ignored
 - [ ] Camera fade (parsed, not applied)
 - [ ] Multiple cameras
 
@@ -312,9 +321,18 @@ Effects load from the install (see [wallpaper-engine-assets.md](wallpaper-engine
 
 ## Lighting and 3D
 
-- [ ] 2D lighting, normal maps, reflections, light sources (point, spot, directional)
+- [ ] 2D lighting, normal maps, light sources (point, spot, directional)
   - Ambient and skylight colors are passed to shaders only; nothing computes lighting
-- [ ] 3D scenes, FBX/OBJ models, model materials (PBR maps), skeletal 3D animation, shadows, volumetric lighting, fog
+- [-] 3D model objects (scene `model` objects that point at a `.mdl` file)
+  - Works
+    - Static (unskinned) `.mdl` meshes, drawn with depth in the scene's perspective camera
+    - Each submesh uses its own material, with its textures, blend mode, cull mode and depth settings
+    - Scene camera (`eye`, `center`, `up`, `fov`, `nearz`, `farz`) and camera paths move the 3D view
+    - `reflected` models are drawn in a floor mirror, and a material that samples `_rt_Reflection` shows that mirror
+  - Missing
+    - Skinned `.mdl` models, morph targets and physics bones (the `.mdl` parser reads neither)
+    - Engine-computed lighting, shadows, volumetric lighting and fog
+    - FBX/OBJ and other 3D model formats, PBR material maps, skeletal 3D animation
 - [ ] Built-in 3D shaders (fur, vegetation, chroma)
 
 ## User properties
@@ -415,8 +433,8 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - Works: `createLayer(config)` (an asset path, or an object shaped like a scene.json object: image, particle, text or sound; its own scripts and animations are bound), `destroyLayer`, `sortLayer`
     - Works: scene settings `bloom`, `bloomstrength`, `bloomthreshold`, `clearcolor`, `ambientcolor`, `skylightcolor`, `cameraparallax*` and `camerashake*` (read/write; bloom values apply live in HDR scenes only, other scenes bake them when the bloom passes are created)
     - Works: `getInitialLayerConfig(layer)` returns the object as authored in scene.json
-    - Works: `getCameraTransforms()` and `setCameraTransforms({eye, center, up, zoom})`; `zoom` zooms the 2D view, while `eye`, `center` and `up` are stored but the orthographic renderer does not use them
-    - Works: `clearenabled`, `camerafade`, `fov`, `nearz`, `farz` (read/write; `fov`, `nearz` and `farz` are kept but the orthographic renderer does not use them)
+    - Works: `getCameraTransforms()` and `setCameraTransforms({eye, center, up, zoom})`; `zoom` zooms the 2D view; `eye`, `center` and `up` drive the 3D model camera (the 2D view ignores them)
+    - Works: `clearenabled`, `camerafade`, `fov`, `nearz`, `farz` (read/write; `fov`, `nearz` and `farz` apply to 3D model objects, the 2D view ignores them)
   - [x] `input`: `cursorWorldPosition`, `cursorScreenPosition` and `cursorLeftDown` follow the pointer
 - [x] Animation handles: timeline, sprite-sheet and puppet animation layers (`rate`, `fps`, `frameCount`, `duration`, `frame`, `play`, `stop`, `pause`, `blend`, `visible`, `addEndedCallback`, `join`); `getAnimation` / `getTextureAnimation` return an object even when the layer has no such animation, so unguarded calls do not throw
 - [-] Events
@@ -476,7 +494,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 - [-] Materials, shaders and particle definitions
   - Works: loaded from wallpapers and from the install (see [wallpaper-engine-assets.md](wallpaper-engine-assets.md))
   - Missing: formats and fields not listed in the sections above
-- [ ] Other `.mdl` variants and 3D model formats
+- [ ] Skinned `.mdl` models and other 3D model formats (FBX, OBJ)
 
 ## Platform, command line and tooling
 
