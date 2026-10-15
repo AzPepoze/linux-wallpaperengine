@@ -212,6 +212,11 @@ bool parseSceneFile(const char* scene_json_path, SceneDocument& out, const UserP
         cJSON_ArrayForEach(object, objects) {
             parseCameraPath(object, out.camera);
             out.objects.push_back(parseObject(object));
+            float zoom = 1.0f;
+            if (cameraPathZoom(object, zoom)) {
+                out.objects.back().camera_path = true;
+                out.objects.back().camera_zoom = zoom;
+            }
         }
     }
 

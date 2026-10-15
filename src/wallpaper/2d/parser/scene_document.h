@@ -177,6 +177,9 @@ struct SceneObjectDocument {
     ModelObjectDocument model;
     std::vector<EffectInstanceDocument> effects;
     std::vector<PropertyAnimationDocument> animations;
+    // A visible camera object drives the scene camera; camera_zoom is its lens-size value.
+    bool camera_path = false;
+    float camera_zoom = 1.0f;
     std::string raw_json;  // the object as authored (getInitialLayerConfig)
 };
 
@@ -206,6 +209,8 @@ struct SceneCameraDocument {
     // Camera-path objects animate the zoom and a relative origin offset (the scene's entry animation).
     AnimationCurve zoom_curve;
     std::array<AnimationCurve, 3> origin_curves;
+    // The camera object's zoom value (the lens size), multiplied into the view scale.
+    float zoom_scale = 1.0f;
 };
 
 struct SceneBloomDocument {

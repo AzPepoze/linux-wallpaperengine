@@ -447,6 +447,34 @@ void testCameraPathJson() {
                  "a file without a paths array is rejected");
 }
 
+void testCameraLensZoom() {
+    const char* project = R"JSON({"general": {"properties": {"lens": {"type": "slider", "value": 1.0}}}})JSON";
+    const char* scene = R"JSON({
+      "camera": {"center": "0 0 0", "eye": "0 0 1", "up": "0 1 0"},
+      "objects": [
+        {"id": 5, "name": "Lens", "camera": "default", "visible": true,
+         "zoom": {"user": "lens", "value": 1.0}}
+      ]})JSON";
+    const std::string project_path = writeTemp(project);
+    const std::string scene_path = writeTemp(scene);
+
+    UserProperties properties;
+    test::expect("lens zoom", properties.loadProject(project_path), "project defaults load");
+    properties.setFromString("lens", "1.5");
+
+    SceneDocument zoomed, defaults;
+    test::expect("lens zoom", parseSceneFile(scene_path.c_str(), zoomed, &properties), "scene parses");
+    test::expect("lens zoom", parseSceneFile(scene_path.c_str(), defaults), "scene parses without properties");
+    unlink(project_path.c_str());
+    unlink(scene_path.c_str());
+
+    test::expect("lens zoom", zoomed.camera.zoom_scale == 1.5f, "the lens value becomes the camera zoom");
+    test::expect("lens zoom", defaults.camera.zoom_scale == 1.0f, "the authored default is 1");
+    test::expect("lens zoom", zoomed.objects.size() == 1 && zoomed.objects[0].camera_path,
+                 "the camera object is a camera path");
+    test::expect("lens zoom", zoomed.objects[0].camera_zoom == 1.5f, "the object keeps its lens value");
+}
+
 void testMissingFile() {
     SceneDocument doc;
     test::expect("missing", !parseSceneFile("/tmp/lwe_no_such_scene.json", doc), "a missing file fails");
@@ -585,6 +613,7 @@ int main(int argc, char** argv) {
     testBloomFlag();
     testModelObjects();
     testCameraPathJson();
+    testCameraLensZoom();
     testMissingFile();
     testPackageMetadata();
     return test::finish("scene parser tests");

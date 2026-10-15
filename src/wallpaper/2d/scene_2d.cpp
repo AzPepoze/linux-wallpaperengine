@@ -354,6 +354,7 @@ void Scene2DRuntime::updateViewport() {
         ctx.scene.render_scale *=
             std::max(evaluateCurve(curve.keys, curve.fps, curve.length, curve.mode, ctx.scene.elapsed_time), 0.001f);
     }
+    ctx.scene.render_scale *= std::max(camera.zoom_scale, 0.001f);
     const auto& origin_x = camera.origin_curves[0];
     const auto& origin_y = camera.origin_curves[1];
     if (!origin_x.keys.empty())

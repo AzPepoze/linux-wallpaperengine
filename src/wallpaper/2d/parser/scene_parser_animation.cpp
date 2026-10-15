@@ -82,13 +82,24 @@ void parsePropertyAnimation(const cJSON* object, const char* property, std::vect
     doc.relative = parseBool(member(animation, "relative"), false);
     out.push_back(std::move(doc));
 }
+bool cameraPathZoom(const cJSON* object, float& zoom) {
+    if (!cJSON_IsString(member(object, "camera"))) return false;
+    if (!parseBool(member(object, "visible"), true)) return false;
+
+    zoom = 1.0f;
+    const cJSON* value = member(member(object, "zoom"), "value");
+    if (cJSON_IsNumber(value)) zoom = (float)value->valuedouble;
+    return true;
+}
+
 // A visible camera object may carry keyframed `zoom` / `origin` properties.
 void parseCameraPath(const cJSON* object, SceneCameraDocument& out) {
-    if (!cJSON_IsString(member(object, "camera"))) return;
-    if (!parseBool(member(object, "visible"), true)) return;
+    float zoom = 1.0f;
+    if (!cameraPathZoom(object, zoom)) return;
+    out.zoom_scale = zoom;
 
-    const cJSON* zoom = member(member(object, "zoom"), "animation");
-    if (cJSON_IsObject(zoom)) parseCurve(zoom, "c0", out.zoom_curve);
+    const cJSON* zoom_animation = member(member(object, "zoom"), "animation");
+    if (cJSON_IsObject(zoom_animation)) parseCurve(zoom_animation, "c0", out.zoom_curve);
     const cJSON* origin = member(member(object, "origin"), "animation");
     if (cJSON_IsObject(origin)) {
         parseCurve(origin, "c0", out.origin_curves[0]);

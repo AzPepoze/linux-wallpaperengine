@@ -94,10 +94,11 @@ bool scriptOwns(const wallpaper_engine::SceneObjectDocument& object, std::string
 }
 
 // The object JSON without the fields a live edit may change, so any other difference still means a rebuild.
-// Script property values are updated in place, so they are left out of the comparison too.
-std::string jsonWithoutLiveFields(const std::string& json, bool image) {
-    const std::string without_fields = image ? jsonWithout(json, {"visible", "scale", "alpha", "color"})
-                                             : jsonWithout(json, {"visible", "scale"});
+// Script property values and a camera path's zoom are updated in place, so they are left out too.
+std::string jsonWithoutLiveFields(const std::string& json, bool image, bool camera_path) {
+    std::string without_fields = image ? jsonWithout(json, {"visible", "scale", "alpha", "color"})
+                                       : jsonWithout(json, {"visible", "scale"});
+    if (camera_path) without_fields = jsonWithout(without_fields, {"zoom"});
     return jsonWithoutScriptProperties(without_fields);
 }
 
@@ -173,8 +174,11 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     const bool image_layer = image != nullptr;
     if (!planScriptProperties(ctx, id, old_object, new_object, edits))
         return rebuildFor(new_object, "a script that cannot update live");
-    if (jsonWithoutLiveFields(old_object.raw_json, image_layer) !=
-        jsonWithoutLiveFields(new_object.raw_json, image_layer))
+    if (old_object.camera_path != new_object.camera_path) return rebuildFor(new_object, "a camera path");
+    if (new_object.camera_path && old_object.camera_zoom != new_object.camera_zoom)
+        edits.push_back([&ctx, zoom = new_object.camera_zoom] { ctx.scene.camera.zoom_scale = zoom; });
+    if (jsonWithoutLiveFields(old_object.raw_json, image_layer, old_object.camera_path) !=
+        jsonWithoutLiveFields(new_object.raw_json, image_layer, new_object.camera_path))
         return rebuildFor(new_object, "a field that is not live");
 
     if (old_object.visible != new_object.visible) {
