@@ -76,7 +76,6 @@ This page lists the features of Wallpaper Engine, and which ones this project su
 - [x] Mouse (Partial)
   - [x] Follows the mouse
   - [x] Click and hover on layers
-- [ ] Keyboard, touch and gamepad
 - [x] Package files and textures
   - [x] `.pkg` files
   - [x] `.tex` textures

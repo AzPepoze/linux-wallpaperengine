@@ -478,7 +478,6 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
     - A pressed layer retains move/up delivery outside its bounds, with current local coordinates for dragging
   - Missing
     - Live delivery to a background layer-shell surface has not been confirmed
-- [ ] Keyboard, touch and gamepad input
 - [ ] Interactive effects, particles and puppet bones
 
 ## Textures and asset formats
