@@ -117,7 +117,6 @@ Some references come from these projects:
 | --- | --- |
 | linux-wallpaperengine by Almamu | [github.com/Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine) |
 | open-wallpaper-engine by waywallen | [github.com/waywallen/open-wallpaper-engine](https://github.com/waywallen/open-wallpaper-engine) |
-| linux-wallpaperengine-gui by AzPepoze | [github.com/AzPepoze/linux-wallpaperengine-gui](https://github.com/AzPepoze/linux-wallpaperengine-gui) |
 
 ## More
 
