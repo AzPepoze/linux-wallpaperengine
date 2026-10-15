@@ -199,10 +199,38 @@ Options from the upstream launcher that this build does not support are accepted
 
 ## Hand-off to a running wallpaper
 
-If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits. The running instance then:
+If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits.
 
-1. Switches to the new wallpaper with the transition from `--transition` (default `fade`, a crossfade). `none` cuts straight over, and `random` picks one effect per switch. Effects use the original transition shaders from your install, or the built-in fade if they are missing.
-2. Applies new `--set-property` values live. Most settings update without a reload. Changes that need a new scene, such as turning bloom on or off, reload it. See [Features](features-detail.md) for the list.
-3. Updates volume, mute, frame cap, output device and visualizer on or off. A device change reloads the wallpaper so its sounds play on the new output.
+| Step | What happens |
+|---|---|
+| Switch wallpaper | Uses the `--transition` effect (default `fade`) |
+| Property values | Updates live when possible, otherwise reloads the scene |
+| Audio, frame cap, visualizer | Updates live |
+| Output device change | Reloads, so sounds play on the new output |
+
+### Transition modes
+
+| `--transition` | Effect |
+|---|---|
+| `fade` (default) | Crossfade |
+| `none` | Cuts straight over |
+| `random` | Picks one effect per switch |
+
+> [!NOTE]
+> Effects use the original transition shaders from your install. If they are missing, the built-in fade is used.
+
+### Property changes
+
+Most `--set-property` changes update the running scene. These reload it:
+
+| Change | Reloads the scene? |
+|---|---|
+| Turning bloom on or off | Yes |
+| Turning the clear color on or off | Yes |
+| Script source or animation changes | Yes |
+| Combos, textures, or settings added or removed | Yes |
+| Any other value change in the list above | No |
+
+For the full list of live settings, see [Features](features-detail.md).
 
 Pass `--no-control` to start a separate instance instead.
