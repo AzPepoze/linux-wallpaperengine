@@ -54,6 +54,8 @@ class ShaderPass {
     bool show_files = false;
     bool is_fullscreen_quad = false;
     bool geometry_classified = false;
+    // Set before init() to compile for 3D model meshes instead of sprites.
+    bool mesh_geometry = false;
     std::string render_target;
     float render_scale = 1.0f;
     std::map<int, std::string> render_texture_bindings;
@@ -85,7 +87,8 @@ class ShaderPass {
         for (const auto& block : compiled.custom_uniform_blocks) {
             if (block.slot < 0 || block.uniform_names.empty()) continue;
 
-            std::vector<float> packed(block.uniform_names.size() * 4, 0.0f);
+            std::vector<float>& packed = packed_uniforms_;
+            packed.assign(block.uniform_names.size() * 4, 0.0f);
             for (size_t i = 0; i < block.uniform_names.size(); ++i) {
                 const std::string& uniform_name = block.uniform_names[i];
                 auto value = uniforms.find(uniform_name);
@@ -152,6 +155,7 @@ class ShaderPass {
     void updateAnimatedUniforms(float time);
     bool resolveMaterialName(const std::string& name, std::string& resolved) const;
     std::vector<ShaderUniformConfig> shader_uniform_configs_;
+    std::vector<float> packed_uniforms_;  // reused each draw so packing does not allocate
     std::string stored_vs_source;
     std::string stored_fs_source;
     std::map<std::string, wallpaper_engine::AnimationCurve> resolved_animations;

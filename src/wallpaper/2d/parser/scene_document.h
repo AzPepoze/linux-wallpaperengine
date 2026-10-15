@@ -17,6 +17,7 @@ enum class SceneObjectKind {
     Particle,
     Text,
     Sound,
+    Model,
 };
 
 enum class SoundPlaybackMode {
@@ -153,6 +154,12 @@ struct SoundObjectDocument {
     float max_time = 5.0f;
 };
 
+// A 3D model object; placement lives in the node's origin, angles and scale.
+struct ModelObjectDocument {
+    std::string model;  // the .mdl path
+    bool reflected = false;
+};
+
 // One animated scene property. Properties of an object that link via parent/children share a single timeline.
 struct SceneObjectDocument {
     SceneObjectKind kind = SceneObjectKind::Unknown;
@@ -167,9 +174,27 @@ struct SceneObjectDocument {
     ParticleObjectDocument particle;
     TextObjectDocument text;
     SoundObjectDocument sound;
+    ModelObjectDocument model;
     std::vector<EffectInstanceDocument> effects;
     std::vector<PropertyAnimationDocument> animations;
+    // A visible camera object drives the scene camera; camera_zoom is its lens-size value.
+    bool camera_path = false;
+    float camera_zoom = 1.0f;
     std::string raw_json;  // the object as authored (getInitialLayerConfig)
+};
+
+struct CameraTransformDocument {
+    float timestamp = 0.0f;  // seconds into the path
+    std::array<float, 3> eye = {0.0f, 0.0f, 0.0f};
+    std::array<float, 3> center = {0.0f, 0.0f, -1.0f};
+    std::array<float, 3> up = {0.0f, 1.0f, 0.0f};
+};
+
+// One fly-through segment from a 3D scene's camera path file.
+struct CameraPathDocument {
+    std::string name;
+    float duration = 0.0f;
+    std::vector<CameraTransformDocument> transforms;
 };
 
 struct SceneCameraDocument {
@@ -177,9 +202,15 @@ struct SceneCameraDocument {
     std::array<float, 3> eye = {0.0f, 0.0f, 0.0f};
     std::array<float, 3> up = {0.0f, 1.0f, 0.0f};
 
+    // Camera path files named by `camera.paths`, and the paths read from them in file order.
+    std::vector<std::string> path_files;
+    std::vector<CameraPathDocument> paths;
+
     // Camera-path objects animate the zoom and a relative origin offset (the scene's entry animation).
     AnimationCurve zoom_curve;
     std::array<AnimationCurve, 3> origin_curves;
+    // The camera object's zoom value (the lens size), multiplied into the view scale.
+    float zoom_scale = 1.0f;
 };
 
 struct SceneBloomDocument {

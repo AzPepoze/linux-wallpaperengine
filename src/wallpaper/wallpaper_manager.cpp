@@ -1,11 +1,15 @@
 #include "wallpaper/wallpaper_manager.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <string_view>
 #include <utility>
+
+#include <cjson/cJSON.h>
 
 #include "app/control/control_server.h"
 #include "app/package_extractor.h"
@@ -14,7 +18,11 @@
 #include "shared/core/task_pool.h"
 #include "shared/graphics/backend/surface.h"
 #include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/effects/effect_parser.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
+#include "wallpaper/2d/layers/particle/particle_layer.h"
+#include "wallpaper/2d/layers/particle/particle_parser.h"
+#include "wallpaper/2d/layers/sound/sound_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
 #include "wallpaper/2d/scene_2d_wallpaper.h"
@@ -87,6 +95,8 @@ bool animated(const wallpaper_engine::SceneObjectDocument& object, std::string_v
 bool scriptOwns(const wallpaper_engine::SceneObjectDocument& object, std::string_view field) {
     if (field == "visible") return !object.visible_script.empty();
     if (field == "scale") return !object.node.scale_script.empty() || animated(object, "scale");
+    if (field == "origin") return !object.node.origin_script.empty() || animated(object, "origin");
+    if (field == "angles") return !object.node.angles_script.empty() || animated(object, "angles");
     if (field == "alpha")
         return !object.image.alpha_script.empty() || !object.image.alpha_keys.empty() || animated(object, "alpha");
     if (field == "color") return !object.image.color_script.empty() || animated(object, "color");
@@ -94,9 +104,36 @@ bool scriptOwns(const wallpaper_engine::SceneObjectDocument& object, std::string
 }
 
 // The object JSON without the fields a live edit may change, so any other difference still means a rebuild.
-std::string jsonWithoutLiveFields(const std::string& json, bool image) {
-    if (image) return jsonWithout(json, {"visible", "scale", "alpha", "color"});
-    return jsonWithout(json, {"visible", "scale"});
+// Script property values and a camera path's zoom are updated in place, so they are left out too.
+std::string jsonWithoutLiveFields(const std::string& json, bool image, bool camera_path) {
+    std::string without_fields = image ? jsonWithout(json, {"visible", "scale", "alpha", "color"})
+                                       : jsonWithout(json, {"visible", "scale"});
+    if (camera_path) without_fields = jsonWithout(without_fields, {"zoom"});
+    return jsonWithoutScriptProperties(without_fields);
+}
+
+// A node's origin and angles are read from the scene tree every frame, unless a script or timeline drives them.
+bool nodeTransformIsLive(const wallpaper_engine::SceneObjectDocument& object) {
+    return !scriptOwns(object, "origin") && !scriptOwns(object, "angles");
+}
+
+// Which settings of one object can change in place, decided by the layer it was built into.
+struct LiveKeys {
+    bool image = false;      // visible, scale, alpha and color of an image layer
+    bool transform = false;  // origin and angles, read from the scene tree
+    bool sound = false;      // volume and mute
+    bool text = false;       // text, alpha and color of a text layer
+    bool particle = false;   // instance overrides of a particle layer
+};
+
+// The object JSON to compare, leaving out the settings that change in place.
+std::string comparableObject(const wallpaper_engine::SceneObjectDocument& object, const LiveKeys& live) {
+    std::string json = jsonWithoutEffectConstants(jsonWithoutLiveFields(object.raw_json, live.image, object.camera_path));
+    if (live.sound) json = jsonWithout(json, {"volume", "mute"});
+    if (live.text) json = jsonWithout(json, {"text", "alpha", "color"});
+    if (live.particle) json = jsonWithoutInstanceOverrides(json);
+    if (live.transform) json = jsonWithout(json, {"origin", "angles"});
+    return json;
 }
 
 // Logs why an object forces a rebuild and returns false, so the caller can stop planning.
@@ -106,6 +143,180 @@ bool rebuildFor(const wallpaper_engine::SceneObjectDocument& object, std::string
     return false;
 }
 
+// A property script bound through ScriptBindings, addressed the way ScriptBindings::add registers it.
+struct PropertyScript {
+    BoundProperty property;
+    int effect_index;
+    std::string script;
+    std::string properties_json;
+};
+
+std::vector<PropertyScript> boundScripts(const wallpaper_engine::SceneObjectDocument& object) {
+    std::vector<PropertyScript> scripts = {
+        {BoundProperty::Origin, -1, object.node.origin_script.script, object.node.origin_script.properties_json},
+        {BoundProperty::Scale, -1, object.node.scale_script.script, object.node.scale_script.properties_json},
+        {BoundProperty::Angles, -1, object.node.angles_script.script, object.node.angles_script.properties_json},
+        {BoundProperty::Visible, -1, object.visible_script.script, object.visible_script.properties_json},
+        {BoundProperty::Color, -1, object.image.color_script.script, object.image.color_script.properties_json},
+        {BoundProperty::Size, -1, object.image.size_script.script, object.image.size_script.properties_json},
+        {BoundProperty::Text, -1, object.text.script, object.text.script_properties_json},
+    };
+    for (size_t i = 0; i < object.effects.size(); ++i) {
+        const wallpaper_engine::ScriptedValue& visible = object.effects[i].visible_script;
+        scripts.push_back({BoundProperty::EffectVisible, (int)i, visible.script, visible.properties_json});
+    }
+    return scripts;
+}
+
+// Queues the script value updates for one object. False when a script changed in a way that needs a rebuild.
+bool planScriptProperties(EngineContext& ctx, uint32_t id, const wallpaper_engine::SceneObjectDocument& old_object,
+                          const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
+    // Alpha and effect-constant scripts are not bound through ScriptBindings yet, so they still rebuild.
+    if (old_object.image.alpha_script_properties_json != new_object.image.alpha_script_properties_json) return false;
+    if (old_object.effects.size() != new_object.effects.size()) return false;
+    for (size_t i = 0; i < old_object.effects.size(); ++i) {
+        const auto& old_constants = old_object.effects[i].constant_scripts;
+        const auto& new_constants = new_object.effects[i].constant_scripts;
+        if (old_constants.size() != new_constants.size()) return false;
+        for (size_t j = 0; j < old_constants.size(); ++j) {
+            if (old_constants[j].script.script != new_constants[j].script.script ||
+                old_constants[j].script.properties_json != new_constants[j].script.properties_json)
+                return false;
+        }
+    }
+
+    const std::vector<PropertyScript> before = boundScripts(old_object);
+    const std::vector<PropertyScript> after = boundScripts(new_object);
+    for (size_t i = 0; i < before.size(); ++i) {
+        if (before[i].script != after[i].script) return false;
+        if (before[i].properties_json == after[i].properties_json) continue;
+        if (!ctx.scene.scripts || !ctx.scene.scripts->hasBinding(id, after[i].property, after[i].effect_index))
+            return false;
+        edits.push_back([&ctx, id, script = after[i]] {
+            ctx.scene.scripts->updateProperties(id, script.property, script.properties_json, script.effect_index);
+        });
+    }
+    return true;
+}
+
+// The constant values of each pass in an effect instance, read the same way the effect loader reads them.
+using PassConstants = std::vector<std::map<std::string, std::vector<float>>>;
+
+PassConstants passConstants(const std::string& instance_json) {
+    PassConstants passes;
+    cJSON* root = cJSON_Parse(instance_json.c_str());
+    const cJSON* list = root ? cJSON_GetObjectItemCaseSensitive(root, "passes") : nullptr;
+    if (!cJSON_IsArray(list)) {
+        cJSON_Delete(root);
+        return passes;
+    }
+    const cJSON* pass = nullptr;
+    cJSON_ArrayForEach(pass, list) {
+        std::map<std::string, std::vector<float>> values;
+        EffectParser::readUniformValues(pass, values);
+        passes.push_back(std::move(values));
+    }
+    cJSON_Delete(root);
+    return passes;
+}
+
+// Scripted or animated constants are rewritten every frame, so a stored value would not stick.
+bool constantIsScripted(const wallpaper_engine::EffectInstanceDocument& effect, const std::string& name) {
+    return std::any_of(effect.constant_scripts.begin(), effect.constant_scripts.end(),
+                       [&name](const auto& constant) { return constant.name == name; });
+}
+
+// Queues the effect constant updates for one object. False when an effect changed in a way that needs a rebuild.
+bool planEffectConstants(EngineContext& ctx, uint32_t id, const wallpaper_engine::SceneObjectDocument& old_object,
+                         const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
+    for (size_t i = 0; i < old_object.effects.size(); ++i) {
+        const wallpaper_engine::EffectInstanceDocument& before = old_object.effects[i];
+        const wallpaper_engine::EffectInstanceDocument& after = new_object.effects[i];
+        if (before.file != after.file || before.name != after.name) return false;
+        if (jsonWithoutPassConstants(before.instance_config_json) != jsonWithoutPassConstants(after.instance_config_json))
+            return false;
+
+        const Layer* layer = findLayer(ctx, id);
+        if (!layer || i >= layer->effects.size()) return false;
+        const PassConstants old_passes = passConstants(before.instance_config_json);
+        const PassConstants new_passes = passConstants(after.instance_config_json);
+        if (old_passes.size() != new_passes.size() || new_passes.size() != layer->effects[i]->passes.size())
+            return false;
+
+        for (size_t p = 0; p < new_passes.size(); ++p) {
+            if (old_passes[p].size() != new_passes[p].size()) return false;
+            for (const auto& [name, values] : new_passes[p]) {
+                const auto found = old_passes[p].find(name);
+                if (found == old_passes[p].end()) return false;
+                if (found->second == values) continue;
+                const ShaderPass* pass = layer->effects[i]->passes[p];
+                if (!pass || !pass->materialConstant(name) || constantIsScripted(after, name)) return false;
+                edits.push_back([&ctx, id, i, p, name, values] {
+                    Layer* live = findLayer(ctx, id);
+                    if (live && i < live->effects.size() && p < live->effects[i]->passes.size())
+                        live->effects[i]->passes[p]->setMaterialConstant(name, values);
+                });
+            }
+        }
+    }
+    return true;
+}
+
+bool sameInstanceOverrides(const wallpaper_engine::ParticleObjectDocument& a,
+                           const wallpaper_engine::ParticleObjectDocument& b) {
+    return a.override_alpha == b.override_alpha && a.override_rate == b.override_rate &&
+           a.override_size == b.override_size && a.override_count == b.override_count &&
+           a.override_speed == b.override_speed && a.override_lifetime == b.override_lifetime &&
+           a.has_override_color == b.has_override_color && a.override_color == b.override_color &&
+           a.override_color_is_legacy == b.override_color_is_legacy;
+}
+
+// Queues the sound, text and particle setting changes that have live setters. False when one needs a rebuild.
+bool planLayerProperties(EngineContext& ctx, uint32_t id, const wallpaper_engine::SceneObjectDocument& old_object,
+                         const wallpaper_engine::SceneObjectDocument& new_object, const LiveKeys& live,
+                         LiveEdits& edits) {
+    if (live.sound) {
+        if (old_object.sound.volume != new_object.sound.volume)
+            edits.push_back([&ctx, id, volume = new_object.sound.volume] {
+                if (auto* sound = dynamic_cast<SoundLayer*>(findLayer(ctx, id))) sound->setVolume(volume);
+            });
+        if (old_object.sound.mute != new_object.sound.mute)
+            edits.push_back([&ctx, id, muted = new_object.sound.mute] {
+                if (auto* sound = dynamic_cast<SoundLayer*>(findLayer(ctx, id))) sound->setMuted(muted);
+            });
+    }
+
+    if (live.text) {
+        const wallpaper_engine::TextObjectDocument& before = old_object.text;
+        const wallpaper_engine::TextObjectDocument& after = new_object.text;
+        if (before.alpha != after.alpha)
+            edits.push_back([&ctx, id, alpha = (double)after.alpha] {
+                if (auto* text = dynamic_cast<TextLayer*>(findLayer(ctx, id))) text->propertySetNumber("alpha", alpha);
+            });
+        // A script drives the text every frame, so its static text is not used.
+        if (before.text != after.text) {
+            if (!after.script.empty()) return false;
+            edits.push_back([&ctx, id, text = after.text] {
+                if (auto* layer = dynamic_cast<TextLayer*>(findLayer(ctx, id))) layer->propertySetString("text", text);
+            });
+        }
+        if (before.color != after.color) {
+            const std::array<double, 3> color = {after.color[0], after.color[1], after.color[2]};
+            edits.push_back([&ctx, id, color] {
+                if (auto* text = dynamic_cast<TextLayer*>(findLayer(ctx, id))) text->propertySetVector("color", color.data());
+            });
+        }
+    }
+
+    if (live.particle && !sameInstanceOverrides(old_object.particle, new_object.particle)) {
+        edits.push_back([&ctx, id, config = ParticleParser::parseObject(new_object)] {
+            auto* particle = dynamic_cast<ParticleLayer*>(findLayer(ctx, id));
+            if (particle && particle->ps) particle->ps->applyInstanceOverrides(config);
+        });
+    }
+    return true;
+}
+
 // Collects the edits that bring one object up to date. False when the object needs a rebuild.
 bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocument& old_object,
                      const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
@@ -113,8 +324,22 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     Layer* layer = findLayer(ctx, id);
     ImageLayer* image = liveImageLayer(layer);
     const bool image_layer = image != nullptr;
-    if (jsonWithoutLiveFields(old_object.raw_json, image_layer) !=
-        jsonWithoutLiveFields(new_object.raw_json, image_layer))
+    if (!planScriptProperties(ctx, id, old_object, new_object, edits))
+        return rebuildFor(new_object, "a script that cannot update live");
+    if (!planEffectConstants(ctx, id, old_object, new_object, edits))
+        return rebuildFor(new_object, "an effect that cannot update live");
+    if (old_object.camera_path != new_object.camera_path) return rebuildFor(new_object, "a camera path");
+    if (new_object.camera_path && old_object.camera_zoom != new_object.camera_zoom)
+        edits.push_back([&ctx, zoom = new_object.camera_zoom] { ctx.scene.camera.zoom_scale = zoom; });
+    LiveKeys live;
+    live.image = image_layer;
+    live.transform = nodeTransformIsLive(old_object) && nodeTransformIsLive(new_object);
+    live.sound = dynamic_cast<SoundLayer*>(layer) != nullptr;
+    live.text = dynamic_cast<TextLayer*>(layer) != nullptr;
+    live.particle = dynamic_cast<ParticleLayer*>(layer) != nullptr;
+    if (!planLayerProperties(ctx, id, old_object, new_object, live, edits))
+        return rebuildFor(new_object, "a layer setting that cannot update live");
+    if (comparableObject(old_object, live) != comparableObject(new_object, live))
         return rebuildFor(new_object, "a field that is not live");
 
     if (old_object.visible != new_object.visible) {
@@ -134,6 +359,18 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
         edits.push_back([node, scale = new_object.node.scale] { node->scale = scale; });
     }
 
+    if (old_object.node.origin != new_object.node.origin) {
+        SceneTreeNode* node = treeNodeOf(ctx, id);
+        if (!node || scriptOwns(new_object, "origin")) return rebuildFor(new_object, "origin");
+        edits.push_back([node, origin = new_object.node.origin] { node->origin = origin; });
+    }
+
+    if (old_object.node.angles != new_object.node.angles) {
+        SceneTreeNode* node = treeNodeOf(ctx, id);
+        if (!node || scriptOwns(new_object, "angles")) return rebuildFor(new_object, "angles");
+        edits.push_back([node, angles = new_object.node.angles] { node->angles = angles; });
+    }
+
     if (old_object.image.alpha != new_object.image.alpha) {
         if (!image || scriptOwns(new_object, "alpha")) return rebuildFor(new_object, "alpha");
         edits.push_back([image, alpha = new_object.image.alpha] { image->setBaseAlpha(alpha); });
@@ -146,12 +383,6 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
         });
     }
     return true;
-}
-
-// The general block without camera parallax, which is the only general setting applied in place.
-std::string generalWithoutParallax(const std::string& json) {
-    return jsonWithout(
-        json, {"cameraparallax", "cameraparallaxamount", "cameraparallaxdelay", "cameraparallaxmouseinfluence"});
 }
 
 bool sameParallax(const wallpaper_engine::SceneGeneralDocument& a, const wallpaper_engine::SceneGeneralDocument& b) {
@@ -171,6 +402,30 @@ void applyParallaxChange(EngineContext& ctx, const wallpaper_engine::SceneGenera
     applyParallaxScene(ctx, current);
 }
 
+// Copies the live general settings from the fresh parse. Shake and clear color are copied at load, so they are set here too.
+void applyGeneralChange(EngineContext& ctx, const wallpaper_engine::SceneGeneralDocument& fresh) {
+    wallpaper_engine::SceneGeneralDocument& general = ctx.scene.general;
+    general.camera_shake_enabled = fresh.camera_shake_enabled;
+    general.camera_shake_amplitude = fresh.camera_shake_amplitude;
+    general.camera_shake_speed = fresh.camera_shake_speed;
+    general.camera_shake_roughness = fresh.camera_shake_roughness;
+    ctx.shake.enabled = fresh.camera_shake_enabled;
+    ctx.shake.amplitude = fresh.camera_shake_amplitude;
+    ctx.shake.speed = fresh.camera_shake_speed;
+    ctx.shake.roughness = fresh.camera_shake_roughness;
+    general.bloom.strength = fresh.bloom.strength;
+    general.bloom.threshold = fresh.bloom.threshold;
+    general.ambient_color = fresh.ambient_color;
+    general.skylight_color = fresh.skylight_color;
+    general.zoom = fresh.zoom;
+    general.clear_color = fresh.clear_color;
+    if (general.has_clear_color && general.clear_enabled) {
+        ctx.pass_action.colors[0].clear_value = {general.clear_color[0], general.clear_color[1], general.clear_color[2],
+                                                 general.clear_color[3]};
+    }
+    general.raw_json = fresh.raw_json;
+}
+
 // Plans every live edit for the fresh scene. Nothing is applied until the whole plan succeeds.
 bool planSceneEdits(EngineContext& ctx, const wallpaper_engine::SceneDocument& fresh, LiveEdits& edits) {
     if (fresh.objects.size() != ctx.scene.bound_objects.size()) {
@@ -183,8 +438,15 @@ bool planSceneEdits(EngineContext& ctx, const wallpaper_engine::SceneDocument& f
         if (old_object.node.id != new_object.node.id) return false;
         if (!planObjectEdits(ctx, old_object, new_object, edits)) return false;
     }
-    if (generalWithoutParallax(ctx.scene.general.raw_json) != generalWithoutParallax(fresh.general.raw_json)) {
-        LOG_TAG_I("WALLPAPER_MGR", "A general setting other than parallax changed; rebuilding the scene");
+    // Zoom driven by a script is rewritten every frame, so only a script-free zoom can change in place.
+    const bool zoom_live = ctx.scene.general.zoom_script.empty() && fresh.general.zoom_script.empty();
+    if (jsonWithoutLiveGeneral(ctx.scene.general.raw_json, zoom_live) !=
+        jsonWithoutLiveGeneral(fresh.general.raw_json, zoom_live)) {
+        LOG_TAG_I("WALLPAPER_MGR", "A general setting that is not live changed; rebuilding the scene");
+        return false;
+    }
+    if (ctx.scene.general.has_clear_color != fresh.general.has_clear_color) {
+        LOG_TAG_I("WALLPAPER_MGR", "The clear color was added or removed; rebuilding the scene");
         return false;
     }
     return true;
@@ -199,6 +461,7 @@ bool applyBindingsInPlace(EngineContext& ctx, const UserProperties& properties) 
     if (!planSceneEdits(ctx, fresh, edits)) return false;
     for (const auto& edit : edits) edit();
     applyParallaxChange(ctx, fresh.general);
+    applyGeneralChange(ctx, fresh.general);
     ctx.scene.bound_objects = std::move(fresh.objects);
     return true;
 }
@@ -235,12 +498,25 @@ struct WallpaperManager::LoadJob : PreparedLoad {
     std::chrono::steady_clock::time_point last_frame = started;
 };
 
+void WallpaperManager::applyTextureBounds(EngineContext& ctx) {
+    texture_width_ = surface::width();
+    texture_height_ = surface::height();
+    downscale_ = ctx.downscale;
+}
+
+// Each wallpaper instance loads its own textures, so every instance gets the current texture settings.
+void WallpaperManager::configureAssets(AssetManager& assets) const {
+    assets.setDownscaleMethod(downscale_);
+    assets.setOutputSize(texture_width_, texture_height_);
+}
+
 bool WallpaperManager::load(const std::string& scene_directory, EngineContext& ctx) {
     if (scene_directory.empty()) return false;
 
     ProjectInfo info = ProjectInfo::detect(scene_directory);
     attachPreset(info, ctx.wallpaper_path);
     if (!WallpaperLoader::canLoad(info)) return false;
+    applyTextureBounds(ctx);
 
     // The outgoing wallpaper stays alive and playing until the transition ends.
     if (active_instance_) outgoing_instance_ = std::move(active_instance_);
@@ -252,6 +528,7 @@ bool WallpaperManager::load(const std::string& scene_directory, EngineContext& c
     LOG_TAG_I("WALLPAPER_MGR", "New instance audio group=%u for %s", (unsigned)instance->audio_group,
               scene_directory.c_str());
     if (shared_assets_) instance->assets.attachShared(shared_assets_);
+    configureAssets(instance->assets);
     instance->state.wallpaper_path = scene_directory;
     instance->state.source_path = ctx.wallpaper_path;
     instance->state.is_pkg = ctx.is_pkg;
@@ -316,6 +593,20 @@ void WallpaperManager::update(float dt, EngineContext& ctx) {
     }
 
     if (outgoing_instance_ && transition_.active() && !transition_.live()) tickOutgoingAudio(ctx, dt);
+
+    // Shrunk textures were sized for the old output, so the wallpaper reloads to match.
+    const bool output_changed = surface::width() != texture_width_ || surface::height() != texture_height_;
+    if (output_changed && downscale::resizesPixels(downscale_) && active_instance_ && !pending_switch_ && !load_job_) {
+        SwitchRequest reload;
+        reload.path = ctx.wallpaper_path;
+        reload.is_pkg = ctx.is_pkg;
+        reload.properties = ctx.user_properties.toStrings();
+        pending_switch_ = std::move(reload);
+        // Record the size now, so a failed reload is not queued again every frame.
+        texture_width_ = surface::width();
+        texture_height_ = surface::height();
+    }
+
     if (active_instance_ && active_instance_->wallpaper) active_instance_->wallpaper->update(dt, ctx);
 }
 
@@ -592,6 +883,8 @@ void WallpaperManager::pollLoad(EngineContext& ctx) {
         activateInstance(ctx, *job.instance, active_view_);
         ScriptEngine::instance().setAssetsDir(std::string(ctx.engine_path) + "/assets");
         ScriptEngine::instance().setWallpaperId(std::filesystem::path(job.request.path).filename().string());
+        applyTextureBounds(ctx);
+        configureAssets(job.instance->assets);
         if (job.info.type == ProjectType::Scene) {
             auto scene = std::make_unique<Scene2DWallpaper>(ctx);
             scene->beginLoadDocument(std::move(job.document), ctx);

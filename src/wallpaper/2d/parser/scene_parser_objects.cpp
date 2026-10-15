@@ -62,10 +62,17 @@ SceneObjectKind detectObjectKind(const cJSON* object) {
     if (cJSON_IsString(text) || cJSON_IsObject(text)) return SceneObjectKind::Text;
 
     const cJSON* image = cJSON_GetObjectItemCaseSensitive(object, "image");
+    if (cJSON_IsString(image)) return SceneObjectKind::Image;
+
     const cJSON* model = cJSON_GetObjectItemCaseSensitive(object, "model");
-    if (cJSON_IsString(image) || cJSON_IsString(model)) return SceneObjectKind::Image;
+    if (cJSON_IsString(model)) return SceneObjectKind::Model;
 
     return SceneObjectKind::Unknown;
+}
+
+void parseModelFields(const cJSON* object, ModelObjectDocument& model) {
+    readPlainString(object, "model", model.model);
+    model.reflected = parseBool(member(object, "reflected"), false);
 }
 // `alpha` is either a number or an animated property: a fallback `value` plus keyframes under `animation`.
 void parseImageAlpha(const cJSON* alpha, ImageObjectDocument& image) {
@@ -216,6 +223,7 @@ SceneObjectDocument parseObject(const cJSON* object) {
     parseParticleFields(object, doc.particle);
     parseTextFields(object, doc.text);
     parseSoundFields(object, doc.sound);
+    parseModelFields(object, doc.model);
     parseEffects(object, doc.effects);
     for (const char* property : {"origin", "scale", "angles", "color", "alpha"}) {
         parsePropertyAnimation(object, property, doc.animations);

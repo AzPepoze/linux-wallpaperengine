@@ -15,6 +15,7 @@
 #include "wallpaper/2d/parser/scene_document.h"
 #include "wallpaper/2d/puppet/mdl_parser.h"
 #include "wallpaper/2d/puppet/puppet_pose.h"
+#include "shared/graphics/texture_size.h"
 #include "wallpaper/2d/script/scene_script.h"
 
 class EngineContext;
@@ -232,6 +233,10 @@ class ImageLayer : public Layer {
     bool ensureEffectTargets(EngineContext& ctx, sg_image source_image = {SG_INVALID_ID});
     // Target size for a layer whose authored size is width x height, under the --resolution setting.
     std::pair<int, int> layerTargetSize(EngineContext& ctx, int width, int height) const;
+    // Pixel-art layers grow their effect targets to the displayed size; others use layerTargetSize.
+    std::pair<int, int> effectTargetSize(EngineContext& ctx, int width, int height) const;
+    // On-screen size in physical pixels, with the reference-size scale applied.
+    std::pair<double, double> displayedPixelSize(EngineContext& ctx) const;
 
    public:
     void renderEffectChain(EngineContext& ctx, sg_image src_img = {SG_INVALID_ID}, sg_view src_view = {SG_INVALID_ID});

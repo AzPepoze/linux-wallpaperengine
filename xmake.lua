@@ -8,8 +8,8 @@ add_rules("plugin.compile_commands.autoupdate", {outputdir = "."})
 -- ---------------------------------------------------------------------------
 -- Track the upstream heads. Run `xmake require --upgrade` when you want to
 -- refresh the cached dependency revisions.
-add_requires("sokol master")
-add_requires("linmath.h master")
+add_requires("sokol 662761bc242382216f8d508cde3d5ee317cc34f3")
+add_requires("linmath.h 3eef82841046507e16a0f6194a61cee2eadd34b3")
 add_requires("vulkan-headers")
 add_requires("lz4")
 add_requires("cjson")
@@ -43,7 +43,7 @@ if has_config("web") then
     add_requires("pkgconfig::Qt6WebEngineQuick")
 end
 
--- On by default when libwayland-client, wayland-scanner and the lib/wlr-protocols submodule are present. Draws the wallpaper
+-- On by default when libwayland-client, wayland-scanner and the third_party/wlr-protocols submodule are present. Draws the wallpaper
 -- on a wlr-layer-shell surface when --screen-root/--layer is given and a Wayland session is running.
 option("layer_shell")
     set_showmenu(true)
@@ -51,8 +51,8 @@ option("layer_shell")
     on_check(function (option)
         import("lib.detect.find_tool")
         import("lib.detect.find_package")
-        if not os.isfile(path.join(os.projectdir(), "lib/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml")) then
-            cprint("${yellow}layer_shell disabled: run `git submodule update --init` to fetch lib/wlr-protocols")
+        if not os.isfile(path.join(os.projectdir(), "third_party/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml")) then
+            cprint("${yellow}layer_shell disabled: run `git submodule update --init` to fetch third_party/wlr-protocols")
             return
         end
         if find_tool("wayland-scanner") and find_package("pkgconfig::wayland-client") then
@@ -97,9 +97,9 @@ local function generate_wayland_protocols(target)
     os.mkdir(outdir)
 
     -- The request argument "namespace" is a C++ keyword in the generated header, so the build uses a copy of the
-    -- upstream XML (lib/wlr-protocols submodule) with that argument spelled "namespace_".
+    -- upstream XML (third_party/wlr-protocols submodule) with that argument spelled "namespace_".
     local layer_shell = path.join(outdir, "wlr-layer-shell-unstable-v1.xml")
-    local patched = (io.readfile(path.join(os.projectdir(), "lib/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"))
+    local patched = (io.readfile(path.join(os.projectdir(), "third_party/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"))
                          :gsub('name="namespace"', 'name="namespace_"'))
     if not os.isfile(layer_shell) or io.readfile(layer_shell) ~= patched then
         io.writefile(layer_shell, patched)
@@ -164,6 +164,43 @@ target("linux-wallpaperengine")
     add_defines("LWE_WEB=" .. (has_config("web") and "1" or "0"))
     add_defines("LWE_LAYER_SHELL=" .. (has_config("layer_shell") and "1" or "0"))
     add_rules("lwe.version")
+    -- Vendored shader sources (third_party/) are embedded as C strings, so the binary needs no file at runtime.
+    on_load(function (target)
+        local outdir = target:autogendir()
+        os.mkdir(outdir)
+        local function embed(source, include_name, variable, delimiter, patch)
+            local text = io.readfile(path.join(os.projectdir(), source), {encoding = "binary"})
+            if patch then text = patch(text) end
+            io.writefile(path.join(outdir, include_name),
+                         "const char " .. variable .. "[] = R\"" .. delimiter .. "(" .. text .. ")" .. delimiter .. "\";\n")
+        end
+        -- Documented patches (third_party/README.md): samplers arrive as LweCombinedSampler2D, and offsets are
+        -- applied in UV space because the shader compiler needs constant texture offsets.
+        local function replaceOnce(text, from, to)
+            local patched, count = text:gsub(from, to, 1)
+            if count ~= 1 then raise("SMAA.hlsl changed: '" .. from .. "' not found, review the patches") end
+            return patched
+        end
+        embed("third_party/smaa/SMAA.hlsl", "smaa_source.inc", "kSmaaHlsl", "SMAA", function (text)
+            -- Both the HLSL and GLSL branches define it; only the GLSL one is compiled, but patching all keeps them in step.
+            local patched, count = text:gsub("#define SMAATexture2D%(tex%) sampler2D tex",
+                                             "#define SMAATexture2D(tex) LweCombinedSampler2D tex")
+            if count < 1 then raise("SMAA.hlsl changed: SMAATexture2D not found, review the patches") end
+            text = patched
+            text = replaceOnce(text, "#define SMAASampleLevelZeroOffset%(tex, coord, offset%) textureLodOffset%(tex, coord, 0%.0, offset%)",
+                               "#define SMAASampleLevelZeroOffset(tex, coord, offset) textureLod(tex, coord + (offset) * SMAA_RT_METRICS.xy, 0.0)")
+            text = replaceOnce(text, "#define SMAASampleOffset%(tex, coord, offset%) texture%(tex, coord, offset%)",
+                               "#define SMAASampleOffset(tex, coord, offset) texture(tex, coord + (offset) * SMAA_RT_METRICS.xy)")
+            return text
+        end)
+        -- The one documented patch (third_party/fxaa/README.md): the engine passes samplers as LweCombinedSampler2D.
+        embed("third_party/fxaa/FXAA3_11.h", "fxaa_source.inc", "kFxaaHeader", "FXAA", function (text)
+            local patched, count = text:gsub("#define FxaaTex sampler2D", "#define FxaaTex LweCombinedSampler2D", 1)
+            if count ~= 1 then raise("FXAA3_11.h changed: the FxaaTex define was not found, review the patch") end
+            return patched
+        end)
+        target:add("includedirs", outdir, path.join(os.projectdir(), "third_party/smaa"))
+    end)
     -- Plugins call back into the binary, so its host API symbols must be in the dynamic symbol table.
     add_ldflags("-rdynamic", {force = true})
 
@@ -317,6 +354,13 @@ target_end()
 add_test("frame_rate_tests", {"tests/frame_rate_test.cpp", "src/app/frame_rate.cpp"})
 add_test("effect_resolution_tests", {"tests/effect_resolution_test.cpp"})
 add_test("resolution_tests", {"tests/resolution_test.cpp"})
+add_test("antialias_tests", {"tests/antialias_test.cpp"})
+add_test("downscale_tests", {"tests/downscale_test.cpp"})
+add_test("texture_resize_tests", {"tests/texture_resize_test.cpp", "src/shared/assets/texture_resize.cpp"})
+add_test("tex_mips_tests", {"tests/tex_mips_test.cpp", "src/shared/assets/tex_decoder.cpp",
+                            "src/shared/assets/tex_format.cpp", "src/shared/assets/tex_header.cpp",
+                            "src/shared/assets/tex_payload.cpp", "src/shared/core/logger.cpp", "src/shared/core/vfs.cpp"},
+         {"lz4", "stb"})
 add_test("content_bounds_tests", {"tests/content_bounds_test.cpp"})
 add_test("gpu_timing_tests", {"tests/gpu_timing_test.cpp"})
 add_test("performance_profile_tests", {"tests/performance_profile_test.cpp",
@@ -370,8 +414,16 @@ add_test("script_manifest_tests", {"tests/script_manifest_test.cpp", "src/wallpa
          {"quickjs"})
 
 add_test("mdl_tests", {"tests/mdl/*.cpp", "src/wallpaper/2d/puppet/mdl_parser.cpp",
-                       "src/wallpaper/2d/puppet/puppet_pose.cpp", "src/wallpaper/2d/tree/scene_tree.cpp"},
+                       "src/wallpaper/2d/puppet/mdl_mesh.cpp", "src/wallpaper/2d/puppet/puppet_pose.cpp",
+                       "src/wallpaper/2d/tree/scene_tree.cpp"},
          {"linmath.h"})
+
+add_test("static_model_tests", {"tests/static_model_test.cpp", "src/wallpaper/2d/camera/perspective_camera.cpp",
+                                "src/wallpaper/2d/layers/model/static_mesh.cpp",
+                                "src/wallpaper/2d/layers/model/model_material.cpp",
+                                "src/wallpaper/user_properties.cpp", "src/shared/core/vfs.cpp",
+                                "src/shared/core/logger.cpp"},
+         {"linmath.h", "sokol", "cjson"})
 
 add_test("shader_tests", {"tests/shader_preprocess_test.cpp", "src/shared/graphics/shader/shader_processor.cpp",
                           "src/shared/graphics/shader/shader_processor_metadata.cpp",
@@ -416,6 +468,7 @@ add_test("scene_parser_tests", {"tests/scene_parser_test.cpp", "src/wallpaper/2d
                                 "src/wallpaper/2d/parser/scene_parser_objects.cpp",
                                 "src/wallpaper/2d/parser/scene_parser_effects.cpp",
                                 "src/wallpaper/2d/parser/scene_parser_animation.cpp",
+                                "src/wallpaper/2d/parser/scene_parser_camera.cpp",
                                 "src/wallpaper/user_properties.cpp", "src/shared/core/utils.cpp",
                                 "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp"},
          {"cjson"})
@@ -451,6 +504,8 @@ add_test("audio_engine_tests", {"tests/audio_engine_test.cpp", "src/shared/audio
          {"miniaudio", "lz4", "stb"}, {"dl", "m", "pthread"})
 
 add_test("intro_zoom_tests", {"tests/intro_zoom_test.cpp"})
+
+add_test("camera_path_tests", {"tests/camera_path_test.cpp", "src/wallpaper/2d/camera/camera_path.cpp"})
 
 add_test("ogg_decoder_tests", {"tests/ogg_decoder_test.cpp", "src/shared/audio/ogg_decoder.cpp"}, {"stb"})
 
@@ -515,8 +570,8 @@ target("script_corpus")
               "src/shared/core/utils.cpp", "src/shared/core/vfs.cpp", "src/shared/core/logger.cpp",
               "src/wallpaper/2d/parser/scene_parser.cpp", "src/wallpaper/2d/parser/scene_parser_common.cpp",
               "src/wallpaper/2d/parser/scene_parser_objects.cpp", "src/wallpaper/2d/parser/scene_parser_effects.cpp",
-              "src/wallpaper/2d/parser/scene_parser_animation.cpp", "src/wallpaper/user_properties.cpp",
-              "src/wallpaper/2d/animation/animation_timelines.cpp",
+              "src/wallpaper/2d/parser/scene_parser_animation.cpp", "src/wallpaper/2d/parser/scene_parser_camera.cpp",
+              "src/wallpaper/user_properties.cpp", "src/wallpaper/2d/animation/animation_timelines.cpp",
               "src/wallpaper/2d/animation_curve.cpp")
     if is_mode("debug", "asan", "ubsan") then
         add_defines("DEBUG_BUILD=1")

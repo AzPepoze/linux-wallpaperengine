@@ -1,5 +1,6 @@
 #include "tex_decoder.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -15,7 +16,8 @@
 namespace wallpaper_engine {
 using namespace tex_internal;
 
-DecodedImage decodeTexture(const char* path, int image_index) {
+// Decodes one mip level of one image. Level 0 is the full-size image.
+DecodedImage decodeTextureLevel(const char* path, int image_index, uint32_t level) {
     if (!path) return {};
 
     const char* extension = std::strrchr(path, '.');
@@ -35,7 +37,7 @@ DecodedImage decodeTexture(const char* path, int image_index) {
         return {};
     }
 
-    LOG_TAG_I(TAG, "Loading texture: %s (images: %u, requested: %d)", path, header.image_count, image_index);
+    if (level == 0) LOG_TAG_I(TAG, "Loading texture: %s (images: %u, requested: %d)", path, header.image_count, image_index);
     if (image_index < 0 || image_index >= static_cast<int>(header.image_count)) {
         LOG_TAG_W(TAG, "Requested image index %d out of bounds (count: %u)", image_index, header.image_count);
         return {};
@@ -63,7 +65,7 @@ DecodedImage decodeTexture(const char* path, int image_index) {
             }
 
             const uint32_t data_size = readU32(file);
-            const bool requested = (image_number == static_cast<uint32_t>(image_index)) && (mip == 0);
+            const bool requested = (image_number == static_cast<uint32_t>(image_index)) && (mip == level);
             if (!requested) {
                 std::fseek(file, static_cast<long>(data_size), SEEK_CUR);
                 continue;
@@ -149,6 +151,31 @@ DecodedImage decodeTexture(const char* path, int image_index) {
     }
 
     return {};
+}
+
+DecodedImage decodeTexture(const char* path, int image_index) {
+    return decodeTextureLevel(path, image_index, 0);
+}
+
+std::vector<DecodedImage> decodeTextureMips(const char* path, int image_index) {
+    const char* extension = path ? std::strrchr(path, '.') : nullptr;
+    if (!extension || std::strcmp(extension, ".tex") != 0) return {};
+
+    const TextureMetadata metadata = inspectTextureMetadata(path);
+    if (!metadata.valid || image_index < 0 || image_index >= static_cast<int>(metadata.mip_counts.size())) return {};
+
+    std::vector<DecodedImage> levels;
+    uint32_t level_width = metadata.width;
+    uint32_t level_height = metadata.height;
+    for (uint32_t level = 0; level < metadata.mip_counts[image_index]; ++level) {
+        DecodedImage image = decodeTextureLevel(path, image_index, level);
+        // A level must be exactly half the one before it, or the chain would be wrong.
+        if (!image.valid() || image.is_video || image.width != level_width || image.height != level_height) return {};
+        levels.push_back(std::move(image));
+        level_width = std::max(1u, level_width / 2);
+        level_height = std::max(1u, level_height / 2);
+    }
+    return levels;
 }
 
 }  // namespace wallpaper_engine

@@ -34,14 +34,14 @@ bool isCompositeRenderTarget(const std::string& name) {
 
 // `exact` replaces the target texel for texel instead of alpha-blending onto transparent black.
 void copyInputToTarget(EngineContext& ctx, sg_image input_image, sg_view input_view, sg_view target, int width,
-                       int height, bool exact = false) {
+                       int height, bool exact = false, bool nearest = false) {
     sg_pass copy_pass = colorPass(target, SG_LOADACTION_CLEAR);
     const int gpu_token = gpu_timing_begin_pass("copy");
     sg_begin_pass(&copy_pass);
     renderer_update_viewport(&ctx.renderer, (float)width, (float)height);
     float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     renderer_draw_sprite(ctx, &ctx.renderer, input_image, input_view, 0.0f, 0.0f, (float)width, (float)height, 0.0f,
-                         white, false, nullptr, exact);
+                         white, false, nullptr, exact, {}, nearest);
     sg_end_pass();
     gpu_timing_end_pass(gpu_token);
 }
@@ -170,8 +170,9 @@ void ImageLayer::tracePass(IRenderObserver& diag, EngineContext& ctx, const Effe
         binding.image_id = image.id;
         binding.view_id = view.id;
         const sg_image_desc desc = sg_query_image_desc(image);
-        binding.width = desc.width;
-        binding.height = desc.height;
+        const texture_size::Size size = texture_size::of(image);
+        binding.width = size.width;
+        binding.height = size.height;
         binding.is_render_target = desc.usage.color_attachment;
     };
     auto describeNamedTarget = [](TextureBindingTrace& binding, const NamedRenderTarget& target) {
@@ -223,10 +224,10 @@ const content_bounds::Rect& ImageLayer::passActiveRegion(EngineContext& ctx, con
                               !textures.texture_paths.empty() && !textures.texture_paths[0].empty() &&
                               !textures.textures.empty() && textures.textures[0].id != SG_INVALID_ID;
     if (masked_waves && effect_target_width > 0 && effect_target_height > 0) {
-        const sg_image_desc mask_desc = sg_query_image_desc(textures.textures[0]);
-        const double mask_aspect = (double)mask_desc.width / std::max(1, mask_desc.height);
+        const texture_size::Size mask_size = texture_size::of(textures.textures[0]);
+        const double mask_aspect = (double)mask_size.width / std::max(1, mask_size.height);
         const double layer_aspect = (double)effect_target_width / effect_target_height;
-        if (mask_desc.width > 0 && std::abs(mask_aspect / layer_aspect - 1.0) < 0.01) {
+        if (mask_size.width > 0 && std::abs(mask_aspect / layer_aspect - 1.0) < 0.01) {
             region = ctx.asset_mgr->textureContentBounds(textures.texture_paths[0].c_str());
         }
     }
@@ -286,6 +287,7 @@ uint64_t ImageLayer::effectChainSignature(EngineContext& ctx, sg_image base_imag
 }
 
 void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view src_view) {
+    const bool nearest = (texture_metadata.flags & wallpaper_engine::kTextureFlagNoInterpolation) != 0;
     const sg_image previous_output_image = effect_output_image;
     const sg_view previous_output_view = effect_output_view;
     effect_output_image = {SG_INVALID_ID};
@@ -336,8 +338,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
     ChainState state;
     state.layer_source_image = state.input_image = state.chain_image = base_img;
     state.layer_source_view = state.input_view = state.chain_view = base_view;
-    const sg_image_desc source_desc = sg_query_image_desc(state.input_image);
-    diag.onSourceImage(0, state.input_image, source_desc.width, source_desc.height);
+    const texture_size::Size source_size = texture_size::of(state.input_image);
+    diag.onSourceImage(0, state.input_image, source_size.width, source_size.height);
 
     const float saved_view_width = ctx.renderer.view_width;
     const float saved_view_height = ctx.renderer.view_height;
@@ -374,7 +376,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 if (named_target) {
                     // Copy the input through so downstream passes do not sample an uninitialised buffer.
                     copyInputToTarget(ctx, state.input_image, state.input_view,
-                                      named_target->currentWrite().attachment_view, target_width, target_height);
+                                      named_target->currentWrite().attachment_view, target_width, target_height, false,
+                                      nearest);
                     named_target->swap();
                 }
                 continue;
@@ -388,7 +391,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             if (pass->compiled.pipeline.id == SG_INVALID_ID) {
                 // A pass that never compiled forwards its input, so no later pass reads uninitialised targets.
                 copyInputToTarget(ctx, state.input_image, state.input_view, output_attachment, target_width,
-                                  target_height);
+                                  target_height, false, nearest);
                 advanceChain(state, named_target);
                 continue;
             }
@@ -425,7 +428,8 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
                 if (region.valid) active_region = &region;
             }
             if (active_region) {
-                copyInputToTarget(ctx, inputs.image, inputs.view, output_attachment, target_width, target_height, true);
+                copyInputToTarget(ctx, inputs.image, inputs.view, output_attachment, target_width, target_height, true,
+                                  nearest);
             }
             sg_pass offscreen_pass =
                 colorPass(output_attachment, active_region ? SG_LOADACTION_LOAD : SG_LOADACTION_CLEAR);
@@ -446,7 +450,7 @@ void ImageLayer::renderEffectChain(EngineContext& ctx, sg_image src_img, sg_view
             render_pass.logical_scale = effect_logical_scale;
             float effect_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
             renderer_draw_sprite(ctx, &ctx.renderer, inputs.image, inputs.view, 0.0f, 0.0f, (float)target_width,
-                                 (float)target_height, 0.0f, effect_tint, false, &render_pass);
+                                 (float)target_height, 0.0f, effect_tint, false, &render_pass, false, {}, nearest);
             sg_end_pass();
             if (ctx.performance_profile) gpu_timing_end_pass(gpu_token);
 

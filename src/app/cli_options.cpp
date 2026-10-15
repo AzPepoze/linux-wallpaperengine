@@ -182,6 +182,18 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         opts.resolution = resolution::Setting{};
     }
 
+    const std::string antialias_text = resolve({"--antialias"}, "antialias", "off");
+    if (!antialias::parse(antialias_text, opts.antialias)) {
+        fprintf(stderr, "Unknown antialias '%s'; using off\n", antialias_text.c_str());
+        opts.antialias = antialias::Mode::Off;
+    }
+
+    const std::string downscale_text = resolve({"--downscale"}, "downscale", "auto");
+    if (!downscale::parse(downscale_text, opts.downscale)) {
+        fprintf(stderr, "Unknown downscale '%s'; using auto\n", downscale_text.c_str());
+        opts.downscale = downscale::Method::Auto;
+    }
+
     opts.help = cli_args::hasFlag(args, {"-h", "--help"});
     opts.whoareyou = cli_args::hasFlag(args, {"--whoareyou"});
     opts.version = cli_args::hasFlag(args, {"-V", "--version"});

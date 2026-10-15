@@ -5,6 +5,8 @@
 #include <utility>
 #include <vector>
 
+#include "shared/core/antialias.h"
+#include "shared/core/downscale.h"
 #include "shared/core/logger.h"
 #include "shared/core/resolution.h"
 #include "shared/graphics/diagnostics/diagnostic_config.h"
@@ -50,7 +52,9 @@ struct CliOptions {
     float intro_zoom = 1.0f;
     float intro_duration = 4.0f;
     resolution::Setting resolution;  // --resolution
-    WindowGeometry window;           // --window XxYxWxH
+    antialias::Mode antialias = antialias::Mode::Off;      // --antialias
+    downscale::Method downscale = downscale::Method::Auto;  // --downscale
+    WindowGeometry window;                                 // --window XxYxWxH
     bool performance_profile = false;
     bool script_profile = false;  // log the most expensive scripts every few seconds
     bool no_ui = false;

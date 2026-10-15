@@ -10,7 +10,7 @@
 
 namespace {
 constexpr uint64_t kAcquireTimeoutNs = 100ull * 1000 * 1000;
-constexpr uint32_t kMinImageCount = 3;
+constexpr uint32_t kMinImageCount = 2;
 const char* const kDeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
 
 bool hasDeviceExtensions(VkPhysicalDevice device) {

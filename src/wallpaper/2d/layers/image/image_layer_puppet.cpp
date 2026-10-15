@@ -162,9 +162,9 @@ bool ImageLayer::renderPuppet(EngineContext& ctx) {
         has_effect_output ? effect_output_view
                           : (current_texture_frame ? (sg_view)animated_frame.texture_view : (sg_view)cached_view);
 
-    const sg_image_desc material_desc = sg_query_image_desc(img);
-    int width = (int)std::lround(size[0] > 0.0f ? size[0] : (float)material_desc.width);
-    int height = (int)std::lround(size[1] > 0.0f ? size[1] : (float)material_desc.height);
+    const texture_size::Size material_size = texture_size::of(img);
+    int width = (int)std::lround(size[0] > 0.0f ? size[0] : (float)material_size.width);
+    int height = (int)std::lround(size[1] > 0.0f ? size[1] : (float)material_size.height);
     width = std::max(1, width);
     height = std::max(1, height);
     updatePuppetPositions(width, height);

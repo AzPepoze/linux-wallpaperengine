@@ -9,7 +9,9 @@
 
 #include "app/platform/pointer/pointer_source.h"
 #include "shared/assets/asset_manager.h"
+#include "shared/core/antialias.h"
 #include "shared/core/config.h"
+#include "shared/core/downscale.h"
 #include "shared/core/resolution.h"
 #include "shared/graphics/render.h"
 #include "sokol_gfx.h"
@@ -127,6 +129,8 @@ struct EngineContext {
     float intro_zoom = 1.0f;
     float intro_duration = 4.0f;
     resolution::Setting resolution;
+    antialias::Mode antialias = antialias::Mode::Off;
+    downscale::Method downscale = downscale::Method::Auto;
     bool performance_profile = false;
     int fps_limit = 0;  // runtime frame-rate cap; 0 = vsync, no software cap
     sg_pass_action pass_action = {};

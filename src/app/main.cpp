@@ -142,6 +142,8 @@ static void applyCliToContext() {
     ctx.intro_zoom = cli.intro_zoom;
     ctx.intro_duration = cli.intro_duration;
     ctx.resolution = cli.resolution;
+    ctx.antialias = cli.antialias;
+    ctx.downscale = cli.downscale;
     ctx.parallax_smoothing = cli.parallax.smoothing;
     ctx.parallax_scale = cli.parallax.scale;
     ctx.disable_parallax = cli.disable_parallax;
@@ -207,6 +209,7 @@ static void init(void) {
         exit(EXIT_FAILURE);
     }
     ctx.asset_mgr = &asset_manager;
+    asset_manager.setDownscaleMethod(ctx.downscale);
     shared_assets.engine_path = ctx.engine_path;
     shared_assets.engine_provider = std::make_unique<EngineAssetProvider>(ctx.engine_path);
     shared_assets.internal_provider = std::make_unique<InternalAssetProvider>();
@@ -374,8 +377,8 @@ static bool printsInfoOnly() {
 }
 
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
-    // Two malloc arenas keep parallel loading from leaving tens of MB resident.
-    mallopt(M_ARENA_MAX, 2);
+    // One malloc arena: parallel loading otherwise leaves a separate heap per worker thread resident.
+    mallopt(M_ARENA_MAX, 1);
     cli = CliOptions::parse(argc, argv);
     logger_init(printsInfoOnly() ? LOG_LEVEL_ERROR : cli.log_level);
     // Identity probe must come before GPU work and logging so stdout stays one JSON line.

@@ -88,8 +88,9 @@ void ImageLayer::draw(EngineContext& ctx) {
     } else if (has_effect_output || puppet_resolved) {
         quad = {SG_INVALID_ID};
     }
+    const bool nearest = (texture_metadata.flags & wallpaper_engine::kTextureFlagNoInterpolation) != 0;
     renderer_draw_sprite(ctx, &ctx.renderer, draw_image, draw_view, rect.x, rect.y, rect.width, rect.height,
-                         rect.rotation, tint, false, nullptr, false, quad);
+                         rect.rotation, tint, false, nullptr, false, quad, nearest);
 }
 
 void ImageLayer::updateOutputQuad(EngineContext& ctx) {

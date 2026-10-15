@@ -73,6 +73,10 @@ class Layer : public ILayer {
     virtual bool usesTexturePath(const std::string& /*path*/) const {
         return false;
     }
+    // True for 3D layers, which draw with the scene depth buffer attached.
+    virtual bool needsDepthBuffer() const {
+        return false;
+    }
 
     bool draw_debug_bounds = false;
 

@@ -7,10 +7,12 @@
 #include <vector>
 
 #include "render.h"
+#include "pipeline_variants.h"
 #include "render_internal.h"
 #include "shader/shader_backend.h"
 #include "shader/shader_compiler.h"
 #include "shader/shader_processor.h"
+#include "shared/core/downscale.h"
 #include "shared/core/engine_context.h"
 #include "shared/core/logger.h"
 #include "shared/core/task_pool.h"
@@ -18,6 +20,8 @@
 #include "sokol_glue.h"
 
 namespace {
+#include "fxaa_source.inc"
+
 using render_internal::kFirstWallpaperBlendMode;
 using render_internal::kLastWallpaperBlendMode;
 
@@ -202,6 +206,37 @@ const std::string kPresentFragmentSource =
     "  frag_color = vec4(x, c.a);\n"
     "}\n";
 
+// NVIDIA FXAA 3.11 (third_party/fxaa, BSD-3) is the anti-aliasing; the knee is the same one kPresentFragmentSource uses.
+// The sampler is not named "tex": the header's FxaaPixelShader takes a parameter with that name.
+// texel.xy holds 1/width and 1/height of the target.
+const std::string kPresentFxaaFragmentSource =
+    "#version 330\n"
+    "#define FXAA_PC 1\n"
+    "#define FXAA_GLSL_130 1\n"
+    "#define FXAA_QUALITY__PRESET 12\n"
+    "#define FXAA_GREEN_AS_LUMA 1\n"
+    "uniform vec4 texel;\n"
+    // Offsets are applied in UV space: the shader compiler needs constant texture offsets, and FXAA's are runtime.
+    "vec4 textureLodOffset(LweCombinedSampler2D sampler, vec2 uv, float lod, vec2 offset) {\n"
+    "  return sampler.t.SampleLevel(sampler.s, uv + offset * texel.xy, lod);\n"
+    "}\n" +
+    std::string(kFxaaHeader) +
+    "in vec2 uv;\n"
+    "out vec4 frag_color;\n"
+    "uniform sampler2D fxaa_src;\n"
+    "vec3 knee(vec3 c) {\n"
+    "  vec3 x = max(c, vec3(0.0));\n"
+    "  const float k = 0.75;\n"
+    "  const float range = 1.0 - k;\n"
+    "  vec3 rolled = k + range * (vec3(1.0) - exp(-max(x - k, vec3(0.0)) / range));\n"
+    "  return mix(x, rolled, step(vec3(k), x));\n"
+    "}\n"
+    "void main() {\n"
+    "  vec4 aa = FxaaPixelShader(uv, vec4(0.0), fxaa_src, fxaa_src, fxaa_src, texel.xy, vec4(0.0), vec4(0.0),\n"
+    "                            vec4(0.0), 0.75, 0.166, 0.0833, 0.0, 0.0, 0.0, vec4(0.0));\n"
+    "  frag_color = vec4(knee(aa.rgb), aa.a);\n"
+    "}\n";
+
 const std::string kMeshVertexSource =
     "#version 330\n"
     "uniform mat4 mvp;\n"
@@ -282,16 +317,33 @@ void createGeometryBuffers(renderer_t* r) {
     r->bind.index_buffer = r->index_buffer;
 }
 
-void createSamplers(renderer_t* r) {
+constexpr uint32_t kAnisotropyLevel = 8;
+
+// Pixel-art samplers never use mip levels, so they keep nearest sampling for every method.
+void createSamplers(renderer_t* r, downscale::Method method) {
     sg_sampler_desc s_desc = {};
     s_desc.min_filter = SG_FILTER_LINEAR;
     s_desc.mag_filter = SG_FILTER_LINEAR;
+    s_desc.mipmap_filter = downscale::usesMipChain(method) ? SG_FILTER_LINEAR : SG_FILTER_NEAREST;
+    const bool anisotropic = method == downscale::Method::Aniso || method == downscale::Method::Auto;
+    s_desc.max_anisotropy = anisotropic ? kAnisotropyLevel : 1;
     s_desc.wrap_u = SG_WRAP_REPEAT;
     s_desc.wrap_v = SG_WRAP_REPEAT;
     r->smp_repeat = sg_make_sampler(&s_desc);
     s_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
     s_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
     r->smp_clamp = sg_make_sampler(&s_desc);
+    s_desc.min_filter = SG_FILTER_NEAREST;
+    s_desc.mag_filter = SG_FILTER_NEAREST;
+    s_desc.mipmap_filter = SG_FILTER_NEAREST;
+    s_desc.max_lod = 0.0f;
+    s_desc.max_anisotropy = 1;
+    s_desc.wrap_u = SG_WRAP_REPEAT;
+    s_desc.wrap_v = SG_WRAP_REPEAT;
+    r->smp_nearest_repeat = sg_make_sampler(&s_desc);
+    s_desc.wrap_u = SG_WRAP_CLAMP_TO_EDGE;
+    s_desc.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
+    r->smp_nearest_clamp = sg_make_sampler(&s_desc);
     for (int i = 0; i < SG_MAX_SAMPLER_BINDSLOTS; i++) {
         r->bind.samplers[i] = r->smp_repeat;
     }
@@ -323,9 +375,9 @@ void createSpritePipelines(renderer_t* r) {
     pip_desc.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
     pip_desc.index_type = SG_INDEXTYPE_UINT16;
     useAlphaBlend(pip_desc);
-    r->pip_alpha = sg_make_pipeline(&pip_desc);
+    r->pip_alpha = pipeline_variants::make(pip_desc);
     pip_desc.colors[0].blend.enabled = false;
-    r->pip_copy = sg_make_pipeline(&pip_desc);
+    r->pip_copy = pipeline_variants::make(pip_desc);
     pip_desc.colors[0].blend.enabled = true;
 
     sg_pipeline_desc unpremul_desc = pip_desc;
@@ -337,14 +389,20 @@ void createSpritePipelines(renderer_t* r) {
     present_desc.shader = makeSpriteShader(kSpriteVertexSource, kPresentFragmentSource, "renderer-present");
     present_desc.colors[0].blend = {};
     r->pip_present = sg_make_pipeline(&present_desc);
+    sg_shader_desc fxaa_shader_desc = spriteShaderDesc();
+    fxaa_shader_desc.uniform_blocks[1].glsl_uniforms[0].glsl_name = "texel";
+    fxaa_shader_desc.texture_sampler_pairs[0].glsl_name = "fxaa_src";
+    present_desc.shader = create_backend_shader(&fxaa_shader_desc, kSpriteVertexSource, kPresentFxaaFragmentSource,
+                                                "renderer-present-fxaa");
+    r->pip_present_fxaa = sg_make_pipeline(&present_desc);
 
     pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE;
-    r->pip_add = sg_make_pipeline(&pip_desc);
+    r->pip_add = pipeline_variants::make(pip_desc);
 
     pip_desc.primitive_type = SG_PRIMITIVETYPE_LINES;
     pip_desc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    r->pip_lines = sg_make_pipeline(&pip_desc);
+    r->pip_lines = pipeline_variants::make(pip_desc);
 }
 
 void createMeshPipeline(renderer_t* r) {
@@ -355,16 +413,16 @@ void createMeshPipeline(renderer_t* r) {
     desc.layout.attrs[1].buffer_index = 1;
     desc.index_type = SG_INDEXTYPE_UINT16;
     useAlphaBlend(desc);
-    r->pip_mesh = sg_make_pipeline(&desc);
+    r->pip_mesh = pipeline_variants::make(desc);
 }
 }  // namespace
 
-void renderer_init(renderer_t* r, float w, float h) {
+void renderer_init(renderer_t* r, float w, float h, downscale::Method downscale_method) {
     r->view_width = w;
     r->view_height = h;
 
     createGeometryBuffers(r);
-    createSamplers(r);
+    createSamplers(r, downscale_method);
     createFallbackTextures(r);
     createSpritePipelines(r);
     createMeshPipeline(r);
@@ -443,6 +501,7 @@ void renderer_cleanup(renderer_t* r) {
     r->pip_add = {};
     r->pip_unpremul = {};
     r->pip_present = {};
+    r->pip_present_fxaa = {};
     r->pip_lines = {};
     r->pip_mesh = {};
     for (auto& pipeline : r->pip_image_composite) pipeline = {};
@@ -452,6 +511,8 @@ void renderer_cleanup(renderer_t* r) {
     r->index_buffer = {};
     r->smp_repeat = {};
     r->smp_clamp = {};
+    r->smp_nearest_repeat = {};
+    r->smp_nearest_clamp = {};
     r->white_view = {};
     r->white_pixel = {};
     r->black_view = {};

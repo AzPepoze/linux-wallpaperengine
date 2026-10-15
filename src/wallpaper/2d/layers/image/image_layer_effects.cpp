@@ -7,6 +7,18 @@
 
 std::pair<int, int> ImageLayer::layerTargetSize(EngineContext& ctx, int width, int height) const {
     if (ctx.resolution.mode == resolution::Setting::Mode::Native) return {width, height};
+    const auto [displayed_width, displayed_height] = displayedPixelSize(ctx);
+    return resolution::targetSize(width, height, displayed_width, displayed_height);
+}
+
+std::pair<int, int> ImageLayer::effectTargetSize(EngineContext& ctx, int width, int height) const {
+    const bool nearest = (texture_metadata.flags & wallpaper_engine::kTextureFlagNoInterpolation) != 0;
+    if (!nearest || ctx.resolution.mode == resolution::Setting::Mode::Native) return layerTargetSize(ctx, width, height);
+    const auto [displayed_width, displayed_height] = displayedPixelSize(ctx);
+    return resolution::upscaledTargetSize(width, height, displayed_width, displayed_height);
+}
+
+std::pair<double, double> ImageLayer::displayedPixelSize(EngineContext& ctx) const {
     const ScreenRect rect = screenRect(ctx);
     const double sx = ctx.renderer.view_width > 0 && ctx.scene.physical_view_width > 0
                           ? ctx.scene.physical_view_width / ctx.renderer.view_width
@@ -18,16 +30,15 @@ std::pair<int, int> ImageLayer::layerTargetSize(EngineContext& ctx, int width, i
     const double c = std::cos(angle), s = std::sin(angle);
     const double ratio =
         resolution::referenceRatio(ctx.resolution, ctx.scene.physical_view_width, ctx.scene.physical_view_height);
-    return resolution::targetSize(width, height, rect.width * std::hypot(c * sx, s * sy) * ratio,
-                                  rect.height * std::hypot(s * sx, c * sy) * ratio);
+    return {rect.width * std::hypot(c * sx, s * sy) * ratio, rect.height * std::hypot(s * sx, c * sy) * ratio};
 }
 
 ImageLayer::RenderSizeInfo ImageLayer::renderSizeInfo() const {
     RenderSizeInfo info;
     if (img.id != SG_INVALID_ID) {
-        const sg_image_desc desc = sg_query_image_desc(img);
-        info.authored_width = desc.width;
-        info.authored_height = desc.height;
+        const texture_size::Size authored = texture_size::of(img);
+        info.authored_width = authored.width;
+        info.authored_height = authored.height;
     }
     if (puppet_resolved && puppet_target.image.id != SG_INVALID_ID) {
         info.target = "puppet";
@@ -44,10 +55,10 @@ ImageLayer::RenderSizeInfo ImageLayer::renderSizeInfo() const {
 bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) {
     sg_image target_source = source_image.id != SG_INVALID_ID ? source_image : (sg_image)img;
     if (target_source.id == SG_INVALID_ID) return false;
-    const sg_image_desc source_desc = sg_query_image_desc(target_source);
-    if (source_desc.width <= 0 || source_desc.height <= 0) return false;
-    int width = source_desc.width;
-    int height = source_desc.height;
+    const texture_size::Size source_size = texture_size::of(target_source);
+    if (source_size.width <= 0 || source_size.height <= 0) return false;
+    int width = source_size.width;
+    int height = source_size.height;
     // Layers larger than the screen run effects at on-screen size; resolution uniforms keep the authored size.
     bool eligible = !is_fullscreen && !copy_background && !is_compose_region && !effects.empty();
     for (const Effect* effect : effects) {
@@ -69,11 +80,11 @@ bool ImageLayer::ensureEffectTargets(EngineContext& ctx, sg_image source_image) 
         if (!eligible) break;
     }
     if (eligible) {
-        const auto dimensions = layerTargetSize(ctx, width, height);
+        const auto dimensions = effectTargetSize(ctx, width, height);
         width = dimensions.first;
         height = dimensions.second;
     }
-    effect_logical_scale = std::max(1.0f, (float)source_desc.width / (float)std::max(1, width));
+    effect_logical_scale = std::max(1.0f, (float)source_size.width / (float)std::max(1, width));
     if (effect_target_width == width && effect_target_height == height && effect_targets[0].image.id != SG_INVALID_ID &&
         effect_targets[1].image.id != SG_INVALID_ID && effect_targets[0].texture_view.id != SG_INVALID_ID &&
         effect_targets[1].texture_view.id != SG_INVALID_ID && effect_targets[0].attachment_view.id != SG_INVALID_ID &&

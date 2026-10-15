@@ -4,6 +4,7 @@
 #include "render.h"
 #include "shared/core/config.h"
 #include "shared/core/engine_context.h"
+#include "texture_size.h"
 
 void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
                                   int index_count, sg_image main_image, sg_view main_view,
@@ -18,16 +19,16 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 
     for (int slot = 0; slot < SG_MAX_SAMPLER_BINDSLOTS; ++slot) r->bind.samplers[slot] = r->smp_repeat;
 
-    sg_apply_pipeline(pass->pipeline);
+    pipeline_variants::apply(pass->pipeline);
     r->bind.vertex_buffers[0] = vertex_buffer;
     r->bind.index_buffer = index_buffer;
     r->bind.views[0] = main_view;
     r->bind.samplers[0] = pass->repeat_effect_input ? r->smp_repeat : r->smp_clamp;
 
     builtin_uniforms_t builtins = input_builtins;
-    const sg_image_desc main_desc = sg_query_image_desc(main_image);
-    builtins.texture_resolutions[0][0] = main_desc.width > 0 ? (float)main_desc.width : 1.0f;
-    builtins.texture_resolutions[0][1] = main_desc.height > 0 ? (float)main_desc.height : 1.0f;
+    const texture_size::Size main_size = texture_size::of(main_image);
+    builtins.texture_resolutions[0][0] = main_size.width > 0 ? (float)main_size.width : 1.0f;
+    builtins.texture_resolutions[0][1] = main_size.height > 0 ? (float)main_size.height : 1.0f;
     builtins.texture_resolutions[0][2] = builtins.texture_resolutions[0][0];
     builtins.texture_resolutions[0][3] = builtins.texture_resolutions[0][1];
 
@@ -48,10 +49,11 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
         const sg_image sampled_image = sg_query_view_image(r->bind.views[slot]);
         if (sampled_image.id != SG_INVALID_ID) {
             const sg_image_desc sampled_desc = sg_query_image_desc(sampled_image);
+            const texture_size::Size sampled_size = texture_size::of(sampled_image);
             if (sampled_desc.usage.color_attachment) r->bind.samplers[slot] = r->smp_clamp;
             if (slot < 5) {
-                builtins.texture_resolutions[slot][0] = sampled_desc.width > 0 ? (float)sampled_desc.width : 1.0f;
-                builtins.texture_resolutions[slot][1] = sampled_desc.height > 0 ? (float)sampled_desc.height : 1.0f;
+                builtins.texture_resolutions[slot][0] = sampled_size.width > 0 ? (float)sampled_size.width : 1.0f;
+                builtins.texture_resolutions[slot][1] = sampled_size.height > 0 ? (float)sampled_size.height : 1.0f;
                 builtins.texture_resolutions[slot][2] = builtins.texture_resolutions[slot][0];
                 builtins.texture_resolutions[slot][3] = builtins.texture_resolutions[slot][1];
             }

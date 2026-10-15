@@ -14,7 +14,8 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [x] Scene wallpapers (Partial)
     - [x] Image, text, particle and sound layers
     - [x] Effects and camera parallax
-    - [ ] Light layers and 3D models
+    - [x] Static 3D model objects (Partial)
+    - [ ] Light layers and skinned 3D models
   - [x] Video wallpapers (Partial)
     - [x] mp4, webm, mkv and more
     - [x] Hardware video decoding
@@ -41,7 +42,7 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [x] Parallax
   - [x] Shake
   - [x] Zoom
-  - [ ] Perspective cameras
+  - [x] Perspective camera for 3D model objects (Partial)
 - [x] Particles (Partial)
   - [x] Common emitters, movement and trails
   - [ ] Some operators
@@ -51,9 +52,10 @@ This page lists the features of Wallpaper Engine, and which ones this project su
 - [x] Puppet warp (Partial)
   - [x] Skinned models and clips
   - [ ] Blend shapes and physics
-- [ ] Lighting and 3D
+- [x] Lighting and 3D (Partial)
   - [ ] 2D lighting and normal maps
-  - [ ] 3D models
+  - [x] Static 3D models with depth and floor reflections (Partial)
+  - [ ] Skinned 3D models, lighting and shadows
 - [x] Scripts, SceneScript (Partial)
   - [x] Most common scripts
   - [ ] Some APIs are stubs
@@ -74,10 +76,23 @@ This page lists the features of Wallpaper Engine, and which ones this project su
 - [x] Mouse (Partial)
   - [x] Follows the mouse
   - [x] Click and hover on layers
-- [ ] Keyboard, touch and gamepad
 - [x] Package files and textures
   - [x] `.pkg` files
   - [x] `.tex` textures
+  - [x] Mip levels for large textures by default (`--downscale auto`), stored or generated, plus box and lanczos shrink
+  - [x] Anti-aliasing for scene wallpapers (`--antialias`, see [Anti-aliasing](features-detail.md#anti-aliasing))
+    - [x] MSAA 2x, 4x, 8x, same as Wallpaper Engine's Anti-aliasing options
+    - [x] FXAA and SMAA, which Wallpaper Engine does not offer
+- [x] Performance settings (Partial)
+  - [x] FPS cap (`-f`/`--fps`)
+  - [x] Texture size (`--downscale`)
+  - [x] Pause when the app is suspended or minimized
+  - [x] Model reflections (Partial, no on/off setting)
+  - [x] Effects and bloom (Partial, no on/off setting outside debug builds)
+  - [ ] Quality presets (Low, Medium, High, Ultra)
+  - [ ] Shadows and volumetric lighting
+  - [ ] Pause when another app is maximized, fullscreen or playing audio, when the display sleeps, and application rules
+- [ ] General settings (process priority, video loading and loop, crash restart, and more)
 - [x] Command line
 - [x] GPU selection
 - [ ] Multi-monitor in one process

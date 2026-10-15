@@ -1,6 +1,7 @@
 #include "shader_compiler.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <regex>
 #include <string>
 #include <vector>
@@ -11,6 +12,7 @@
 #include "shared/core/config.h"
 #include "shared/core/load_trace.h"
 #include "shared/core/logger.h"
+#include "shared/graphics/pipeline_variants.h"
 #include "shared/graphics/render.h"
 
 namespace {
@@ -48,10 +50,69 @@ void configureParticleBuiltins(sg_shader_desc& desc) {
     }
 }
 
+ShaderVertexLayout detectVertexLayout(const std::string& vertex_source, bool mesh_geometry) {
+    if (mesh_geometry) return ShaderVertexLayout::Mesh3D;
+    if (vertex_source.find("a_TexCoordC4") != std::string::npos &&
+        vertex_source.find("a_PositionVec4") != std::string::npos)
+        return ShaderVertexLayout::ParticleRope;
+    if (usesParticleSpriteLayout(vertex_source)) return ShaderVertexLayout::ParticleSprite;
+    return ShaderVertexLayout::Sprite2D;
+}
+
+void setMeshVertexAttributes(sg_shader_desc& desc) {
+    desc.attrs[0].glsl_name = "a_Position";
+    desc.attrs[1].glsl_name = "a_Normal";
+    desc.attrs[2].glsl_name = "a_Tangent4";
+    desc.attrs[3].glsl_name = "a_TexCoord";
+}
+
+void setVertexAttribute(sg_pipeline_desc& desc, int slot, size_t offset, sg_vertex_format format) {
+    desc.layout.attrs[slot].offset = (int)offset;
+    desc.layout.attrs[slot].format = format;
+}
+
+void setMeshVertexLayout(sg_pipeline_desc& desc) {
+    desc.layout.buffers[0].stride = sizeof(mesh_vertex_t);
+    setVertexAttribute(desc, 0, offsetof(mesh_vertex_t, position), SG_VERTEXFORMAT_FLOAT3);
+    setVertexAttribute(desc, 1, offsetof(mesh_vertex_t, normal), SG_VERTEXFORMAT_FLOAT3);
+    setVertexAttribute(desc, 2, offsetof(mesh_vertex_t, tangent), SG_VERTEXFORMAT_FLOAT4);
+    setVertexAttribute(desc, 3, offsetof(mesh_vertex_t, uv), SG_VERTEXFORMAT_FLOAT2);
+    desc.index_type = SG_INDEXTYPE_UINT32;
+}
+
+void applyBlendMode(sg_pipeline_desc& desc, ShaderBlendMode blend_mode) {
+    if (blend_mode == ShaderBlendMode::Disabled) return;
+    desc.colors[0].blend.enabled = true;
+    desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    desc.colors[0].blend.dst_factor_rgb =
+        blend_mode == ShaderBlendMode::Additive ? SG_BLENDFACTOR_ONE : SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
+    desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+}
+
 }  // namespace
+
+GfxPipeline ShaderCompiler::makeMeshPipeline(sg_shader shader, const MeshPipelineState& state) {
+    if (shader.id == SG_INVALID_ID) return {};
+
+    sg_pipeline_desc pip_desc = {};
+    pip_desc.shader = shader;
+    setMeshVertexLayout(pip_desc);
+    pip_desc.cull_mode = state.cull_back_faces ? SG_CULLMODE_BACK : SG_CULLMODE_NONE;
+    // With the right-handed camera, .mdl front faces arrive counter-clockwise on screen.
+    pip_desc.face_winding = SG_FACEWINDING_CCW;
+    pip_desc.depth.pixel_format = SG_PIXELFORMAT_DEPTH;
+    pip_desc.depth.compare = state.depth_test ? SG_COMPAREFUNC_LESS_EQUAL : SG_COMPAREFUNC_ALWAYS;
+    pip_desc.depth.write_enabled = state.depth_write;
+    applyBlendMode(pip_desc, state.blend);
+    // Opaque materials still write an alpha value; keep the scene's own alpha instead.
+    if (state.blend == ShaderBlendMode::Disabled) pip_desc.colors[0].write_mask = SG_COLORMASK_RGB;
+    return pipeline_variants::make(pip_desc);
+}
 
 GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout layout, ShaderBlendMode blend_mode) {
     if (shader.id == SG_INVALID_ID) return {};
+    if (layout == ShaderVertexLayout::Mesh3D) return makeMeshPipeline(shader, {.blend = blend_mode});
 
     sg_pipeline_desc pip_desc = {};
     pip_desc.shader = shader;
@@ -91,45 +152,34 @@ GfxPipeline ShaderCompiler::makePipeline(sg_shader shader, ShaderVertexLayout la
         pip_desc.index_type = SG_INDEXTYPE_UINT16;
     }
 
-    if (blend_mode != ShaderBlendMode::Disabled) {
-        pip_desc.colors[0].blend.enabled = true;
-        pip_desc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
-        pip_desc.colors[0].blend.dst_factor_rgb =
-            blend_mode == ShaderBlendMode::Additive ? SG_BLENDFACTOR_ONE : SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-        pip_desc.colors[0].blend.src_factor_alpha = SG_BLENDFACTOR_ONE;
-        pip_desc.colors[0].blend.dst_factor_alpha = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    }
-
-    return sg_make_pipeline(&pip_desc);
+    applyBlendMode(pip_desc, blend_mode);
+    return pipeline_variants::make(pip_desc);
 }
 
 CompiledShader ShaderCompiler::compile(const std::string& shader_name, const std::string& vertSource,
                                        const std::string& fragSource,
-                                       const std::map<std::string, std::vector<float>>& uniforms, int textureCount) {
-    return build(shader_name, vertSource, fragSource, uniforms, textureCount, true);
+                                       const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
+                                       bool mesh_geometry) {
+    return build(shader_name, vertSource, fragSource, uniforms, textureCount, mesh_geometry, true);
 }
 
 void ShaderCompiler::prewarm(const std::string& shader_name, const std::string& vertSource,
                              const std::string& fragSource, const std::map<std::string, std::vector<float>>& uniforms,
-                             int textureCount) {
-    build(shader_name, vertSource, fragSource, uniforms, textureCount, false);
+                             int textureCount, bool mesh_geometry) {
+    build(shader_name, vertSource, fragSource, uniforms, textureCount, mesh_geometry, false);
 }
 
 CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::string& vertSource,
                                      const std::string& fragSource,
                                      const std::map<std::string, std::vector<float>>& uniforms, int textureCount,
-                                     bool create_gpu_objects) {
+                                     bool mesh_geometry, bool create_gpu_objects) {
     const auto trace_start = std::chrono::steady_clock::now();
     CompiledShader result;
     std::string compiled_vert_source = vertSource;
     std::string compiled_frag_source = fragSource;
     ShaderSourceProcessor::normalizePreprocessor(compiled_vert_source);
     ShaderSourceProcessor::normalizePreprocessor(compiled_frag_source);
-    result.vertex_layout = compiled_vert_source.find("a_TexCoordC4") != std::string::npos &&
-                                   compiled_vert_source.find("a_PositionVec4") != std::string::npos
-                               ? ShaderVertexLayout::ParticleRope
-                           : usesParticleSpriteLayout(compiled_vert_source) ? ShaderVertexLayout::ParticleSprite
-                                                                            : ShaderVertexLayout::Sprite2D;
+    result.vertex_layout = detectVertexLayout(compiled_vert_source, mesh_geometry);
 
     for (std::string* source : {&compiled_vert_source, &compiled_frag_source}) {
         if (source->find("Resolution") != std::string::npos) rewriteTextureResolutions(*source);
@@ -146,6 +196,8 @@ CompiledShader ShaderCompiler::build(const std::string& shader_name, const std::
         shd_desc.attrs[2].glsl_name = "a_Color";
         shd_desc.attrs[3].glsl_name = "a_TexCoordVec4C1";
         shd_desc.attrs[4].glsl_name = "a_TexCoordC2";
+    } else if (result.vertex_layout == ShaderVertexLayout::Mesh3D) {
+        setMeshVertexAttributes(shd_desc);
     } else {
         shd_desc.attrs[0].glsl_name = "a_Position";
         shd_desc.attrs[1].glsl_name = "a_TexCoord";

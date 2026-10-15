@@ -11,6 +11,7 @@
 #include "shared/core/logger.h"
 #include "shared/core/utils.h"
 #include "shared/graphics/passes/shader_pass.h"
+#include "shared/graphics/texture_size.h"
 
 #define TAG "PARTICLE"
 
@@ -89,6 +90,25 @@ void ParticleSystem::initParticleBuffers() {
     particle_index_buffer = sg_make_buffer(&index_desc);
 }
 
+void ParticleSystem::applyInstanceOverrides(const ParticleObjectConfig& overrides) {
+    override_alpha = overrides.override_alpha;
+    override_rate = overrides.override_rate;
+    override_size = overrides.override_size;
+    override_count = overrides.override_count;
+    override_speed = overrides.override_speed;
+    override_lifetime = overrides.override_lifetime;
+    override_color_is_legacy = overrides.override_color_is_legacy;
+
+    constexpr int kDisableColor = 8, kDisableCount = 16, kDisableLifetime = 32, kDisableSize = 64, kDisableSpeed = 128;
+    if (config.flags & kDisableCount) override_count = 1.0f;
+    if (config.flags & kDisableLifetime) override_lifetime = 1.0f;
+    if (config.flags & kDisableSize) override_size = 1.0f;
+    if (config.flags & kDisableSpeed) override_speed = 1.0f;
+    has_override_color = overrides.has_override_color && !(config.flags & kDisableColor);
+    if (has_override_color)
+        for (int component = 0; component < 3; ++component) override_color[component] = overrides.override_color[component];
+}
+
 ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, EngineContext& ctx, float scene_width,
                                                float scene_height, const ParticleObjectConfig& overrides) {
     if (!particle_path || !particle_path[0]) return nullptr;
@@ -105,25 +125,7 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
 
     ParticleSystem* particle_system = new ParticleSystem(std::move(config), scene_width, scene_height);
     particle_system->config_path = absolute_path;
-    particle_system->override_alpha = overrides.override_alpha;
-    particle_system->override_rate = overrides.override_rate;
-    particle_system->override_size = overrides.override_size;
-    particle_system->override_count = overrides.override_count;
-    particle_system->override_speed = overrides.override_speed;
-    particle_system->override_lifetime = overrides.override_lifetime;
-    particle_system->override_color_is_legacy = overrides.override_color_is_legacy;
-
-    constexpr int kDisableColor = 8, kDisableCount = 16, kDisableLifetime = 32, kDisableSize = 64, kDisableSpeed = 128;
-    const int flags = particle_system->config.flags;
-    if (flags & kDisableCount) particle_system->override_count = 1.0f;
-    if (flags & kDisableLifetime) particle_system->override_lifetime = 1.0f;
-    if (flags & kDisableSize) particle_system->override_size = 1.0f;
-    if (flags & kDisableSpeed) particle_system->override_speed = 1.0f;
-    if (overrides.has_override_color && !(flags & kDisableColor)) {
-        particle_system->has_override_color = true;
-        for (int component = 0; component < 3; ++component)
-            particle_system->override_color[component] = overrides.override_color[component];
-    }
+    particle_system->applyInstanceOverrides(overrides);
     particle_system->is_trail =
         particle_system->config.renderer.type == "spritetrail" || particle_system->config.renderer.type == "trail";
     particle_system->use_perspective = (particle_system->config.flags & 4) != 0;
@@ -196,9 +198,9 @@ ParticleSystem* ParticleSystem::createFromPath(const char* particle_path, Engine
 
         if ((particle_system->texture_width <= 0 || particle_system->texture_height <= 0) &&
             pass->pass_textures.texture0.id != SG_INVALID_ID) {
-            const sg_image_desc image_desc = sg_query_image_desc(pass->pass_textures.texture0);
-            particle_system->texture_width = image_desc.width;
-            particle_system->texture_height = image_desc.height;
+            const texture_size::Size image_size = texture_size::of(pass->pass_textures.texture0);
+            particle_system->texture_width = image_size.width;
+            particle_system->texture_height = image_size.height;
         }
     }
 

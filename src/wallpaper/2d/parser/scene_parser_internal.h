@@ -30,6 +30,12 @@ void parseEffects(const cJSON* object, std::vector<EffectInstanceDocument>& out)
 void parseAnimationLayers(const cJSON* array, std::vector<AnimationLayerDocument>& out);
 void parsePropertyAnimation(const cJSON* object, const char* property, std::vector<PropertyAnimationDocument>& out);
 void parseCameraPath(const cJSON* object, SceneCameraDocument& out);
+// True when the object is a visible camera path; `zoom` gets its lens-size value.
+bool cameraPathZoom(const cJSON* object, float& zoom);
+
+// 3D fly-through paths: the file list under `camera.paths`, then each file read beside the scene file.
+void parseCameraPathFiles(const cJSON* camera, std::vector<std::string>& out);
+void loadCameraPaths(const char* scene_json_path, SceneCameraDocument& camera);
 
 }  // namespace scene_parser_detail
 }  // namespace wallpaper_engine

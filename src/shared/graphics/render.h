@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "linmath.h"
+#include "shared/core/downscale.h"
 #include "shared/core/vfs.h"
 #include "shared/graphics/gfx_resource.h"
 #include "sokol_gfx.h"
@@ -44,12 +45,21 @@ typedef struct {
     float u, v;
 } vertex_t;
 
+// One vertex of a 3D model mesh; attributes the model lacks stay zero.
+typedef struct {
+    float position[3];
+    float normal[3];
+    float tangent[4];  // xyz plus handedness in w
+    float uv[2];
+} mesh_vertex_t;
+
 struct renderer_t {
     GfxPipeline pip_alpha;
     GfxPipeline pip_copy;
     GfxPipeline pip_add;
     GfxPipeline pip_unpremul;
     GfxPipeline pip_present;
+    GfxPipeline pip_present_fxaa;
     GfxPipeline pip_lines;
     GfxPipeline pip_mesh;
     GfxPipeline pip_image_composite[31];
@@ -60,6 +70,8 @@ struct renderer_t {
     sg_bindings bind = {};
     GfxSampler smp_repeat;
     GfxSampler smp_clamp;
+    GfxSampler smp_nearest_repeat;
+    GfxSampler smp_nearest_clamp;
     GfxImage white_pixel;
     GfxView white_view;
     GfxImage black_pixel;
@@ -71,7 +83,7 @@ struct renderer_t {
     uint32_t draw_calls = 0;
 };
 
-void renderer_init(renderer_t* r, float w, float h);
+void renderer_init(renderer_t* r, float w, float h, downscale::Method downscale_method);
 void renderer_update_viewport(renderer_t* r, float w, float h);
 typedef struct {
     mat4x4 mvp;
@@ -91,6 +103,7 @@ typedef struct {
     vec4 light_skylight_color;
 } builtin_uniforms_t;
 
+// Object-space built-ins of particle and 3D model shaders (uniform block 3).
 typedef struct {
     mat4x4 model_matrix;
     mat4x4 model_matrix_inverse;
@@ -111,12 +124,13 @@ static_assert(offsetof(builtin_uniforms_t, pointer_position) % 16 == 0,
 static_assert(sizeof(builtin_uniforms_t) % 16 == 0, "built-in uniform block must preserve std140 tail alignment");
 static_assert(sizeof(particle_builtin_uniforms_t) % 16 == 0,
               "particle built-in uniform block must preserve std140 alignment");
+static_assert(sizeof(mesh_vertex_t) == sizeof(float) * 12, "mesh vertices must be tightly packed");
 #endif
 
 #ifdef __cplusplus
 void renderer_draw_sprite(EngineContext& ctx, renderer_t* r, sg_image img, sg_view main_view, float x, float y, float w,
                           float h, float rotation, float tint[4], bool additive, const render_effect_pass_t* pass,
-                          bool replace = false, sg_buffer quad_buffer = {});
+                          bool replace = false, sg_buffer quad_buffer = {}, bool nearest = false);
 void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer vertex_buffer, sg_buffer index_buffer,
                                   int index_count, sg_image main_image, sg_view main_view,
                                   const render_effect_pass_t* pass, const builtin_uniforms_t& builtins,
@@ -124,7 +138,8 @@ void renderer_draw_particle_batch(EngineContext& ctx, renderer_t* r, sg_buffer v
 void renderer_draw_unpremultiplied(renderer_t* r, sg_view source_view, float width, float height);
 
 // Highlight roll-off keeps additive effects from hard-clipping to flat white.
-void renderer_present(renderer_t* r, sg_view source_view, float width, float height);
+// Presents the composed scene; fxaa adds edge smoothing to the same pass.
+void renderer_present(renderer_t* r, sg_view source_view, float width, float height, bool fxaa);
 
 void renderer_draw_mesh(EngineContext& ctx, renderer_t* r, sg_buffer position_buffer, sg_buffer uv_buffer,
                         sg_buffer index_buffer, int index_count, sg_image image, sg_view main_view, const float tint[4],

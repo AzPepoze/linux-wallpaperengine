@@ -24,7 +24,7 @@ void ScriptRuntime::create(const std::string& assets_dir) {
         LOG_TAG_W(TAG, "QuickJS runtime creation failed");
         return;
     }
-    JS_SetMemoryLimit(runtime_, 64u * 1024u * 1024u);
+    JS_SetMemoryLimit(runtime_, 32u * 1024u * 1024u);
     JS_SetInterruptHandler(runtime_, interruptHandler, this);
     installScriptModuleLoader(runtime_);
     context_ = JS_NewContext(runtime_);

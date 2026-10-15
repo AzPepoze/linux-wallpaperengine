@@ -25,6 +25,8 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `log_level` | `debug\|info\|warn\|error` | debug in debug builds, else info | Same as `--log-level` |
 | `pointer` | `auto\|x11\|hyprland\|surface\|evdev` | auto | Same as `--pointer` |
 | `resolution` | `auto\|native\|WxH` | auto | Same as `--resolution` |
+| `downscale` | `off\|auto\|mipmap\|aniso\|box\|lanczos` | auto | Same as `--downscale` |
+| `antialias` | `off\|fxaa\|smaa\|msaa2\|msaa4\|msaa8` | off | Same as `--antialias` |
 
 ## Environment variables
 
@@ -62,7 +64,26 @@ The engine reads `config.json` from the working directory or one of its parents.
 | `--video-ram` | | off | Load video into RAM instead of streaming |
 | `--performance-profile` | | off | Log frame timing after a 5-second warmup |
 | `--resolution` | `auto\|native\|WxH` | auto | Render size of effect chains, puppets and models. `auto` follows the output size. `native` uses the authored size. `WxH` sizes them as if the output were that size (for example `3840x2160`). `--effect-resolution` still works |
+| `--downscale` | `off\|auto\|mipmap\|aniso\|box\|lanczos` | auto | How textures are sampled when drawn smaller than their size. See the table below |
+| `--antialias` | `off\|fxaa\|smaa\|msaa2\|msaa4\|msaa8` | off | Edge smoothing. `fxaa` and `smaa` are post filters. `msaa2`, `msaa4` and `msaa8` multisample the scene, and fall back to off if the GPU does not support the count |
 | `--script-profile` | | off | Log the slowest scripts every 10 seconds |
+
+### Downscale
+
+| Value | What it does | Memory |
+| --- | --- | --- |
+| `off` | Draws the full-size texture with no mip levels, so shrunk art shows stair-steps | Full size |
+| `auto` (default) | Uses the mip levels for textures larger than the output, and skips the rest | Full size, plus the smaller levels for large textures |
+| `mipmap` | Uses smaller levels stored in the file, or makes them, to reduce shimmer | Full size, plus the smaller levels |
+| `aniso` | Same as `mipmap`, with 8x anisotropic filtering at angles | Same as `mipmap` |
+| `box` | Shrinks RGBA8 textures once to fit the output, with a box filter | Smaller |
+| `lanczos` | Same as `box`, with a sharper Lanczos filter | Smaller |
+
+> [!NOTE]
+> `box` and `lanczos` only shrink RGBA8 textures. Other formats stay full size.
+
+> [!NOTE]
+> When the output size changes, the wallpaper reloads so the shrunk textures match it.
 
 ### Display
 
@@ -178,10 +199,38 @@ Options from the upstream launcher that this build does not support are accepted
 
 ## Hand-off to a running wallpaper
 
-If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits. The running instance then:
+If a wallpaper is already running on the same output, a new launch hands the change to that running instance and exits.
 
-1. Switches to the new wallpaper with the transition from `--transition` (default `fade`, a crossfade). `none` cuts straight over, and `random` picks one effect per switch. Effects use the original transition shaders from your install, or the built-in fade if they are missing.
-2. Applies new `--set-property` values live.
-3. Updates volume, mute, frame cap, output device and visualizer on or off. A device change reloads the wallpaper so its sounds play on the new output.
+| Step | What happens |
+|---|---|
+| Switch wallpaper | Uses the `--transition` effect (default `fade`) |
+| Property values | Updates live when possible, otherwise reloads the scene |
+| Audio, frame cap, visualizer | Updates live |
+| Output device change | Reloads, so sounds play on the new output |
+
+### Transition modes
+
+| `--transition` | Effect |
+|---|---|
+| `fade` (default) | Crossfade |
+| `none` | Cuts straight over |
+| `random` | Picks one effect per switch |
+
+> [!NOTE]
+> Effects use the original transition shaders from your install. If they are missing, the built-in fade is used.
+
+### Property changes
+
+Most `--set-property` changes update the running scene. These reload it:
+
+| Change | Reloads the scene? |
+|---|---|
+| Turning bloom on or off | Yes |
+| Turning the clear color on or off | Yes |
+| Script source or animation changes | Yes |
+| Combos, textures, or settings added or removed | Yes |
+| Any other value change in the list above | No |
+
+For the full list of live settings, see [Features](features-detail.md).
 
 Pass `--no-control` to start a separate instance instead.

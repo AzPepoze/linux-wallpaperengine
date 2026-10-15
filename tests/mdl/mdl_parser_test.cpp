@@ -11,6 +11,7 @@ using test::check;
 
 void runPuppetPoseTests();
 void runSceneAttachmentTests();
+void runMdlMeshTests();
 
 namespace {
 
@@ -267,5 +268,6 @@ int main() {
 
     runPuppetPoseTests();
     runSceneAttachmentTests();
+    runMdlMeshTests();
     return test::finish("mdl tests");
 }

@@ -8,6 +8,9 @@
 
 namespace wallpaper_engine {
 
+// Header flag: sample with nearest-neighbour filtering (pixel art).
+constexpr uint32_t kTextureFlagNoInterpolation = 0x1;
+
 struct TextureAnimationFrame {
     uint32_t image_index = 0;
     float duration = 0.0f;
@@ -23,6 +26,7 @@ struct TextureMetadata {
     uint32_t height = 0;
     uint32_t flags = 0;
     uint32_t image_count = 0;
+    std::vector<uint32_t> mip_counts;  // stored mip levels per image
     uint32_t spritesheet_cols = 0;
     uint32_t spritesheet_rows = 0;
     uint32_t spritesheet_frames = 0;
@@ -31,6 +35,8 @@ struct TextureMetadata {
 };
 
 DecodedImage decodeTexture(const char* path, int image_index = 0);
+// Every stored mip level of one image, largest first. Empty unless the file is a valid .tex with clean levels.
+std::vector<DecodedImage> decodeTextureMips(const char* path, int image_index = 0);
 TextureMetadata inspectTextureMetadata(const char* path);
 const TextureAnimationFrame* textureFrameAtTime(const TextureMetadata& metadata, float seconds);
 
