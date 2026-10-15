@@ -35,6 +35,42 @@ std::string jsonWithoutScriptProperties(const std::string& json) {
     return result;
 }
 
+namespace {
+// Drops the constant values of every pass of one effect instance.
+void removePassConstants(cJSON* effect) {
+    cJSON* passes = cJSON_GetObjectItemCaseSensitive(effect, "passes");
+    if (!cJSON_IsArray(passes)) return;
+    cJSON* pass = nullptr;
+    cJSON_ArrayForEach(pass, passes) {
+        if (cJSON_IsObject(pass)) cJSON_DeleteItemFromObjectCaseSensitive(pass, "constantshadervalues");
+    }
+}
+}  // namespace
+
+std::string jsonWithoutPassConstants(const std::string& instance_json) {
+    cJSON* root = cJSON_Parse(instance_json.c_str());
+    if (!root) return instance_json;
+    removePassConstants(root);
+    std::string result = printJson(root, instance_json);
+    cJSON_Delete(root);
+    return result;
+}
+
+std::string jsonWithoutEffectConstants(const std::string& object_json) {
+    cJSON* root = cJSON_Parse(object_json.c_str());
+    if (!root) return object_json;
+    cJSON* effects = cJSON_GetObjectItemCaseSensitive(root, "effects");
+    if (cJSON_IsArray(effects)) {
+        cJSON* effect = nullptr;
+        cJSON_ArrayForEach(effect, effects) {
+            if (cJSON_IsObject(effect)) removePassConstants(effect);
+        }
+    }
+    std::string result = printJson(root, object_json);
+    cJSON_Delete(root);
+    return result;
+}
+
 std::string jsonWithoutLiveGeneral(const std::string& json, bool zoom_live) {
     // Bloom on/off and clear enable are not listed: they need render targets set up at load.
     const std::string without_live =

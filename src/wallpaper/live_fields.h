@@ -13,4 +13,10 @@ std::string jsonWithoutScriptProperties(const std::string& json);
 // The general block without the settings that update in place. `zoom_live` is false when zoom is script driven.
 std::string jsonWithoutLiveGeneral(const std::string& json, bool zoom_live);
 
+// An effect instance without the constant values of each pass, which update in place.
+std::string jsonWithoutPassConstants(const std::string& instance_json);
+
+// An object without the constant values of its effects' passes, which update in place.
+std::string jsonWithoutEffectConstants(const std::string& object_json);
+
 #endif  // LIVE_FIELDS_H

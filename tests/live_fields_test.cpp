@@ -74,6 +74,32 @@ void testScriptDrivenZoomStillDiffers() {
            "a script-driven zoom is not live and still rebuilds");
 }
 
+void testPassConstantsAreIgnoredButCombosAreNot() {
+    const std::string before =
+        R"({"passes":[{"constantshadervalues":{"Strength":0.5},"combos":{"MODE":1}}],"file":"effects/a/effect.json"})";
+    const std::string tuned =
+        R"({"passes":[{"constantshadervalues":{"Strength":0.9},"combos":{"MODE":1}}],"file":"effects/a/effect.json"})";
+    const std::string combo =
+        R"({"passes":[{"constantshadervalues":{"Strength":0.5},"combos":{"MODE":2}}],"file":"effects/a/effect.json"})";
+    expect("pass constants", jsonWithoutPassConstants(before) == jsonWithoutPassConstants(tuned),
+           "a constant value change compares equal");
+    expect("pass constants", jsonWithoutPassConstants(before) != jsonWithoutPassConstants(combo),
+           "a combo change still differs");
+}
+
+void testEffectConstantsInObjectAreIgnored() {
+    const std::string before =
+        R"({"name":"a","effects":[{"file":"f","passes":[{"constantshadervalues":{"alpha":1.0},"id":3}]}]})";
+    const std::string after =
+        R"({"name":"a","effects":[{"file":"f","passes":[{"constantshadervalues":{"alpha":0.4},"id":3}]}]})";
+    const std::string hidden =
+        R"({"name":"a","effects":[{"file":"g","passes":[{"constantshadervalues":{"alpha":0.4},"id":3}]}]})";
+    expect("object effects", jsonWithoutEffectConstants(before) == jsonWithoutEffectConstants(after),
+           "a constant change inside an effect compares equal");
+    expect("object effects", jsonWithoutEffectConstants(before) != jsonWithoutEffectConstants(hidden),
+           "an effect file change still differs");
+}
+
 }  // namespace
 
 int main() {
@@ -86,5 +112,7 @@ int main() {
     testLiveGeneralSettingsCompareEqual();
     testNonLiveGeneralSettingStillDiffers();
     testScriptDrivenZoomStillDiffers();
+    testPassConstantsAreIgnoredButCombosAreNot();
+    testEffectConstantsInObjectAreIgnored();
     return test::finish("live fields tests");
 }

@@ -4,8 +4,11 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <string_view>
 #include <utility>
+
+#include <cjson/cJSON.h>
 
 #include "app/control/control_server.h"
 #include "app/package_extractor.h"
@@ -14,6 +17,7 @@
 #include "shared/core/task_pool.h"
 #include "shared/graphics/backend/surface.h"
 #include "wallpaper/2d/camera/parallax.h"
+#include "wallpaper/2d/effects/effect_parser.h"
 #include "wallpaper/2d/layers/image/image_layer.h"
 #include "wallpaper/2d/layers/text/text_layer.h"
 #include "wallpaper/2d/parser/scene_parser.h"
@@ -111,7 +115,7 @@ bool nodeTransformIsLive(const wallpaper_engine::SceneObjectDocument& object) {
 
 // The object JSON to compare, leaving out the node transform when it can change in place.
 std::string comparableObject(const wallpaper_engine::SceneObjectDocument& object, bool image, bool transform_live) {
-    const std::string json = jsonWithoutLiveFields(object.raw_json, image, object.camera_path);
+    const std::string json = jsonWithoutEffectConstants(jsonWithoutLiveFields(object.raw_json, image, object.camera_path));
     return transform_live ? jsonWithout(json, {"origin", "angles"}) : json;
 }
 
@@ -178,6 +182,69 @@ bool planScriptProperties(EngineContext& ctx, uint32_t id, const wallpaper_engin
     return true;
 }
 
+// The constant values of each pass in an effect instance, read the same way the effect loader reads them.
+using PassConstants = std::vector<std::map<std::string, std::vector<float>>>;
+
+PassConstants passConstants(const std::string& instance_json) {
+    PassConstants passes;
+    cJSON* root = cJSON_Parse(instance_json.c_str());
+    const cJSON* list = root ? cJSON_GetObjectItemCaseSensitive(root, "passes") : nullptr;
+    if (!cJSON_IsArray(list)) {
+        cJSON_Delete(root);
+        return passes;
+    }
+    const cJSON* pass = nullptr;
+    cJSON_ArrayForEach(pass, list) {
+        std::map<std::string, std::vector<float>> values;
+        EffectParser::readUniformValues(pass, values);
+        passes.push_back(std::move(values));
+    }
+    cJSON_Delete(root);
+    return passes;
+}
+
+// Scripted or animated constants are rewritten every frame, so a stored value would not stick.
+bool constantIsScripted(const wallpaper_engine::EffectInstanceDocument& effect, const std::string& name) {
+    return std::any_of(effect.constant_scripts.begin(), effect.constant_scripts.end(),
+                       [&name](const auto& constant) { return constant.name == name; });
+}
+
+// Queues the effect constant updates for one object. False when an effect changed in a way that needs a rebuild.
+bool planEffectConstants(EngineContext& ctx, uint32_t id, const wallpaper_engine::SceneObjectDocument& old_object,
+                         const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
+    for (size_t i = 0; i < old_object.effects.size(); ++i) {
+        const wallpaper_engine::EffectInstanceDocument& before = old_object.effects[i];
+        const wallpaper_engine::EffectInstanceDocument& after = new_object.effects[i];
+        if (before.file != after.file || before.name != after.name) return false;
+        if (jsonWithoutPassConstants(before.instance_config_json) != jsonWithoutPassConstants(after.instance_config_json))
+            return false;
+
+        const Layer* layer = findLayer(ctx, id);
+        if (!layer || i >= layer->effects.size()) return false;
+        const PassConstants old_passes = passConstants(before.instance_config_json);
+        const PassConstants new_passes = passConstants(after.instance_config_json);
+        if (old_passes.size() != new_passes.size() || new_passes.size() != layer->effects[i]->passes.size())
+            return false;
+
+        for (size_t p = 0; p < new_passes.size(); ++p) {
+            if (old_passes[p].size() != new_passes[p].size()) return false;
+            for (const auto& [name, values] : new_passes[p]) {
+                const auto found = old_passes[p].find(name);
+                if (found == old_passes[p].end()) return false;
+                if (found->second == values) continue;
+                const ShaderPass* pass = layer->effects[i]->passes[p];
+                if (!pass || !pass->materialConstant(name) || constantIsScripted(after, name)) return false;
+                edits.push_back([&ctx, id, i, p, name, values] {
+                    Layer* live = findLayer(ctx, id);
+                    if (live && i < live->effects.size() && p < live->effects[i]->passes.size())
+                        live->effects[i]->passes[p]->setMaterialConstant(name, values);
+                });
+            }
+        }
+    }
+    return true;
+}
+
 // Collects the edits that bring one object up to date. False when the object needs a rebuild.
 bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocument& old_object,
                      const wallpaper_engine::SceneObjectDocument& new_object, LiveEdits& edits) {
@@ -187,6 +254,8 @@ bool planObjectEdits(EngineContext& ctx, const wallpaper_engine::SceneObjectDocu
     const bool image_layer = image != nullptr;
     if (!planScriptProperties(ctx, id, old_object, new_object, edits))
         return rebuildFor(new_object, "a script that cannot update live");
+    if (!planEffectConstants(ctx, id, old_object, new_object, edits))
+        return rebuildFor(new_object, "an effect that cannot update live");
     if (old_object.camera_path != new_object.camera_path) return rebuildFor(new_object, "a camera path");
     if (new_object.camera_path && old_object.camera_zoom != new_object.camera_zoom)
         edits.push_back([&ctx, zoom = new_object.camera_zoom] { ctx.scene.camera.zoom_scale = zoom; });
