@@ -37,6 +37,7 @@ Related: [wallpaper-engine-assets.md](wallpaper-engine-assets.md) lists what the
 - [Interaction](#interaction)
 - [Textures and asset formats](#textures-and-asset-formats)
 - [Platform, command line and tooling](#platform-command-line-and-tooling)
+- [Performance settings](#performance-settings)
 - [RGB hardware](#rgb-hardware)
 
 ## Wallpaper types
@@ -506,6 +507,55 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 - [x] CI runs formatting and static analysis (`xmake check`)
 
 - [x] Diagnostic readback converts float/HDR and single/dual-channel targets to RGBA8 before PNG export.
+
+## Performance settings
+
+Wallpaper Engine's Performance tab, and what this project does for each item.
+
+- [x] FPS
+  - `-f`/`--fps` caps the frame rate
+- [x] Anti-aliasing (see [Anti-aliasing](#anti-aliasing))
+- [-] Texture resolution
+  - Works: `--downscale` sets texture size
+  - Missing: the High Quality, High Performance and Automatic presets
+- [-] Post-processing
+  - Works: effects and bloom run
+  - Missing: a Disabled, Enabled or Ultra setting outside debug builds
+- [-] Reflections
+  - Works: model reflections render when a scene uses them
+  - Missing: an on/off setting
+- [ ] Shadows
+  - Missing: Disabled, Low, Medium, High and Ultra
+- [ ] Volumetric lighting
+  - Missing: Disabled, Low, Medium, High and Ultra
+- [ ] Quality presets (Low, Medium, High, Ultra)
+- [x] Pause on suspend or minimize
+  - Pauses when the app is suspended or iconified
+- [ ] Other app maximized or fullscreen
+  - Missing: the pause and keep-running choices; fullscreen flags are accepted and ignored
+- [ ] Other app playing audio
+- [ ] Display asleep
+  - Missing: the stop and free memory choice
+- [ ] Application rules
+
+## General settings
+
+Wallpaper Engine's General tab, and what this project does for each item.
+
+- [ ] Recording threshold
+- [ ] Reload when changing output device
+- Not applicable: video framework (Scene DX11, HDR), Windows only
+- [-] Video hardware acceleration
+  - Works: hardware video decoding runs
+  - Missing: an on/off setting
+- [ ] Video loading (From disk, In-memory)
+- [ ] Video loop (Default, Sync clock, Sync topology)
+- Not applicable: WebM framework, since web wallpapers use Qt6 WebEngine
+- [ ] Process priority
+- [ ] Pause when VRAM is exhausted
+- [ ] Hide other applications in mini mode
+- [ ] Use high-precision timers
+- [ ] Restart after crashing
 
 ## RGB hardware
 
