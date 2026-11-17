@@ -293,6 +293,9 @@ add_test("alpha_tests", {"tests/alpha_curve_test.cpp", "src/wallpaper/2d/alpha_c
                          "src/wallpaper/2d/animation_curve.cpp"})
 
 add_test("cli_tests", {"tests/cli_args_test.cpp", "src/app/cli_args.cpp"})
+add_test("capture_options_tests", {"tests/capture_options_test.cpp", "src/capture/capture_options.cpp"})
+add_test("capture_schedule_tests", {"tests/capture_schedule_test.cpp", "src/capture/capture_schedule.cpp", "src/capture/capture_options.cpp"})
+add_test("capture_output_tests", {"tests/capture_output_test.cpp", "src/capture/capture_output.cpp"}, {"cjson"})
 
 add_test("identity_tests", {"tests/identity_test.cpp", "src/app/identity.cpp"})
 -- Wayland layer-shell wallpaper (-r on Wayland): a plugin, so the main binary does not link libwayland or xkbcommon.
@@ -376,7 +379,8 @@ add_test("flag_config_tests", {"tests/flag_config_test.cpp", "src/app/flag_confi
 add_test("live_fields_tests", {"tests/live_fields_test.cpp", "src/wallpaper/live_fields.cpp"}, {"cjson"})
 
 add_test("cli_options_tests", {"tests/cli_options_test.cpp", "src/app/cli_options.cpp", "src/app/cli_args.cpp",
-                               "src/app/flag_config.cpp", "src/shared/core/logger.cpp"}, {"sokol", "cjson"})
+                               "src/app/flag_config.cpp", "src/capture/capture_options.cpp",
+                               "src/shared/core/logger.cpp"}, {"sokol", "cjson"})
 
 add_test("layer_tests", {"tests/layer_options_test.cpp", "src/app/platform/layer_options.cpp"})
 
