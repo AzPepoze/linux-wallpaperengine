@@ -46,4 +46,16 @@ sg_environment environment() {
 sg_swapchain acquireSwapchain() {
     return g_provider ? g_provider->acquireSwapchain() : sglue_swapchain();
 }
+
+bool hasSwapchain() {
+    return g_provider ? g_provider->hasSwapchain() : true;
+}
+
+sg_attachments offscreenAttachments() {
+    return g_provider ? g_provider->offscreenAttachments() : sg_attachments{};
+}
+
+sg_image offscreenColor() {
+    return g_provider ? g_provider->offscreenColor() : sg_image{SG_INVALID_ID};
+}
 }  // namespace surface

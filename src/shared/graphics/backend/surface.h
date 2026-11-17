@@ -15,6 +15,10 @@ class SurfaceProvider {
     virtual void requestQuit() = 0;
     virtual sg_environment environment() = 0;
     virtual sg_swapchain acquireSwapchain() = 0;
+    // Headless providers render into an offscreen target instead of a swapchain.
+    virtual bool hasSwapchain() const { return true; }
+    virtual sg_attachments offscreenAttachments() { return {}; }
+    virtual sg_image offscreenColor() { return {SG_INVALID_ID}; }
 };
 
 namespace surface {
@@ -27,6 +31,9 @@ double frameDuration();
 void requestQuit();
 sg_environment environment();
 sg_swapchain acquireSwapchain();
+bool hasSwapchain();
+sg_attachments offscreenAttachments();
+sg_image offscreenColor();
 }  // namespace surface
 
 #endif  // SURFACE_H
