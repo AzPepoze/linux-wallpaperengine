@@ -1,5 +1,7 @@
 #define SOKOL_VULKAN
 #include <malloc.h>
+#include <filesystem>
+#include <memory>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,10 +18,13 @@
 #include "app/frame_rate.h"
 #include "app/identity.h"
 #include "app/package_extractor.h"
+#include "app/platform/headless/headless_runner.h"
+#include "app/platform/headless/headless_surface.h"
 #include "app/platform/layer_backend.h"
 #include "app/platform/pointer/pointer_source.h"
 #include "app/platform/x11_desktop/x11_desktop.h"
 #include "app/signals.h"
+#include "capture/capture_session.h"
 #include "shared/assets/media/media_source.h"
 #include "shared/assets/shared_assets.h"
 #include "shared/audio/audio_engine.h"
@@ -186,6 +191,20 @@ static void loadInitialWallpaper() {
     wallpaper_mgr.load(ctx.asset_root, ctx);
 }
 
+static std::unique_ptr<capture::CaptureSession> capture_session;
+
+static void startCaptureSession() {
+    if (!cli.capture.enabled) return;
+    const std::string name = std::filesystem::path(ctx.wallpaper_path).filename().string();
+    capture_session = std::make_unique<capture::CaptureSession>(cli.capture, name);
+    capture::setActiveSession(capture_session.get());
+}
+
+static void stopCaptureSession() {
+    capture::setActiveSession(nullptr);
+    capture_session.reset();
+}
+
 static void init(void) {
 #if DEBUG_BUILD
     // Names this debug build's process so its GPU faults are identifiable in kernel logs.
@@ -248,6 +267,7 @@ static void init(void) {
         PhaseTimer timer("wallpaper load (total)");
         loadInitialWallpaper();
     }
+    startCaptureSession();
     if (!x11_desktop_output.empty() && !x11PlaceDesktopWindow(x11_desktop_title, x11_desktop_output))
         LOG_TAG_W("X11", "could not make the window a desktop window on %s", x11_desktop_output.c_str());
     LOG_I("Linux Wallpaper Engine Initialized");
@@ -273,6 +293,7 @@ static void cleanup(void) {
     RenderDiagnostics::instance().shutdown(terminationRequested());
 #endif
 
+    stopCaptureSession();
     wallpaper_mgr.clear(ctx);
     wallpaper_mgr.shutdownTransition();
     AudioEngine::instance().shutdown();
@@ -376,6 +397,11 @@ static bool printsInfoOnly() {
     return cli.whoareyou || cli.version || cli.list_transitions || cli.list_outputs || cli.list_properties;
 }
 
+// Read by the release and debug entry points to choose the headless loop over a window.
+extern "C" bool lwe_headless_requested() {
+    return cli.capture.enabled;
+}
+
 extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     // One malloc arena: parallel loading otherwise leaves a separate heap per worker thread resident.
     mallopt(M_ARENA_MAX, 1);
@@ -408,6 +434,10 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
         const std::vector<std::string> args(argv, argv + argc);
         for (const std::string& option : cli_args::unknownOptions(args))
             LOG_TAG_W("OPTIONS", "ignoring unsupported option '%s'", option.c_str());
+    }
+    if (!cli.capture.error.empty()) {
+        fprintf(stderr, "%s\n", cli.capture.error.c_str());
+        exit(EXIT_FAILURE);
     }
     selectRequestedGpu();
 
@@ -501,11 +531,14 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     desc.icon.sokol_default = true;
     desc.logger.func = slog_func;
     desc.enable_clipboard = true;
+    if (lwe_headless_requested()) headless::setSize(cli.capture.width, cli.capture.height, cli.capture.fps);
     return desc;
 }
 
 #if DEBUG_BUILD
 extern "C" sapp_desc sokol_main(int argc, char* argv[]) {
-    return lwe_app_descriptor(argc, argv);
+    const sapp_desc desc = lwe_app_descriptor(argc, argv);
+    if (lwe_headless_requested()) exit(headless::run(desc));
+    return desc;
 }
 #endif

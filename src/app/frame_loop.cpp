@@ -4,6 +4,7 @@
 
 #include "app/frame_rate.h"
 #include "app/platform/pointer/global_pointer.h"
+#include "capture/capture_session.h"
 #include "shared/audio/audio_engine.h"
 #include "shared/core/build_config.h"
 #include "shared/core/logger.h"
@@ -109,10 +110,7 @@ static void updateFrame(EngineContext& ctx, WallpaperManager& mgr, Scene2DRuntim
         ctx.scene.general.clear_enabled ? SG_LOADACTION_CLEAR : SG_LOADACTION_DONTCARE;
     ctx.pass_action.colors[0].clear_value = {ctx.scene.general.clear_color[0], ctx.scene.general.clear_color[1],
                                              ctx.scene.general.clear_color[2], ctx.scene.general.clear_color[3]};
-    float dt = (float)surface::frameDuration();
-#if DEBUG_BUILD
-    if (RenderDiagnostics::instance().getConfig().fixed_step) dt = 1.0f / 60.0f;
-#endif
+    const float dt = (float)surface::frameDuration();
     ctx.frametime = dt;
     ctx.time += dt;
     AudioEngine::instance().update(dt);
@@ -201,7 +199,6 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     mgr.beginPendingSwitch(ctx);
 
 #if DEBUG_BUILD
-    RenderDiagnostics::instance().onFrameStart(ctx.profiler.frame_index, ctx);
     const uint64_t update_start = stm_now();
 #endif
 
@@ -209,6 +206,10 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     if (ctx.performance_profile) performance_profile::beginRender();
     const int update_token = gpu_timing_begin_pass("update");
     updateFrame(ctx, mgr, runtime);
+    capture::prepareFrameCapture(ctx.time, ctx.profiler.frame_index);
+#if DEBUG_BUILD
+    if (capture::captureDumpThisFrame()) RenderDiagnostics::instance().beginShot(capture::currentShotDir(), ctx);
+#endif
     mgr.updateTransition((float)surface::frameDuration());
     gpu_timing_end_pass(update_token);
     // Continue mode steps the outgoing instance before the incoming one draws.
@@ -236,9 +237,13 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
 
     sg_pass pass = {};
     pass.action = ctx.pass_action;
-    const uint64_t acquire_start = ctx.performance_profile ? stm_now() : 0;
-    pass.swapchain = surface::acquireSwapchain();
-    if (ctx.performance_profile) performance_profile::recordAcquire(stm_ms(stm_since(acquire_start)));
+    if (surface::hasSwapchain()) {
+        const uint64_t acquire_start = ctx.performance_profile ? stm_now() : 0;
+        pass.swapchain = surface::acquireSwapchain();
+        if (ctx.performance_profile) performance_profile::recordAcquire(stm_ms(stm_since(acquire_start)));
+    } else {
+        pass.attachments = surface::offscreenAttachments();
+    }
     const int clear_token = gpu_timing_begin_pass("swapchain/clear");
     sg_begin_pass(&pass);
     gpu_timing_end_pass(clear_token);
@@ -269,10 +274,13 @@ void runFrame(EngineContext& ctx, WallpaperManager& mgr) {
     sg_end_pass();
     if (ctx.performance_profile) performance_profile::endRender();
     sg_commit();
+#if DEBUG_BUILD
+    RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);
+#endif
+    capture::onFrameComplete(ctx.time, ctx.profiler.frame_index, surface::offscreenColor());
     if (ctx.performance_profile) performance_profile::recordCpuFrame(stm_ms(stm_since(profile_cpu_start)));
 
 #if DEBUG_BUILD
-    RenderDiagnostics::instance().onFrameEnd(ctx.profiler.frame_index, ctx);
     recordFrameProfile(ctx, frame_start);
 #endif
 }
