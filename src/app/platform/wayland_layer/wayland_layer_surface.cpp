@@ -472,5 +472,7 @@ bool WaylandLayerSurface::pump() {
     else
         wl_display_cancel_read(display);
     wl_display_dispatch_pending(display);
-    return wl_display_get_error(display) == 0;
+    const int error = wl_display_get_error(display);
+    if (error != 0) LOG_E("[LAYER] Wayland display error %d", error);
+    return error == 0;
 }

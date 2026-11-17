@@ -248,11 +248,19 @@ std::unique_ptr<LayerApp> LayerApp::create(const CliOptions& cli) {
 
     auto impl = std::make_unique<Impl>();
     impl->wayland = WaylandLayerSurface::create(config);
-    if (!impl->wayland) return nullptr;
+    if (!impl->wayland) {
+        LOG_E("[LAYER] could not create the layer surface");
+        return nullptr;
+    }
+    LOG_D("[LAYER] creating the Vulkan swapchain (%dx%d)", impl->wayland->pixelWidth(), impl->wayland->pixelHeight());
     impl->swapchain = WaylandVulkanSwapchain::create(
         impl->wayland->display(), impl->wayland->surface(), static_cast<uint32_t>(impl->wayland->pixelWidth()),
         static_cast<uint32_t>(impl->wayland->pixelHeight()), frame_rate::policyFor(cli.fps_limit).vsync);
-    if (!impl->swapchain) return nullptr;
+    if (!impl->swapchain) {
+        LOG_E("[LAYER] could not create the Vulkan swapchain");
+        return nullptr;
+    }
+    LOG_D("[LAYER] layer backend ready");
     return std::unique_ptr<LayerApp>(new LayerApp(std::move(impl)));
 }
 
@@ -266,9 +274,15 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
     app.wayland->setKeyHandler([&](uint32_t key, bool pressed) { app.forwardKey(key, pressed, callbacks.event); });
     app.wayland->setCharHandler([&](uint32_t codepoint) { app.forwardChar(codepoint, callbacks.event); });
 
+    LOG_D("[LAYER] running init");
     callbacks.init();
+    LOG_D("[LAYER] entering the frame loop");
     while (!app.quit.load(std::memory_order_relaxed)) {
-        if (!app.wayland->pump() || app.wayland->closed()) break;
+        if (!app.wayland->pump()) {
+            LOG_E("[LAYER] Wayland connection failed; leaving the frame loop");
+            break;
+        }
+        if (app.wayland->closed()) break;
         if (app.wayland->takeResize())
             app.swapchain->resize(static_cast<uint32_t>(app.wayland->pixelWidth()),
                                   static_cast<uint32_t>(app.wayland->pixelHeight()));
@@ -279,7 +293,9 @@ int LayerApp::run(const LayerAppCallbacks& callbacks) {
         if (performance_profile::enabled()) performance_profile::recordPresent((nowSeconds() - present_start) * 1000.0);
     }
     if (app.wayland->closed()) LOG_I("[LAYER] the compositor closed the surface");
+    LOG_I("[LAYER] frame loop ended (quit requested: %s)", app.quit.load() ? "yes" : "no");
     callbacks.cleanup();
     surface::setProvider(nullptr);
+    LOG_D("[LAYER] cleanup done; returning to main");
     return 0;
 }
