@@ -9,7 +9,6 @@
 class EngineContext;
 
 namespace render_diagnostics_internal {
-std::string resolveWallpaperName(const EngineContext& ctx);
 void exportBundleAsync(DiagnosticExportPayload payload, const std::atomic<bool>* cancel);
 }  // namespace render_diagnostics_internal
 

@@ -58,8 +58,6 @@ struct DiagnosticExportPayload {
     float render_scale = 1.0f;
     std::string wallpaper_path;
     std::string engine_path;
-    bool has_deterministic_time = false;
-    bool final_only = false;
 
     bool has_source_image = false;
     std::vector<uint8_t> source_rgba;
@@ -93,8 +91,9 @@ class RenderDiagnostics : public IRenderObserver {
     void init(const DiagnosticOptions& options = {});
     void shutdown(bool cancel_pending = false);
     bool isEffectDisabled(int effect_index, const std::string& effect_path) const override;
-    void triggerCapture(uint64_t current_frame);
-    void onFrameStart(uint64_t frame_index, EngineContext& ctx);
+    // Starts collecting one capture shot into output_dir, which the session creates.
+    void beginShot(const std::string& output_dir, const EngineContext& ctx);
+    // Exports the shot started by beginShot. No-op when no shot is in progress.
     void onFrameEnd(uint64_t frame_index, EngineContext& ctx);
 
     void registerShaderDump(const ShaderDump& dump) override;

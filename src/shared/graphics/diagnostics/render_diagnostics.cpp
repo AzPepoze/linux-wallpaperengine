@@ -19,7 +19,6 @@
 #include "shared/core/logger.h"
 #include "shared/graphics/backend/gpu_debug_labels.h"
 #include "shared/graphics/backend/gpu_readback.h"
-#include "shared/graphics/backend/surface.h"
 #include "shared/graphics/shader/shader_compiler.h"
 
 namespace fs = std::filesystem;
@@ -46,11 +45,8 @@ void RenderDiagnostics::shutdown(bool cancel_pending) {
 
 void RenderDiagnostics::init(const DiagnosticOptions& options) {
     config.enabled = options.enabled;
-    config.target_frame = options.target_frame > 0 ? (uint64_t)options.target_frame : 100;
     config.capture_pass_images = true;
     if (!options.enabled) return;
-    config.fixed_step = options.deterministic;
-    if (options.deterministic) srand(1);
 
     size_t start = 0;
     const std::string& list = options.disable_effects;
@@ -75,13 +71,7 @@ void RenderDiagnostics::init(const DiagnosticOptions& options) {
         config.disable_bloom = true;
         effect_log.info("Bisect: bloom rendering disabled");
     }
-    if (options.final_only) {
-        config.final_only = true;
-        effect_log.info("Diagnostic final-only mode: per-pass/per-stage PNG dumps disabled");
-    }
-    config.exit_after_diagnose = options.exit_after_diagnose;
-    effect_log.info("Effect diagnostic mode ENABLED (auto-run on frame: %llu)",
-                    (unsigned long long)config.target_frame);
+    effect_log.info("Effect diagnostic mode ENABLED (a full bundle is written for each capture shot)");
 }
 
 bool RenderDiagnostics::isEffectDisabled(int effect_index, const std::string& effect_path) const {
@@ -99,43 +89,18 @@ std::string RenderDiagnostics::overrideFragmentSource(const std::string& shader_
     return ShaderCompiler::applyDebugStep(shader_name, ShaderCompiler::applyDebugMode(fs_source, view_mode), step);
 }
 
-void RenderDiagnostics::triggerCapture(uint64_t current_frame) {
-    config.enabled = true;
-    config.target_frame = current_frame + 1;
-    config.capture_complete = false;
-    is_capturing_frame = false;
-    effect_log.info("Manual diagnostic capture triggered for frame: %llu", (unsigned long long)config.target_frame);
-}
+void RenderDiagnostics::beginShot(const std::string& output_dir, const EngineContext& /*ctx*/) {
+    is_capturing_frame = true;
+    render_graph_.passes.clear();
+    pass_images_.clear();
+    has_source_image_ = false;
+    has_final_image_ = false;
+    scene_stage_index_ = 0;
+    config.output_dir = output_dir;
 
-void RenderDiagnostics::onFrameStart(uint64_t frame_index, EngineContext& ctx) {
-    if (!config.enabled || config.capture_complete) return;
-
-    if (config.shouldCaptureFrame(frame_index)) {
-        is_capturing_frame = true;
-        render_graph_.passes.clear();
-        pass_images_.clear();
-        has_source_image_ = false;
-        has_final_image_ = false;
-        scene_stage_index_ = 0;
-
-        std::string wallpaper_name = resolveWallpaperName(ctx);
-        config.output_dir = "./diagnostics/" + wallpaper_name;
-
-        std::error_code ec;
-        if (fs::exists(config.output_dir, ec)) {
-            fs::remove_all(config.output_dir, ec);
-        }
-        fs::create_directories(config.output_dir, ec);
-
-        if (config.has_deterministic_time) {
-            ctx.time = config.deterministic_time;
-        }
-
-        effect_log.info(">>> Beginning diagnostic capture for '%s' on frame %llu <<<", wallpaper_name.c_str(),
-                        (unsigned long long)frame_index);
-    } else {
-        is_capturing_frame = false;
-    }
+    std::error_code ec;
+    fs::create_directories(config.output_dir, ec);
+    effect_log.info(">>> Beginning diagnostic capture into '%s' <<<", config.output_dir.c_str());
 }
 
 void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
@@ -150,8 +115,6 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     payload.render_scale = ctx.scene.render_scale;
     payload.wallpaper_path = ctx.wallpaper_path;
     payload.engine_path = ctx.engine_path;
-    payload.has_deterministic_time = config.has_deterministic_time;
-    payload.final_only = config.final_only;
 
     payload.has_source_image = has_source_image_;
     payload.source_rgba = std::move(source_rgba_);
@@ -187,18 +150,12 @@ void RenderDiagnostics::onFrameEnd(uint64_t frame_index, EngineContext& ctx) {
     payload.shader_dumps = shader_dumps_;
     payload.provenance_list = provenance_list_;
 
-    config.capture_complete = true;
     is_capturing_frame = false;
 
     if (worker_thread_.joinable()) {
         worker_thread_.join();
     }
     worker_thread_ = std::thread(exportBundleAsync, std::move(payload), &cancel_export_);
-
-    if (config.exit_after_diagnose) {
-        effect_log.info("Diagnostic capture finished, requesting clean quit");
-        surface::requestQuit();
-    }
 }
 
 void RenderDiagnostics::registerShaderDump(const ShaderDump& dump) {

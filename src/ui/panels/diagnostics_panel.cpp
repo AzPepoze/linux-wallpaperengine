@@ -140,19 +140,8 @@ void Debugger::drawDiagnosticsTab(EngineContext& ctx) {
     }
 
     UiComponents::SectionHeader("Diagnostics Capture");
-    const char* status =
-        diagnostics.config.capture_complete
-            ? "Complete (Written to disk)"
-            : (diagnostics.is_capturing_frame ? "Capturing..." : (diagnostics.config.enabled ? "Pending..." : "Idle"));
-    UiComponents::PropertyRow("Status:", "%s", status);
     if (!diagnostics.config.output_dir.empty()) {
         UiComponents::PropertyRow("Output:", "%s", diagnostics.config.output_dir.c_str());
-    }
-    if (ImGui::Button("Dump Diagnostics Now", ImVec2(-1.0f, 28.0f))) {
-        diagnostics.triggerCapture(ctx.profiler.frame_index);
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Dumps shader passes, textures, render graph, and uniforms to ./diagnostics");
     }
 }
 

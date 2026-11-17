@@ -141,7 +141,7 @@ void Scene2DRuntime::drawOffscreen() {
     int layer_index = 0;
     auto capture_layer_result = [&](Layer* layer, bool raw_layer) {
         IRenderObserver& diagnostics = renderObserver();
-        if (!diagnostics.isCapturingFrame() || RenderDiagnostics::instance().getConfig().final_only) return;
+        if (!diagnostics.isCapturingFrame()) return;
 
         Snapshot snapshot = makeSnapshot(width, height);
         if (!snapshot.valid()) return;

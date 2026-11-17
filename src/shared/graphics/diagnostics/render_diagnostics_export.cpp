@@ -53,50 +53,6 @@ std::string cleanEffectName(const std::string& effect_file, const std::string& s
 }  // namespace
 
 namespace render_diagnostics_internal {
-std::string resolveWallpaperName(const EngineContext& ctx) {
-    const char* roots[] = {ctx.wallpaper_path, ctx.asset_root};
-    for (const char* root : roots) {
-        if (!root || root[0] == '\0') continue;
-        std::string project_json_path = std::string(root) + "/project.json";
-        std::ifstream file(project_json_path);
-        if (file.is_open()) {
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            std::string content = buffer.str();
-            cJSON* json = cJSON_Parse(content.c_str());
-            if (json) {
-                cJSON* title_item = cJSON_GetObjectItemCaseSensitive(json, "title");
-                if (cJSON_IsString(title_item) && title_item->valuestring && title_item->valuestring[0] != '\0') {
-                    std::string sanitized = sanitizeFilename(title_item->valuestring);
-                    cJSON_Delete(json);
-                    return sanitized;
-                }
-                cJSON_Delete(json);
-            }
-        }
-    }
-
-    if (ctx.wallpaper_path[0] != '\0') {
-        fs::path p(ctx.wallpaper_path);
-        while (p.has_filename() && p.filename().empty()) p = p.parent_path();
-        std::string stem = p.stem().string();
-        if (!stem.empty() && stem != "extracted") {
-            return sanitizeFilename(stem);
-        }
-    }
-
-    if (ctx.asset_root[0] != '\0') {
-        fs::path p(ctx.asset_root);
-        while (p.has_filename() && p.filename().empty()) p = p.parent_path();
-        std::string stem = p.stem().string();
-        if (!stem.empty() && stem != "extracted") {
-            return sanitizeFilename(stem);
-        }
-    }
-
-    return "wallpaper";
-}
-
 namespace {
 struct ExportContext {
     DiagnosticExportPayload& payload;
@@ -123,13 +79,12 @@ bool writeSourceAndFinalImages(ExportContext& export_context, ImageStats& source
     if (payload.has_source_image && !payload.source_rgba.empty()) {
         source_stats = ImageStats::compute(payload.source_rgba.data(), payload.source_w, payload.source_h);
         has_source_stats = true;
-        if (!payload.final_only &&
-            RenderDiagnostics::writePng(export_context.frame_dir + "/source.png", payload.source_w, payload.source_h,
+        if (RenderDiagnostics::writePng(export_context.frame_dir + "/source.png", payload.source_w, payload.source_h,
                                         payload.source_rgba.data())) {
             export_context.generated_files.push_back(export_context.frameRelative("source.png"));
         }
     }
-    if (!payload.final_only && payload.has_final_image && !payload.final_rgba.empty() &&
+    if (payload.has_final_image && !payload.final_rgba.empty() &&
         RenderDiagnostics::writePng(export_context.frame_dir + "/layer-final.png", payload.final_w, payload.final_h,
                                     payload.final_rgba.data())) {
         export_context.generated_files.push_back(export_context.frameRelative("layer-final.png"));
@@ -157,7 +112,6 @@ bool writeStageImages(ExportContext& export_context) {
             flush_batch();
             return false;
         }
-        if (payload.final_only && stage.name != "post-bloom-final") continue;
         if (!stage_dir_ready) {
             ensureDir(stage_dir);
             stage_dir_ready = true;
@@ -224,38 +178,36 @@ bool analyzePassImages(ExportContext& export_context, const ImageStats& source_s
                 item.trace.has_delta_from_source = true;
             }
 
-            if (!payload.final_only) {
-                const std::string layer_clean =
-                    sanitizeFilename(item.trace.layer_name.empty() ? "layer" : item.trace.layer_name);
-                const std::string effect_clean = cleanEffectName(item.trace.effect_file, item.trace.shader_name);
-                const std::string shader_clean =
-                    sanitizeFilename(item.trace.shader_name.empty() ? "shader" : item.trace.shader_name);
+            const std::string layer_clean =
+                sanitizeFilename(item.trace.layer_name.empty() ? "layer" : item.trace.layer_name);
+            const std::string effect_clean = cleanEffectName(item.trace.effect_file, item.trace.shader_name);
+            const std::string shader_clean =
+                sanitizeFilename(item.trace.shader_name.empty() ? "shader" : item.trace.shader_name);
 
-                char pass_dir_name[256];
-                snprintf(pass_dir_name, sizeof(pass_dir_name), "%02d_%s_%s", item.trace.draw_order, layer_clean.c_str(),
-                         effect_clean.c_str());
-                const std::string pass_dir = export_context.frame_dir + "/" + pass_dir_name;
-                ensureDir(pass_dir);
+            char pass_dir_name[256];
+            snprintf(pass_dir_name, sizeof(pass_dir_name), "%02d_%s_%s", item.trace.draw_order, layer_clean.c_str(),
+                     effect_clean.c_str());
+            const std::string pass_dir = export_context.frame_dir + "/" + pass_dir_name;
+            ensureDir(pass_dir);
 
-                char pass_file_name[256];
-                snprintf(pass_file_name, sizeof(pass_file_name), "pass-%02d-%s.png", item.trace.pass_index,
-                         shader_clean.c_str());
-                const std::string relative =
-                    export_context.frameRelative(std::string(pass_dir_name) + "/" + pass_file_name);
-                const std::string png_path = pass_dir + "/" + pass_file_name;
-                const int png_width = item.width;
-                const int png_height = item.height;
-                const uint8_t* png_data = item.rgba_data.data();
-                writes.emplace_back(std::async(std::launch::async,
-                                               [png_path, png_width, png_height, png_data]() {
-                                                   return RenderDiagnostics::writePng(png_path, png_width, png_height,
-                                                                                      png_data);
-                                               }),
-                                    &item);
-                item.trace.captured_image_filename.clear();
-                written_names.push_back(relative);
-                if (writes.size() >= batch_size) flushWrites();
-            }
+            char pass_file_name[256];
+            snprintf(pass_file_name, sizeof(pass_file_name), "pass-%02d-%s.png", item.trace.pass_index,
+                     shader_clean.c_str());
+            const std::string relative =
+                export_context.frameRelative(std::string(pass_dir_name) + "/" + pass_file_name);
+            const std::string png_path = pass_dir + "/" + pass_file_name;
+            const int png_width = item.width;
+            const int png_height = item.height;
+            const uint8_t* png_data = item.rgba_data.data();
+            writes.emplace_back(std::async(std::launch::async,
+                                           [png_path, png_width, png_height, png_data]() {
+                                               return RenderDiagnostics::writePng(png_path, png_width, png_height,
+                                                                                  png_data);
+                                           }),
+                                &item);
+            item.trace.captured_image_filename.clear();
+            written_names.push_back(relative);
+            if (writes.size() >= batch_size) flushWrites();
 
             if (item.trace.render_target_name.empty()) {
                 prev_w = item.width;
@@ -381,15 +333,6 @@ void writeManifest(const ExportContext& export_context) {
     cJSON_AddNumberToObject(manifest, "target_frame", (double)payload.frame_index);
     cJSON_AddNumberToObject(manifest, "target_time", (double)payload.time);
     cJSON_AddStringToObject(manifest, "wallpaper_path", payload.wallpaper_path.c_str());
-
-    cJSON* deterministic = cJSON_CreateObject();
-    cJSON_AddBoolToObject(deterministic, "time_frozen", payload.has_deterministic_time);
-    cJSON_AddBoolToObject(deterministic, "mouse_frozen", payload.has_deterministic_time);
-    cJSON_AddBoolToObject(deterministic, "particles_prng_deterministic", false);
-    cJSON_AddBoolToObject(deterministic, "audio_deterministic", false);
-    cJSON_AddStringToObject(deterministic, "notes",
-                            "Time and pointer are frozen. Particle PRNG and audio streams are non-deterministic.");
-    cJSON_AddItemToObject(manifest, "deterministic_systems", deterministic);
 
     cJSON* files = cJSON_CreateArray();
     for (const auto& file : export_context.generated_files)
