@@ -333,14 +333,17 @@ static void runDesktopLayerIfPossible() {
     if (!wantsDesktopLayer() || cli.sandbox) return;
     const auto create =
         reinterpret_cast<CreateLayerBackendFunction>(pluginSymbol("wayland", "lwe_create_layer_backend"));
+    LOG_D("[LAYER] plugin entry point %s", create ? "found" : "missing");
     std::unique_ptr<LayerBackend> backend = create ? std::unique_ptr<LayerBackend>(create(cli)) : nullptr;
     if (!backend) {
         LOG_W("[LAYER] desktop layer unavailable; running in a window");
         return;
     }
     layer_active = true;
+    LOG_D("[LAYER] starting the layer backend");
     const int code = backend->run({init, frame, event, cleanup});
     backend.reset();
+    LOG_I("[APP] layer backend returned %d; exiting", code);
     exit(code);
 }
 
@@ -490,7 +493,7 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
 
             std::string handoff_error;
             if (ControlClient::tryHandoff(key, request, &handoff_error)) {
-                LOG_I("[CONTROL] handed off wallpaper switch for %s: %s", key.c_str(), request.path.c_str());
+                LOG_I("[CONTROL] handed off wallpaper switch for %s: %s; exiting", key.c_str(), request.path.c_str());
                 exit(0);
             }
             LOG_D("[CONTROL] no live instance on %s (%s)", key.c_str(), handoff_error.c_str());
@@ -508,11 +511,14 @@ extern "C" sapp_desc lwe_app_descriptor(int argc, char* argv[]) {
     }
 
     if (wantsX11Desktop()) {
+        LOG_D("[APP] drawing on an X11 desktop window");
         x11_desktop_output = cli.screen_root;
         x11_desktop_title = x11DesktopTitle(x11_desktop_output);
     } else {
+        LOG_D("[APP] trying the desktop layer");
         runDesktopLayerIfPossible();
     }
+    LOG_D("[APP] opening the application window");
 
     sapp_desc desc = {};
     desc.init_cb = init;

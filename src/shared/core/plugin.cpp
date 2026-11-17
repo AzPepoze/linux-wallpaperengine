@@ -62,8 +62,10 @@ void* loadPlugin(const char* name) {
 
     using AbiFunction = int (*)();
     const auto abi = reinterpret_cast<AbiFunction>(dlsym(handle, "lwe_plugin_abi"));
-    if (!abi || abi() != kPluginAbi) {
-        LOG_W("Plugin %s was built for another engine version; it is not used", path.c_str());
+    const int plugin_abi = abi ? abi() : -1;
+    if (plugin_abi != kPluginAbi) {
+        LOG_W("Plugin %s was built for another engine version (plugin ABI %d, engine ABI %d); it is not used",
+              path.c_str(), plugin_abi, kPluginAbi);
         dlclose(handle);
         handle = nullptr;
         return nullptr;
