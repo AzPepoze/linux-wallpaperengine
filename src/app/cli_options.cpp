@@ -34,7 +34,7 @@ std::string audioState(const CliOptions& opts) {
 
 const char* audioSource(const CliOptions& opts) {
     if (opts.silent) return "CLI";
-    if (opts.no_audio) return "diagnostics/no-ui";
+    if (opts.no_audio) return "no-ui";
     return "default";
 }
 
@@ -54,6 +54,39 @@ std::string gpuArg(int argc, char* argv[]) {
 std::string flagValue(const char* name) {
     const char* value = sargs_value(name);
     return value ? value : "";
+}
+
+std::string optionText(const std::vector<std::string>& args, const std::vector<std::string>& names) {
+    std::string value;
+    cli_args::optionValue(args, names, value);
+    return value;
+}
+
+// Raw capture values; capture::parseCaptureOptions validates them.
+capture::CaptureFlags captureFlags(const std::vector<std::string>& args) {
+    capture::CaptureFlags flags;
+    flags.capture = optionText(args, {"--capture"});
+    flags.every = optionText(args, {"--capture-every"});
+    flags.from = optionText(args, {"--capture-from"});
+    flags.until = optionText(args, {"--capture-until"});
+    flags.limit = optionText(args, {"--capture-limit"});
+    flags.dir = optionText(args, {"--capture-dir"});
+    flags.size = optionText(args, {"--capture-size"});
+    flags.fps = optionText(args, {"--capture-fps"});
+    flags.screenshot = optionText(args, {"--screenshot"});
+    flags.screenshot_delay = optionText(args, {"--screenshot-delay"});
+#if DEBUG_BUILD
+    flags.dump = hasDashedFlag("capture-dump");
+#endif
+    return flags;
+}
+
+// A capture run renders with no audio, UI, control socket or pointer input.
+void forceCaptureHeadless(CliOptions& opts) {
+    opts.no_audio = true;
+    opts.no_ui = true;
+    opts.no_control = true;
+    opts.disable_mouse = true;
 }
 
 #if DEBUG_BUILD
@@ -121,13 +154,9 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
 #if DEBUG_BUILD
     opts.sandbox = hasDashedFlag("sandbox");
     opts.no_ui = hasDashedFlag("no-ui");
-    opts.diagnostics.enabled = hasDashedFlag("diagnose") || hasDashedFlag("diagnostics");
     opts.diagnostics.disable_effects = valueAnySpelling("disable-effects");
     opts.diagnostics.disable_particles = hasDashedFlag("disable-particles");
     opts.diagnostics.disable_bloom = hasAnySpelling("disable-bloom");
-    opts.diagnostics.final_only = hasDashedFlag("diagnose-final-only");
-    opts.diagnostics.exit_after_diagnose = hasDashedFlag("exit-after-diagnose");
-    opts.diagnostics.deterministic = hasDashedFlag("diagnose-deterministic");
 #endif
     auto record = [&](const std::string& key, const std::string& value, const char* source) {
         opts.startup_options.push_back(key + "=" + (value.empty() ? "<unset>" : value) + " (source: " + source + ")");
@@ -212,7 +241,7 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
         opts.log_level = fallback_level;
     }
     opts.silent = hasDashedFlag("no-audio") || cli_args::hasFlag(args, {"-s", "--silent", "--mute"});
-    opts.no_audio = opts.no_ui || opts.diagnostics.enabled;
+    opts.no_audio = opts.no_ui;
     opts.no_audio_processing = hasDashedFlag("no-audio-processing");
     opts.list_audio_devices = hasDashedFlag("list-audio-devices");
     opts.audio_device = resolve({"--audio-device"}, "audio_device", "");
@@ -233,12 +262,6 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     opts.performance_profile = cli_args::hasFlag(args, {"--performance-profile"});
     opts.video_ram = cli_args::hasFlag(args, {"--video-ram"});
     opts.script_profile = cli_args::hasFlag(args, {"--script-profile"});
-#if DEBUG_BUILD
-    std::string capture_frame;
-    if (cli_args::optionValue(args, {"--diagnose-frame"}, capture_frame)) {
-        opts.diagnostics.target_frame = atoi(capture_frame.c_str());
-    }
-#endif
     cli_args::optionValue(args, {"--assets-dir"}, opts.assets_dir);
     opts.scaling = resolve({"--scaling"}, "scaling_mode", "");
     opts.pointer = resolve({"--pointer"}, "pointer", "auto");
@@ -249,6 +272,11 @@ CliOptions CliOptions::parse(int argc, char* argv[]) {
     cli_args::optionValue(args, {"--layer"}, opts.layer);
     opts.no_control = hasDashedFlag("no-control");
     opts.toggle_debug_ui = hasDashedFlag("toggle-debug-ui");
+    opts.capture = capture::parseCaptureOptions(captureFlags(args));
+    if (opts.capture.enabled) forceCaptureHeadless(opts);
+#if DEBUG_BUILD
+    opts.diagnostics.enabled = opts.capture.dump;
+#endif
     for (const std::string& entry : cli_args::optionValues(args, {"--set-property"})) {
         const size_t equals = entry.find('=');
         if (equals == std::string::npos) continue;

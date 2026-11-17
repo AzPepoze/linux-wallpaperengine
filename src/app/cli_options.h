@@ -9,6 +9,7 @@
 #include "shared/core/downscale.h"
 #include "shared/core/logger.h"
 #include "shared/core/resolution.h"
+#include "capture/capture_options.h"
 #include "shared/graphics/diagnostics/diagnostic_config.h"
 #include "wallpaper/web/web_options.h"
 
@@ -43,7 +44,7 @@ struct CliOptions {
     bool has_extract_dir = false;
     std::string gpu;
     bool list_gpus = false;
-    bool no_audio = false;  // audio fully off (diagnostics, --no-ui)
+    bool no_audio = false;  // audio fully off (--no-ui, capture runs)
     bool silent = false;    // output muted; the spectrum still runs
     bool no_audio_processing = false;
     bool list_audio_devices = false;
@@ -59,6 +60,7 @@ struct CliOptions {
     bool script_profile = false;  // log the most expensive scripts every few seconds
     bool no_ui = false;
     DiagnosticOptions diagnostics;
+    capture::CaptureOptions capture;  // --capture*, --screenshot
     bool cover = false;
     std::string assets_dir;
     int fps_limit = 0;  // 0 = unset: rely on vsync, no software cap

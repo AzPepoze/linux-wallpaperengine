@@ -126,6 +126,19 @@ int main() {
               (DEBUG_BUILD ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO));
     }
 
+#if DEBUG_BUILD
+    // Only --capture-dump turns the diagnostics bundle on; the old --diagnose flag is gone.
+    {
+        const CliOptions opts = parse({"app", "--capture", "0.5", "--capture-dump", "/wp"});
+        CHECK(opts.diagnostics.enabled);
+        CHECK(opts.no_audio);
+    }
+    {
+        const CliOptions opts = parse({"app", "--capture", "0.5", "--diagnose", "/wp"});
+        CHECK(!opts.diagnostics.enabled);
+    }
+#endif
+
     {
         const CliOptions opts = parse({"app", "--version", "--list-outputs", "--list-transitions", "/wp"});
         CHECK(opts.version && opts.list_outputs && opts.list_transitions);

@@ -102,14 +102,24 @@ constexpr CliOption kWeb[] = {
 constexpr CliOption kDiagnostics[] = {
     {{"--sandbox", nullptr}, nullptr, CliBuild::Debug, "Run the debug effect sandbox"},
     {{"--no-ui", nullptr}, nullptr, CliBuild::Debug, "Start without the ImGui UI"},
-    {{"--diagnose", "--diagnostics", nullptr}, nullptr, CliBuild::Debug, "Enable render diagnostics"},
-    {{"--diagnose-frame", nullptr}, "<n>", CliBuild::Debug, "Frame to capture (default 100)"},
-    {{"--diagnose-final-only", nullptr}, nullptr, CliBuild::Debug, "Capture only the final output"},
-    {{"--diagnose-deterministic", nullptr}, nullptr, CliBuild::Debug, "Fixed 1/60 s step and seeded RNG"},
-    {{"--exit-after-diagnose", nullptr}, nullptr, CliBuild::Debug, "Quit once the capture completes"},
     {{"--disable-effects", nullptr}, "<pattern>", CliBuild::Debug, "Disable effects matching substring (*/all = all)"},
     {{"--disable-particles", nullptr}, nullptr, CliBuild::Debug, "Disable particles in diagnostics"},
     {{"--disable-bloom", nullptr}, nullptr, CliBuild::Debug, "Disable bloom in diagnostics"},
+    kSentinel,
+};
+
+constexpr CliOption kCapture[] = {
+    {{"--capture", nullptr}, "<times>", CliBuild::All, "Shots at these scene seconds, e.g. 0.2,1,3"},
+    {{"--capture-every", nullptr}, "<s|frame>", CliBuild::All, "Repeating shots every s seconds, or every frame"},
+    {{"--capture-from", nullptr}, "<s>", CliBuild::All, "Start of the repeat (default 0)"},
+    {{"--capture-until", nullptr}, "<s>", CliBuild::All, "Stop the repeat at this scene time"},
+    {{"--capture-limit", nullptr}, "<n>", CliBuild::All, "Max shots (default 100); the run exits when reached"},
+    {{"--capture-dir", nullptr}, "<dir>", CliBuild::All, "Output folder (default ./captures/<wallpaper>)"},
+    {{"--capture-size", nullptr}, "<WxH>", CliBuild::All, "Output size (default 1920x1080)"},
+    {{"--capture-fps", nullptr}, "<n>", CliBuild::All, "Fixed time step (default 60)"},
+    {{"--capture-dump", nullptr}, nullptr, CliBuild::Debug, "Diagnostics folder per shot (render graph, shaders, uniforms)"},
+    {{"--screenshot", nullptr}, "<path>", CliBuild::All, "One shot written to this exact path"},
+    {{"--screenshot-delay", nullptr}, "<s>", CliBuild::All, "Scene time of the --screenshot shot (default 0)"},
     kSentinel,
 };
 
@@ -144,8 +154,6 @@ constexpr CliOption kCompatibility[] = {
      CliBuild::All,
      "Accepted for launcher compatibility; ignored",
      true},
-    {{"--screenshot", nullptr}, "<path>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
-    {{"--screenshot-delay", nullptr}, "<n>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--screen-span", nullptr}, "<names>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--bg", nullptr}, "<id/path>", CliBuild::All, "Accepted for launcher compatibility; ignored", true},
     {{"--dump-structure", nullptr}, nullptr, CliBuild::All, "Accepted for launcher compatibility; ignored", true},
@@ -161,6 +169,7 @@ constexpr CliGroupDef kGroups[] = {
     {CliGroup::Audio, "Audio", kAudio},
     {CliGroup::Web, "Web", kWeb},
     {CliGroup::Diagnostics, "Diagnostics", kDiagnostics},
+    {CliGroup::Capture, "Capture", kCapture},
     {CliGroup::Particles, "Particles", kParticles},
     {CliGroup::Info, "Info", kInfo},
     {CliGroup::Compatibility, "Compatibility", kCompatibility},

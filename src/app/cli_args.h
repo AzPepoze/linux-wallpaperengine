@@ -18,6 +18,7 @@ enum class CliGroup {
     Audio,
     Web,
     Diagnostics,
+    Capture,
     Particles,
     Info,
     Compatibility,

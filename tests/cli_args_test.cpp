@@ -36,9 +36,9 @@ int main() {
     CHECK(cli_args::positional(layerDebug) == "/wp");
     CHECK(cli_args::optionValue(layerDebug, {"--layer-size"}, value) && value == "320x180");
 
-    const V diagnose = {"app", "--diagnose", "--diagnose-frame", "10", "/wp"};
-    CHECK(cli_args::positional(diagnose) == "/wp");
-    CHECK(cli_args::optionValue(diagnose, {"--diagnose-frame"}, value) && value == "10");
+    const V captureDump = {"app", "--capture-dump", "--disable-effects", "bloom", "/wp"};
+    CHECK(cli_args::positional(captureDump) == "/wp");
+    CHECK(cli_args::optionValue(captureDump, {"--disable-effects"}, value) && value == "bloom");
 
     const V setProps = {"app", "--set-property", "a=1", "--set-property", "b=two words", "--set-property=c=3", "/wp"};
     CHECK(cli_args::positional(setProps) == "/wp");
@@ -87,13 +87,25 @@ int main() {
                       "shot.png", "--screen-span",    "DP-1,DP-2",    "/wp"};
     CHECK(cli_args::positional(compat) == "/wp");
     CHECK(cli_args::takesValue("--screenshot"));
+    CHECK(cli_args::takesValue("--screenshot-delay"));
     const V unsupported = cli_args::unknownOptions(compat);
-    CHECK(unsupported.size() == 4);
+    CHECK(unsupported.size() == 3);
     CHECK(unsupported[0] == "--dump-structure");
     CHECK(unsupported[1] == "--noautomute");
-    CHECK(unsupported[2] == "--screenshot");
-    CHECK(unsupported[3] == "--screen-span");
+    CHECK(unsupported[2] == "--screen-span");
     CHECK(cli_args::unknownOptions({"app", "--disable-mouse", "/wp"}).empty());
+
+    // --screenshot is implemented now, so it is no longer reported as ignored.
+    CHECK(cli_args::unknownOptions({"app", "--screenshot", "shot.png", "--screenshot-delay", "2", "/wp"}).empty());
+
+    // Capture flags are implemented; their values are not taken as the wallpaper.
+    const V capture = {"app", "--capture", "0.2,1", "--capture-dir", "/out", "--capture-dump", "/wp"};
+    CHECK(cli_args::positional(capture) == "/wp");
+    CHECK(cli_args::takesValue("--capture"));
+    CHECK(cli_args::takesValue("--capture-every"));
+    CHECK(cli_args::takesValue("--capture-dir"));
+    CHECK(!cli_args::takesValue("--capture-dump"));
+    CHECK(cli_args::unknownOptions(capture).empty());
 
     const V mixed = {"app", "--gpu", "1", "--fps=30", "--totally-new", "shot.png", "/wp"};
     const V mixed_unknown = cli_args::unknownOptions(mixed);
@@ -118,17 +130,24 @@ int main() {
     CHECK(help.find("Control:") != std::string::npos);
     CHECK(help.find("Audio:") != std::string::npos);
     CHECK(help.find("Web:") != std::string::npos);
+    CHECK(help.find("Capture:") != std::string::npos);
     CHECK(help.find("Particles:") != std::string::npos);
     CHECK(help.find("Info:") != std::string::npos);
     CHECK(help.find("--whoareyou") != std::string::npos);
     CHECK(help.find("--web-transport") != std::string::npos);
     CHECK(help.find("--fps") != std::string::npos);
+    CHECK(help.find("--capture-every <s|frame>") != std::string::npos);
+    CHECK(help.find("--capture-dir <dir>") != std::string::npos);
+    CHECK(help.find("--screenshot-delay <s>") != std::string::npos);
+    CHECK(help.find("Accepted for launcher compatibility; ignored") != std::string::npos);
 #if DEBUG_BUILD
     CHECK(help.find("Diagnostics:") != std::string::npos);
-    CHECK(help.find("--diagnose") != std::string::npos);
+    CHECK(help.find("--disable-effects <pattern>") != std::string::npos);
+    CHECK(help.find("--capture-dump") != std::string::npos);
 #else
     CHECK(help.find("Diagnostics:") == std::string::npos);
-    CHECK(help.find("--diagnose") == std::string::npos);
+    CHECK(help.find("--disable-effects") == std::string::npos);
+    CHECK(help.find("--capture-dump") == std::string::npos);
 #endif
 
     CHECK(cli_args::takesValue("--config"));
