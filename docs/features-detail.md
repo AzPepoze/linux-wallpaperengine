@@ -459,7 +459,7 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
   - Works
     - `thisScene.createModelData({ shapes })`, `applyData`, `replaceData`, `destroyModelData`, the `IModelData.POSITION / NORMAL / UV / TANGENT_SIGNED / COLOR` constants, and `thisScene.createLayer({ model })`; asset handles from `engine.registerAsset()` work as materials and as `createLayer` arguments
     - The mesh is drawn flat into the layer's picture: each shape is textured with its material's first texture (white when it has none)
-    - Confirmed on screen: a script-made triangle renders as a solid white shape of the expected size and position on the layer origin (deterministic `--diagnose` capture of a test scene)
+    - Confirmed on screen: a script-made triangle renders as a solid white shape of the expected size and position on the layer origin (deterministic `--capture` shot of a test scene)
   - Missing
     - Depth, lighting, normals, tangents, vertex colors and the material's own shader; `perspective`
     - Shapes with more than 65535 vertices
@@ -499,14 +499,17 @@ Reference: [SceneScript documentation](https://docs.wallpaperengine.io/en/scene/
 
 - [x] Vulkan renderer (sokol) with GPU selection (`--list-gpus`, `--gpu`), frame cap (`-f`/`--fps`) and scaling (`--scaling default|fit|fill|stretch`)
 - [x] `--whoareyou` prints a one-line JSON identity (name, implementation, version, control socket and feature list) for GUI detection; no GPU work or logs run on that path
-- [x] Compatibility with upstream launcher flags: unsupported options (for example `--noautomute`, `--screenshot`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
+- [x] Compatibility with upstream launcher flags: unsupported options (for example `--noautomute`, `--screen-span`) are recognized and value-parsed so they never become the wallpaper path, then logged as `ignoring unsupported option`
 - [x] Info and listing flags: `-V`/`--version`, `--list-outputs` (Wayland or X11 output names for `-r`), `--list-transitions`, `-l`/`--list-properties` (same layout as upstream, with `--set-property` and GUI-saved values applied)
 - [x] Logging and config flags: `--log-level debug|info|warn|error`, `-q`/`--quiet`, and `--config <path>` to read a `config.json` from another place
 - [x] `--disable-parallax` turns camera parallax off; `--disable-mouse` keeps the wallpaper from receiving mouse input or reading the global pointer
 - [-] Wayland wlr-layer-shell backend (`-r`/`--screen-root`, `--layer`; debug builds also `--layer-size`, `--layer-anchor`)
   - Works: background, bottom, top and overlay layers, anchoring, output selection, pointer motion and buttons, parallax
   - Missing: `--scaling stretch` and `--clamp` are accepted but ignored
-- [x] Debug-build diagnostics: `--diagnose` family (frame capture with pass images, scene stages, render graph, shaders, uniforms), `--disable-effects`, `--disable-particles`, `--disable-bloom`, `--sandbox`, `--no-ui`, and an ImGui inspector
+- [x] Headless capture ([Capture](capture.md)): `--capture`, `--capture-every`, `--capture-dir` and the other `--capture-*` flags, and `--screenshot` for one file
+  - Works: PNG shots at scene times, repeats by interval or every frame, `manifest.json` with the times of each shot, and a fixed step so the same wallpaper gives the same picture
+  - Missing: video and web wallpapers may not move exactly with scene time
+- [x] Debug-build diagnostics: `--capture-dump` folder per shot (render graph, shaders, uniforms), `--disable-effects`, `--disable-particles`, `--disable-bloom`, `--sandbox`, `--no-ui`, and an ImGui inspector
 - [x] Scene-tree search by name or ID: results show IDs and parent paths; selecting a result expands its ancestors, and clearing search preserves the selection. Automatic scrolling is limited to revealing search selections.
 - [x] Debug selection bounds: image/text outlines follow rotated placement; selected groups show descendant outlines, combined bounds and world origin
 - [x] Headless scene-data corpus checks: `bin/debug/scene_parser_tests --corpus <workshop-content-dir>` checks metadata, object retention, IDs, parent links, finite scales and numeric scale bindings through the production parser. These checks do not verify GPU output or unsupported scene features.

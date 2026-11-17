@@ -18,7 +18,7 @@ Upstream: [Almamu/linux-wallpaperengine](https://github.com/Almamu/linux-wallpap
 | `--scaling <mode>` | Yes |
 | `--clamping <mode>` | No |
 | `--assets-dir <path>` | Yes |
-| `--screenshot <file>` | No |
+| `--screenshot <file>` | Yes (see [Capture](capture.md)) |
 | `--list-properties` | Yes |
 | `--set-property name=value` | Yes |
 | `--disable-mouse` | Yes |

@@ -94,6 +94,9 @@ This page lists the features of Wallpaper Engine, and which ones this project su
   - [ ] Pause when another app is maximized, fullscreen or playing audio, when the display sleeps, and application rules
 - [ ] General settings (process priority, video loading and loop, crash restart, and more)
 - [x] Command line
+- [x] Headless capture (Partial)
+  - [x] Screenshots at chosen scene times, and `--screenshot`
+  - [ ] Exact scene time for video and web wallpapers
 - [x] GPU selection
 - [ ] Multi-monitor in one process
 - [ ] RGB hardware

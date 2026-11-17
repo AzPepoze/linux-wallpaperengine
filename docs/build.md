@@ -17,9 +17,9 @@ There are two modes. Pick one.
 
 | Topic | What to know |
 | --- | --- |
-| Debug-only options | `--sandbox`, `--diagnose` and the rest are only listed in a debug build's help. Use a debug build for them |
+| Debug-only options | `--sandbox`, `--capture-dump` and the rest are only listed in a debug build's help. Use a debug build for them |
 | Effect sandbox | Run `xmake sandbox`. It builds the debug build and starts the sandbox |
-| Diagnostics | They save output to a folder, and they can be slow. Use them when you are finding a bug |
+| Diagnostics | `--capture-dump` saves output to a folder, and it can be slow. Use it when you are finding a bug. See [Capture](capture.md) |
 | Switch back | Run `xmake f -m release` again, then `xmake` |
 | What each command does | `xmake f -m debug` only saves the mode. It does not compile. `xmake` does the compiling |
 | Set the mode once | The mode is saved, so after `xmake f -m debug` you only need `xmake` to rebuild |

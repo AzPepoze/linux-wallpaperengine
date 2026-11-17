@@ -175,6 +175,27 @@ If the source you pick does not work, the program moves down the same list and l
 | `--particle-debug-velocity-scale` | `<f>` | 0.05 | Velocity arrow length |
 | `--particle-debug-max-particles` | `<n>` | 128 | Max particles drawn |
 
+### Capture
+
+Take pictures of a wallpaper at chosen times, without a window. See [Capture](capture.md) for examples and the output files.
+
+| Option | Value | Default | What it does |
+| --- | --- | --- | --- |
+| `--capture` | `<times>` | | Shots at these scene times in seconds, e.g. `0.2,1,3` |
+| `--capture-every` | `<s\|frame>` | | Repeat a shot every `s` seconds, or every frame |
+| `--capture-from` | `<s>` | 0 | Start of the repeat |
+| `--capture-until` | `<s>` | | Stop the repeat at this scene time |
+| `--capture-limit` | `<n>` | 100 | Most shots. The run exits when reached |
+| `--capture-dir` | `<dir>` | `./captures/<wallpaper>` | Output folder |
+| `--capture-size` | `<WxH>` | 1920x1080 | Picture size |
+| `--capture-fps` | `<n>` | 60 | Fixed time step of the scene |
+| `--capture-dump` | | off | Also save a diagnostics folder for each shot. Debug builds only |
+| `--screenshot` | `<path>` | | Take one shot and write it to this exact file |
+| `--screenshot-delay` | `<s>` | 0 | Scene time of the `--screenshot` shot |
+
+> [!NOTE]
+> Any `--capture` option makes the run headless. It has no window, no audio, no UI and no control socket.
+
 ### Debug builds only
 
 | Option | Value | Default | What it does |
@@ -182,11 +203,6 @@ If the source you pick does not work, the program moves down the same list and l
 | `--layer-size` | `<WxH>` | — | Small test rectangle, e.g. `320x180` |
 | `--layer-anchor` | `<edges>` | — | Where the small rectangle sits, e.g. `top-left` |
 | `--toggle-debug-ui` | | off | Show or hide the debug panel of the running wallpaper on this output |
-| `--diagnose`, `--diagnostics` | | off | Capture render diagnostics |
-| `--diagnose-frame` | `<n>` | 100 | Frame to capture |
-| `--diagnose-final-only` | | off | Capture only the final output |
-| `--diagnose-deterministic` | | off | Fixed time step and seeded random numbers |
-| `--exit-after-diagnose` | | off | Quit after the capture |
 | `--disable-effects` | `<pattern>` | — | Turn off effects matching a name (`*/all` = all) |
 | `--disable-particles` | | off | Turn off particles |
 | `--disable-bloom` | | off | Turn off bloom |

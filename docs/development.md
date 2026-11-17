@@ -37,18 +37,13 @@ Build outputs go to `bin/<mode>/`. The optional feature files (`libwayland.so`, 
 
 ## Render diagnostics (debug builds)
 
-Diagnostics are off unless you ask for them:
+To save a diagnostics folder for each shot, use a debug build with `--capture-dump`. See [Capture](capture.md#diagnostics-bundle-debug-builds).
 
 ```bash
-bin/debug/linux-wallpaperengine --diagnose "/path/to/wallpaper"
+bin/debug/linux-wallpaperengine /path/to/wallpaper --capture 1 --capture-dump
 ```
 
-They capture pass images, scene stages, render graphs, shader code and uniforms.
-
-- `--diagnose-frame <n>` captures another frame (default 100). A window that is off screen advances frames slowly.
-- `--diagnose-deterministic` uses a fixed time step and seeded random numbers. The same frame then renders the same way on each run. Window size and cursor position still affect the result.
-
-All diagnostic options are listed in [Options](options.md#debug-builds-only).
+All debug-only options are listed in [Options](options.md#debug-builds-only).
 
 ## Feature status
 

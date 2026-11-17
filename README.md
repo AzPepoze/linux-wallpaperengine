@@ -126,6 +126,7 @@ Some references come from these projects:
 | Build modes (release and debug) | [docs/build.md](docs/build.md) |
 | See every option | [docs/options.md](docs/options.md) |
 | Build, test and debug the program | [docs/development.md](docs/development.md) |
+| Take screenshots without a window | [docs/capture.md](docs/capture.md) |
 | See what works and what does not | [docs/features.md](docs/features.md) |
 | Compare with the upstream launcher | [docs/compatibility.md](docs/compatibility.md) |
 | Learn the Wallpaper Engine file formats and behaviour | [docs/wallpaper-engine-knowledge.md](docs/wallpaper-engine-knowledge.md) |
